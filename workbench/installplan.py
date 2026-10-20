@@ -249,7 +249,7 @@ def digest_of(fields):
     return hashlib.sha256(_json(fields).encode("ascii")).hexdigest()
 
 
-def _json_store(document):
+def json_store(document):
     return (json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n").encode("ascii")
 
 
@@ -296,8 +296,8 @@ def build(target, selection, snapshots, base, seed, workbench_version):
     baselines = {a.path: a.hash for a in actions
                  if a.kind == "create-file" and a.path != MARKER_PATH}
     store_writes = (
-        ("projects/%s/baselines" % project, _json_store({"baselines": baselines, "format": 1})),
-        ("projects/%s/seen" % project, _json_store(
+        ("projects/%s/baselines" % project, json_store({"baselines": baselines, "format": 1})),
+        ("projects/%s/seen" % project, json_store(
             {"format": 1, "kind": "path", "value": target.path})),
     )
     modules = tuple({

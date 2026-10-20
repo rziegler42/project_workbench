@@ -33,6 +33,7 @@ import collections
 import copy
 import hashlib
 
+from . import base as base_module
 from . import blocks, display, installed, installplan, manifest, safefs
 
 MODES = ("upgrade", "add")
@@ -49,7 +50,7 @@ Row = collections.namedtuple("Row", "kind path block slot owner_class detail")
 # `op` is "create" or "replace"; `expected` is the hash the file must still have for a replace.
 Write = collections.namedtuple("Write", "op path data expected hash executable")
 UpgradePlan = collections.namedtuple(
-    "UpgradePlan", "mode rows writes document manifest_bytes baselines")
+    "UpgradePlan", "mode rows writes dirs document manifest_bytes baselines")
 
 
 class UpgradeError(Exception):
@@ -85,8 +86,7 @@ class _Build:
     # --- helpers -------------------------------------------------------------------------
 
     def row(self, kind, path, block=None, slot=None, owner_class="", detail=""):
-        self.rows.append(Row(kind, path, block, slot, owner_class,
-                             display.ascii_text(detail)[:200]))
+        self.rows.append(Row(kind, path, block, slot, owner_class, detail[:200]))
 
     def set_entry(self, path, owner_class, digest, block=None, slot=None):
         item = {"class": owner_class, "hash": digest, "path": path}
@@ -268,6 +268,26 @@ def _why(entry):
     return entry.detail or "it cannot be read"
 
 
+def _new_dirs(reader, writes):
+    """The directories a create would have to make, parents first, each once."""
+    missing = set()
+    for w in writes:
+        if w.op != "create":
+            continue
+        parts = w.path.split("/")[:-1]
+        for n in range(1, len(parts) + 1):
+            prefix = "/".join(parts[:n])
+            if prefix in missing:
+                continue
+            try:
+                if reader.list_dir(prefix) is None:
+                    missing.add(prefix)
+            except safefs.SafeFsError as exc:
+                raise UpgradeError("%s cannot be made: %s" % (display.ascii_text(prefix)[:80],
+                                                              exc))
+    return sorted(missing, key=lambda d: d.encode("utf-8"))
+
+
 def _merge_packages(new, old, selected):
     """The new package records, plus the modules of the old ones that are no longer selected, so
     the manifest still says who owns the entries that are left in place."""
@@ -334,6 +354,7 @@ def build(existing, reader, baselines, selection, snapshots, base, workbench_ver
     except safefs.SafeFsError as exc:
         raise UpgradeError(str(exc))
     writes = sorted(work.writes, key=lambda w: _key(w.path, None))
+    dirs = _new_dirs(reader, writes)
     if _sha(manifest_bytes) != existing.manifest_hash:
         writes.append(Write("replace", MANIFEST, manifest_bytes, existing.manifest_hash,
                             _sha(manifest_bytes), False))
@@ -343,5 +364,134 @@ def build(existing, reader, baselines, selection, snapshots, base, workbench_ver
     for w in writes:
         new_baselines[w.path] = w.hash
     rows = sorted(work.rows, key=lambda r: _key(r.path, r.block))
-    return UpgradePlan(mode, tuple(rows), tuple(writes), document, manifest_bytes,
+    return UpgradePlan(mode, tuple(rows), tuple(writes), tuple(dirs), document, manifest_bytes,
                        new_baselines)
+
+
+# --- the digest and the preview text -----------------------------------------------------------
+
+
+def store_writes(plan):
+    """The guarded-store writes of an upgrade: ``((path, bytes),)``. Only the baselines change;
+    the first-seen record is already there."""
+    project = manifest.project_id(plan.document["seed"])
+    return (("projects/%s/baselines" % project,
+             installplan.json_store({"baselines": plan.baselines, "format": 1})),)
+
+
+def _changes(existing, selection):
+    """Each selected module with what its declaration did since it was installed."""
+    old = {(p["name"], m["name"]): m for p in existing.document["packages"] for m in p["modules"]}
+    out = []
+    for v in selection.modules:
+        before = old.get((v.package, v.name))
+        record = {"declaration": v.declaration_hash, "name": v.name, "package": v.package,
+                  "tree": v.tree_hash, "type": v.type, "version": v.version}
+        if v.type == "harness":
+            change = {"kind": "not recorded"}
+        elif before is None:
+            change = {"kind": "new"}
+        elif (before["declaration"], before["tree"], before["version"]) == (
+                v.declaration_hash, v.tree_hash, v.version):
+            change = {"kind": "unchanged"}
+        else:
+            change = {"kind": "changed", "declaration": before["declaration"],
+                      "tree": before["tree"], "version": before["version"]}
+        record["change"] = change
+        out.append(record)
+    return out
+
+
+def digest_fields(plan, existing, selection, identity):
+    """Every field the owner approves, with explicit names. `identity` is the target's
+    (device, inode). The workbench version is the one the new manifest records. The hash of each
+    write is taken from its bytes, and a write whose recorded hash is not that is refused."""
+    for w in plan.writes:
+        if w.hash != _sha(w.data):
+            raise UpgradeError("the write of %s does not match its hash"
+                               % display.ascii_text(w.path)[:80])
+    return {
+        "command": plan.mode,
+        "target": {"device": identity[0], "inode": identity[1]},
+        "workbench": plan.document["workbench"], "recorded_workbench": existing.document["workbench"],
+        "base": plan.document["base"], "manifest_before": existing.manifest_hash,
+        "manifest_after": _sha(plan.manifest_bytes),
+        "modules": _changes(existing, selection),
+        "packages": plan.document["packages"],
+        "rows": [{"kind": r.kind, "path": r.path, "block": r.block, "slot": r.slot,
+                  "class": r.owner_class, "detail": r.detail} for r in plan.rows],
+        "directories": list(plan.dirs),
+        "writes": [{"op": w.op, "path": w.path, "mode": "x" if w.executable else "-",
+                    "size": len(w.data), "hash": _sha(w.data), "expected": w.expected}
+                   for w in plan.writes],
+        "baselines": plan.baselines,
+        "store_writes": [{"path": p, "hash": _sha(d)} for p, d in store_writes(plan)],
+    }
+
+
+def digest(plan, existing, selection, identity):
+    return installplan.digest_of(digest_fields(plan, existing, selection, identity))
+
+
+def _show(text):
+    return display.ascii_text(str(text).replace("\\", "\\\\"))
+
+
+def render(plan, existing, selection, target_path, identity, show_digest=False):
+    """The preview text. Every name, path and package-supplied string is ASCII-escaped, and no
+    existing file's content is printed, only hashes and reasons."""
+    counts = collections.Counter(r.kind for r in plan.rows)
+    lines = ["target: %s" % _show(target_path), "command: %s" % plan.mode, "state: existing",
+             "workbench: %s (the project records %s)" % (
+                 _show(plan.document["workbench"]), _show(existing.document["workbench"])),
+             "summary: " + ", ".join("%d %s" % (counts[k], k) for k in
+                                     (CREATE, APPEND, REPLACE, SKIP, CONFLICT) if counts[k])
+             + "; %d file writes; %d store writes" % (len(plan.writes), len(store_writes(plan)))]
+    changes = _changes(existing, selection)
+    flags = ["%s module %s/%s" % (m["type"], _show(m["package"]), _show(m["name"]))
+             for m in changes if m["type"] in ("harness", "process")]
+    if flags:
+        lines.append("high risk: " + "; ".join(flags))
+    lines.append("modules:")
+    for m in changes:
+        change = m["change"]
+        lines.append("  %s/%s %s (%s): %s" % (_show(m["package"]), _show(m["name"]),
+                                              _show(m["version"]), m["type"], change["kind"]))
+        lines.append("    declaration %s" % m["declaration"])
+        lines.append("    tree %s" % m["tree"])
+        if change["kind"] == "changed":
+            lines.append("    was: version %s, declaration %s, tree %s" % (
+                _show(change["version"]), change["declaration"], change["tree"]))
+    for package in plan.document["packages"]:
+        lines.append("  package %s from %s" % (_show(package["name"]), _show(package["source"])))
+    lines.append("paths:")
+    for r in plan.rows:
+        who = "" if r.block is None else " block %s slot:%s" % (_show(r.block), _show(r.slot))
+        row = "  %s %s%s [%s]" % (r.kind, _show(r.path), who, r.owner_class or "-")
+        if r.detail:
+            row += " (%s)" % _show(r.detail)
+        lines.append(row)
+    if plan.dirs:
+        lines.append("directories:")
+        lines.extend("  create-dir %s" % _show(d) for d in plan.dirs)
+    lines.append("file writes:")
+    for w in plan.writes:
+        row = "  %s %s %s %d bytes sha256 %s" % (w.op, _show(w.path), "x" if w.executable else "-",
+                                                 len(w.data), w.hash)
+        if w.expected:
+            row += " (now %s)" % w.expected
+        lines.append(row)
+    appends = [r for r in plan.rows if r.kind == APPEND]
+    if appends:
+        lines.append("appended blocks (if you decline one, add this marker line where the block "
+                     "should go instead):")
+        for r in appends:
+            lines.append("  %s: %s  for block %s" % (_show(r.path), base_module.marker(r.slot),
+                                                      _show(r.block)))
+    lines.append("guarded store:")
+    for path, data in store_writes(plan):
+        lines.append("  replace %s sha256 %s" % (path, _sha(data)))
+    lines.append("git: not run; nothing is committed")
+    if show_digest:
+        lines.append("digest: %s" % digest(plan, existing, selection, identity))
+    return "\n".join(lines) + "\n"
