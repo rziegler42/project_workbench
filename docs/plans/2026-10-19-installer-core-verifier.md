@@ -437,11 +437,17 @@ The edits made after round 3 have not been re-reviewed. The plan stays `Approved
 ## Result
 
 In progress. Increments A to E are committed (`89d64c6`, `3f6b6ec`, `2b53cd0`,
-`92fe5fa`, `eab70b6`) and the review fixes for E follow them (`beaf221`). Increment F
-(`workbench/verify.py`, `tests/test_verify.py`) is implemented and not yet committed or
-reviewed. The full suite passes (212 tests, `python3 -m unittest discover -s tests`).
-Increments B and E had a security review whose findings were fixed with tests; C, D and F
-had no independent review yet.
+`92fe5fa`, `eab70b6`) and the review fixes for E follow them (`beaf221`). Increment F is committed (`087d198`). Increment G
+(`workbench/cli.py`, `tests/test_cli.py`, `docs/development.md`) is implemented and not
+yet committed or reviewed. The full suite passes (229 tests,
+`python3 -m unittest discover -s tests`), and the documented commands were run on the
+sample package: exit 0 with a selection, exit 1 without a harness, exit 2 with no command.
+Increments B and E had a security review whose findings were fixed with tests; C, D, F
+and G had no independent review yet.
+
+Calls made in G: refusals and the warnings that accompany them go to stderr, an
+acceptance to stdout; control characters in anything printed are escaped; the
+"same path" test compares absolute paths without touching the filesystem.
 
 Calls made in F, for the owner to confirm in Increment H: a module is never its own
 provider, so requiring its own capability is unmet; a slot fill counts as a soft
@@ -459,4 +465,5 @@ slot names and `provides` may not list `slot:` entries; `fills` takes `slot:<nam
 dotted sub-names are refused; harness item naming is `<kind>/<name>` as the
 `modulefiles` docstring states; an empty directory in `ships` is refused.
 
-Next: commit Increment F when the owner asks, then Increment G (the verify command).
+Next: commit Increment G when the owner asks, then Increment H (the spec, the decision
+record and this Result).

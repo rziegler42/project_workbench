@@ -19,7 +19,8 @@ ambiguous blank.
 | Purpose | Command |
 |---|---|
 | Setup | not applicable (standard library only; nothing to install) |
-| Run locally | `python3 -m workbench` |
+| Run locally | `python3 -m workbench verify [<package> \| --dir <path>] [--select <module> ...] [--no-harness-required]` |
+| Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
 | One focused test | `python3 -m unittest tests.test_package` |
 | Full tests | `python3 -m unittest discover -s tests` |
 | Format | not applicable (no code yet) |
@@ -27,6 +28,21 @@ ambiguous blank.
 | Type check | not applicable (no code yet) |
 | Build | not applicable (no code yet) |
 | All required checks | `python3 -m unittest discover -s tests`; document checks are run by the owner in session, as `docs/README.md` states |
+
+## The verify command
+
+`verify` reads a package and writes nothing. The package is the positional argument or
+`--dir`, defaulting to `.`; the same path given both ways is accepted, two different
+paths are a usage error. Without `--select` it checks every module on its own; with it,
+it also checks the named modules as one install (`<module>` or `<package>/<module>`),
+and prints the install order. A harness module is required in a selection unless
+`--no-harness-required` is given.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | accepted; one line per module with its version and the first twelve characters of the declaration and tree hashes, then warnings |
+| 1 | refused; one `refused:` line per problem on stderr, naming the package or module and the rule |
+| 2 | usage error |
 
 ## Verification workflow
 

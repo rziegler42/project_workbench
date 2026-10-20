@@ -2,12 +2,11 @@
 
 import sys
 
-USAGE = "usage: python3 -m workbench <command> [options]\n"
+from . import cli
 
 
 def main(argv):
-    sys.stderr.write(USAGE)
-    return 2
+    return cli.main(argv)
 
 
 if __name__ == "__main__":
