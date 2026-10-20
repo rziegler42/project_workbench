@@ -25,6 +25,9 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench preview upgrade [<target> | --dir <path>] [--package <source> [--ref <ref>]] ...\n"
          "                                            (read-only; no --select, no download)\n"
          "       python3 -m workbench upgrade <same arguments as preview upgrade>   (owner-run, terminal only)\n"
+         "       python3 -m workbench preview add [<target> | --dir <path>] --package <source> [--ref <ref>] ...\n"
+         "                                        --select <module> ...   (read-only; no download)\n"
+         "       python3 -m workbench add <same arguments as preview add>   (owner-run, terminal only)\n"
          "       python3 -m workbench acknowledge [<target> | --dir <path>]   (owner-run, terminal only)\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
@@ -139,26 +142,27 @@ def _project_command(tokens, out, err, store_root, distribution, upgrading=False
 
 
 def _preview(argv, out, err, store_root, distribution):
-    if len(argv) < 2 or argv[1] not in ("install", "upgrade"):
-        err.write("preview takes install or upgrade (add is not built yet)\n%s" % USAGE)
+    if len(argv) < 2 or argv[1] not in ("install", "upgrade", "add"):
+        err.write("preview takes install, upgrade or add\n%s" % USAGE)
         return 2
     upgrading = argv[1] == "upgrade"
     opened = _project_command(argv[2:], out, err, store_root, distribution, upgrading)
     if isinstance(opened, int):
         return opened
-    if upgrading:
-        return upgrade.run_preview(opened[1], opened[0], out, err, distribution)
+    if argv[1] in ("upgrade", "add"):
+        return upgrade.run_preview(opened[1], opened[0], out, err, distribution, mode=argv[1])
     return preview.run(opened[1], opened[0], out, err, distribution)
 
 
-def _upgrade(tokens, out, err, store_root, distribution, stdin):
+def _upgrade(tokens, out, err, store_root, distribution, stdin, mode="upgrade"):
     stdin = stdin if stdin is not None else sys.stdin
-    if not upgrade.require_terminal(stdin, out, err):
+    if not upgrade.require_terminal(stdin, out, err, mode):
         return 1
-    opened = _project_command(tokens, out, err, store_root, distribution, upgrading=True)
+    opened = _project_command(tokens, out, err, store_root, distribution,
+                              upgrading=mode == "upgrade")
     if isinstance(opened, int):
         return opened
-    return upgrade.run(opened[1], opened[0], stdin, out, err, distribution)
+    return upgrade.run(opened[1], opened[0], stdin, out, err, distribution, mode=mode)
 
 
 def _install(tokens, out, err, store_root, distribution, stdin):
@@ -206,8 +210,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         return _preview(argv, out, err, store_root, distribution)
     if argv and argv[0] == "acknowledge":
         return _acknowledge(argv[1:], err, out, store_root, stdin)
-    if argv and argv[0] == "upgrade":
-        return _upgrade(argv[1:], out, err, store_root, distribution, stdin)
+    if argv and argv[0] in ("upgrade", "add"):
+        return _upgrade(argv[1:], out, err, store_root, distribution, stdin, argv[0])
     if argv and argv[0] == "install":
         return _install(argv[1:], out, err, store_root, distribution, stdin)
     try:

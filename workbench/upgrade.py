@@ -1,5 +1,6 @@
-"""``wb preview upgrade`` and ``wb upgrade``: show, and after the owner types the digest do, an
-upgrade of an existing project.
+"""``wb preview upgrade`` and ``wb upgrade``, ``wb preview add`` and ``wb add``: show, and after
+the owner types the digest do, an upgrade of an existing project or the addition of modules it
+does not have.
 
 ``prepare`` is the whole read-only pipeline from a held target to a plan, in the order the spec
 gives, and refuses with a reason at the first step that fails: the project is read
@@ -9,7 +10,10 @@ records is verified and gated, and only then is the plan built. The project is c
 its baselines a second time with the files the plan would write into. The write command calls
 the same function.
 
-``preview upgrade`` writes nothing. ``upgrade`` is owner-run and terminal-only like ``install``:
+``add`` is the same pipeline with the modules named by ``--select`` added to those the project
+records. Each must be new; the installed ones are verified and gated with them, and any change to
+an installed file or block is refused (``upgrade`` makes it), so ``add`` writes only new files,
+new blocks and the manifest. ``preview upgrade`` writes nothing. ``upgrade`` is owner-run and terminal-only like ``install``:
 it prints the plan with its digest, reads the typed first twelve characters, rebuilds the plan
 from the packages as they are now and refuses if its digest differs, then writes in this order:
 the marker ``.workbench/local/incomplete``, the directories, the created files, the files
@@ -32,7 +36,7 @@ ENDING = preview.ENDING
 LISTED = 40
 RECOVERY = ("a file already replaced no longer matches the manifest, so a second run would call "
             "it edited, and there is no automatic repair: put the files listed as written back "
-            "from version control or a copy, remove the marker yourself, and run the upgrade "
+            "from version control or a copy, remove the marker yourself, and run the command "
             "again")
 RECOVERY_FILES_DONE = ("the project's files and manifest are complete; only the store entry or "
                        "the marker is left: remove the marker yourself, then run "
@@ -88,16 +92,17 @@ def _package_json(path):
     return name, [m for m in modules if isinstance(m, str)]
 
 
-def _resolve(guarded, document, given):
+def _resolve(guarded, document, given, adding=False):
     """One ``Resolved`` per package the manifest records: the one given for it, else the cached
-    copy of its recorded source and ref."""
+    copy of its recorded source and ref. When adding, a given package the project does not
+    record is a new one."""
     recorded = {p["name"]: p for p in document["packages"]}
     chosen = {}
     try:
         for source, ref in given:
             resolved = sources.resolve_cached(guarded, source, ref)
             name, _ = _package_json(resolved.path)
-            if name not in recorded:
+            if name not in recorded and not adding:
                 raise preview.Refused(["the package %s is not one this project records; adding "
                                        "a module is `wb add`" % display.ascii_text(name)[:80]])
             if name in chosen:
@@ -118,7 +123,49 @@ def _resolve(guarded, document, given):
     return [(name, chosen[name]) for name in sorted(chosen)]
 
 
-def prepare(guarded, held, given, distribution, version, which=shutil.which, mode="upgrade"):
+def _already_installed(tokens, recorded):
+    """Refuse a selected module the project already has: it changes only with `upgrade`."""
+    for token in tokens:
+        if "/" in token:
+            have = tuple(token.split("/", 1)) in recorded
+        else:
+            have = any(name == token for _, name in recorded)
+        if have:
+            raise preview.Refused(["%s is already installed; an installed module changes only "
+                                   "with `wb upgrade` (name another package's module of the "
+                                   "same name as <package>/<module>)"
+                                   % display.ascii_text(token)[:80]])
+
+
+def _same_provenance(packages, recorded):
+    """A package the project already records keeps its source, ref and commit through an add;
+    moving it to another origin or commit is an upgrade."""
+    old = {p["name"]: p for p in recorded}
+    for package in packages:
+        was = old.get(package.name)
+        if was is not None and (package.source, package.ref, package.commit) != (
+                was["source"], was["ref"], was["commit"]):
+            raise preview.Refused([
+                "add never changes where an installed package comes from: %s is recorded from %s "
+                "and was given from %s; use upgrade" % (
+                    display.ascii_text(package.name)[:80],
+                    display.ascii_text(was["source"])[:120],
+                    display.ascii_text(package.source)[:120])])
+
+
+def _installed_unchanged(changes, recorded):
+    """An add does not move an installed module to another version, whatever happens to its
+    files: that is `upgrade`."""
+    for item in changes:
+        if (item["package"], item["name"]) in recorded and item["change"]["kind"] == "changed":
+            raise preview.Refused(["add never changes an installed module: %s/%s differs from "
+                                   "what is installed; use upgrade"
+                                   % (display.ascii_text(item["package"])[:80],
+                                      display.ascii_text(item["name"])[:80])])
+
+
+def prepare(guarded, held, given, distribution, version, which=shutil.which, mode="upgrade",
+            add=()):
     """Read, check, verify, gate and plan. Returns a dict with ``plan``, ``existing``,
     ``selection``, ``approvals``, ``warnings`` and ``writer``; raises ``preview.Refused``."""
     if held.state != "existing":
@@ -138,13 +185,18 @@ def prepare(guarded, held, given, distribution, version, which=shutil.which, mod
     if found:
         _refuse_differences(found)
 
-    resolved = _resolve(guarded, existing.document, given)
+    resolved = _resolve(guarded, existing.document, given, adding=mode == "add")
     # A recorded module its package no longer declares is not selected: its entries are left in
     # place and reported, and nothing of it is deleted.
     declared = {name: _package_json(item.path)[1] for name, item in resolved}
     select = ["%s/%s" % (p["name"], m["name"]) for p in existing.document["packages"]
               for m in p["modules"] if m["name"] in declared[p["name"]]]
-    if not select:
+    recorded = {(p["name"], m["name"]) for p in existing.document["packages"]
+                for m in p["modules"]}
+    if mode == "add":
+        _already_installed(add, recorded)
+        select += list(add)
+    elif not select:
         raise preview.Refused(["none of the modules the project records is in its packages"])
     paths = [item.path for _, item in resolved]
     result = verify.verify_packages(
@@ -155,6 +207,13 @@ def prepare(guarded, held, given, distribution, version, which=shutil.which, mod
         raise preview.Refused([str(problem) for problem in result.problems])
     if [info.name for info in result.packages] != [name for name, _ in resolved]:
         raise preview.Refused(["the packages changed while they were read; nothing was done"])
+    # A package's own harness comes with it and is not written; naming one to add is an error.
+    named = {name for m in result.modules if m.type == "harness"
+             for name in (m.name, "%s/%s" % (m.package, m.name))}
+    if mode == "add" and named & set(add):
+        raise preview.Refused(["a harness is attached, not added; attach is not built yet"])
+    if mode == "add" and not [key for key in result.order if key not in recorded]:
+        raise preview.Refused(["none of the selected modules is new to the project"])
     decision = gate.check_selection(guarded, result, distribution)
     if not decision.approved:
         raise preview.Refused(["%s/%s is not approved on this machine: %s" % (
@@ -176,6 +235,9 @@ def prepare(guarded, held, given, distribution, version, which=shutil.which, mod
         origins[info.name].ref, origins[info.name].commit, info.tree_hash)
         for info in result.packages if info.name in used)
     selection = installplan.Selection(modules, packages)
+    if mode == "add":
+        _same_provenance(packages, existing.document["packages"])
+        _installed_unchanged(upgradeplan._changes(existing, selection), recorded)
     try:
         plan = upgradeplan.build(existing, writer, baselines, selection, snaps, loaded_base,
                                  version, mode)
@@ -199,12 +261,12 @@ def prepare(guarded, held, given, distribution, version, which=shutil.which, mod
 
 
 def run_preview(guarded, parsed, out, err, distribution=None, version=None,
-                which=shutil.which):
+                which=shutil.which, mode="upgrade"):
     """Print the preview and return 0, or print ``refused:`` lines and return 1."""
     try:
         with target.open_target(parsed.target, guarded.root) as held:
             done = prepare(guarded, held, parsed.packages, distribution,
-                           version or __version__, which)
+                           version or __version__, which, mode, parsed.select or ())
             text = upgradeplan.render(done["plan"], done["existing"], done["selection"],
                                       held.path, held.identity, approvals=done["approvals"])
     except target.TargetError as exc:
@@ -287,9 +349,7 @@ def _write(guarded, held, plan, progress):
     progress.stage = "marker"
     try:
         writer.remove_marker()
-    except safefs.SafeFsError:
-        if held.has_incomplete_marker():
-            raise
+    except projectfs.MarkerMissing:
         progress.warnings.append("the marker %s was already gone" % projectfs.MARKER)
 
 
@@ -331,10 +391,11 @@ def _lines(err, exc):
                   % display.clean(line))
 
 
-def _run(guarded, parsed, stdin, out, err, distribution, version, which, progress):
+def _run(guarded, parsed, stdin, out, err, distribution, version, which, progress, mode):
     try:
         with target.open_target(parsed.target, guarded.root) as held:
-            done = prepare(guarded, held, parsed.packages, distribution, version, which)
+            done = prepare(guarded, held, parsed.packages, distribution, version, which, mode,
+                           parsed.select or ())
             plan, existing, selection = done["plan"], done["existing"], done["selection"]
             for warning in done["warnings"]:
                 err.write("warning: %s\n" % display.clean(warning))
@@ -344,16 +405,17 @@ def _run(guarded, parsed, stdin, out, err, distribution, version, which, progres
                 out.write("nothing to change\n")
                 return 0
             digest = upgradeplan.digest(plan, existing, selection, held.identity)
-            out.write("\nTo upgrade, type the first %d characters of the digest shown above and "
+            out.write("\nTo %s, type the first %d characters of the digest shown above and "
                       "press Enter.\nAnything else cancels and writes nothing.\n> "
-                      % confirm.CONFIRM_CHARS)
+                      % (mode, confirm.CONFIRM_CHARS))
             out.flush()
             if not confirm.typed_matches(stdin, digest):
                 out.write("cancelled: nothing was written\n")
                 return 1
             held.recheck()
             try:
-                again = prepare(guarded, held, parsed.packages, distribution, version, which)
+                again = prepare(guarded, held, parsed.packages, distribution, version, which,
+                                mode, parsed.select or ())
             except preview.Refused as exc:
                 raise preview.Refused(["the project or its packages changed while the plan was "
                                        "shown: %s; nothing was written" % "; ".join(exc.lines)])
@@ -370,11 +432,15 @@ def _run(guarded, parsed, stdin, out, err, distribution, version, which, progres
                 if progress.writer is None:
                     raise
                 confirm.report_failure(
-                    progress, cause, err, what="upgrade",
+                    progress, cause, err, what=mode,
                     hint=RECOVERY_FILES_DONE if progress.stage in ("store", "marker")
                     else RECOVERY)
                 return 3
-            _finish(plan, progress, held, out, err)
+            progress.done = True
+            try:
+                _finish(plan, progress, held, out, err)
+            except OSError:
+                pass
             return 0
     except target.TargetError as exc:
         return _refuse(err, display.clean(str(exc)).replace("refused: ", "", 1))
@@ -385,32 +451,36 @@ def _run(guarded, parsed, stdin, out, err, distribution, version, which, progres
         return _refuse(err, str(exc))
 
 
-def require_terminal(stdin, out, err):
+def require_terminal(stdin, out, err, mode="upgrade"):
     """True when both streams are terminals; otherwise print the refusal and return False."""
     if approve.is_terminal(stdin) and approve.is_terminal(out):
         return True
-    _refuse(err, "upgrade is owner-run: standard input and output must both be terminals. Run "
-                 "this command yourself, from your own terminal; `preview upgrade` shows the "
-                 "same plan without writing.")
+    _refuse(err, "%s is owner-run: standard input and output must both be terminals. Run "
+                 "this command yourself, from your own terminal; `preview %s` shows the "
+                 "same plan without writing." % (mode, mode))
     return False
 
 
-def run(guarded, parsed, stdin, out, err, distribution=None, version=None, which=shutil.which):
-    """Upgrade after the owner types the digest. Returns the exit code: 0 done or nothing to
+def run(guarded, parsed, stdin, out, err, distribution=None, version=None, which=shutil.which,
+        mode="upgrade"):
+    """Upgrade or add after the owner types the digest. Returns the exit code: 0 done or nothing to
     change, 1 refused or cancelled, 3 stopped after writing began, 130 interrupted before it."""
-    if not require_terminal(stdin, out, err):
+    if not require_terminal(stdin, out, err, mode):
         return 1
     progress = confirm.Progress()
     progress.warnings = []
     progress.stage = "files"
+    progress.done = False
     try:
         return _run(guarded, parsed, stdin, out, err, distribution, version or __version__,
-                    which, progress)
+                    which, progress, mode)
     except KeyboardInterrupt:
+        if progress.done:
+            return 0
         if progress.started:
             try:
                 err.write("\ninterrupted after writing began: the project may be partly "
-                          "upgraded; check %s\n" % projectfs.MARKER)
+                          "written; check %s\n" % projectfs.MARKER)
             except OSError:
                 pass
             return 3

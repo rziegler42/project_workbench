@@ -42,6 +42,10 @@ class WriteConflict(safefs.SafeFsError):
     """The path exists, or a link or a non-directory is in the way."""
 
 
+class MarkerMissing(safefs.SafeFsError):
+    """The install marker is not there (as opposed to being unreadable or in the way)."""
+
+
 # What `read_file` returns: the bytes, their SHA-256 (hex) and the permission bits.
 FileState = collections.namedtuple("FileState", "data hash mode")
 
@@ -431,7 +435,7 @@ class Writer:
                 raise WriteConflict("the install marker is not a regular file: %s" % shown)
             os.unlink(parts[-1], dir_fd=dirfd)
         except FileNotFoundError:
-            raise safefs.SafeFsError("the install marker is missing: %s" % shown)
+            raise MarkerMissing("the install marker is missing: %s" % shown)
         except OSError as exc:
             raise _os_error("remove", shown, exc)
         finally:

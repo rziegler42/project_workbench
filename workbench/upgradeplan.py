@@ -465,8 +465,15 @@ def render(plan, existing, selection, target_path, identity, show_digest=False, 
         if change["kind"] == "changed":
             lines.append("    was: version %s, declaration %s, tree %s" % (
                 _show(change["version"]), change["declaration"], change["tree"]))
+    was = {p["name"]: p for p in existing.document["packages"]}
     for package in plan.document["packages"]:
         lines.append("  package %s from %s" % (_show(package["name"]), _show(package["source"])))
+        old = was.get(package["name"])
+        if old is not None and (old["source"], old["ref"], old["commit"]) != (
+                package["source"], package["ref"], package["commit"]):
+            lines.append("    source changed from %s ref %s commit %s" % (
+                _show(old["source"]), _show(old["ref"] or "(none)"),
+                _show(old["commit"] or "(none)")))
     lines.append("paths:")
     for r in plan.rows:
         who = "" if r.block is None else " block %s slot:%s" % (_show(r.block), _show(r.slot))

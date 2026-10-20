@@ -553,13 +553,13 @@ class Chain(base_tests.UpgradePreview):
 
 
 class Finish(Upgrade):
-    def test_ctrl_c_after_the_write_does_not_say_nothing_was_written(self):
+    def test_ctrl_c_while_printing_the_result_is_not_a_failure(self):
         new = self.ready(notes=base_tests.NOTES2)
         with unittest.mock.patch("workbench.upgrade._finish", side_effect=KeyboardInterrupt):
             code, out, err = self.upgrade("--package", new)
-        self.assertEqual(3, code)
+        self.assertEqual(0, code)
         self.assertNotIn("nothing was written", out + err)
-        self.assertIn("interrupted after writing began", err)
+        self.assertFalse(self.marker())
 
     def test_ctrl_c_before_the_answer_is_still_130(self):
         new = self.ready(notes=base_tests.NOTES2)
@@ -586,6 +586,20 @@ class Finish(Upgrade):
         self.assertEqual(0, code, err)
         self.assertIn("warning: the marker", err)
         self.assertIn("was already gone", err)
+
+    def test_a_marker_that_cannot_be_removed_is_a_failure_not_a_warning(self):
+        new = self.ready(notes=base_tests.NOTES2)
+        real = projectfs.Writer.remove_marker
+
+        def remove(writer):
+            raise projectfs.safefs.SafeFsError("permission denied")
+
+        with unittest.mock.patch.object(projectfs.Writer, "remove_marker", remove):
+            code, out, err = self.upgrade("--package", new)
+        self.assertEqual(3, code)
+        self.assertNotIn("already gone", err)
+        self.assertTrue(self.marker())
+        self.assertTrue(real)
 
     def test_a_file_that_is_not_what_was_written_is_a_failure(self):
         new = self.ready(notes=base_tests.NOTES2)
