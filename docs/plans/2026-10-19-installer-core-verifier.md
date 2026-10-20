@@ -1,7 +1,8 @@
 # Installer core and the declaration verifier
 
-Status: Approved
+Status: Completed
 Created: 2026-10-19
+Completed: 2026-10-19
 Candidate: workbench-v1#installer-core-verifier
 Specs: module-contract, repository-boundary
 
@@ -436,9 +437,11 @@ The edits made after round 3 have not been re-reviewed. The plan stays `Approved
 
 ## Result
 
-Complete pending archive: Increments A to H are committed, and the owner accepted the
-language decision (`docs/decisions/2026-10-19-implementation-language.md`) on 2026-10-19.
-The plan's status is still `Approved`; archiving it is the owner's step.
+Completed on 2026-10-19: Increments A to H are committed, and the owner accepted the
+language decision (`docs/decisions/2026-10-19-implementation-language.md`). The owner
+archived the plan with these gaps known: the full suite was run in the working tree and
+not on a fresh clone; the criteria are mapped to test files, not test names; and the
+final review fixes and Increment H were not re-reviewed.
 
 Commits: A `89d64c6`, B `3f6b6ec`, C `2b53cd0`, D `92fe5fa`, E `eab70b6` and its review
 fixes `beaf221`, F `087d198`, G `4700198`. H `ffcc092`, and its review fixes `a887d22`. The full suite
@@ -501,4 +504,5 @@ from the earlier reviews (unbounded total tree size, some unwrapped `OSError`s, 
 temporary file left after a kill, weak `fsync` on macOS, the `_hook` test seam in
 production code) remain open for later plans.
 
-Next: the owner archives the plan (`ask-codex archive` at completion is the owner's).
+Next: the owner runs `ask-codex archive` for the open plan review, which is owner-only.
+The candidate `workbench-v1#installer-core-verifier` is complete by this plan's status.
