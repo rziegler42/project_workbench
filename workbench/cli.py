@@ -8,7 +8,8 @@ import argparse
 import os
 import sys
 
-from . import approve, display, firstparty, launch, pins, safefs, settings, store, verify
+from . import (approve, display, firstparty, launch, pins, preview, safefs, settings, sources,
+               store, target, verify)
 
 PROG = "python3 -m workbench"
 USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
@@ -18,6 +19,8 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench pin <project-id> <name> <helper> --root <dir>   (owner-run, terminal only)\n"
          "       python3 -m workbench launch <project-id> <name> --root <dir> -- <args>\n"
          "       python3 -m workbench release-approvals\n"
+         "       python3 -m workbench preview install [<target> | --dir <path>] --package <source> [--ref <ref>] ...\n"
+         "                                            [--package ...] --select <module> ...   (read-only)\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
 
@@ -95,6 +98,41 @@ def _release(distribution, out, err):
     return 0
 
 
+def _open_store(store_root, err):
+    """Every command first makes sure the guarded store exists, before any check.
+
+    The personal settings are seeded when missing and reported when damaged; a damaged file is
+    never overwritten and every checkpoint then stops. Returns ``(store, notes)`` or None.
+    """
+    try:
+        guarded = store.Store(store_root if store_root is not None else store.default_root())
+        guarded.ensure()
+        return guarded, ["settings: " + problem for problem in settings.initialize(guarded).problems]
+    except safefs.SafeFsError as exc:
+        err.write("refused: %s\n" % _clean(str(exc)))
+        return None
+
+
+def _preview(argv, out, err, store_root, distribution):
+    try:
+        if len(argv) < 2 or argv[1] != "install":
+            raise _Usage("preview takes install (upgrade and add are not built yet)")
+        parsed = sources.parse_install(argv[2:])
+        command = sources.Command(target.choose(parsed.positional, parsed.dir_option),
+                                  parsed.packages, parsed.select)
+    except (_Usage, sources.UsageError, target.TargetUsage) as exc:
+        err.write("%s\n%s" % (_clean(str(exc)), USAGE))
+        return 2
+    opened = _open_store(store_root, err)
+    if opened is None:
+        return 1
+    guarded, notes = opened
+    notes += launch.install_wrapper(guarded, distribution or firstparty.default_distribution())
+    for note in notes:
+        err.write("warning: %s\n" % _clean(note))
+    return preview.run(guarded, command, out, err, distribution)
+
+
 def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=None):
     """Run a command. `store_root`, `distribution` and `stdin` are for tests; the command
     line cannot set them."""
@@ -110,6 +148,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
     if argv and argv[0] == "launch" and "--" in argv:
         split = argv.index("--")
         argv, passthrough = argv[:split], argv[split + 1:]
+    if argv and argv[0] == "preview":
+        return _preview(argv, out, err, store_root, distribution)
     try:
         args = _parser().parse_args(argv)
         if args.command == "launch":
@@ -134,16 +174,10 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
     except SystemExit as exc:  # --help
         return exc.code if isinstance(exc.code, int) else 2
 
-    # Every command first makes sure the guarded store exists, before any check.
-    # The personal settings are seeded when missing and reported when damaged; a damaged
-    # file is never overwritten and every checkpoint then stops.
-    try:
-        guarded = store.Store(store_root if store_root is not None else store.default_root())
-        guarded.ensure()
-        notes = ["settings: " + problem for problem in settings.initialize(guarded).problems]
-    except safefs.SafeFsError as exc:
-        err.write("refused: %s\n" % _clean(str(exc)))
+    opened = _open_store(store_root, err)
+    if opened is None:
         return 1
+    guarded, notes = opened
 
     if args.command == "launch":
         # Only the wrapper is checked here; nothing else is printed, so the helper's own

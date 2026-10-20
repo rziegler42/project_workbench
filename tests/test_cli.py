@@ -146,6 +146,17 @@ class UsageTest(CliBase):
                 self.assertEqual((code, out), (2, ""))
                 self.assertIn("usage:", err)
 
+    def test_preview_usage_is_listed_and_bad_forms_exit_2(self):
+        code, out, err = run("preview")
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("preview install", err)
+        for argv in (["preview", "upgrade"], ["preview", "install"],
+                     ["preview", "install", "--select", "a"]):
+            with self.subTest(argv=argv):
+                code, out, err = run(*argv)
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn("usage:", err)
+
     def test_two_different_paths_are_refused(self):
         code, _, err = run("verify", self.path, "--dir", os.path.join(self.base, "other"))
         self.assertEqual(code, 2)
