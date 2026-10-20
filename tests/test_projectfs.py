@@ -516,6 +516,36 @@ class ReadReplaceTest(Fixture):
             writer.read_file("a")
         with self.assertRaises(safefs.SafeFsError):
             writer.replace_file("a", sha(b""), b"x")
+        with self.assertRaises(safefs.SafeFsError):
+            writer.list_dir("a")
+
+    def test_list_dir_gives_sorted_names_and_kinds_without_following_links(self):
+        os.mkdir(os.path.join(self.root, "d"))
+        self.put("d/b", b"1")
+        self.put("d/a", b"2")
+        os.mkdir(os.path.join(self.root, "d", "sub"))
+        os.symlink(self.outside, os.path.join(self.root, "d", "link"))
+        os.mkfifo(os.path.join(self.root, "d", "pipe"))
+        self.assertEqual([("a", "file"), ("b", "file"), ("link", "symlink"), ("pipe", "other"),
+                          ("sub", "dir")], self.writer().list_dir("d"))
+
+    def test_list_dir_of_a_missing_directory_is_none(self):
+        self.assertIsNone(self.writer().list_dir("nothing"))
+        self.assertIsNone(self.writer().list_dir("nothing/below"))
+
+    def test_list_dir_refuses_a_link_or_a_file_in_the_way(self):
+        os.symlink(self.outside, os.path.join(self.root, "up"))
+        self.put("plain", b"x")
+        for rel in ("up", "up/deeper", "plain", "plain/deeper"):
+            with self.subTest(rel=rel), self.assertRaises(WriteConflict):
+                self.writer().list_dir(rel)
+
+    def test_list_dir_changes_nothing(self):
+        os.mkdir(os.path.join(self.root, "d"))
+        writer = self.writer()
+        writer.list_dir("d")
+        self.assertEqual([], writer.written)
+        self.assertEqual(["d"], os.listdir(self.root))
 
 
 if __name__ == "__main__":

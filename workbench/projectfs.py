@@ -1,5 +1,5 @@
-"""The project writer: create files and directories inside a held target, read a file and
-replace a file whose content is as expected, and nothing else.
+"""The project writer: create files and directories inside a held target, read a file, list a
+directory and replace a file whose content is as expected, and nothing else.
 
 Every write walks from the held target descriptor one path component at a time, each
 directory opened with no-follow and directory-only flags, so a parent swapped for a link
@@ -262,6 +262,35 @@ class Writer:
             finally:
                 os.close(fd)
             return FileState(data, hashlib.sha256(data).hexdigest(), stat.S_IMODE(opened.st_mode))
+        finally:
+            for each in fds:
+                os.close(each)
+
+    def list_dir(self, rel):
+        """The entries of directory `rel` as sorted ``(name, kind)`` pairs, `kind` being what
+        ``safefs.classify`` says of the entry itself (a link is ``symlink``, never followed), or
+        None when the directory is not there. A link or a file in the way of the directory is a
+        conflict. A name that fails the path validator is refused."""
+        parts = safefs.validate_relpath(rel)
+        fds = []
+        try:
+            try:
+                dirfd = self._walk(parts, fds, False)
+            except FileNotFoundError:
+                return None
+            try:
+                names = sorted(os.listdir(dirfd))
+                found = []
+                for name in names:
+                    safefs.validate_relpath(name)
+                    try:
+                        info = os.stat(name, dir_fd=dirfd, follow_symlinks=False)
+                    except FileNotFoundError:
+                        continue
+                    found.append((name, safefs.classify(info.st_mode)))
+            except OSError as exc:
+                raise _os_error("list", self._shown(rel), exc)
+            return found
         finally:
             for each in fds:
                 os.close(each)
