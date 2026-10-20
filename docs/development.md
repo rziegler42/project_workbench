@@ -33,6 +33,7 @@ ambiguous blank.
 | Preview an install (read-only) | `python3 -m workbench preview install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Owner-run: install a new project (terminal only) | `python3 -m workbench install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Owner-run: accept changes made to a project (terminal only) | `python3 -m workbench acknowledge [<target> \| --dir <path>]` |
+| Owner-run: clear the marker of an unfinished write (terminal only) | `python3 -m workbench recover [<target> \| --dir <path>]` |
 | Preview an upgrade (read-only) | `python3 -m workbench preview upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
 | Owner-run: upgrade a project (terminal only) | `python3 -m workbench upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
 | Preview adding a module (read-only) | `python3 -m workbench preview add [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
@@ -163,7 +164,8 @@ package approval stores the resolved commit as the pin.
 `python3 -m workbench preview install [<target> | --dir <path>] --package <source> [--ref <ref>] ...
 --select <module> ...` shows what an install would do and writes nothing. `python3 -m workbench
 install` takes the same arguments and writes the project. `upgrade`, `add` and `acknowledge` are
-in "Acknowledging, upgrading and adding" below.
+in "Acknowledging, upgrading and adding" below, and `recover` in "Recovering from an unfinished
+write".
 The target goes before `--select`, or use `--dir`; `--package` may repeat and a `--ref` binds to
 the `--package` before it. Options are not abbreviated.
 
@@ -196,8 +198,8 @@ the `--package` before it. Options are not abbreviated.
   executable), directories 0755, narrowed by the umask. It ends with the count of paths,
   `nothing was committed` and `harness not attached: attach is not built yet`.
 - **A failure after the first write** prints `failed:` with the cause, the paths written and not
-  written, and that the marker is left; the directory is then refused as an existing project
-  until the owner deletes it by hand. Nothing is cleaned up.
+  written, and that the marker is left, and names `wb recover`; the directory is then refused as
+  an existing project until the marker is cleared. Nothing is cleaned up.
 
 | Exit code | Meaning |
 |---|---|
@@ -262,16 +264,17 @@ python3 -m workbench add             <the same arguments>                     (o
   baseline, with a summary of the manifest (packages, sources, refs, commits, module hashes and
   every file entry). It asks for the first 12 characters of the digest, re-reads, and replaces
   the baselines of exactly the listed paths in one atomic store write. It writes nothing in the
-  project. A link, a directory or another non-regular file where a file is expected cannot be
-  acknowledged, and more than 500 differences are refused. With none it prints `nothing to
-  acknowledge`.
+  project. A link, a directory or another non-regular file where a file is expected, and a name
+  under `.workbench/` that fails the path rules (a control character, bytes that are not UTF-8,
+  a colon or a backslash), cannot be acknowledged: it is listed with its reason and nothing is
+  written, and `upgrade` and `add` refuse with it listed. More than 500 differences are refused.
+  With none it prints `nothing to acknowledge`.
 - **Failure.** A failure after the marker was made prints `failed:` with the cause, the paths
-  written and not written, and a hint, leaves the marker, and exits 3; the directory is then not
-  an existing project until the owner removes the marker by hand. If only the store entry or the
-  marker is left, the files and manifest are complete and the owner runs `acknowledge`. If a
-  file was replaced before the manifest, a second run would call it edited and there is no
-  automatic repair: put the files back from version control or a copy. A marker that cannot be
-  made exits 1 with nothing written. An interrupt after writing began exits 3.
+  written and not written, and a hint naming `wb recover`, leaves the marker, and exits 3; the
+  directory is then not an existing project until the marker is cleared. `wb recover` clears it
+  only where that is safe; there is no automatic repair of files: put them back from version
+  control or a copy (see "Recovering from an unfinished write"). A marker that cannot be made
+  exits 1 with nothing written. An interrupt after writing began exits 3.
 
 | Exit code | Meaning |
 |---|---|
@@ -284,12 +287,69 @@ python3 -m workbench add             <the same arguments>                     (o
 **Limits.** A file with more than one hard link is refused, since its other name may be outside the
 project. The check of a file's hash and the rename that replaces it are not one operation, so
 a write by another process in between is lost; the typed text is friction, not authentication,
-and the harness's deny rule is the barrier. A rerun after a part-way failure can rewrite the
-manifest while file conflicts remain (writing the planned manifest hash into the marker would
-close this and is not built). After a reinstall at the same path, a manifest carrying an old seed
+and the harness's deny rule is the barrier. The comparison of a project with its baselines reads
+at most 256 MiB of file content in one scan (each file at most 16 MiB, 20000 entries under
+`.workbench/`, 32 levels deep) and refuses beyond it; `acknowledge` compares every baselined file
+in the project, not only those under `.workbench/`, and `upgrade` scans twice, each time with a
+fresh budget. After a reinstall at the same path, a manifest carrying an old seed
 from git history is checked against the baselines kept for that seed, and `acknowledge` shows
 the project id but does not highlight a change in it. A manifest source with
 credentials stripped may not match the cache record. `attach` and `check` are not built.
+
+## Recovering from an unfinished write
+
+`install`, `upgrade` and `add` write `.workbench/local/incomplete` first and remove it last. The
+marker holds a record of the plan being written (`workbench/unfinished.py`, format 1): the
+command, the project id when known, the workbench version, each file write (path, operation, the
+hash before, the hash after), each directory the plan creates, the files of the `.git` skeleton
+with their hashes, and each guarded-store write with its hash. It is canonical JSON, at most
+1 MiB and 10000 entries, with the manifest's path rules; no path may be at or under
+`.workbench/local`. The record is untrusted text and grants nothing: a marker that is empty (made
+by an earlier version), truncated, oversized or malformed reads as "no record", and `recover` then
+cannot help. A plan too large to record (about 5000 files) is refused before anything is written.
+
+```
+python3 -m workbench recover [<target> | --dir <path>]                    (owner-run)
+```
+
+- **Every other command that meets a marker** (`preview`, `install`, `upgrade`, `add`,
+  `acknowledge`) refuses with the same report, and `recover` shows it without the last line: the
+  command and version recorded, how many recorded files and store entries hold the state before
+  the plan, the state after it, or something else, the paths to deal with, and that `wb
+  recover` is the way forward. Reading is
+  bounded (256 MiB in all), never follows a link and reads regular files only.
+- **`recover`** is owner-run and terminal-only. It examines the project, shows the report and
+  what it would remove, and asks for the first 12 characters of the digest, which covers the
+  marker's bytes, the examination, the removals and the target's identity. After the answer it
+  examines again and refuses a different digest.
+- **It clears the marker only in these states** and refuses every other with the paths to deal
+  with, writing nothing:
+  - recorded files all in the state before the plan and the store entries all absent or old
+    (nothing happened, or the owner put the files back): the marker goes, and so does each
+    recorded directory that is empty, deepest first, with `rmdir` only; a failed `install` then
+    leaves the target as it was and `install` can be run again;
+  - files all in the state after the plan and every store entry written: only the marker was
+    left, and it goes;
+  - `upgrade` and `add` only, files after and no store entry written: the marker goes and
+    `acknowledge` then lists exactly the written paths for the owner to accept. An `install` in
+    that state, or with a partial store, is refused with the advice to put the project back,
+    run `recover` again and install again. The workbench does not repair a store.
+- **It never** writes or restores a file, removes a file other than the marker, removes a
+  directory that holds anything, touches the store, or removes the target directory. More than
+  500 removals, or `.workbench/local` holding more than the marker, are refused. The typed text
+  is friction, not authentication.
+- **Known limits.** The marker is unlinked by name a moment after the second examination, so a
+  marker swapped in that window is removed instead of the one shown. A forged record can make
+  `recover` remove empty directories the owner made, since `rmdir` refuses only non-empty ones;
+  they are listed before the digest is typed.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | the marker was cleared, or there is none |
+| 1 | refused or cancelled; nothing was removed |
+| 2 | usage error |
+| 3 | a removal failed or was interrupted after removal began; the message says whether the marker is still there |
+| 130 | interrupted at the prompt |
 
 ## The distribution layout
 

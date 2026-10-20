@@ -727,6 +727,12 @@ D are in those commits' messages and tests. Fixed:
   `.workbench-<pid>-<hex>.tmp`; case-insensitive and Unicode-normalising filesystems were not
   tested for name collisions.
 
+*Closed by `2026-10-20-unfinished-write-recovery` (result note, no change to the limits above):*
+the marker now records the plan and `wb recover` clears it (the first limit); a hostile name under
+`.workbench/` is listed as a difference that cannot be acknowledged and the scan has a 256 MiB
+byte budget (the first two E and F items). Still open: the remaining limits above, the cumulative
+budget of the project reader, and case and normalisation aliases.
+
 **Completion.** The owner had this plan marked `Completed` on 2026-10-20. The criteria above were
 checked against the tests and the recorded run; the unresolved items are the limits listed above
 (the partial-failure state after a failed write, the reviews not made by a separate agent, and the

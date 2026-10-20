@@ -402,7 +402,7 @@ Rounds used 2 of 3. R2-F1 and R2-F2 were recorded as `applied`. The owner chose 
   (swaps were simulated by patching), the full read budget, a pty run by the reviewer. A
   regression test for the case-variant refusal was added.
 
-### Increment D — done, committed (see the `#D` trailer)
+### Increment D — done, committed as `ef4c19c`
 
 - `projectfs.Writer.list_dir(rel, lenient=False)`: with `lenient`, a name that fails the path
   validator (control character, non-UTF-8, colon, backslash, `.git`) is listed with the kind
@@ -432,5 +432,23 @@ Rounds used 2 of 3. R2-F1 and R2-F2 were recorded as `applied`. The owner chose 
   has no cumulative budget (Deferred work). `acknowledge` compares every baselined file, so a
   project whose baselined files total over 256 MiB cannot be acknowledged or upgraded (the
   message says to deal with it by hand); `upgrade` scans twice, each with a fresh budget.
-  Document in E.
-- Next: Increment E (documentation).
+  Documented in E.
+
+### Increment E — done, not yet committed
+
+- `docs/development.md`: `recover` in the command table; a new section "Recovering from an
+  unfinished write" (the record, the report every command gives, the accepted states, what it
+  never does, limits, exit codes); the install and upgrade failure texts now name `wb recover`;
+  the acknowledge text lists the unacceptable-name rule; the scan limits (256 MiB, 16 MiB per
+  file, 20000 entries, depth 32, the whole-project comparison, the double scan of `upgrade`); the
+  stale "a rerun can rewrite the manifest" limit is removed.
+- `docs/specs/installer-interface.md`: a `recover` row in the command table and a `recover`
+  section (record, examination, accepted states, exit codes, limits); the acknowledge "As built"
+  text; the recovery rule under "Failure part-way"; exit code 3 for `recover`.
+- `2026-10-20-ownership-and-upgrade.md`: a result note that its marker limit and the E and F
+  items are closed here (status and result edit only).
+- Each claim was matched to code or a test of A to D (the bounds, states, exit codes, hostile
+  names and budgets). Not matched to a run: the "about 5000 files" figure is an estimate from the
+  1 MiB bound, whose refusal is tested with a patched bound. Documents only: no code changed;
+  the plan's status is left for the owner.
+- Next: the owner marks the plan complete when satisfied.

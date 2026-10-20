@@ -160,6 +160,7 @@ says so.
 | `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run | built |
 | add a module | project | target, a module | the same as `upgrade`, new files and blocks only | yes, owner-run | built |
 | `acknowledge` | project | target | the guarded store: the project's acknowledgement baselines | yes, owner-run | built |
+| `recover` | project | target | removes the unfinished-write marker and the empty directories the plan created, nothing else | yes, owner-run | built |
 | `verify` | package | a package directory (`<package>` or `--dir`), `--select`, `--no-harness-required` | nothing | no | built |
 | `approve` | package | a package directory, or `--source` with an optional `--ref`; `--module` | the guarded store: approval records, the cache | yes | built; `--dir` proposed |
 | `pin` | package | a project id, a name, a helper, `--root` | the guarded store: a pin | yes | built |
@@ -413,14 +414,59 @@ publishes, and none edits a living or historical document** (`repository-boundar
   other answer writes nothing and exits 1; no differences says `nothing to acknowledge` and
   exits 0.
 - **Agent may run it:** no. It is denied to an agent by the harness as `approve` is.
-- **As built.** A link, a directory or another non-regular file where a file is expected cannot
-  be acknowledged and is refused; so are more than 500 differences. The digest covers the
+- **As built.** A link, a directory or another non-regular file where a file is expected, and a
+  name under `.workbench/` that fails the path rules (control character, non-UTF-8, colon,
+  backslash), cannot be acknowledged: it is listed as a difference with its reason, never
+  entered, and nothing is written. So are more than 500 differences refused. The comparison
+  reads at most 256 MiB of file content and refuses beyond it. The digest covers the
   differences, the manifest hash, the baselines before and after and the target's identity;
   the project is read again after the answer and a different digest is refused. The summary
   lists every file entry of the manifest. The baselines are replaced in one atomic store
   write and nothing in the project is written.
 - **Agent may run it:** `wb preview upgrade ...` and `wb preview add ...`, yes. `upgrade` and
   `add` themselves are owner-run, from a terminal *(owner)*.
+
+### `recover` (built by `unfinished-write-recovery`)
+
+`wb recover [<target> | --dir <path>]`
+
+- **The marker record.** `install`, `upgrade` and `add` write `.workbench/local/incomplete` first
+  and remove it last. It holds canonical JSON, format 1, at most 1 MiB and 10000 entries:
+  `command`, `project`, `workbench`, `dirs` (directories the plan creates), `files` (path,
+  operation `create` or `replace`, hash before or none, hash after), `git` (the `.git` skeleton's
+  files and hashes) and `store` (guarded-store path, hash before or none, hash after). Paths follow
+  the manifest's rules and may not be at or under `.workbench/local`. The record is built after the
+  plan's digest is fixed and never changes it. It is untrusted text with no authority: a marker
+  that is empty, truncated, oversized, has unknown keys, a bad path or a bad hash is "no record".
+  A plan too large for the bound is refused before anything is written.
+- **Examination.** Read-only and bounded (256 MiB). Each recorded file is `before`, `after` or
+  `other` and each store entry `before`, `after` or `other`, read through no-follow descriptors
+  and the guarded store; directories are `absent`, `empty`, `holds` or `other`, and the `.git`
+  skeleton `absent`, `after` or `other`. The files sum to `before`, `after` or `mixed` and the
+  store to `none`, `all` or `partial`. Every command that meets a marker refuses with this report
+  and names `wb recover`.
+- **Needs:** an existing project (a marked target counts as one for this command only). Owner-run
+  and terminal-only, checked before anything is read. It shows the report and the removals and
+  asks for the first 12 characters of a digest covering the marker's bytes, the examination, the
+  removals and the target's identity; after the answer it examines again and refuses a different
+  digest.
+- **Clears the marker only** with files `before` and store `none` (the recorded directories that
+  are empty go too, deepest first, by `rmdir`); files `after` and store `all`; and, for `upgrade`
+  and `add` only, files `after` and store `none`, after which `acknowledge` lists exactly the
+  written paths. An `install` with files `after` and the store `none` or `partial` is refused with
+  the advice to put the project back and install again. Every other state is refused with the
+  paths to deal with and nothing is written.
+- **Never** writes or restores a file, removes any file but the marker, removes a directory that
+  holds anything, changes the store, or removes the target directory. More than 500 removals are
+  refused.
+- **Exit codes:** 0 cleared or nothing to recover; 1 refused or cancelled; 2 usage; 3 a removal
+  failed or was interrupted (the message says whether the marker remains); 130 interrupted at the
+  prompt.
+- **Agent may run it:** no. It is owner-run and terminal-only; a harness's deny rule is the
+  barrier, as for `acknowledge`.
+- **Limits.** The marker is unlinked by name after the second examination, so a marker swapped in
+  that window is removed instead of the one shown. A forged record can make `recover` remove empty
+  directories the owner made; they are listed before the digest is typed.
 
 ## The existing commands
 
@@ -580,7 +626,7 @@ and an owner-run write is a **rule** *(owner)*; the layout of the text is a prop
 | 0 | done: the command did what it was asked, a `preview` was produced, or `check` found nothing to report as a problem (warnings alone do not change it) |
 | 1 | refused or cancelled, nothing was done; or `check` reported a problem |
 | 2 | usage error: an unknown command or option, a missing or empty value, two spellings of the target that differ. The guarded store is not touched. `--help` exits 0 |
-| 3 | stopped after writing: the report lists what was written *(my call)* |
+| 3 | stopped after writing: the report lists what was written *(my call)*; for `recover`, a removal failed or was interrupted |
 
 - `launch` returns the helper's own exit code instead of these, so a helper that exits 1, 2 or
   3 looks like one of these by code alone; the text on standard error tells them apart. A
@@ -609,9 +655,11 @@ and an owner-run write is a **rule** *(owner)*; the layout of the text is a prop
   directory read as a real project. A kill that gives no chance to report (power loss,
   `SIGKILL`) is found by the marker. *(My call; the marker is untracked, so it grants no
   authority.)*
-- Recovery is by the owner. A part-written new project is deleted by hand and installed
-  again. An upgrade's changes are uncommitted, so git can revert them. The report says which
-  applies.
+- Recovery is by the owner. The marker records the plan, every command that meets it reports
+  whether the project holds the state before the plan, after it or something else, and `wb
+  recover` clears the marker in the states it names. Files are never restored by the workbench:
+  a part-written new project is put back by hand and installed again, and an upgrade's changes
+  are uncommitted, so git can revert them. The report says which applies.
 - An implementation may write to a staging area and rename into place so that a failure
   leaves the target as it was. That is a proposal; the rule above holds either way.
 - Interrupting a command before the first write is safe.
