@@ -569,10 +569,11 @@ approved the plan after it. The review is not closed.
 
 ## Result
 
-In progress. Increments A to F are committed (A `32bb04c`, B `968266f`, C `9d11c39`,
-D `79849b5`, E `ca239c6`, F `6ec0fc7`). Each had an independent workflow review and a
-security review at the owner's request, and the findings were checked and fixed before its
-commit. G to K are not started. The final Result is written when K completes.
+In progress. Increments A to H are committed (A `32bb04c`, B `968266f`, C `9d11c39`,
+D `79849b5`, E `ca239c6`, F `6ec0fc7`, G `d526957`, H `8b653b0`). Each had an independent
+workflow review and a security review at the owner's request, and the findings were checked
+and fixed before its commit. I to K are not started. The final Result is written when K
+completes.
 
 Deviations and decisions made while building, to be carried into the spec edits in K:
 
@@ -604,6 +605,35 @@ Deviations and decisions made while building, to be carried into the spec edits 
   Nothing a package controls is shortened; summary, risk and hashes come first; every
   package string is shown as ASCII. `display.clean` (stricter) and `display.ascii_text` are
   new, and the CLI's cleaner now lives in `display.py`.
+- **G.** `approve <package> [--module NAME]` is owner-run: it refuses unless stdin and stdout
+  are terminals (tested on file descriptors), verifies, prints the request, and records only
+  when the owner types the first 12 characters of the tree hash shown (the package's, or with
+  `--module` the module's). It verifies again before writing and refuses a package that
+  changed. Module records are written before the package record, so an approved package has
+  all its modules approved; a failure part way leaves the earlier records and lists them. The
+  request is rendered only from the verification result: `Verified` gained `module` and
+  `executable` (execute bits from the hashed walk) and `PackageInfo` gained `package`, so
+  nothing is read a second time; `request.executable_items` was removed. `main` takes a
+  keyword-only `stdin` for tests. The approver is the account name from the user database. The
+  typed text is a guard against a mistake, not authentication: the characters are printed by
+  `verify` and the request, and a process that opens its own pseudo-terminal passes the
+  terminal test, so only the harness deny rule stops an agent. The spec's sentence "the owner
+  records an approval by running a command themselves from a prompt the agent does not
+  control" is therefore met by G only as friction.
+- **H.** `fetch.fetch(store, source, ref)` downloads into `cache/<id>/package/` plus
+  `fetch.json`, via a staging directory and one rename. The bare repository is in a temporary
+  directory outside the store (not in the cache as the plan said) and is removed, so
+  `shutil.rmtree` is used on directories the module created; Increment I's "adds no deletion"
+  means no deletion of cache copies. Sources are narrower than the plan listed (no credentials
+  in https, no scp-style, no `git://` or plain `http://`); local paths become `file://` URLs.
+  Added beyond the plan: `--depth 1`, object checking (`fsckObjects`), a case-folding collision
+  check, a UTF-8 path requirement, a listing-size cross-check against `cat-file`, a ref
+  character check, git in its own process group with capped output, timeouts and a file-size
+  limit, ssh forwarding off. `safefs.write_tree` gained an `executable` set. A listing is read
+  incrementally because a tree can share subtrees (a 29 KB repository listed 10.6 million
+  files). Increment I re-fetches a pinned commit by id with `--depth 1`, which servers that do
+  not advertise it can refuse. A `kill -9` can leave a temporary or `.incoming-*` directory.
+  Real `https` and `ssh` transports are never exercised by tests.
 - **Test command.** A test module that imports `support` loads only under
   `python3 -m unittest discover -s tests` (use `-p 'test_x.py'` for one file).
 - **Not done anywhere so far:** no mutation testing of the new tests.
