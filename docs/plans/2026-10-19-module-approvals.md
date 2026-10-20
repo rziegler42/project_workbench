@@ -569,4 +569,41 @@ approved the plan after it. The review is not closed.
 
 ## Result
 
-Not started.
+In progress. Increments A to F are committed (A `32bb04c`, B `968266f`, C `9d11c39`,
+D `79849b5`, E `ca239c6`, F `6ec0fc7`). Each had an independent workflow review and a
+security review at the owner's request, and the findings were checked and fixed before its
+commit. G to K are not started. The final Result is written when K completes.
+
+Deviations and decisions made while building, to be carried into the spec edits in K:
+
+- **A.** `cli.main` takes keyword-only `store_root` (and later `distribution`) for tests; the
+  command line cannot set them. Seeding the settings is done by the CLI after `Store.ensure`,
+  not inside it. `Store.kind` was added; `Store.exists` was removed because it followed
+  intermediate links. The store and its layout directories must be mode exactly `0700`.
+- **B.** `floor.effective_stops` takes `removals` only to refuse them. Added stops are tested
+  at function level because a module has no field to declare one (to be ruled in K).
+- **C.** The record is `packages/<key>/approval.json`; a check returns
+  `Check(approved, record, reason)` and compares the subject as well as the hashes (the key
+  stays kind plus the two hashes, as planned, so a byte-identical module under another
+  package name is not approved and cannot be recorded until the first record is removed;
+  keying by subject would remove that limit). A repeat approval keeps the first record.
+  `__version__` was added to `workbench/__init__.py`.
+- **D.** First-party means: directly inside `packages/`, not a symbolic link, declared name
+  equals the directory name, and a shipped package record matches the package's current
+  hashes. Shipped records are in `workbench/shipped_approvals/` in the store layout.
+  `Store` was split into a read-only `Tree` and `Store`. `release-approvals` writes nothing if
+  verification fails, keeps and reports stale records, and has no terminal gate, so the
+  shipped records count as approval only if the owner reviews their git diff.
+- **E.** `check_selection(store, result, distribution=None)` returns `Gate`/`ModuleGate`
+  tuples. A package record may cover a plain module (type exactly `module`) if it lists the
+  module with its two hashes; every other type needs its own record. `Verified` gained
+  `type` and `Result` gained `packages`. The gate approves what `verify` hashed, not what an
+  installer reads later: the installer must write from the verified bytes or verify and gate
+  again from the same snapshot, and must set `first_party` from `firstparty.is_first_party`.
+- **F.** `render(...)` became `render_module`, `render_package` and `executable_items`.
+  Nothing a package controls is shortened; summary, risk and hashes come first; every
+  package string is shown as ASCII. `display.clean` (stricter) and `display.ascii_text` are
+  new, and the CLI's cleaner now lives in `display.py`.
+- **Test command.** A test module that imports `support` loads only under
+  `python3 -m unittest discover -s tests` (use `-p 'test_x.py'` for one file).
+- **Not done anywhere so far:** no mutation testing of the new tests.
