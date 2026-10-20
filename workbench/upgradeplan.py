@@ -437,7 +437,7 @@ def _show(text):
     return display.ascii_text(str(text).replace("\\", "\\\\"))
 
 
-def render(plan, existing, selection, target_path, identity, show_digest=False):
+def render(plan, existing, selection, target_path, identity, show_digest=False, approvals=None):
     """The preview text. Every name, path and package-supplied string is ASCII-escaped, and no
     existing file's content is printed, only hashes and reasons."""
     counts = collections.Counter(r.kind for r in plan.rows)
@@ -459,6 +459,9 @@ def render(plan, existing, selection, target_path, identity, show_digest=False):
                                               _show(m["version"]), m["type"], change["kind"]))
         lines.append("    declaration %s" % m["declaration"])
         lines.append("    tree %s" % m["tree"])
+        found = (approvals or {}).get((m["package"], m["name"]))
+        if found:
+            lines.append("    approved by the %s record (%s)" % (_show(found[0]), _show(found[1])))
         if change["kind"] == "changed":
             lines.append("    was: version %s, declaration %s, tree %s" % (
                 _show(change["version"]), change["declaration"], change["tree"]))

@@ -226,7 +226,7 @@ class PreviewTest(unittest.TestCase):
     def test_usage_errors_exit_2_without_touching_store(self):
         bare = os.path.join(self.root, "untouched")
         cases = [
-            ["preview"], ["preview", "upgrade"], ["preview", "install"],
+            ["preview"], ["preview", "add"], ["preview", "install"],
             ["preview", "install", "--select", "h"],
             ["preview", "install", "--package", "p"],
             ["preview", "install", "--ref", "v1", "--package", "p", "--select", "h"],

@@ -150,7 +150,7 @@ class UsageTest(CliBase):
         code, out, err = run("preview")
         self.assertEqual((code, out), (2, ""))
         self.assertIn("preview install", err)
-        for argv in (["preview", "upgrade"], ["preview", "install"],
+        for argv in (["preview", "add"], ["preview", "install"],
                      ["preview", "install", "--select", "a"]):
             with self.subTest(argv=argv):
                 code, out, err = run(*argv)

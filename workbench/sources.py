@@ -39,8 +39,11 @@ def _value(tokens, index, option):
     return tokens[index + 1]
 
 
-def parse_install(tokens):
+def parse_install(tokens, upgrade=False):
     """Read the arguments of ``install`` or ``preview install`` into a ``Parsed``.
+
+    With `upgrade`, the arguments of ``upgrade``: ``--package`` is optional, since the project
+    records its own, and ``--select`` is not accepted, since the project records its modules.
 
     The target goes before ``--select`` (which takes every name up to the next option), or
     is given with ``--dir``. Anything unknown, empty or out of place is a ``UsageError``.
@@ -69,6 +72,8 @@ def parse_install(tokens):
             dir_option = _value(tokens, index, token)
             index += 2
         elif token == "--select":
+            if upgrade:
+                raise UsageError("--select is not used: the modules are those the project records")
             if select is not None:
                 raise UsageError("--select was given twice")
             select = []
@@ -87,6 +92,8 @@ def parse_install(tokens):
                 raise UsageError("more than one target was given")
             positional = token
             index += 1
+    if upgrade:
+        return Parsed(positional, dir_option, [tuple(item) for item in packages], None)
     if not packages:
         raise UsageError("at least one --package is required")
     if select is None:

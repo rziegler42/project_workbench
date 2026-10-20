@@ -9,7 +9,7 @@ import os
 import sys
 
 from . import (approve, display, firstparty, install, launch, pins, preview, safefs, settings,
-               sources, store, target, verify)
+               sources, store, target, upgrade, verify)
 
 PROG = "python3 -m workbench"
 USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
@@ -22,6 +22,8 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench preview install [<target> | --dir <path>] --package <source> [--ref <ref>] ...\n"
          "                                            [--package ...] --select <module> ...   (read-only)\n"
          "       python3 -m workbench install <same arguments as preview install>   (owner-run, terminal only)\n"
+         "       python3 -m workbench preview upgrade [<target> | --dir <path>] [--package <source> [--ref <ref>]] ...\n"
+         "                                            (read-only; no --select, no download)\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
 
@@ -114,11 +116,11 @@ def _open_store(store_root, err):
         return None
 
 
-def _project_command(tokens, out, err, store_root, distribution):
-    """Parse and open for ``preview install`` and ``install``: ``(command, guarded)`` or an exit
-    code."""
+def _project_command(tokens, out, err, store_root, distribution, upgrading=False):
+    """Parse and open for ``preview install``, ``preview upgrade`` and ``install``:
+    ``(command, guarded)`` or an exit code."""
     try:
-        parsed = sources.parse_install(tokens)
+        parsed = sources.parse_install(tokens, upgrade=upgrading)
         command = sources.Command(target.choose(parsed.positional, parsed.dir_option),
                                   parsed.packages, parsed.select)
     except (sources.UsageError, target.TargetUsage) as exc:
@@ -135,12 +137,15 @@ def _project_command(tokens, out, err, store_root, distribution):
 
 
 def _preview(argv, out, err, store_root, distribution):
-    if len(argv) < 2 or argv[1] != "install":
-        err.write("preview takes install (upgrade and add are not built yet)\n%s" % USAGE)
+    if len(argv) < 2 or argv[1] not in ("install", "upgrade"):
+        err.write("preview takes install or upgrade (add is not built yet)\n%s" % USAGE)
         return 2
-    opened = _project_command(argv[2:], out, err, store_root, distribution)
+    upgrading = argv[1] == "upgrade"
+    opened = _project_command(argv[2:], out, err, store_root, distribution, upgrading)
     if isinstance(opened, int):
         return opened
+    if upgrading:
+        return upgrade.run_preview(opened[1], opened[0], out, err, distribution)
     return preview.run(opened[1], opened[0], out, err, distribution)
 
 
