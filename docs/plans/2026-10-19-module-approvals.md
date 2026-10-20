@@ -570,7 +570,7 @@ approved the plan after it. The review is not closed.
 ## Result
 
 In progress. Increments A to H are committed (A `32bb04c`, B `968266f`, C `9d11c39`,
-D `79849b5`, E `ca239c6`, F `6ec0fc7`, G `d526957`, H `8b653b0`). Each had an independent
+D `79849b5`, E `ca239c6`, F `6ec0fc7`, G `d526957`, H `8b653b0`); I is built and in review. Each had an independent
 workflow review and a security review at the owner's request, and the findings were checked
 and fixed before its commit. I to K are not started. The final Result is written when K
 completes.
@@ -634,6 +634,23 @@ Deviations and decisions made while building, to be carried into the spec edits 
   files). Increment I re-fetches a pinned commit by id with `--depth 1`, which servers that do
   not advertise it can refuse. A `kill -9` can leave a temporary or `.incoming-*` directory.
   Real `https` and `ssh` transports are never exercised by tests.
+- **I.** `approve --source <url-or-path> [--ref <ref>]` runs the terminal test, then `fetch`,
+  then builds the request, takes the typed hash and writes the records from the downloaded
+  copy; the request names the source, the resolved commit and the copy's location. The package
+  record stores the resolved commit. `approvals.check_package` is unchanged: it is keyed by the
+  declaration and tree hashes, so a ref that moves to different content is not approved and
+  the pinned commit's content still is. **Deviation:** the commit is provenance and is no
+  longer part of what a record binds (`_binding`), so identical content approved again from
+  another commit, or after a local approval, is "already approved" and the first record and its
+  pin are kept (the command says "kept the earlier pin X; this download was commit Y", or that
+  no commit is pinned). `repository-boundary.md` "attach" says the first approval pins the
+  commit and the tree hash; that holds for the first approval only, and K should say so. A
+  `--module` approval has no package record and no pin. A copy that is declined or fails
+  verification stays in the cache and nothing removes it. The pin stores the commit but not the
+  source, and a later install re-fetches it by id with `--depth 1`; a force-pushed-away commit
+  leaves the pin unreachable while the content approval still holds. Whatever reads cached
+  copies later must verify them again as untrusted. `fetch` now also removes its staging
+  directory on an interrupt and reports a temporary directory it cannot make as a refusal.
 - **Test command.** A test module that imports `support` loads only under
   `python3 -m unittest discover -s tests` (use `-p 'test_x.py'` for one file).
 - **Not done anywhere so far:** no mutation testing of the new tests.

@@ -174,10 +174,20 @@ class WriteAndCheckTest(Base):
         with self.assertRaisesRegex(ApprovalError, "different record"):
             self.package(modules=[("mod", C, D), ("extra", D, C)])
         with self.assertRaisesRegex(ApprovalError, "different record"):
-            self.package(modules=[("mod", C, D)], commit=COMMIT)
-        with self.assertRaisesRegex(ApprovalError, "different record"):
             approvals.record_package(self.store, "other", A, B, [("mod", C, D)], "owner", NOW)
         self.assertEqual(approvals.check_package(self.store, "pkg", A, B).record.commit, None)
+
+    def test_the_commit_is_provenance_so_another_commit_keeps_the_first_record(self):
+        first = self.package(modules=[("mod", C, D)], commit=COMMIT)
+        again = self.package(modules=[("mod", C, D)], commit="b" * 40)
+        self.assertEqual(again, first)
+        self.assertEqual(approvals.check_package(self.store, "pkg", A, B).record.commit, COMMIT)
+
+    def test_a_local_approval_is_kept_when_the_same_content_is_approved_from_a_commit(self):
+        first = self.package(modules=[("mod", C, D)])
+        again = self.package(modules=[("mod", C, D)], commit=COMMIT)
+        self.assertEqual(again, first)
+        self.assertIsNone(approvals.check_package(self.store, "pkg", A, B).record.commit)
 
     def test_a_damaged_record_is_not_replaced(self):
         self.module()

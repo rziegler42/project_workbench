@@ -280,6 +280,27 @@ class RefusalTest(Base):
                 fetch.fetch(self.store, self.source, "main")
         self.nothing_left()
 
+    def test_an_interrupt_while_writing_leaves_no_staging_directory(self):
+        self.package()
+        real = safefs.write_tree
+
+        def interrupted(root, tree, executable=()):
+            first = sorted(tree)[0]
+            real(root, {first: tree[first]})
+            raise KeyboardInterrupt()
+
+        with unittest.mock.patch.object(safefs, "write_tree", interrupted):
+            with self.assertRaises(KeyboardInterrupt):
+                fetch.fetch(self.store, self.source, "main")
+        self.nothing_left()
+
+    def test_a_temporary_directory_that_cannot_be_made_is_a_refusal(self):
+        self.package()
+        with unittest.mock.patch.object(tempfile, "mkdtemp", side_effect=OSError(28, "No space left")):
+            with self.assertRaisesRegex(fetch.FetchError, "temporary directory"):
+                fetch.fetch(self.store, self.source, "main")
+        self.assertEqual(os.listdir(self.cache), [])
+
     def test_a_failure_part_way_through_writing_removes_what_was_written(self):
         self.package()
         real = safefs.write_tree

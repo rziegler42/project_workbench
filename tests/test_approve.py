@@ -319,6 +319,240 @@ class RecordingTest(Base):
         self.nothing_recorded()
 
 
+def run_git(cwd, *args):
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+    done = subprocess.run(
+        ["git", "-c", "user.name=Test", "-c", "user.email=test@example.test",
+         "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"] + list(args),
+        cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if done.returncode != 0:
+        raise AssertionError("git %s: %s" % (args, done.stderr.decode()))
+    return done.stdout.decode().strip()
+
+
+class SourceBase(Base):
+    def setUp(self):
+        super().setUp()
+        self.repo = os.path.join(self.base, "source")
+        shutil.copytree(FIXTURE, self.repo)
+        run_git(self.repo, "init", "-q", "--template=")
+        self.commit1 = self.commit_all("first")
+        self.cache = os.path.join(self.store.root, "cache")
+
+    def commit_all(self, message):
+        run_git(self.repo, "add", "-A")
+        run_git(self.repo, "commit", "-q", "-m", message, "--allow-empty")
+        return run_git(self.repo, "rev-parse", "HEAD")
+
+    def package_record(self, decl_tree=None):
+        info, _ = self.facts()
+        decl, tree = decl_tree or (info.declaration_hash, info.tree_hash)
+        return approvals.check_package(self.store, "sample", decl, tree)
+
+    def cached(self):
+        return sorted(name for name in os.listdir(self.cache))
+
+
+class SourceApprovalTest(SourceBase):
+    def test_a_source_is_downloaded_shown_and_approved_with_the_commit_pinned(self):
+        info, _ = self.facts()
+        code, output, error = self.drive(["--source", self.repo, "--ref", "main"],
+                                         answer=info.tree_hash[:12])
+        self.assertEqual((code, error), (0, ""), output)
+        self.assertIn("Downloading", output)
+        self.assertIn(self.commit1, output)
+        self.assertIn("downloaded copy:", output)
+        self.assertIn("approved package sample", output)
+        self.assertIn("pinned commit " + self.commit1, output)
+        record = self.package_record()
+        self.assertTrue(record.approved)
+        self.assertEqual(record.record.commit, self.commit1)
+        self.assertTrue(self.approved_module("sample-harness"))
+        self.assertTrue(self.approved_module("sample-notes"))
+        self.assertEqual(len(self.cached()), 1)
+
+    def test_the_hash_to_type_is_the_one_of_the_downloaded_copy(self):
+        info, _ = self.facts()
+        _, output, _ = self.drive(["--source", self.repo], answer="no")
+        self.assertIn("tree hash:        " + info.tree_hash, output)
+        self.assertIn("cancelled: nothing was recorded", output)
+
+    def test_the_default_ref_is_head(self):
+        info, _ = self.facts()
+        code, output, _ = self.drive(["--source", self.repo], answer=info.tree_hash[:12])
+        self.assertEqual(code, 0, output)
+        self.assertEqual(self.package_record().record.commit, self.commit1)
+
+    def test_a_ref_that_moved_to_different_content_is_not_approved(self):
+        info, _ = self.facts()
+        self.assertEqual(self.drive(["--source", self.repo, "--ref", "main"],
+                                    answer=info.tree_hash[:12])[0], 0)
+        with open(os.path.join(self.repo, "sample-notes", "files", "docs", "notes.md"), "a") as h:
+            h.write("moved\n")
+        commit2 = self.commit_all("second")
+        self.assertNotEqual(commit2, self.commit1)
+
+        # The old token no longer matches what the ref now gives.
+        code, output, _ = self.drive(["--source", self.repo, "--ref", "main"],
+                                     answer=info.tree_hash[:12])
+        self.assertEqual(code, 1)
+        self.assertIn("cancelled: nothing was recorded", output)
+        self.assertIn(commit2, output)
+        # Two module records and the package record from the first approval, and no more.
+        self.assertEqual(len(self.package_records_in_store()), 3)
+
+        # The new content has no approval, and the pinned commit's content still has one.
+        moved = verify.verify_package(self.copy_of(commit2), harness_required=False)
+        self.assertTrue(moved.accepted)
+        new = moved.packages[0]
+        self.assertNotEqual(new.tree_hash, info.tree_hash)
+        self.assertFalse(approvals.check_package(self.store, "sample", new.declaration_hash,
+                                                 new.tree_hash).approved)
+        self.assertTrue(self.package_record().approved)
+        # Fetching the pinned commit again gives the approved content.
+        code, output, _ = self.drive(["--source", self.repo, "--ref", self.commit1],
+                                     answer=info.tree_hash[:12])
+        self.assertEqual(code, 0, output)
+        self.assertIn("already approved package sample", output)
+        self.assertEqual(self.package_record().record.commit, self.commit1)
+
+    def copy_of(self, commit):
+        """The downloaded package whose fetch.json names `commit`."""
+        import json
+        for directory in self.cached():
+            with open(os.path.join(self.cache, directory, "fetch.json")) as handle:
+                if json.load(handle)["commit"] == commit:
+                    return os.path.join(self.cache, directory, "package")
+        self.fail("no downloaded copy of " + commit)
+
+    def package_records_in_store(self):
+        return os.listdir(os.path.join(self.store.root, "packages"))
+
+    def test_declining_records_nothing_and_keeps_the_downloaded_copy(self):
+        code, output, _ = self.drive(["--source", self.repo], answer="no")
+        self.assertEqual(code, 1)
+        self.nothing_recorded()
+        (directory,) = self.cached()
+        kept = os.path.join(self.cache, directory, "package", "package.json")
+        self.assertTrue(os.path.isfile(kept))
+        self.assertIn("downloaded copy is kept at", output)
+        self.assertIn(os.path.join(self.cache, directory, "package"), output)
+
+    def test_a_downloaded_copy_that_fails_verification_records_nothing(self):
+        with open(os.path.join(self.repo, "sample-notes", "stray.txt"), "w") as handle:
+            handle.write("x")
+        self.commit_all("stray")
+        code, output, error = self.drive(["--source", self.repo], answer="x")
+        self.assertEqual(code, 1)
+        self.assertIn("unaccounted-file", error)
+        self.assertIn("downloaded copy is kept at", error)
+        self.assertNotIn("type the first", output)
+        self.nothing_recorded()
+        self.assertEqual(len(self.cached()), 1)
+
+    def test_a_download_that_fails_records_nothing_and_leaves_the_cache_empty(self):
+        code, _, error = self.drive(["--source", self.repo, "--ref", "no-such-branch"], answer="x")
+        self.assertEqual(code, 1)
+        self.assertIn("the download failed", error)
+        self.nothing_recorded()
+        self.assertEqual(self.cached(), [])
+
+    def test_a_source_that_is_not_allowed_is_refused_before_anything_is_fetched(self):
+        for source in ("ext::sh -c id", "http://example.invalid/x", "git://example.invalid/x"):
+            with self.subTest(source=source):
+                code, _, error = self.drive(["--source", source], answer="x")
+                self.assertEqual(code, 1)
+                self.assertIn("the download failed", error)
+        self.nothing_recorded()
+        self.assertEqual(self.cached(), [])
+
+    def test_nothing_is_downloaded_when_the_terminal_test_fails(self):
+        code, output, error = self.drive(["--source", self.repo], answer="x", stdin="pipe")
+        self.assertEqual(code, 1)
+        self.assertIn("owner-run", error)
+        self.assertNotIn("Downloading", output)
+        self.assertEqual(self.cached(), [])
+        self.nothing_recorded()
+
+    def test_a_downloaded_copy_that_changes_while_it_is_shown_records_nothing(self):
+        info, _ = self.facts()
+
+        def tamper():
+            (directory,) = self.cached()
+            path = os.path.join(self.cache, directory, "package", "sample-notes", "files", "docs", "notes.md")
+            os.chmod(path, 0o644)
+            with open(path, "a") as handle:
+                handle.write("changed after it was shown\n")
+
+        code, output, error = self.drive(["--source", self.repo], answer=info.tree_hash[:12],
+                                         between=tamper)
+        self.assertEqual(code, 1, output)
+        self.assertIn("changed while it was shown", error)
+        self.nothing_recorded()
+
+    def test_a_module_from_a_source_has_no_package_record_and_no_pin(self):
+        _, modules = self.facts()
+        code, output, _ = self.drive(["--source", self.repo, "--module", "sample-notes"],
+                                     answer=modules["sample-notes"].tree_hash[:12])
+        self.assertEqual(code, 0, output)
+        self.assertTrue(self.approved_module("sample-notes"))
+        self.assertFalse(self.package_record().approved)
+        self.assertNotIn("pinned commit", output)
+
+    def test_the_same_content_from_another_commit_is_the_same_approval(self):
+        info, _ = self.facts()
+        self.assertEqual(self.drive(["--source", self.repo], answer=info.tree_hash[:12])[0], 0)
+        commit2 = self.commit_all("history only")
+        self.assertNotEqual(commit2, self.commit1)
+        code, output, _ = self.drive(["--source", self.repo], answer=info.tree_hash[:12])
+        self.assertEqual(code, 0, output)
+        self.assertIn("already approved package sample", output)
+        self.assertIn(commit2, output)
+        self.assertEqual(self.package_record().record.commit, self.commit1)
+        self.assertIn("kept the earlier pin " + self.commit1, output)
+        self.assertIn("this download was commit " + commit2, output)
+
+    def test_a_local_approval_is_kept_when_the_same_content_is_approved_from_a_source(self):
+        info, _ = self.facts()
+        self.assertEqual(self.drive([self.path], answer=info.tree_hash[:12])[0], 0)
+        code, output, _ = self.drive(["--source", self.repo], answer=info.tree_hash[:12])
+        self.assertEqual(code, 0, output)
+        self.assertIn("already approved package sample", output)
+        self.assertIn("no commit is pinned", output)
+        self.assertIsNone(self.package_record().record.commit)
+
+
+class SourceUsageTest(SourceBase):
+    def usage(self, *argv):
+        out, err = io.StringIO(), io.StringIO()
+        code = cli.main(["approve"] + list(argv), out, err, store_root=self.store.root)
+        return code, err.getvalue()
+
+    def test_exactly_one_of_a_package_and_a_source_is_required(self):
+        for argv in ([], [self.path, "--source", self.repo], ["--ref", "main"]):
+            with self.subTest(argv=argv):
+                code, error = self.usage(*argv)
+                self.assertEqual(code, 2)
+                self.assertIn("usage:", error)
+
+    def test_ref_goes_with_a_source(self):
+        code, error = self.usage(self.path, "--ref", "main")
+        self.assertEqual(code, 2)
+        self.assertIn("--ref goes with --source", error)
+
+    def test_empty_values_are_usage_errors(self):
+        for argv in (["--source", ""], ["--source", self.repo, "--ref", ""],
+                     ["--source", self.repo, "--module", ""], [""]):
+            with self.subTest(argv=argv):
+                self.assertEqual(self.usage(*argv)[0], 2)
+
+    def test_nothing_is_downloaded_or_recorded_on_a_usage_error(self):
+        self.usage(self.path, "--source", self.repo)
+        self.assertEqual(self.cached(), [])
+        self.nothing_recorded()
+
+
 class ModuleApprovalTest(Base):
     def test_one_module_with_its_own_hash_records_only_that_module(self):
         _, modules = self.facts()

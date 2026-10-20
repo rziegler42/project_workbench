@@ -9,7 +9,10 @@ is a different key and has no approval. Two kinds exist:
   and tree hash (``docs/specs/module-contract.md``).
 * ``package``: subject ``<package>``, bound to the package declaration's hash and the
   tree hash of the whole package directory. It also lists the modules it approved (name
-  and both hashes each) and the resolved git commit, when the package came from one.
+  and both hashes each) and the resolved git commit, when the package came from one. The commit
+  is provenance, the pin of where the bytes came from; it is not part of what the record
+  binds, so identical content reached by another commit is the same approval and the first
+  record, with its commit, is kept.
 
 The record is strict JSON with exactly these fields, no others::
 
@@ -193,8 +196,10 @@ def serialize(approval):
 
 
 def _binding(approval):
+    # The commit is where the bytes came from, not what is approved: the content is bound by
+    # the hashes. Identical content reached by another commit is the same approval.
     return (approval.kind, approval.subject, approval.declaration_hash, approval.tree_hash,
-            approval.modules, approval.commit)
+            approval.modules)
 
 
 def _write(store, approval):

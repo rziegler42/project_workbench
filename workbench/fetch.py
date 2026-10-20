@@ -314,7 +314,10 @@ def fetch(store, source, ref="HEAD", *, now=None):
     url = normalize_source(source)
     check_ref(ref)
     git, env = _git_executable(), _environment()
-    workdir = tempfile.mkdtemp(prefix="workbench-fetch-")
+    try:
+        workdir = tempfile.mkdtemp(prefix="workbench-fetch-")
+    except OSError as exc:
+        raise FetchError("cannot make a temporary directory: %s" % (exc.strerror or exc))
     try:
         nohooks = os.path.join(workdir, "nohooks")
         os.mkdir(nohooks)
@@ -370,6 +373,10 @@ def _place(store, url, ref, commit, entries, contents, now):
         except (safefs.SafeFsError, OSError) as exc:
             shutil.rmtree(os.path.join(cache, staging), ignore_errors=True)
             raise FetchError("cannot write the package into the cache: %s" % exc)
+        except BaseException:
+            # An interrupt (Ctrl-C) must not leave a half-written staging directory behind.
+            shutil.rmtree(os.path.join(cache, staging), ignore_errors=True)
+            raise
     finally:
         os.close(fd)
     return Fetched(identity, os.path.join(cache, identity, "package"), commit, url, ref,

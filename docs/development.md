@@ -20,7 +20,7 @@ ambiguous blank.
 |---|---|
 | Setup | not applicable (standard library only; nothing to install) |
 | Run locally | `python3 -m workbench verify [<package> \| --dir <path>] [--select <module> ...] [--no-harness-required]` |
-| Owner-run: approve a package or one module (terminal only) | `python3 -m workbench approve <package> [--module <name>]` |
+| Owner-run: approve a package or one module (terminal only) | `python3 -m workbench approve (<package> \| --source <url> [--ref <ref>]) [--module <name>]` |
 | Release time: write the approvals shipped with first-party packages | `python3 -m workbench release-approvals` |
 | Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
 | One focused test file | `python3 -m unittest discover -s tests -p 'test_approvals.py'` (a test module that imports `support` only loads under `discover -s tests`) |
@@ -95,8 +95,8 @@ resolved commit and counts) or raises `FetchError` and leaves nothing in the cac
 
 ## Approving a package
 
-`python3 -m workbench approve <package> [--module <name>]` is how the owner records an
-approval. Run it yourself, from your own terminal; the agent's command permissions will deny
+`python3 -m workbench approve (<package> | --source <url> [--ref <ref>]) [--module <name>]` is how
+the owner records an approval. Run it yourself, from your own terminal; the agent's command permissions will deny
 it once a harness renders that rule (`claude-harness`). The checks in the command are
 friction, not the barrier: a process that allocates its own pseudo-terminal passes the
 terminal test, and the 12 characters are not a secret, because the request and `verify` both
@@ -121,8 +121,26 @@ print them. The typed text guards against a mistaken approval, and it is not aut
 
 The recorded approver is the account name from the operating system's user database, not
 from an environment variable; it is text and grants nothing. Exit codes: 0 recorded, 1
-refused or cancelled, 2 usage error. The command does not take a source URL yet; approving
-from a downloaded copy comes with the inert download.
+refused or cancelled, 2 usage error.
+
+**Approving from a source.** `--source` takes an `https://`, `ssh://` or `file://` URL or a
+local repository, and `--ref` a branch, tag or commit (default `HEAD`). Give either a package
+directory or `--source`, not both. The terminal test runs first, so nothing is downloaded when
+it fails. The package is then downloaded inertly into the cache (see "Inert download"),
+verified there, and the request, the hash you type and the records all come from that cached
+copy; the request names the source, the resolved commit and where the copy is. The first
+package approval stores the resolved commit as the pin.
+
+- What is approved is the content, bound by the package tree hash. A ref that later moves to
+  different content is a different tree hash and is not approved, and fetching the pinned
+  commit again gives the approved content. The same content reached by another commit is the
+  same approval: the first record, and its pin, is kept, and the command says so and names
+  both commits when they differ.
+- A module approved with `--module` has no package record and so no pin.
+- A fetch that fails, or a copy that fails verification, records nothing. A copy that you
+  decline or that fails stays in the cache so it can be read again; the command prints where.
+  Nothing removes cache copies yet.
+- A later install fetches the pinned commit and compares the tree hash with the approved one.
 
 ## First-party packages and shipped approvals
 

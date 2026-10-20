@@ -13,7 +13,8 @@ from . import approve, display, firstparty, safefs, settings, store, verify
 PROG = "python3 -m workbench"
 USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "[--select <module> ...] [--no-harness-required]\n"
-         "       python3 -m workbench approve <package> [--module <name>]   (owner-run, terminal only)\n"
+         "       python3 -m workbench approve (<package> | --source <url> [--ref <ref>]) [--module <name>]\n"
+         "                                                    (owner-run, terminal only)\n"
          "       python3 -m workbench release-approvals\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
@@ -41,7 +42,12 @@ def _parser():
                        help="do not require a harness module in the selection")
     owner = commands.add_parser("approve", allow_abbrev=False,
                                 help="owner-run, from a terminal: approve a package or one module")
-    owner.add_argument("package", help="the package directory")
+    owner.add_argument("package", nargs="?", help="the package directory")
+    owner.add_argument("--source", metavar="URL",
+                       help="download the package into the cache first: an https, ssh or file URL, "
+                            "or a local repository")
+    owner.add_argument("--ref", metavar="REF", help="the branch, tag or commit to download "
+                                                    "(default: HEAD); only with --source")
     owner.add_argument("--module", metavar="NAME", help="approve only this module")
     commands.add_parser("release-approvals", allow_abbrev=False,
                         help="release time: write the approvals shipped for first-party packages")
@@ -90,8 +96,13 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         args = _parser().parse_args(argv)
         if args.command not in ("verify", "release-approvals", "approve"):
             raise _Usage("a command is required")
-        if args.command == "approve" and (not args.package or args.module == ""):
-            raise _Usage("the package path and the module name may not be empty")
+        if args.command == "approve":
+            if (args.package is None) == (args.source is None):
+                raise _Usage("give either a package directory or --source, not both and not neither")
+            if args.ref is not None and args.source is None:
+                raise _Usage("--ref goes with --source")
+            if "" in (args.package, args.source, args.ref, args.module):
+                raise _Usage("the package, source, ref and module may not be empty")
         path = _target(args) if args.command == "verify" else None
     except _Usage as exc:
         err.write("%s\n%s" % (_clean(str(exc)), USAGE))
@@ -116,7 +127,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         for note in notes:
             err.write("warning: %s\n" % _clean(note))
         return approve.run(guarded, args.package, args.module,
-                           stdin if stdin is not None else sys.stdin, out, err, distribution)
+                           stdin if stdin is not None else sys.stdin, out, err, distribution,
+                           args.source, args.ref or "HEAD")
 
     result = verify.verify_package(path, select=args.select,
                                    harness_required=not args.no_harness_required,
