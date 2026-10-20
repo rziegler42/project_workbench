@@ -626,12 +626,28 @@ second `acknowledge` printed `nothing to acknowledge`.
 
 **Reviews.** Increments G to L were challenged by an advisor before commit, and D, J, K and L were
 also attacked by a separate agent in a scratch copy (findings treated as untrusted and checked);
-the findings of A to F are in those commits' messages and tests. Fixed:
+E, F, G and I were attacked by separate agents after the plan was completed; the findings of A to
+D are in those commits' messages and tests. Fixed:
 
 - D (reviewed after the plan's last increment, by a separate agent, with no Critical, High or Medium
   finding): the mode handling, the order of the permission fix, the hash check and the rename, link,
   FIFO and directory swaps, parent swaps and injected failures held in experiments. A file with
   another hard link was readable and replaceable as project data; `_open_regular` now refuses it.
+- E and F (separate agent; no Critical, High or Medium finding; a project could not hide a
+  difference in any experiment, every malformed baselines or seen entry was refused, and no entry
+  read as installed with different bytes): `.workbench/local` was skipped whatever its kind, so a
+  link or file by that name showed no difference (it is now skipped only as a directory and
+  reported otherwise); the manifest's forbidden paths (`manifest.json`, `local`) were compared
+  with exact case, so `.workbench/LOCAL/x` was accepted and, on a case-insensitive filesystem,
+  read the scratch directory (now compared without case, as is the walk's `local` skip).
+- G and I (separate agent; no Critical, High or Medium finding; hostile markers, fill text,
+  manifest tampering, module write paths and `package.json` variants all refused or classified
+  as conflict in experiments): no code change. A module's `writes` may name a path under a living
+  directory (`docs/plans/` and the like); the file is `seeded`, so install creates it
+  exclusively and an upgrade never touches it, and a module cannot make a living path
+  module-owned. Forbidding it is left to the groundwork module, which may need seeded READMEs
+  there (`installer-interface.md`, "Write set", records this). A block inserted into a CRLF file
+  is LF-only.
 - G: a block with an existing entry was replaced without checking its holder file (a retagged or
   dropped file entry could be rewritten); the version was not compared; both closed with tests.
 - I: a swapped file between the two reads (every replace now carries the baseline hash), a
@@ -693,10 +709,17 @@ the findings of A to F are in those commits' messages and tests. Fixed:
 - Not exercised by the reviewers: BrokenPipe paths, a real-terminal over-long answer, hostile
   manifest strings through the rendered plan, a new package name colliding with a reserved name,
   and `add` with a changed `base`.
-- Only D, J, K and L were reviewed by a separate agent, and the fixes made after those reviews were
-  checked by tests only; E, F, G and I were not attacked by a separate agent. One completion
-  criterion asks for a security review of D, J, K and L with no unresolved finding; the
-  partial-failure finding on K is recorded above as a limit, and D's remaining findings are below.
+- Every increment from D to L was reviewed by a separate agent except H (its digest and render
+  were covered with G and I), and the fixes made after those reviews were checked by tests only.
+  One completion criterion asks for a security review of D, J, K and L with no unresolved
+  finding; the partial-failure finding on K is recorded above as a limit, and D's remaining
+  findings are below.
+- From the reviews of E and F: a control-character, bidi or over-long name under `.workbench/`,
+  or more than 20000 entries, makes `acknowledge` and `upgrade` refuse the whole scan, so the
+  owner can only remove the file (listing the name as a difference would be better); each file is
+  capped at 16 MiB but there is no cumulative byte budget, so a tree of many large sparse files
+  scans slowly; case and Unicode-normalisation aliases of `.workbench` itself and NFD names in
+  baselines were not tested.
 - From the review of D: a file whose mode allows no read cannot be replaced (it fails closed);
   `list_dir` has no entry-count limit, and one control-character name makes a listing refuse;
   ownership, ACLs and extended attributes are not kept by a replace; there is no directory fsync

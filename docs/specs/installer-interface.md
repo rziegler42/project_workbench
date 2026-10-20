@@ -193,7 +193,10 @@ publishes, and none edits a living or historical document** (`repository-boundar
   module's own namespace, its declared `writes` and its slot `fills`. Nothing in the
   committed manifest or the lock widens that set. A manifest entry that names a path outside
   it, or a living or historical path, or that claims an owner class the declaration does not
-  give, is reported as a conflict and is never written. The manifest is untrusted text.
+  give, is reported as a conflict and is never written. The manifest is untrusted text. As
+  built, a module's declared `writes` may name a path under a living directory; such a file is
+  `seeded`, so it is created exclusively and never replaced, and no declaration can make a living
+  path module-owned. Whether to forbid it is left to the groundwork module.
 - **Exclusive creation.** Every file or block a command adds is created exclusively, without
   following links. A path that already exists, tracked or not, is a conflict for the owner;
   the local manifest or any scratch file does not change that. A command never overwrites a
