@@ -25,40 +25,16 @@ import os
 import shutil
 import stat
 
-from . import (__version__, approve, display, fetch, installplan, manifest, preview, projectfs,
-               safefs, sources, target)
+from . import (__version__, approve, confirm, display, fetch, installplan, manifest, preview,
+               projectfs, safefs, sources, target)
 
-CONFIRM_CHARS = 12
-MAX_ANSWER = 200
-LISTED = 40            # paths listed per group in a failure report
-
-try:
-    import termios
-except ImportError:  # not POSIX; the safe filesystem layer refuses to run there anyway
-    termios = None
-
-
-class _Progress:
-    """What has happened, for the report when something fails."""
-
-    def __init__(self):
-        self.started = False
-        self.writer = None
-        self.plan = None
-        self.stored = []
+CONFIRM_CHARS = confirm.CONFIRM_CHARS
+MAX_ANSWER = confirm.MAX_ANSWER
+termios = confirm.termios
 
 
 def _text(value):
     return display.clean(str(value))
-
-
-def _discard_typed_ahead(stream):
-    if termios is None:
-        return
-    try:
-        termios.tcflush(stream.fileno(), termios.TCIFLUSH)
-    except (termios.error, AttributeError, OSError, ValueError):
-        pass
 
 
 # --- the sources --------------------------------------------------------------------------
@@ -136,39 +112,6 @@ def _write(guarded, held, plan, progress):
     writer.remove_marker()
 
 
-def _group(title, items, err):
-    if not items:
-        return
-    err.write("%s:\n" % title)
-    for item in items[:LISTED]:
-        err.write("  %s\n" % display.ascii_text(item))
-    if len(items) > LISTED:
-        err.write("  and %d more\n" % (len(items) - LISTED))
-
-
-def _report_failure(held, progress, cause, err):
-    writer, plan = progress.writer, progress.plan
-    written = list(writer.written)
-    if writer.made_target:
-        written.insert(0, "./ (the target directory)")
-    planned = []
-    for action in plan.actions:
-        if action.kind in ("create-file", "create-dir"):
-            planned.append(action.path + ("/" if action.kind == "create-dir" else ""))
-        elif action.kind == "git-init":
-            planned.append(".git/")
-    have = set(writer.written)
-    missing = [path for path in planned if path not in have]
-    missing += [path for path, _ in plan.store_writes if path not in progress.stored]
-    err.write("failed: %s\n" % display.ascii_text(cause))
-    _group("written", written, err)
-    _group("not written", missing, err)
-    if len(missing) and not [path for path in planned if path not in have]:
-        err.write("the project's files are written but its guarded store entries are not\n")
-    err.write("the install is unfinished: %s is left in place, so this directory is not "
-              "accepted as a project\n" % projectfs.MARKER)
-
-
 def _finish(held, progress, out):
     done = [path for path in progress.writer.written if path != projectfs.MARKER]
     try:
@@ -210,13 +153,11 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
             if held.state == "new-git":
                 err.write("warning: the existing .git is used as it is; no remote is recorded\n")
             out.write(installplan.render(plan, held.path, show_digest=True))
-            token = plan.digest[:CONFIRM_CHARS]
             out.write("\nTo install, type the first %d characters of the digest shown above and "
                       "press Enter.\nAnything else cancels and writes nothing.\n> "
                       % CONFIRM_CHARS)
             out.flush()
-            _discard_typed_ahead(stdin)
-            if stdin.readline(MAX_ANSWER).strip() != token:
+            if not confirm.typed_matches(stdin, plan.digest):
                 out.write("cancelled: nothing was written\n")
                 return 1
             try:
@@ -232,7 +173,7 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
                 _write(guarded, held, plan, progress)
             except (Exception, KeyboardInterrupt) as exc:
                 cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
-                _report_failure(held, progress, cause, err)
+                confirm.report_failure(progress, cause, err)
                 return 3
             _finish(held, progress, out)
             return 0
@@ -254,7 +195,7 @@ def run(guarded, command, stdin, out, err, distribution=None, seed=None, version
         return _refuse(err, "install is owner-run: standard input and output must both be "
                             "terminals. Run this command yourself, from your own terminal; "
                             "`preview install` shows the same plan without writing.")
-    progress = _Progress()
+    progress = confirm.Progress()
     try:
         return _run(guarded, command, stdin, out, err, distribution, seed, version, which,
                     progress)
