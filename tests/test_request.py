@@ -54,6 +54,10 @@ class Base(unittest.TestCase):
     def hashes_for(self, name):
         return self.hashes()[0][name]
 
+    def executable_of(self, name):
+        # The execute bits come from the walk that was hashed, not from a fresh read.
+        return set(self.hashes_for(name).executable)
+
     def edit(self, module, **fields):
         path = os.path.join(self.path, module, "module.json")
         with open(path) as handle:
@@ -138,7 +142,7 @@ class ModuleRequestTest(Base):
     def test_a_shipped_file_with_the_execute_bit_is_marked_executable(self):
         script = os.path.join(self.path, "sample-notes", "scripts", "check.sh")
         os.chmod(script, os.stat(script).st_mode | stat.S_IXUSR)
-        found = request.executable_items(os.path.join(self.path, "sample-notes"))
+        found = self.executable_of("sample-notes")
         self.assertEqual(found, {"scripts/check.sh"})
         text = self.render("sample-notes", executable=found)
         self.assertIn("[executable] scripts/check.sh", text)
@@ -147,7 +151,7 @@ class ModuleRequestTest(Base):
     def test_an_executable_outside_ships_is_listed_on_its_own(self):
         other = os.path.join(self.path, "sample-notes", "files", "docs", "notes.md")
         os.chmod(other, os.stat(other).st_mode | stat.S_IXUSR)
-        found = request.executable_items(os.path.join(self.path, "sample-notes"))
+        found = self.executable_of("sample-notes")
         self.assertEqual(found, {"files/docs/notes.md"})
         text = self.render("sample-notes", executable=found)
         self.assertIn("other executables 1", text)
@@ -155,15 +159,15 @@ class ModuleRequestTest(Base):
                       "files/docs/notes.md", text)
         self.assertIn("[code-bearing] scripts/check.sh", text)
 
-    def test_an_executable_under_the_harness_directory_is_found(self):
-        hook = os.path.join(self.path, "sample-harness", "harness", "claude", "hooks")
+    def test_an_executable_in_a_harness_modules_templates_is_found(self):
+        hook = os.path.join(self.path, "sample-harness", "templates")
         os.makedirs(hook)
         script = os.path.join(hook, "pre.sh")
         with open(script, "w") as handle:
             handle.write("#!/bin/sh\n")
         os.chmod(script, 0o755)
-        found = request.executable_items(os.path.join(self.path, "sample-harness"))
-        self.assertEqual(found, {"harness/claude/hooks/pre.sh"})
+        found = self.executable_of("sample-harness")
+        self.assertEqual(found, {"templates/pre.sh"})
 
     def test_a_shipped_directory_is_executable_if_a_file_below_it_is(self):
         directory = os.path.join(self.path, "sample-notes", "tools")
@@ -173,7 +177,7 @@ class ModuleRequestTest(Base):
             handle.write("#!/bin/sh\n")
         os.chmod(tool, 0o755)
         self.edit("sample-notes", ships=["scripts/check.sh", "tools"])
-        found = request.executable_items(os.path.join(self.path, "sample-notes"))
+        found = self.executable_of("sample-notes")
         self.assertEqual(found, {"tools/run"})
         text = self.render("sample-notes", executable=found)
         self.assertIn("[executable] tools", text)
@@ -181,7 +185,7 @@ class ModuleRequestTest(Base):
         self.assertIn("other executables 0", text)
 
     def test_a_module_with_no_executable_file_has_an_empty_set(self):
-        self.assertEqual(request.executable_items(os.path.join(self.path, "sample-notes")), set())
+        self.assertEqual(self.executable_of("sample-notes"), set())
 
     def test_blocking_a_core_capability_is_high_risk_and_a_prefixed_block_is_not(self):
         self.edit("sample-notes", blocks=["plans"])

@@ -81,6 +81,23 @@ class PackageHashesTest(Base):
         after = self.accepted(verify.verify_package(path)).packages[0].tree_hash
         self.assertNotEqual(before, after)
 
+    def test_the_result_carries_the_parsed_objects_and_execute_bits_it_hashed(self):
+        path = self.package("p", {"a": {"ships": ["run.sh"]}})
+        script = os.path.join(path, "a", "run.sh")
+        with open(script, "w") as handle:
+            handle.write("#!/bin/sh\n")
+        os.chmod(script, 0o755)
+        result = self.accepted(verify.verify_package(path))
+        (module,) = result.modules
+        self.assertEqual(module.module.name, "a")
+        self.assertEqual(module.module.declaration["version"], "1.0.0")
+        self.assertEqual(module.executable, ("run.sh",))
+        self.assertEqual(result.packages[0].package.name, "p")
+        os.chmod(script, 0o644)
+        plain = self.accepted(verify.verify_package(path))
+        self.assertEqual(plain.modules[0].executable, ())
+        self.assertNotEqual(plain.modules[0].tree_hash, module.tree_hash)
+
     def test_a_refused_result_carries_no_hashes_or_packages(self):
         path = self.package("p", {"a": {}})
         with open(os.path.join(path, "a", "stray.txt"), "w") as handle:

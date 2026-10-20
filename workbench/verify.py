@@ -36,12 +36,15 @@ import shutil
 
 from . import declarations, hashing, modulefiles, safefs
 
+# `module` is the parsed Module the hashes were taken for, and `executable` the module's files
+# with the owner execute bit, from the same walk that produced the tree hash. A caller that
+# shows a person what is being approved renders from these, not from a fresh read.
 Verified = collections.namedtuple(
-    "Verified", "package name version declaration_hash tree_hash type")
+    "Verified", "package name version declaration_hash tree_hash type module executable")
 # The hashes of a whole package, taken for the approval gate, and whether it was given as
 # first-party.
 PackageInfo = collections.namedtuple("PackageInfo",
-                                     "name declaration_hash tree_hash first_party")
+                                     "name declaration_hash tree_hash first_party package")
 Result = collections.namedtuple("Result", "accepted problems warnings modules order packages")
 
 
@@ -87,7 +90,7 @@ def verify_packages(paths, select=None, harness_required=True, first_party=(),
         declared[package.name] = package.modules
         try:
             infos.append(PackageInfo(package.name, hashing.declaration_hash(package.declaration),
-                                     hashing.tree_hash(path, what="package"), path in first))
+                                     hashing.tree_hash(path, what="package"), path in first, package))
         except (safefs.SafeFsError, OSError) as exc:
             problems.append(declarations.DeclarationError("package", package.name, "hash", str(exc)))
         for module in loaded.modules:
@@ -98,7 +101,8 @@ def verify_packages(paths, select=None, harness_required=True, first_party=(),
             if not result.problems:
                 modules[(package.name, module.name)] = module
                 verified.append(Verified(package.name, module.name, module.declaration["version"],
-                                         result.declaration_hash, result.tree_hash, module.type))
+                                         result.declaration_hash, result.tree_hash, module.type, module,
+                                         tuple(result.executable)))
 
     order = ()
     if select is not None:

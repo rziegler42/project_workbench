@@ -19,13 +19,13 @@ Rules this text follows, because the owner decides from it and a package wrote i
   unprefixed name), is flagged high risk at the top of its entry. A harness or process
   module also always needs an explicit approval of its own, and a package request marks it.
 * The text is built from a declaration that has already been verified and the hashes the
-  verifier computed. ``executable_items`` is the one thing that reads the module again, to
-  list files with the owner execute bit; the tree hash covers that bit.
+  verifier computed, and the files with the owner execute bit come from the same tree walk
+  that was hashed (``Verified.executable``). Nothing here reads a file.
 """
 
 import json
 
-from . import display, safefs
+from . import display
 
 NEEDS_OWN_APPROVAL = ("harness", "process")
 INLINE_LIMIT = 6        # more entries than this get a header with a count and one line each
@@ -65,16 +65,6 @@ def high_risk(module):
     elif core:
         reasons.append("it blocks core capability %s" % ", ".join(_shown(c) for c in core))
     return reasons
-
-
-def executable_items(module_path):
-    """Every regular file in the module that has the owner execute bit, as a set of paths."""
-    found = set()
-    with safefs.Root(module_path, "module") as root:
-        for entry in root.walk():
-            if entry.kind == "file" and entry.executable:
-                found.add(entry.rel)
-    return found
 
 
 def _under(rel, item):
@@ -122,7 +112,7 @@ def _layout_lines(layout):
 def render_module(package, module, hashes, source=None, executable=()):
     """The request for one module. `hashes` has ``declaration_hash`` and ``tree_hash``.
 
-    `executable` is the set from ``executable_items``.
+    `executable` is the set of the module's executable files, ``Verified.executable``.
     """
     executable = set(executable)
     in_ships = {rel for rel in executable if any(_under(rel, item) for item in module.ships)}
@@ -174,7 +164,7 @@ def render_package(name, version, package_hashes, entries, source=None):
     """The request for a package and all of its modules.
 
     `entries` is a list of ``(module, hashes, executable)`` where `hashes` is the module's
-    verified record and `executable` is a set from ``executable_items``.
+    verified record and `executable` is its ``Verified.executable`` as a set.
     """
     needing = [_shown(m.name) for m, _, _ in entries if m.type in NEEDS_OWN_APPROVAL]
     flagged = [_shown(m.name) for m, _, _ in entries if high_risk(m)]

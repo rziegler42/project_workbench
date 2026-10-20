@@ -93,20 +93,22 @@ def _describe(kind):
     return "an entry that is not a regular file or directory (%s)" % kind
 
 
-TreeInfo = collections.namedtuple("TreeInfo", "hash files dirs contents")
+TreeInfo = collections.namedtuple("TreeInfo", "hash files dirs contents executable")
 
 
 def hash_tree(root_path, what="module", keep=None):
     """Hash every regular file below `root_path`; see the module docstring.
 
     Returns a ``TreeInfo``: the hash, the sorted regular-file paths, the sorted
-    directory paths, and a dict of content for each file `keep(rel)` selects. Each
-    file is read once, so the hash and the kept content come from the same bytes.
+    directory paths, a dict of content for each file `keep(rel)` selects, and the sorted
+    paths of the files that have the owner execute bit. Each file is read once, so the hash,
+    the kept content and the execute bits all come from the same walk.
     """
     records = []
     files = []
     dirs = []
     contents = {}
+    executable = []
     with safefs.Root(root_path, what) as root:
         for entry in root.walk():
             if entry.kind == "dir":
@@ -117,6 +119,8 @@ def hash_tree(root_path, what="module", keep=None):
                                 % (what, _describe(entry.kind), root_path, entry.rel))
             data = root.read_file(entry.rel, expected=entry.identity)
             files.append(entry.rel)
+            if entry.executable:
+                executable.append(entry.rel)
             if keep is not None and keep(entry.rel):
                 contents[entry.rel] = data
             records.append((entry.rel.encode("utf-8"),
@@ -126,7 +130,7 @@ def hash_tree(root_path, what="module", keep=None):
     digest = hashlib.sha256()
     for path, content, flag in records:
         digest.update(content.encode("ascii") + b" " + flag.encode("ascii") + b" " + path + b"\n")
-    return TreeInfo(digest.hexdigest(), sorted(files), sorted(dirs), contents)
+    return TreeInfo(digest.hexdigest(), sorted(files), sorted(dirs), contents, sorted(executable))
 
 
 def tree_hash(root_path, what="module"):

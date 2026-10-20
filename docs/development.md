@@ -20,6 +20,7 @@ ambiguous blank.
 |---|---|
 | Setup | not applicable (standard library only; nothing to install) |
 | Run locally | `python3 -m workbench verify [<package> \| --dir <path>] [--select <module> ...] [--no-harness-required]` |
+| Owner-run: approve a package or one module (terminal only) | `python3 -m workbench approve <package> [--module <name>]` |
 | Release time: write the approvals shipped with first-party packages | `python3 -m workbench release-approvals` |
 | Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
 | One focused test file | `python3 -m unittest discover -s tests -p 'test_approvals.py'` (a test module that imports `support` only loads under `discover -s tests`) |
@@ -47,6 +48,37 @@ and prints the install order. A harness module is required in a selection unless
 | 2 | usage error |
 
 `release-approvals` uses the same codes: 0 done (or nothing to do), 1 refused, 2 usage.
+
+## Approving a package
+
+`python3 -m workbench approve <package> [--module <name>]` is how the owner records an
+approval. Run it yourself, from your own terminal; the agent's command permissions will deny
+it once a harness renders that rule (`claude-harness`). The checks in the command are
+friction, not the barrier: a process that allocates its own pseudo-terminal passes the
+terminal test, and the 12 characters are not a secret, because the request and `verify` both
+print them. The typed text guards against a mistaken approval, and it is not authentication.
+
+1. It refuses unless standard input and standard output are both terminals (tested on the
+   file descriptors, not on an environment variable). There is no `--yes` or similar option.
+2. It verifies the package and refuses on any problem, recording nothing. A package given as
+   a symbolic link is refused.
+3. It prints the request (see below), rendered from that one verification, and asks you to
+   type the first 12 characters of the tree hash shown: the package's, or with `--module`
+   that module's. Anything else cancels and records nothing.
+4. Just before writing it verifies the package again and compares every hash with what it
+   showed. A package that changed while you were reading is refused.
+5. It records a `module` record for each module and then a `package` record, or only the one
+   `module` record with `--module`. A harness or process module is approved on its own
+   record (`--module`, or as part of the package). It writes only into the guarded store.
+   If an approval is already on file the first record is kept, and the command says so.
+   Module records are written before the package record, so a package that is approved has
+   all its modules approved. If a write fails part way, the earlier records stay (they are
+   valid) and the error lists the records written by that run.
+
+The recorded approver is the account name from the operating system's user database, not
+from an environment variable; it is text and grants nothing. Exit codes: 0 recorded, 1
+refused or cancelled, 2 usage error. The command does not take a source URL yet; approving
+from a downloaded copy comes with the inert download.
 
 ## First-party packages and shipped approvals
 
@@ -97,9 +129,10 @@ ships (`[executable]` when a file under it has the owner execute bit, otherwise
 - Every package-supplied string is shown as ASCII. A non-ASCII character appears as an
   escape such as `\u0443`, so a lookalike letter cannot pass for a Latin one, and control,
   invisible and bidirectional characters become visible escapes.
-- The text is built from a verified declaration and the verifier's hashes. The only thing
-  read again is `executable_items(module_path)`, which lists files with the execute bit; the
-  tree hash covers that bit.
+- The text is built from the verification result: the parsed module, its hashes, and the
+  files with the execute bit, all from the one tree walk that was hashed
+  (`Verified.module`, `Verified.executable`). Nothing is read again, so what is shown cannot
+  differ from what is recorded because a file changed between two reads.
 
 `workbench/display.py` has the two cleaners. `clean` (used for the command's own messages)
 keeps ordinary letters in any script and escapes control, invisible, combining, format,

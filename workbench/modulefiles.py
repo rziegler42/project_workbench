@@ -33,7 +33,7 @@ MANIFEST = "manifest.json"
 MAX_REASON_CHARS = 200
 
 ModuleResult = collections.namedtuple(
-    "ModuleResult", "problems warnings declaration_hash tree_hash")
+    "ModuleResult", "problems warnings declaration_hash tree_hash executable")
 
 
 def _keep(rel):
@@ -60,7 +60,7 @@ def verify_module(package_path, package_name, module):
         info = hashing.hash_tree(module_path, "module", keep=_keep)
     except safefs.SafeFsError as exc:
         bad("files", str(exc))
-        return ModuleResult(problems, warnings, None, None)
+        return ModuleResult(problems, warnings, None, None, ())
 
     try:
         reread = declarations.parse_json(info.contents.get("module.json", b""))
@@ -68,7 +68,7 @@ def verify_module(package_path, package_name, module):
         reread = None
     if reread != module.declaration:
         bad("module.json", "changed after it was parsed")
-        return ModuleResult(problems, warnings, None, None)
+        return ModuleResult(problems, warnings, None, None, ())
 
     files = set(info.files)
     dirs = set(info.dirs)
@@ -77,9 +77,9 @@ def verify_module(package_path, package_name, module):
     _harness_layout(module, files, dirs, info.contents, bad, warnings)
 
     if problems:
-        return ModuleResult(problems, warnings, None, None)
+        return ModuleResult(problems, warnings, None, None, ())
     return ModuleResult(problems, warnings, hashing.declaration_hash(module.declaration),
-                        info.hash)
+                        info.hash, tuple(info.executable))
 
 
 def _accounted(module, files, bad):
