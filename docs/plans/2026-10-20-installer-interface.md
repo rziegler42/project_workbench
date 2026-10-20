@@ -1,6 +1,6 @@
 # The installer's commands and options
 
-Status: Approved
+Status: Completed
 Created: 2026-10-20
 Candidate: workbench-v1#installer-interface
 Specs: repository-boundary, trust-and-approval, module-contract
@@ -293,7 +293,10 @@ Evidence: the status line and the owner's statement, recorded in the Result sect
 ## Review record
 
 Requested by the owner. Reviewer: Codex through `ask-codex`, model `gpt-5.6-luna`, medium
-effort, bound of 3 rounds. The review is open; one round has been used.
+effort, bound of 3 rounds. The review was closed by the owner with `ask-codex archive` on
+2026-10-20 (16:40 UTC) after one round of three. The helper reports the outcome as "not
+converged", because the one round had two major findings; both were applied and no second
+round was run.
 
 **Round 1** (2026-10-20): outcome `changes_needed`, two major findings, both applied.
 
