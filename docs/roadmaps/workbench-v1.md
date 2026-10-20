@@ -97,8 +97,8 @@ meet here and the order matters.
   readers for the acknowledgement baselines and the existing project, the owner-run `wb acknowledge`,
   `wb preview upgrade` and `wb preview add` (read-only), and the owner-run `wb upgrade` and `wb add`,
   with classification of every path, a marker and read-back on the write, and no git and no
-  deletion. Two decisions it proposed (`2026-10-20-acknowledge-before-upgrade`,
-  `2026-10-20-upgrade-needs-no-git`) await the owner. The owner-class declaration field is
+  deletion. Its two decisions (`2026-10-20-acknowledge-before-upgrade`,
+  `2026-10-20-upgrade-needs-no-git`) were accepted on 2026-10-20. The owner-class declaration field is
   deferred; a rerun after a part-way failure is not repaired (the plan's Result lists the limits).
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.

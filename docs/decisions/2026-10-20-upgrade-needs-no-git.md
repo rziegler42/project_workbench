@@ -1,6 +1,6 @@
 # An upgrade asks no git question; cleanliness is decided by file hashes
 
-Status: Proposed
+Status: Accepted
 Date: 2026-10-20
 
 ## Context
