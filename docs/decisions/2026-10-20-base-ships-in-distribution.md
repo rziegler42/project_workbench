@@ -1,6 +1,6 @@
 # The base ships in the distribution and is trusted as the workbench is
 
-Status: Proposed
+Status: Accepted
 Date: 2026-10-20
 
 ## Context

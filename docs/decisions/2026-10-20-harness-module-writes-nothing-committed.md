@@ -1,6 +1,6 @@
 # A harness module writes nothing committed
 
-Status: Proposed
+Status: Accepted
 Date: 2026-10-20
 
 ## Context

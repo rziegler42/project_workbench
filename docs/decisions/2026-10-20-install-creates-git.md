@@ -1,6 +1,6 @@
 # Install creates the `.git` directory itself, and only when there is none
 
-Status: Proposed
+Status: Accepted
 Date: 2026-10-20
 
 ## Context
