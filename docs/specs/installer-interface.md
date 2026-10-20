@@ -1,8 +1,9 @@
 # The installer's commands and options
 
-Status: Draft. Being written by the plan `2026-10-20-installer-interface`; not yet approved by
-the owner. Only the commands marked built exist; the rest are proposals until their
-candidates are built. Rules are marked **rule**; option and command spellings are
+Status: Current. Approved by the owner on 2026-10-20. Only the commands marked built exist;
+the rest are proposals until their candidates are built. The approval covers the rules; the
+git mechanism in "States of a target" is untested and must be proved against a hostile
+configuration when it is built. Rules are marked **rule**; option and command spellings are
 **proposals** and may change when the code that uses them exists. A statement the owner has
 decided is marked *(owner)*; a statement that is the author's choice and not the owner's is
 marked *(my call)*; a statement read from the current code and not from a spec is marked
@@ -153,7 +154,7 @@ says so.
 | command | kind | takes | writes | terminal only | state |
 |---|---|---|---|---|---|
 | `install` | project | target, a module selection | committed content, manifest, the project's store directory, then per-clone harness files | yes, owner-run | proposed |
-| `preview` | project | `install`, `upgrade` or `add` and their arguments | nothing in the project; a cache directory if it fetches | no | proposed |
+| `preview` | project | `install`, `upgrade` or `add` and their arguments | nothing; no network, it reads only the approved cache | no | proposed |
 | `attach` | project | target, `--harness` | per-clone harness files, `.git/info/exclude`, the local manifest | no, but owner-run (harness deny rule) | proposed |
 | `check` | project | target | nothing | no | proposed |
 | `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run | proposed |
@@ -209,7 +210,7 @@ publishes, and none edits a living or historical document** (`repository-boundar
   verify the fetched tree against those hashes. A source that only the committed manifest
   names is not contacted until the owner has approved that package here, so an agent-run
   command cannot be made to contact an address a hostile manifest chose. `install` contacts
-  the sources the caller gives. A fetch writes a cache directory in the guarded store
+  the sources the caller gives, and `preview` contacts none. A fetch writes a cache directory in the guarded store
   (`trust-and-approval.md`, Inert download).
 - **Approval binds the write.** The approval of a preview binds its digest, which covers
   every path, owner class and byte to be written. After the approval and before the first
@@ -234,7 +235,7 @@ publishes, and none edits a living or historical document** (`repository-boundar
   at install).
 - **Reads and checks, in this order, before anything is written:** the common checks of rule
   10 (the guarded store first, the target state last); each source, downloaded inertly into
-  the store's cache and never into the target; the selection as one install (`verify`,
+  the store's cache and never into the target (`preview` reads the cache only); the selection as one install (`verify`,
   including counts, conflicts, requirements and install order); and that every module of the
   selection, the harness first, is approved on this machine (the gate,
   `trust-and-approval.md`). Install never records an approval.
@@ -249,7 +250,7 @@ publishes, and none edits a living or historical document** (`repository-boundar
 - **Refuses** any verification failure, any missing approval, a state other than new, and a
   refused target. After a failure part-way, the report says what was written ("Failure part-way").
 - **Contacts the network and writes a cache directory** for each source that is not a local
-  directory.
+  directory, in `install` itself and never in `preview`.
 - **Agent may run it:** no *(owner)*. The owner runs `install`, from a terminal, and approves the
   preview there. An agent runs `wb preview install ...` to see the same preview and write
   nothing (the preview and approval section).
@@ -318,7 +319,8 @@ publishes, and none edits a living or historical document** (`repository-boundar
   where the change comes from: a newer workbench or newer module versions (`upgrade`), or a
   module the project does not have (`add`).
 - **Reads:** the committed manifest; the current files and their hashes; the new declarations
-  and trees, downloaded inertly; and the approval of every new or changed module, which must
+  and trees, read from the cache that `approve` filled (a write command may fetch an approved
+  source again; `preview` never does); and the approval of every new or changed module, which must
   exist before the preview is produced. A changed declaration or tree is a different subject
   and needs a new `approve`. `add` verifies the new module together with the modules already
   installed, so counts (one harness, at most one process module), conflicts, requirements,
@@ -340,7 +342,8 @@ publishes, and none edits a living or historical document** (`repository-boundar
   owner commits; that is intended. It refuses when the installed workbench is older than the
   version recorded in the manifest.
 - **Removing a module is not a command** in this version.
-- **Contacts the network and writes a cache directory** for each source it fetches.
+- **Contacts the network and writes a cache directory** for each source it fetches, in the write
+  command and never in `preview`.
 - **Agent may run it:** `wb preview upgrade ...` and `wb preview add ...`, yes. `upgrade` and
   `add` themselves are owner-run, from a terminal *(owner)*.
 
@@ -388,7 +391,12 @@ and an owner-run write is a **rule** *(owner)*; the layout of the text is a prop
 1. **Two verbs.** `wb preview <install | upgrade | add> ...` takes the same arguments as the
    command it previews. It is read-only, may be run by an agent, and prints the preview. It
    exits 0 when a preview was produced and 1 when the command would have been refused. It
-   prints no typing token. `wb install`, `wb upgrade` and `wb add` write, and are owner-run.
+   prints no typing token. **rule:** it contacts no network and writes nothing, not even a
+   cache directory: it reads only trees that `approve` has already downloaded into the cache
+   and verifies them again, and it refuses and names a source that is not cached and approved.
+   An agent therefore cannot make the workbench contact an address it chose, and the approval
+   a preview needs always came from the owner *(my call; found in review)*. `wb install`,
+   `wb upgrade` and `wb add` write, and are owner-run.
 2. **The write commands are owner-run and terminal-only.** They need a terminal on both
    standard input and standard output, checked on file descriptors as `approve` does, and
    refuse with `refused:` and exit 1 otherwise. They are denied to an agent by the harness,

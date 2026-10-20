@@ -317,4 +317,22 @@ effort, bound of 3 rounds. The review is open; one round has been used.
 
 ## Result
 
-Not started.
+Increments A to E are done. Commits: A `a4e8e3c`, B `f6176a3`, C `e605b17`, D `86c93ed`, and E
+(this commit). The owner approved `docs/specs/installer-interface.md` in session on 2026-10-20,
+after a last review fix that stops `preview` contacting the network, and its status reads
+`Current`. The owner's approval covers the rules; the git mechanism is untested.
+
+Verification: `python3 -B -W error -m unittest discover -s tests` ran 657 tests, all passing,
+with no code or test file changed. `git diff --check` was clean. A grep of the specs and roadmap
+finds no remaining "committed manifest is existing" or "accepted by every command" wording.
+
+Unresolved, for later:
+
+- The two decision records `2026-10-20-target-decided-by-state` and
+  `2026-10-20-preview-then-owner-run-write` are `Proposed` until the owner accepts them.
+- No harness renders the `deny` rules for the owner-run commands yet; the roadmap's
+  `claude-harness` and `opencode-harness` candidates carry the duty. `harness-modules.md` does not
+  mention it.
+- The independent review of this plan (Codex, 1 of 3 rounds) is still open; archiving it is the
+  owner's command.
+- Next candidate: `base-and-manifests`, which settles the `--package` and `--ref` spelling.

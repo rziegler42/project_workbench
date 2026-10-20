@@ -200,7 +200,10 @@ harness files, rendering of the neutral permission rules, the root file, and a c
 that reports drift, stray files and tracked-pointer problems.
 **Dependencies:** `ownership-and-upgrade`, `module-approvals`.
 **Boundary:** Claude only. Translating neutral skills, agents and commands, with
-fail-closed handling of restrictions the harness cannot express.
+fail-closed handling of restrictions the harness cannot express. It must render a `deny`
+for the owner-run commands `wb install`, `upgrade`, `add`, `attach`, `approve`, `pin` and
+`release-approvals` (`trust-and-approval.md`, "Rendering rules"), and call `wb` and not the
+`-m` form. `opencode-harness` carries the same duty.
 **Promotion trigger:** `ownership-and-upgrade` and `module-approvals` complete.
 
 ### verify-opencode — Verify the installed opencode against the specification
