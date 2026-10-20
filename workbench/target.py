@@ -187,6 +187,20 @@ class Target:
         if not stat.S_ISDIR(now.st_mode) or (now.st_dev, now.st_ino) != self._identity:
             raise TargetError("refused: the target changed: %s" % self.path)
 
+    def adopt_created(self, fd):
+        """Make the directory just created in the held parent the held target.
+
+        `fd` is the new directory opened without following links. The parent's descriptor is
+        closed and the state becomes ``new-empty``.
+        """
+        info = os.fstat(fd)
+        if self.fd is not None:
+            os.close(self.fd)
+        self.fd = fd
+        self.state = "new-empty"
+        self.created = True
+        self._identity = (info.st_dev, info.st_ino)
+
     def has_incomplete_marker(self):
         """True when ``.workbench/local/incomplete`` exists; links are never followed."""
         if self.state == "new-missing":
