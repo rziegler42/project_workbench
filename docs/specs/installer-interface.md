@@ -228,9 +228,12 @@ publishes, and none edits a living or historical document** (`repository-boundar
   says to use `upgrade` or add a module.
 - **Selection.** The modules to install are named as `verify` names them, `<module>` or
   `<package>/<module>`. Each package comes from a `--package` source: a local package
-  directory or a URL, with `--ref` naming the branch, tag or commit of the `--package` before
-  it *(proposal; how several packages and refs are written is settled by
-  `base-and-manifests`)*. The selection must contain exactly one module of type `harness`, so
+  directory or a URL. `--package` may repeat; a `--ref <ref>` names the branch, tag or commit of
+  the nearest `--package` before it and appears at most once per package. The options are read
+  in order by hand, since `argparse` cannot associate them *(owner; built by
+  `base-and-manifests`)*. A local directory contacts no network and the gate still applies to
+  it; a URL source must have been fetched and approved by `approve` before `preview` will use
+  it. The selection must contain exactly one module of type `harness`, so
   install never offers `--no-harness-required` (`module-contract.md`: a harness is mandatory
   at install).
 - **Reads and checks, in this order, before anything is written:** the common checks of rule
@@ -247,6 +250,16 @@ publishes, and none edits a living or historical document** (`repository-boundar
   where the project was first seen; the acknowledgement baselines for the files written; and
   last, attach for the chosen harness, which writes the per-clone harness files, the
   `.git/info/exclude` entries and the local manifest. Everything is left uncommitted.
+- **Until `attach` is built** *(owner; `base-and-manifests`)*: `install` requires, verifies and
+  approves the harness module as above, writes nothing for it, skips attach and prints
+  `harness not attached: attach is not built yet`; `claude-harness` adds the attach step to this
+  command. A harness module that declares `writes` or `fills` is refused.
+- **`.git`** *(owner)*: where the target has no `.git`, `install` runs `git init
+  --initial-branch=main` itself, as an action of the preview covered by the digest, with a
+  scrubbed `GIT_*` environment, global and system configuration ignored and an empty template
+  directory. In a target that already holds a `.git` it never runs git, and never reads its
+  configuration. The first-seen record is the resolved path (`repository-boundary.md`); a lone
+  `.git` target warns that no remote was recorded.
 - **Refuses** any verification failure, any missing approval, a state other than new, and a
   refused target. After a failure part-way, the report says what was written ("Failure part-way").
 - **Contacts the network and writes a cache directory** for each source that is not a local
@@ -564,7 +577,12 @@ Answered by the owner on 2026-10-20.
    preview itself and the owner types the first 12 characters of its digest. This replaced an
    earlier answer (one command that previews without a terminal and exits 3), after review
    showed an agent with a pseudo-terminal could complete it.
-6. **No machine-readable output** in this version; text with the `refused:`, `failed:`,
+6. **Built by `base-and-manifests`, answered 2026-10-20:** `install` runs `git init` itself and
+   only when there is no `.git`; the harness module is required and gated but nothing is
+   written for it and attach is skipped; `preview` and `install` accept a local package
+   directory; `--package` repeats and `--ref` binds to the nearest preceding `--package`; the
+   baselines are written and the first-seen record is the resolved path.
+7. **No machine-readable output** in this version; text with the `refused:`, `failed:`,
    `cancelled:`, `problem:` and `warning:` prefixes.
 
 ## Departures from the roadmap's wording

@@ -171,6 +171,13 @@ namespace.
   inside another module's namespace.
 - A harness module additionally writes the per-clone harness files described by its
   own layout. Those paths are not committed.
+- **A harness module declares no `writes` and no `fills`** *(proposed; `base-and-manifests`)*.
+  Its files are per-clone, and a committed file would name the harness. A declaration that gives
+  either is refused at install.
+- **Base-owned slots** *(proposed; `base-and-manifests`)*: `policy`, in `AGENTS.md`, and
+  `docs-index`, in `docs/README.md`. A fill of either needs no selected owner and gives no
+  warning, and a module whose `slots` names one is refused, because a slot has one owner. A
+  slot fill with no owner and not base-owned is still a warning.
 
 ## Verification before anything is written
 
@@ -307,9 +314,6 @@ result is a refusal and carries no hashes and no order.
 - **Overloaded terms** (design-notes review item 12): the schema was written and no clash
   between terms was found in the code, so the item stays open only for the harness and
   trust specifications, which the verifier does not exercise.
-- **Base-owned slots**: the base owns slots that are always present, but which ones is
-  fixed by `base-and-manifests`. Until then the verifier knows none, and a slot fill with
-  no selected owner is a warning.
 - **Item naming** for harness modules: provisional, as stated under "Module files".
 - **Added hard stops.** `trust-and-approval.md` lets a module add hard stops, but the module
   declaration has no field to declare one, so the verifier accepts none and no module supplies any.

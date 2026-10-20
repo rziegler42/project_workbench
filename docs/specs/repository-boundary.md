@@ -2,8 +2,9 @@
 
 Status: Current. Approved by the owner on 2026-10-19. The guarded store, with its approvals, cache, pins
 and launcher, is built (`module-approvals`) and the layout below records it; the manifests, install,
-attach, check and upgrade are not built yet. File names and marker syntax are proposals; the rules are the
-substance.
+attach, check and upgrade are not built yet. `base-and-manifests` builds the committed manifest and
+install; the formats it will build are written below and are proposals until it is complete. File names
+and marker syntax are proposals; the rules are the substance.
 
 Terms are defined in `terms.md`. The declarations the installer reads are defined in
 `module-contract.md`.
@@ -58,7 +59,7 @@ Non-goals:
 .workbench/
   .gitignore                tracked; contains /local/
   manifest.json             tracked; the committed manifest
-  <package>/<module>/       tracked; a module's own files
+  <package>/<module>/       tracked; a copy of the module's whole tree
   local/                    untracked; created on demand
     harness.json            the local manifest
     debug/<YYYY-MM-DD>-<topic>/
@@ -70,8 +71,10 @@ Non-goals:
   cache/<id>/               an inert download: package/ (the files) and fetch.json
   projects/<project-id>/    one directory per project
     pins                    pinned helpers: path relative to the project root, SHA-256
-                            (plan approvals, acknowledgement baselines and where the
-                            project was first seen are not built yet)
+    seen                    where the project was first seen (written by install; proposed)
+    baselines               acknowledgement baselines, path to SHA-256 (written by install;
+                            nothing reads them yet; proposed)
+                            (plan approvals are not built yet)
   bin/wb                    the launcher script, fixed text apart from one path
   bin/run/<uuid>/<name>     a private copy of a pinned helper, only while it runs
 ```
@@ -82,7 +85,24 @@ Non-goals:
 - The names `local`, `manifest*` and `neutral` are reserved and cannot be a package
   or module name.
 - `.workbench/.gitignore` ships in the base, so every clone, including a fresh one
-  before any attach, keeps `.workbench/local/` out of git. It names no harness.
+  before any attach, keeps `.workbench/local/` out of git. It names no harness. Its content is
+  the single line `/local/` and a final newline.
+
+### The base
+
+The base is the content the workbench itself puts in every project before any module. It is part
+of the workbench distribution, in `base/` at the distribution root, and is trusted as the
+workbench code is (`trust-and-approval.md`, the distribution is the trust root); it is not a
+module, has no type and has no approval record. Its tree hash and the workbench version are
+recorded in the committed manifest. *(Proposed; `base-and-manifests`.)*
+
+- `AGENTS.md`: the project's policy headings and the `policy` slot marker. Seeded.
+- `docs/README.md`: an index of the project's documents and the `docs-index` slot marker. Seeded.
+- `.workbench/.gitignore`: generated, not stored. Module-owned.
+- The base owns exactly two slots, `policy` (in `AGENTS.md`) and `docs-index` (in
+  `docs/README.md`). They are always present and a module cannot own either: a slot has one
+  owner.
+- The base names no harness file and contains no executable.
 - Harness files are kept out of git by entries the installer adds to
   `.git/info/exclude` at attach. They are not added to a tracked ignore file,
   because that would name the harness in the committed repository.
@@ -111,6 +131,7 @@ line so that two developers adding different modules do not conflict. It records
 
 - the manifest schema version, and the project seed from which the project ID is
   derived (see "Project ID");
+- the base's tree hash and the version of the workbench that installed;
 - each package: its name, where to obtain it, the requested ref, and the resolved
   commit and tree hash;
 - each module of each package: its version, declaration hash and tree hash;
@@ -119,6 +140,19 @@ line so that two developers adding different modules do not conflict. It records
   hash.
 
 It never names a harness.
+
+**Format (proposed; `base-and-manifests` builds it).** `.workbench/manifest.json` is UTF-8 JSON
+with a final newline. Top-level keys are sorted: `base`, `files`, `packages`, `seed`, `version`,
+`workbench`. `version` is the schema version, 1. `base` is the base's tree hash. `workbench` is
+the installing workbench's version. `packages` is a list, one object per line, sorted by name,
+each with `name`, `source`, `ref`, `commit` and `tree` and `modules` (sorted objects with
+`name`, `version`, `declaration` and `tree`). `files` is a list, one object per line, sorted by
+path, each with `class`, `hash`, `path`, and for a block `slot` and `block`. A harness module is
+omitted, and a package that holds only the harness is omitted whole, because the manifest never
+names a harness. A package source is recorded without any user name, password or query. A
+serializer written for the purpose, not a library's formatting, produces the layout, so the
+one-entry-per-line shape does not depend on a library, and a parser refuses anything else
+(unsorted keys, a duplicate key, an unknown key, a wrong type).
 
 ### Project ID
 
@@ -134,6 +168,19 @@ reach that project's baselines and pins. To prevent it, the store's entry for a 
 also records where the project was first seen: its canonical remote URL, or its path
 when it has no remote. A mismatch is treated as a new project that needs fresh
 approvals, and warns. If a remote legitimately moves, the owner confirms once.
+
+**The seed and the first-seen record (proposed).** The seed is a random UUID4 string. `install`
+writes `projects/<id>/seen` as strict JSON, `{"format": 1, "kind": "path", "value": "<resolved
+absolute path of the target>"}`. Reading a remote needs `.git/config`, which is hostile input,
+so `install` records the path and no remote; a freshly initialized repository has no remote
+anyway. When the target was an existing lone `.git`, `install` warns that no remote was
+recorded. Recording and comparing a remote is settled by the candidate that first meets a
+project in a second clone (at attach). Nothing reads `seen` yet.
+
+**Baselines (proposed).** `install` writes `projects/<id>/baselines` as strict JSON,
+`{"baselines": {"<path>": "<sha256 hex of the bytes written>"}, "format": 1}`, with sorted
+keys, for exactly the files in the approved preview. Reading, comparing and acknowledging
+are for `ownership-and-upgrade` and later.
 
 ## The local manifest
 
@@ -155,6 +202,14 @@ recorded in the manifest.
 
 - A template is not installed as a placeholder file. It stays in its module and is
   used when something is created, so an upgrade has no empty file to overwrite.
+- **Classes at install (proposed).** The base's `AGENTS.md` and `docs/README.md` are `seeded`.
+  `.workbench/.gitignore` is `module-owned`, as is each file under a module's namespace
+  `.workbench/<package>/<module>/`. A file written from a module's `writes` is `seeded`. A
+  filled block is a `slot block`. The declaration has no field to choose the class; a field is
+  for `ownership-and-upgrade` to add.
+- **A module's namespace holds a copy of its whole tree** (declaration, templates, files and
+  the rest), because a template stays in its module and is used when something is created. A
+  harness module writes nothing committed.
 - Text outside a block's markers is never read or changed.
 - If the markers of a block have been removed, the installer takes that as the
   project's choice, does not add them back, and reports that the slot is gone.
@@ -166,6 +221,10 @@ recorded in the manifest.
 - An empty slot is marked `<!-- @slot: <name> -->` in the file that owns it.
 - A filled slot holds a block between `<!-- BEGIN <package>/<module> slot:<name> -->`
   and `<!-- END <package>/<module> slot:<name> -->`.
+- **A filled slot keeps its marker.** The file holds, in install order, one BEGIN/END block
+  per filler, then the `<!-- @slot: <name> -->` marker line, so a later module can add its
+  block before the marker and the interface stays append-only. A fill source that contains a
+  marker line of its own is refused. *(Proposed; `base-and-manifests`.)*
 - Slots are a public, append-only interface. A slot that has been published is not
   removed or renamed. The base ships a small, generous set of coarse slots from the
   first version.
@@ -190,6 +249,16 @@ are not repeated here.
   and the committed manifest, and creates the project's directory in the guarded
   store. Last of all it performs attach for the chosen harness, which writes only
   per-clone harness files.
+- **`.git` (proposed).** A target that has no `.git` is given one by `install` itself, with
+  `git init --initial-branch=main`, an empty template directory and a scrubbed environment (the
+  same arrangement the download uses). A target that already holds a lone `.git` is used as
+  it is, and its configuration is never read or run. Git is never run in a directory that
+  already has one.
+- **Until attach is built (proposed; `base-and-manifests`).** The harness module is required,
+  verified and approved as above, but `install` writes nothing for it, skips attach, and
+  prints `harness not attached: attach is not built yet`. A harness module declares no
+  `writes` or `fills`, because its files are per-clone and a committed file would name the
+  harness.
 - Stops, before writing anything, on any verification failure defined in
   `module-contract.md` or on a missing approval.
 - A harness is mandatory at install.

@@ -62,3 +62,6 @@ List every record, including rejected and superseded ones.
 | [2026-10-20-isolated-launcher-invocation](2026-10-20-isolated-launcher-invocation.md) | The workbench is run through the isolated launcher from project directories | Accepted |
 | [2026-10-20-target-decided-by-state](2026-10-20-target-decided-by-state.md) | A project target is decided by the directory's state, from files and without git | Accepted |
 | [2026-10-20-preview-then-owner-run-write](2026-10-20-preview-then-owner-run-write.md) | A project write is previewed read-only and then written by an owner-run command | Accepted |
+| [2026-10-20-base-ships-in-distribution](2026-10-20-base-ships-in-distribution.md) | The base ships in the distribution and is trusted as the workbench is | Proposed |
+| [2026-10-20-install-creates-git](2026-10-20-install-creates-git.md) | Install creates the `.git` directory itself, and only when there is none | Proposed |
+| [2026-10-20-harness-module-writes-nothing-committed](2026-10-20-harness-module-writes-nothing-committed.md) | A harness module writes nothing committed | Proposed |

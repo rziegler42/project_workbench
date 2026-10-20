@@ -228,6 +228,10 @@ reviewed. It protects against text changed by someone else.
 - Approving an install or an upgrade preview updates the baselines for exactly the
   files in that preview, so the owner is not asked to acknowledge their own approved
   change.
+- **Baselines file (proposed; `base-and-manifests`).** `projects/<id>/baselines` is strict JSON,
+  `{"baselines": {"<path relative to the project root>": "<sha256 hex of the bytes>"}, "format": 1}`,
+  with sorted keys. `install` writes it for the files it wrote. Nothing reads it yet; reading,
+  comparing and acknowledging are for `ownership-and-upgrade` and later.
 - Scratch under `.workbench/local/` is not covered. It grants no authority.
 
 ## Pinned helpers
