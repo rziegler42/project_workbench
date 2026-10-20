@@ -146,6 +146,11 @@ class Target:
         self.created = False
         self._identity = (info.st_dev, info.st_ino)
 
+    @property
+    def identity(self):
+        """The held directory's (device, inode)."""
+        return self._identity
+
     def close(self):
         if self.fd is not None:
             os.close(self.fd)
