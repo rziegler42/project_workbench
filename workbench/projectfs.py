@@ -1,10 +1,13 @@
-"""The project writer: create files and directories inside a held target, and nothing else.
+"""The project writer: create files and directories inside a held target, read a file and
+replace a file whose content is as expected, and nothing else.
 
 Every write walks from the held target descriptor one path component at a time, each
 directory opened with no-follow and directory-only flags, so a parent swapped for a link
 after a check cannot move the write elsewhere. A file is created exclusively and without
 following links; an existing path of any kind, or a link at any component, is a conflict.
-Nothing is overwritten and nothing is unlinked except the install marker.
+Nothing is overwritten except through ``replace_file``, which renames a freshly made sibling
+over a regular file whose hash is the one expected. Nothing is unlinked except the install
+marker and the writer's own sibling when a replace fails.
 
 Limits, recorded on purpose:
 
@@ -13,11 +16,20 @@ Limits, recorded on purpose:
   part-way is listed too, since it exists.
 * A process killed mid-write can leave a part-written file. The install marker
   (``.workbench/local/incomplete``) is how a later command finds that directory.
-* A created directory is made with mode 0755 and a file with 0644 (0755 when executable), both
-  reduced by the process umask and never widened by it.
+* A replace checks the original's hash and then renames; the two steps are not one operation, so
+  a write made to the file in between is lost. The check is against the project's owner or a
+  tool run beside this command, not against an attacker the hash gate already excludes.
+* A created directory is made with mode 0755 and a file with 0644, both reduced by the process
+  umask. A file marked executable is set to 0755 explicitly, which the umask does not narrow.
+  A replaced file keeps its original's narrower mode (see ``replace_file``).
+* A signal that lands between creating the replace sibling and noting it can leave a stray
+  ``.workbench-<pid>-<hex>.tmp`` and an open descriptor, as a killed process can; it is not
+  searched for or removed later.
 """
 
+import collections
 import errno
+import hashlib
 import os
 import stat
 
@@ -28,6 +40,10 @@ MARKER = ".workbench/local/incomplete"
 
 class WriteConflict(safefs.SafeFsError):
     """The path exists, or a link or a non-directory is in the way."""
+
+
+# What `read_file` returns: the bytes, their SHA-256 (hex) and the permission bits.
+FileState = collections.namedtuple("FileState", "data hash mode")
 
 
 def _os_error(what, shown, exc):
@@ -168,6 +184,161 @@ class Writer:
             finally:
                 os.close(fd)
         finally:
+            for each in fds:
+                os.close(each)
+
+    # --- reading and replacing ---
+
+    def _open_regular(self, name, dirfd, shown):
+        """Open `name` no-follow for reading. Returns (fd, fstat) for a regular file, or None when
+        it is not there; a link or any other kind of file is a conflict."""
+        try:
+            info = os.stat(name, dir_fd=dirfd, follow_symlinks=False)
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise _os_error("read", shown, exc)
+        if not stat.S_ISREG(info.st_mode):
+            raise WriteConflict("not a regular file: %s" % shown)
+        try:
+            fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dirfd)
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            if exc.errno in (errno.ELOOP, errno.ENXIO, errno.ENOTDIR):
+                raise WriteConflict("not a regular file: %s" % shown)
+            raise _os_error("read", shown, exc)
+        try:
+            opened = os.fstat(fd)
+            if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (
+                    info.st_dev, info.st_ino):
+                raise WriteConflict("the file changed while it was opened: %s" % shown)
+            if opened.st_size > safefs.MAX_FILE_BYTES:
+                raise safefs.SafeFsError("file too large (%d bytes, limit %d): %s"
+                                         % (opened.st_size, safefs.MAX_FILE_BYTES, shown))
+        except BaseException:
+            os.close(fd)
+            raise
+        return fd, opened
+
+    @staticmethod
+    def _read_all(fd, shown):
+        chunks, total = [], 0
+        limit = safefs.MAX_FILE_BYTES
+        try:
+            while total <= limit:
+                chunk = os.read(fd, min(65536, limit + 1 - total))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                total += len(chunk)
+        except OSError as exc:
+            raise _os_error("read", shown, exc)
+        if total > limit:
+            raise safefs.SafeFsError("file too large (over %d bytes): %s" % (limit, shown))
+        return b"".join(chunks)
+
+    def read_file(self, rel):
+        """The ``FileState`` of the regular file `rel`, or None when it is not there (the file
+        or a directory above it). A link, or a file where a directory should be, at any
+        component, and a file that is not regular, is a conflict. Bounded by
+        ``safefs.MAX_FILE_BYTES``."""
+        parts = safefs.validate_relpath(rel)
+        shown = self._shown(rel)
+        safefs._fire("projectfs_validated", root=self.target.path, rel=rel)
+        fds = []
+        try:
+            try:
+                dirfd = self._walk(parts[:-1], fds, False)
+            except FileNotFoundError:
+                return None
+            safefs._fire("projectfs_walked", root=self.target.path, rel=rel)
+            got = self._open_regular(parts[-1], dirfd, shown)
+            if got is None:
+                return None
+            fd, opened = got
+            try:
+                data = self._read_all(fd, shown)
+            finally:
+                os.close(fd)
+            return FileState(data, hashlib.sha256(data).hexdigest(), stat.S_IMODE(opened.st_mode))
+        finally:
+            for each in fds:
+                os.close(each)
+
+    def replace_file(self, rel, expected_hash, data, executable=False):
+        """Replace the regular file `rel`, whose SHA-256 must be `expected_hash`, with `data`.
+
+        A sibling is created exclusively and filled and synced; the original is then reopened
+        no-follow in the same held directory and its hash compared; the sibling is renamed over
+        it. A different hash, a link, a file that is not regular or one that is gone raises
+        ``WriteConflict``. A sibling this call made is unlinked on every failure; one that was
+        already there is never touched. The sibling is private (0600) until the check has passed. The
+        mode is then 0755 when `executable`; otherwise the original's mode without any execute,
+        group-write or other-write bit, so a private file stays private and no file is widened.
+        No setuid or setgid bit is ever set.
+        """
+        parts = safefs.validate_relpath(rel)
+        if not isinstance(data, bytes):
+            raise safefs.SafeFsError("content is not bytes: %s" % rel)
+        if len(data) > safefs.MAX_FILE_BYTES:
+            raise safefs.SafeFsError("file too large: %s" % rel)
+        shown = self._shown(rel)
+        safefs._fire("projectfs_validated", root=self.target.path, rel=rel)
+        fds = []
+        sibling = None
+        try:
+            try:
+                dirfd = self._walk(parts[:-1], fds, False)
+            except FileNotFoundError:
+                raise WriteConflict("the file is not there: %s" % shown)
+            safefs._fire("projectfs_walked", root=self.target.path, rel=rel)
+            temp = ".workbench-%d-%s.tmp" % (os.getpid(), os.urandom(6).hex())
+            try:
+                fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600,
+                             dir_fd=dirfd)
+            except FileExistsError:
+                raise WriteConflict("the temporary name is taken: %s" % self._shown(temp))
+            except OSError as exc:
+                raise _os_error("create", self._shown(temp), exc)
+            sibling = temp
+            try:
+                try:
+                    view = memoryview(data)
+                    while view:
+                        view = view[os.write(fd, view):]
+                    os.fsync(fd)
+                except OSError as exc:
+                    raise _os_error("write", shown, exc)
+                got = self._open_regular(parts[-1], dirfd, shown)
+                if got is None:
+                    raise WriteConflict("the file is not there: %s" % shown)
+                original, info = got
+                try:
+                    current = hashlib.sha256(self._read_all(original, shown)).hexdigest()
+                finally:
+                    os.close(original)
+                if current != expected_hash:
+                    raise WriteConflict("the file is not as it was installed: %s" % shown)
+                try:
+                    os.fchmod(fd, 0o755 if executable else stat.S_IMODE(info.st_mode) & 0o644)
+                except OSError as exc:
+                    raise _os_error("write", shown, exc)
+            finally:
+                os.close(fd)
+            safefs._fire("projectfs_checked", root=self.target.path, rel=rel)
+            try:
+                os.rename(temp, parts[-1], src_dir_fd=dirfd, dst_dir_fd=dirfd)
+            except OSError as exc:
+                raise _os_error("replace", shown, exc)
+            sibling = None
+            self.written.append(rel)
+        finally:
+            if sibling is not None:
+                try:
+                    os.unlink(sibling, dir_fd=dirfd)
+                except OSError:
+                    pass
             for each in fds:
                 os.close(each)
 

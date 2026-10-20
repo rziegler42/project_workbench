@@ -1,3 +1,4 @@
+import hashlib
 import os
 import stat
 import tempfile
@@ -7,7 +8,9 @@ from workbench import projectfs, safefs, target
 from workbench.projectfs import WriteConflict, Writer
 
 
-class WriterTest(unittest.TestCase):
+class Fixture(unittest.TestCase):
+    """A project directory, a store, a directory outside both, and a writer for the project."""
+
     def setUp(self):
         holder = tempfile.TemporaryDirectory()
         self.addCleanup(holder.cleanup)
@@ -37,6 +40,9 @@ class WriterTest(unittest.TestCase):
     def read(self, rel):
         with open(os.path.join(self.root, *rel.split("/")), "rb") as handle:
             return handle.read()
+
+
+class WriterTest(Fixture):
 
     def test_creates_file_exclusively_and_records_it(self):
         writer = self.writer()
@@ -211,6 +217,305 @@ class WriterTest(unittest.TestCase):
         with self.assertRaises(safefs.SafeFsError):
             writer.create_file("a", b"x")
         self.assertEqual("incomplete", os.path.basename(projectfs.MARKER))
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+class ReadReplaceTest(Fixture):
+    """`read_file` and `replace_file`."""
+
+    def put(self, rel, data, mode=None):
+        path = os.path.join(self.root, *rel.split("/"))
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as handle:
+            handle.write(data)
+        if mode is not None:
+            os.chmod(path, mode)
+        return path
+
+    def litter(self):
+        return [n for n in os.listdir(self.root) if n.endswith(".tmp")]
+
+    # --- read ---
+
+    def test_read_returns_bytes_hash_and_mode(self):
+        self.put("docs/a.md", b"hello", 0o640)
+        got = self.writer().read_file("docs/a.md")
+        self.assertEqual((b"hello", sha(b"hello"), 0o640), tuple(got))
+
+    def test_read_of_a_missing_file_or_directory_is_none(self):
+        writer = self.writer()
+        self.assertIsNone(writer.read_file("nope"))
+        self.assertIsNone(writer.read_file("no/dir/a"))
+
+    def test_read_of_an_empty_file(self):
+        self.put("e", b"")
+        self.assertEqual(sha(b""), self.writer().read_file("e").hash)
+
+    def test_read_refuses_a_link_a_directory_and_a_link_above(self):
+        self.put("real", b"secret")
+        os.symlink(os.path.join(self.root, "real"), os.path.join(self.root, "link"))
+        os.mkdir(os.path.join(self.root, "d"))
+        os.symlink(self.outside, os.path.join(self.root, "up"))
+        self.put("f", b"x")
+        for rel in ("link", "d", "up/x", "f/x"):
+            with self.subTest(rel=rel), self.assertRaises(WriteConflict):
+                self.writer().read_file(rel)
+
+    def test_read_refuses_a_fifo_without_blocking(self):
+        os.mkfifo(os.path.join(self.root, "pipe"))
+        with self.assertRaises(WriteConflict):
+            self.writer().read_file("pipe")
+
+    def test_read_refuses_a_file_over_the_limit(self):
+        self.put("big", b"x" * 20)
+        original = safefs.MAX_FILE_BYTES
+        safefs.MAX_FILE_BYTES = 10
+        self.addCleanup(setattr, safefs, "MAX_FILE_BYTES", original)
+        with self.assertRaises(safefs.SafeFsError):
+            self.writer().read_file("big")
+
+    def test_read_validates_the_path(self):
+        for rel in ("", "/abs", "a/../b", "a//b"):
+            with self.subTest(rel=rel), self.assertRaises(safefs.SafeFsError):
+                self.writer().read_file(rel)
+
+    def test_read_with_a_parent_swapped_after_the_walk_stays_inside(self):
+        self.put("docs/a.md", b"inside")
+        with open(os.path.join(self.outside, "a.md"), "wb") as handle:
+            handle.write(b"OUTSIDE")
+        moved = os.path.join(self.base, "moved")
+
+        def swap(stage, **info):
+            if stage == "projectfs_walked":
+                os.rename(os.path.join(self.root, "docs"), moved)
+                os.symlink(self.outside, os.path.join(self.root, "docs"))
+
+        safefs._hook = swap
+        self.assertEqual(b"inside", self.writer().read_file("docs/a.md").data)
+
+    # --- replace ---
+
+    def test_replace_changes_the_content_and_records_the_path(self):
+        self.put("docs/a.md", b"old")
+        writer = self.writer()
+        writer.replace_file("docs/a.md", sha(b"old"), b"new")
+        self.assertEqual(b"new", self.read("docs/a.md"))
+        self.assertEqual(["docs/a.md"], writer.written)
+        self.assertEqual(["a.md"], os.listdir(os.path.join(self.root, "docs")))
+
+    def test_replace_to_empty_and_from_empty(self):
+        self.put("a", b"")
+        writer = self.writer()
+        writer.replace_file("a", sha(b""), b"x")
+        writer.replace_file("a", sha(b"x"), b"")
+        self.assertEqual(b"", self.read("a"))
+
+    def test_replace_with_a_different_hash_refuses_and_changes_nothing(self):
+        self.put("a", b"edited by the owner")
+        writer = self.writer()
+        with self.assertRaises(WriteConflict):
+            writer.replace_file("a", sha(b"old"), b"new")
+        self.assertEqual(b"edited by the owner", self.read("a"))
+        self.assertEqual([], writer.written)
+        self.assertEqual([], self.litter())
+
+    def test_replace_of_a_missing_file_or_directory_refuses(self):
+        for rel in ("nope", "no/dir/a"):
+            with self.subTest(rel=rel), self.assertRaises(WriteConflict):
+                self.writer().replace_file(rel, sha(b""), b"x")
+        self.assertEqual([], os.listdir(self.root))
+
+    def test_replace_of_a_link_or_directory_refuses_and_leaves_the_victim(self):
+        victim = os.path.join(self.outside, "victim")
+        with open(victim, "wb") as handle:
+            handle.write(b"victim")
+        os.symlink(victim, os.path.join(self.root, "link"))
+        os.mkdir(os.path.join(self.root, "d"))
+        os.symlink(self.outside, os.path.join(self.root, "up"))
+        for rel in ("link", "d", "up/victim"):
+            with self.subTest(rel=rel), self.assertRaises(WriteConflict):
+                self.writer().replace_file(rel, sha(b"victim"), b"new")
+        with open(victim, "rb") as handle:
+            self.assertEqual(b"victim", handle.read())
+        self.assertEqual(["victim"], os.listdir(self.outside))
+        self.assertEqual([], self.litter())
+
+    def test_a_link_planted_at_the_file_between_check_and_rename_is_replaced_not_followed(self):
+        victim = os.path.join(self.outside, "victim")
+        with open(victim, "wb") as handle:
+            handle.write(b"victim")
+        path = self.put("a", b"old")
+
+        def plant(stage, **info):
+            if stage == "projectfs_checked":
+                os.unlink(path)
+                os.symlink(victim, path)
+
+        safefs._hook = plant
+        self.writer().replace_file("a", sha(b"old"), b"new")
+        with open(victim, "rb") as handle:
+            self.assertEqual(b"victim", handle.read())
+        self.assertFalse(os.path.islink(path))
+        self.assertEqual(b"new", self.read("a"))
+
+    def test_a_directory_planted_between_check_and_rename_refuses_and_removes_the_sibling(self):
+        path = self.put("a", b"old")
+
+        def plant(stage, **info):
+            if stage == "projectfs_checked":
+                os.unlink(path)
+                os.mkdir(path)
+
+        safefs._hook = plant
+        writer = self.writer()
+        with self.assertRaises(safefs.SafeFsError):
+            writer.replace_file("a", sha(b"old"), b"new")
+        self.assertTrue(os.path.isdir(path))
+        self.assertEqual([], self.litter())
+        self.assertEqual([], writer.written)
+
+    def test_parent_swapped_for_a_link_after_the_walk_does_not_escape(self):
+        self.put("docs/a.md", b"old")
+        with open(os.path.join(self.outside, "a.md"), "wb") as handle:
+            handle.write(b"OUTSIDE")
+        moved = os.path.join(self.base, "moved")
+
+        def swap(stage, **info):
+            if stage == "projectfs_walked":
+                os.rename(os.path.join(self.root, "docs"), moved)
+                os.symlink(self.outside, os.path.join(self.root, "docs"))
+
+        safefs._hook = swap
+        self.writer().replace_file("docs/a.md", sha(b"old"), b"new")
+        with open(os.path.join(self.outside, "a.md"), "rb") as handle:
+            self.assertEqual(b"OUTSIDE", handle.read())
+        self.assertEqual(["a.md"], os.listdir(moved))
+        with open(os.path.join(moved, "a.md"), "rb") as handle:
+            self.assertEqual(b"new", handle.read())
+        self.assertEqual(["a.md"], os.listdir(self.outside))
+
+    def test_parent_swapped_for_a_link_before_the_walk_refuses(self):
+        self.put("docs/a.md", b"old")
+
+        def swap(stage, **info):
+            if stage == "projectfs_validated":
+                os.rename(os.path.join(self.root, "docs"), os.path.join(self.base, "moved"))
+                os.symlink(self.outside, os.path.join(self.root, "docs"))
+
+        safefs._hook = swap
+        with self.assertRaises(WriteConflict):
+            self.writer().replace_file("docs/a.md", sha(b"old"), b"new")
+        self.assertEqual([], os.listdir(self.outside))
+
+    def test_a_taken_sibling_name_refuses_and_is_never_touched(self):
+        self.put("a", b"old")
+        self.put("planted.tmp", b"keep")
+        taken = ".workbench-%d-%s.tmp" % (os.getpid(), "aabbccddeeff")
+        self.put(taken, b"keep")
+        saved = os.urandom
+        os.urandom = lambda n: bytes.fromhex("aabbccddeeff")
+        self.addCleanup(setattr, os, "urandom", saved)
+        with self.assertRaises(WriteConflict):
+            self.writer().replace_file("a", sha(b"old"), b"new")
+        self.assertEqual(b"keep", self.read(taken))
+        self.assertEqual(b"old", self.read("a"))
+
+    def test_the_sibling_is_removed_when_the_write_fails(self):
+        self.put("a", b"old")
+        real = os.fsync
+
+        def broken(fd):
+            raise OSError(5, "disk")
+
+        os.fsync = broken
+        self.addCleanup(setattr, os, "fsync", real)
+        with self.assertRaises(safefs.SafeFsError):
+            self.writer().replace_file("a", sha(b"old"), b"new")
+        self.assertEqual([], self.litter())
+        self.assertEqual(b"old", self.read("a"))
+
+    def test_replace_modes_under_umask_zero(self):
+        self.put("plain", b"old", 0o644)
+        self.put("run", b"old", 0o600)
+        old = os.umask(0)
+        self.addCleanup(os.umask, old)
+        writer = self.writer()
+        writer.replace_file("plain", sha(b"old"), b"x")
+        writer.replace_file("run", sha(b"old"), b"#!/bin/sh\n", executable=True)
+        self.assertEqual(0o644, self.mode("plain"))
+        self.assertEqual(0o755, self.mode("run"))
+
+    def mode(self, rel):
+        return stat.S_IMODE(os.stat(os.path.join(self.root, rel)).st_mode)
+
+    def test_replace_never_widens_a_private_file(self):
+        for before, after in ((0o600, 0o600), (0o640, 0o640), (0o666, 0o644), (0o755, 0o644),
+                              (0o700, 0o600), (0o4755, 0o644), (0o2644, 0o644)):
+            with self.subTest(before=oct(before)):
+                self.put("f", b"old", before)
+                os.chmod(os.path.join(self.root, "f"), before)
+                self.writer().replace_file("f", sha(b"old"), b"new")
+                self.assertEqual(after, self.mode("f"))
+
+    def test_replace_sets_no_setuid_or_setgid_bit_even_for_an_executable(self):
+        self.put("f", b"old", 0o4755)
+        self.writer().replace_file("f", sha(b"old"), b"new", executable=True)
+        self.assertEqual(0o755, self.mode("f"))
+
+    def test_the_sibling_is_private_until_the_hash_has_passed(self):
+        self.put("f", b"old", 0o600)
+        seen = []
+
+        def look(stage, **info):
+            if stage == "projectfs_checked":
+                seen.extend(self.mode(n) for n in os.listdir(self.root) if n.endswith(".tmp"))
+
+        safefs._hook = look
+        self.writer().replace_file("f", sha(b"old"), b"new")
+        self.assertEqual([0o600], seen)
+
+    def test_a_failed_chmod_removes_the_sibling_and_leaves_the_original(self):
+        self.put("f", b"old", 0o600)
+        real = os.fchmod
+
+        def broken(fd, mode):
+            raise OSError(1, "no")
+
+        os.fchmod = broken
+        self.addCleanup(setattr, os, "fchmod", real)
+        with self.assertRaises(safefs.SafeFsError):
+            self.writer().replace_file("f", sha(b"old"), b"new")
+        self.assertEqual([], self.litter())
+        self.assertEqual(b"old", self.read("f"))
+
+    def test_replace_validates_its_arguments(self):
+        self.put("a", b"old")
+        writer = self.writer()
+        for rel in ("", "/abs", "a/../b", ".git/config"):
+            with self.subTest(rel=rel), self.assertRaises(safefs.SafeFsError):
+                writer.replace_file(rel, sha(b"old"), b"x")
+        with self.assertRaises(safefs.SafeFsError):
+            writer.replace_file("a", sha(b"old"), "text")
+        self.assertEqual(b"old", self.read("a"))
+        self.assertEqual([], self.litter())
+
+    def test_replace_does_not_unlink_anything_but_its_own_sibling(self):
+        self.put("a", b"old")
+        self.put("b", b"other")
+        self.writer().replace_file("a", sha(b"old"), b"new")
+        self.assertEqual(["a", "b"], sorted(os.listdir(self.root)))
+        self.assertEqual(b"other", self.read("b"))
+
+    def test_a_closed_target_is_refused_for_read_and_replace(self):
+        writer = self.writer()
+        writer.target.close()
+        with self.assertRaises(safefs.SafeFsError):
+            writer.read_file("a")
+        with self.assertRaises(safefs.SafeFsError):
+            writer.replace_file("a", sha(b""), b"x")
 
 
 if __name__ == "__main__":
