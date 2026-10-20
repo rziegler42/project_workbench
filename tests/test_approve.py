@@ -61,7 +61,8 @@ class Base(unittest.TestCase):
         before the answer is typed (to change the package while the owner reads).
         """
         master, slave = pty.openpty()
-        env = dict(os.environ, HOME=self.home, PYTHONPATH=ROOT, PYTHONDONTWRITEBYTECODE="1")
+        env = dict(os.environ, HOME=self.home, PYTHONPATH=ROOT, PYTHONDONTWRITEBYTECODE="1",
+                   PATH=support.clean_path())
         proc = subprocess.Popen(
             [sys.executable, "-B", "-m", "workbench", "approve"] + list(args),
             stdin=slave if stdin == "pty" else subprocess.PIPE,
@@ -624,7 +625,8 @@ class RefusalTest(Base):
 
     def test_the_terminal_test_is_on_file_descriptors_not_the_environment(self):
         info, _ = self.facts()
-        env = dict(os.environ, HOME=self.home, PYTHONPATH=ROOT, TERM="xterm", CI="", PS1="$ ")
+        env = dict(os.environ, HOME=self.home, PYTHONPATH=ROOT, TERM="xterm", CI="", PS1="$ ",
+                   PATH=support.clean_path())
         done = subprocess.run(
             [sys.executable, "-B", "-m", "workbench", "approve", self.path],
             input=(info.tree_hash[:12] + "\n").encode(), env=env, cwd=self.base,

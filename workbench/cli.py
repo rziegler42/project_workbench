@@ -8,13 +8,15 @@ import argparse
 import os
 import sys
 
-from . import approve, display, firstparty, safefs, settings, store, verify
+from . import approve, display, firstparty, launch, pins, safefs, settings, store, verify
 
 PROG = "python3 -m workbench"
 USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "[--select <module> ...] [--no-harness-required]\n"
          "       python3 -m workbench approve (<package> | --source <url> [--ref <ref>]) [--module <name>]\n"
          "                                                    (owner-run, terminal only)\n"
+         "       python3 -m workbench pin <project-id> <name> <helper> --root <dir>   (owner-run, terminal only)\n"
+         "       python3 -m workbench launch <project-id> <name> --root <dir> -- <args>\n"
          "       python3 -m workbench release-approvals\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
@@ -49,6 +51,17 @@ def _parser():
     owner.add_argument("--ref", metavar="REF", help="the branch, tag or commit to download "
                                                     "(default: HEAD); only with --source")
     owner.add_argument("--module", metavar="NAME", help="approve only this module")
+    pin = commands.add_parser("pin", allow_abbrev=False,
+                              help="owner-run, from a terminal: pin a helper's content")
+    pin.add_argument("project_id", help="the project id (64 hex digits)")
+    pin.add_argument("name", help="the helper's name")
+    pin.add_argument("helper", help="the helper file, inside the project root")
+    pin.add_argument("--root", required=True, metavar="DIR", help="the project directory")
+    run_cmd = commands.add_parser("launch", allow_abbrev=False,
+                                  help="run a pinned helper if it still matches its pin")
+    run_cmd.add_argument("project_id", help="the project id (64 hex digits)")
+    run_cmd.add_argument("name", help="the helper's name")
+    run_cmd.add_argument("--root", required=True, metavar="DIR", help="the project directory")
     commands.add_parser("release-approvals", allow_abbrev=False,
                         help="release time: write the approvals shipped for first-party packages")
     return parser
@@ -92,10 +105,21 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
                 stream.reconfigure(errors="backslashreplace")
     out = out or sys.stdout
     err = err or sys.stderr
+    # The helper's arguments follow the first `--` and are never parsed as options.
+    passthrough = []
+    if argv and argv[0] == "launch" and "--" in argv:
+        split = argv.index("--")
+        argv, passthrough = argv[:split], argv[split + 1:]
     try:
         args = _parser().parse_args(argv)
-        if args.command not in ("verify", "release-approvals", "approve"):
+        if args.command == "launch":
+            args.args = passthrough
+        if args.command not in ("verify", "release-approvals", "approve", "pin", "launch"):
             raise _Usage("a command is required")
+        if args.command in ("pin", "launch") and "" in (args.project_id, args.name, args.root):
+            raise _Usage("the project id, name and root may not be empty")
+        if args.command == "pin" and not args.helper:
+            raise _Usage("the helper path may not be empty")
         if args.command == "approve":
             if (args.package is None) == (args.source is None):
                 raise _Usage("give either a package directory or --source, not both and not neither")
@@ -121,6 +145,17 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         err.write("refused: %s\n" % _clean(str(exc)))
         return 1
 
+    if args.command == "launch":
+        # Only the wrapper is checked here; nothing else is printed, so the helper's own
+        # streams stay clean.
+        launch.install_wrapper(guarded, distribution or firstparty.default_distribution())
+        return launch.run(guarded, args.project_id, args.name, args.root, args.args, err)
+    notes += launch.install_wrapper(guarded, distribution or firstparty.default_distribution())
+    if args.command == "pin":
+        for note in notes:
+            err.write("warning: %s\n" % _clean(note))
+        return pins.run(guarded, args.project_id, args.name, args.helper, args.root,
+                        stdin if stdin is not None else sys.stdin, out, err)
     if args.command == "release-approvals":
         return _release(distribution, out, err)
     if args.command == "approve":

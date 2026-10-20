@@ -569,8 +569,8 @@ approved the plan after it. The review is not closed.
 
 ## Result
 
-In progress. Increments A to H are committed (A `32bb04c`, B `968266f`, C `9d11c39`,
-D `79849b5`, E `ca239c6`, F `6ec0fc7`, G `d526957`, H `8b653b0`); I is built and in review. Each had an independent
+In progress. Increments A to I are committed (A `32bb04c`, B `968266f`, C `9d11c39`,
+D `79849b5`, E `ca239c6`, F `6ec0fc7`, G `d526957`, H `8b653b0`, I `c9bff41`); J is built and in review. Each had an independent
 workflow review and a security review at the owner's request, and the findings were checked
 and fixed before its commit. I to K are not started. The final Result is written when K
 completes.
@@ -651,6 +651,27 @@ Deviations and decisions made while building, to be carried into the spec edits 
   leaves the pin unreachable while the content approval still holds. Whatever reads cached
   copies later must verify them again as untrusted. `fetch` now also removes its staging
   directory on an interrupt and reports a temporary directory it cannot make as a refusal.
+- **J.** `pin <id> <name> <helper> --root <dir>` (owner-run, terminal only) and `launch <id>
+  <name> --root <dir> -- <args>`, with pins in `projects/<id>/pins` (path relative to the root
+  plus SHA-256, `pinned_by`, `time`); the project id must be 64 lowercase hex digits and helper
+  names are `[A-Za-z0-9][A-Za-z0-9._+-]{0,63}`. `launch` reads the pinned path through the safe
+  reader, hashes it, writes the same bytes to `bin/run/<uuid>/<name>` (mode 0700) and runs that
+  copy with no shell, then removes the directory with `shutil.rmtree` (the same exception as
+  `fetch`). **Deviations:** `pin` also requires typing the first 12 characters of the SHA-256,
+  shows a 15-line preview and says when it replaces a pin, and rechecks before writing; the
+  `wb` PATH warning is given only when the wrapper is written, not on every command; `launch`
+  prints no warnings of its own; launch arguments are split at the first `--` before parsing
+  (argparse's `REMAINDER` swallowed `--root`); `launch._after_hash` is a test seam in
+  production code, `launch()` takes stdin/stdout/stderr for tests, and `launch.find_command`
+  is a seam for the PATH scan; every command, including `launch` and `release-approvals`,
+  writes `bin/wb`. **Found in review:** `python3 -m workbench` puts the current directory
+  first on the module search path, so a hostile project could shadow `workbench` or the
+  standard library; the `wb` wrapper therefore runs `python3 -I` with the workbench directory
+  added by hand, and `docs/development.md` says to run `python3 -m workbench` only from a
+  trusted directory. K should carry this into the specs (it applies to every invocation, not
+  only the launcher). A helper runs from a copy, so it must be self-contained. Exit codes 1
+  and 2 from a helper look like a refusal or a usage error by code alone. A killed launcher
+  can leave `bin/run/<uuid>` behind (harmless data); nothing sweeps them.
 - **Test command.** A test module that imports `support` loads only under
   `python3 -m unittest discover -s tests` (use `-p 'test_x.py'` for one file).
 - **Not done anywhere so far:** no mutation testing of the new tests.

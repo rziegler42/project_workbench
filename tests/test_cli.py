@@ -57,7 +57,7 @@ class CliBase(unittest.TestCase):
 
     def child_env(self, **extra):
         # A child process finds the store from HOME, so it gets a temporary one.
-        return dict(os.environ, HOME=self.home, **extra)
+        return dict(os.environ, HOME=self.home, PATH=support.clean_path(), **extra)
 
 
 class VerifyTest(CliBase):

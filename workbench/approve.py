@@ -47,7 +47,7 @@ CONFIRM_CHARS = 12
 MAX_ANSWER = 200
 
 
-def _is_terminal(stream):
+def is_terminal(stream):
     try:
         return os.isatty(stream.fileno())
     except (AttributeError, OSError, ValueError):
@@ -119,7 +119,7 @@ def run(store, path, module_name, stdin, stdout, err, distribution=None, source=
     the guarded store's cache (``fetch.py``), and the request, the typed hash and the record
     all come from that cached copy. The first approval pins the resolved commit.
     """
-    if not (_is_terminal(stdin) and _is_terminal(stdout)):
+    if not (is_terminal(stdin) and is_terminal(stdout)):
         return _refuse(err, "approval is owner-run: standard input and output must both be "
                             "terminals. Run this command yourself, from your own terminal.")
     fetched = origin = None

@@ -13,6 +13,14 @@ it here whenever a later increment uses a newer feature.
 
 ## Commands
 
+**Where to run them.** `python3 -m workbench ...` puts the current directory first on Python's
+module search path. Run from inside a project you do not trust, a `workbench/` directory or a
+`json.py` in that project would run instead of this code, with your privileges, whatever the
+command (`approve` included). Run the commands below from a directory you trust, such as this
+repository's root, or use the `wb` launcher (see "Pins and the launcher"), which does not have
+this weakness. The examples keep the `python3 -m workbench` form because that is how the
+checkout is run during development.
+
 Keep this table accurate. Use `not applicable` rather than leaving an
 ambiguous blank.
 
@@ -21,6 +29,8 @@ ambiguous blank.
 | Setup | not applicable (standard library only; nothing to install) |
 | Run locally | `python3 -m workbench verify [<package> \| --dir <path>] [--select <module> ...] [--no-harness-required]` |
 | Owner-run: approve a package or one module (terminal only) | `python3 -m workbench approve (<package> \| --source <url> [--ref <ref>]) [--module <name>]` |
+| Owner-run: pin a helper's content (terminal only) | `python3 -m workbench pin <project-id> <name> <helper> --root <project-dir>` |
+| Run a pinned helper | `python3 -m workbench launch <project-id> <name> --root <project-dir> -- <args>` |
 | Release time: write the approvals shipped with first-party packages | `python3 -m workbench release-approvals` |
 | Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
 | One focused test file | `python3 -m unittest discover -s tests -p 'test_approvals.py'` (a test module that imports `support` only loads under `discover -s tests`) |
@@ -141,6 +151,55 @@ package approval stores the resolved commit as the pin.
   decline or that fails stays in the cache so it can be read again; the command prints where.
   Nothing removes cache copies yet.
 - A later install fetches the pinned commit and compares the tree hash with the approved one.
+
+## Pins and the launcher
+
+A helper such as the commit helper is a file of a module, so a pulled edit could replace it. The
+owner pins it, and the launcher runs it only while its bytes still match the pin
+(`workbench/pins.py`, `workbench/launch.py`). A pull that edits the helper changes its hash, so
+it is not run until the owner pins it again.
+
+- **Pin** (owner-run, from a terminal, like `approve`):
+  `python3 -m workbench pin <project-id> <name> <helper> --root <project-dir>`. The project id
+  is 64 lowercase hex digits (the hash of the project's seed, once projects exist). The helper
+  must be a regular file inside the root; a symbolic link, a directory, a FIFO or a path
+  outside the root is refused. The command shows the path, size, SHA-256 and the start of the
+  file, says if it replaces an earlier pin, and records nothing unless you type the first 12
+  characters of the SHA-256. It checks again just before writing. The pin is stored in the
+  guarded store as `projects/<id>/pins`, with the path relative to the root so that clones at
+  different locations share it.
+- **Launch**: `python3 -m workbench launch <project-id> <name> --root <project-dir> -- <args>`.
+  The helper's location comes only from the pin; the caller cannot name another file. The
+  launcher reads `<root>/<pinned path>` through the safe reader (a real root directory, no
+  symbolic link on the way, a regular file), hashes it, and compares it with the pin. If they
+  match it writes those exact bytes to a new file in a private directory under `bin/run/` in
+  the store (mode 0700) and runs that file with the arguments, with no shell, so a file
+  swapped after the check changes nothing. The copy is removed afterwards. The helper's own
+  exit code is returned. Anything that stops it from running exits 1 with a line starting
+  `refused:` on standard error: no pin, a damaged pins file, a missing or unreadable helper, a
+  symbolic link, or a hash that no longer matches (the message says to review it and pin it
+  again).
+- **Limits.** This is a pin check and not a sandbox: the helper runs with your privileges and
+  environment, and the copy lives in a store directory that your own account can write. A
+  helper should be a single self-contained file, because it runs from a copy in a different
+  directory. A helper that exits 1 looks the same as a refusal by exit code alone, and one that exits 2 looks like a
+  usage error; the `refused:` line on standard error tells them apart.
+- **Example.** With a helper at `tools/commit.sh` in a project:
+  `python3 -m workbench pin <id> commit tools/commit.sh --root .` (type the 12 characters),
+  then `python3 -m workbench launch <id> commit --root . -- -m "message"` runs it. After
+  someone edits `tools/commit.sh`, the same `launch` exits 1 with
+  `refused: the helper commit has changed since it was pinned`, until you pin it again.
+- **The `wb` launcher.** Every command makes sure the store has `bin/wb`, a short script that
+  runs this workbench under `python3 -I` (isolated mode) with the workbench directory added by
+  hand. It is fixed text apart from that one path, and is rewritten if the path changes.
+  Isolated mode keeps the current directory and `PYTHONPATH` off the module search path, so a
+  project that ships its own `workbench` package, a `json.py` or a `sitecustomize.py` cannot
+  run in place of the real ones. The name `wb` is kept as
+  the specs state it. When the script is written and another command named `wb` is already on
+  your `PATH`, a warning names it; the warning never stops a command. Nothing is added to your
+  `PATH`: to use it, put `~/.config/project-workbench/bin` there yourself. How the workbench
+  itself is installed is not decided yet, so the script assumes the workbench is a directory on
+  this machine.
 
 ## First-party packages and shipped approvals
 
