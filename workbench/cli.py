@@ -8,11 +8,12 @@ import argparse
 import os
 import sys
 
-from . import safefs, settings, store, verify
+from . import firstparty, safefs, settings, store, verify
 
 PROG = "python3 -m workbench"
 USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "[--select <module> ...] [--no-harness-required]\n"
+         "       python3 -m workbench release-approvals\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
 
@@ -37,6 +38,8 @@ def _parser():
                        help="check these modules as one install: <module> or <package>/<module>")
     check.add_argument("--no-harness-required", action="store_true",
                        help="do not require a harness module in the selection")
+    commands.add_parser("release-approvals", allow_abbrev=False,
+                        help="release time: write the approvals shipped for first-party packages")
     return parser
 
 
@@ -55,8 +58,24 @@ def _target(args):
     return given[0] if given else "."
 
 
-def main(argv, out=None, err=None, *, store_root=None):
-    """Run a command. `store_root` is for tests; the command line cannot set it."""
+def _release(distribution, out, err):
+    try:
+        done = firstparty.release_approvals(distribution)
+    except firstparty.ReleaseError as exc:
+        err.write("refused: %s\n" % _clean(str(exc)))
+        return 1
+    if not done.packages:
+        out.write("no first-party packages\n")
+    else:
+        out.write("wrote %d approvals for %d first-party packages\n" % (done.records, done.packages))
+    for warning in done.warnings:
+        out.write("warning: %s\n" % _clean(warning))
+    return 0
+
+
+def main(argv, out=None, err=None, *, store_root=None, distribution=None):
+    """Run a command. `store_root` and `distribution` are for tests; the command line
+    cannot set them."""
     if out is None and err is None:
         for stream in (sys.stdout, sys.stderr):
             if hasattr(stream, "reconfigure"):
@@ -66,9 +85,9 @@ def main(argv, out=None, err=None, *, store_root=None):
     err = err or sys.stderr
     try:
         args = _parser().parse_args(argv)
-        if args.command != "verify":
+        if args.command not in ("verify", "release-approvals"):
             raise _Usage("a command is required")
-        path = _target(args)
+        path = _target(args) if args.command == "verify" else None
     except _Usage as exc:
         err.write("%s\n%s" % (_clean(str(exc)), USAGE))
         return 2
@@ -86,8 +105,12 @@ def main(argv, out=None, err=None, *, store_root=None):
         err.write("refused: %s\n" % _clean(str(exc)))
         return 1
 
+    if args.command == "release-approvals":
+        return _release(distribution, out, err)
+
     result = verify.verify_package(path, select=args.select,
-                                   harness_required=not args.no_harness_required)
+                                   harness_required=not args.no_harness_required,
+                                   first_party=firstparty.is_first_party(path, distribution))
     if result.accepted:
         for module in result.modules:
             out.write("%s/%s %s declaration %s tree %s\n" % (

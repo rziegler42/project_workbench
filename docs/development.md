@@ -20,6 +20,7 @@ ambiguous blank.
 |---|---|
 | Setup | not applicable (standard library only; nothing to install) |
 | Run locally | `python3 -m workbench verify [<package> \| --dir <path>] [--select <module> ...] [--no-harness-required]` |
+| Release time: write the approvals shipped with first-party packages | `python3 -m workbench release-approvals` |
 | Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
 | One focused test file | `python3 -m unittest discover -s tests -p 'test_approvals.py'` (a test module that imports `support` only loads under `discover -s tests`) |
 | Full tests | `python3 -m unittest discover -s tests` |
@@ -44,6 +45,36 @@ and prints the install order. A harness module is required in a selection unless
 | 0 | accepted; one line per module with its version and the first twelve characters of the declaration and tree hashes, then warnings |
 | 1 | refused; one `refused:` line per problem on stderr, naming the package or module and the rule |
 | 2 | usage error |
+
+`release-approvals` uses the same codes: 0 done (or nothing to do), 1 refused, 2 usage.
+
+## First-party packages and shipped approvals
+
+The workbench distribution is the repository root: code in `workbench/`, first-party
+packages in `packages/` (none yet), and the approvals made for them in
+`workbench/shipped_approvals/`. Shipping with the workbench counts as explicit approval, and
+the records are read from the installed workbench, never copied into the guarded store.
+
+- A package is first-party only if its directory is directly inside `packages/` (and is not
+  a symbolic link), its declared name equals the directory name, and a shipped package
+  record for that name matches the package's current declaration and tree hashes. Otherwise
+  it is third-party. `verify` sets the verifier's `first_party` flag from this, so only an
+  unchanged released package may provide an unprefixed capability name.
+- The shipped records are trusted because the distribution is. Anything that can write the
+  repository can add a package and run `release-approvals`, and the records it writes count
+  as approval, so review what a release changes in `workbench/shipped_approvals/` (its git
+  diff) before accepting it. The command does not need a terminal, because releases may run
+  unattended.
+- `python3 -m workbench release-approvals` is a release-time command, not one for users of a
+  project. It verifies every package under `packages/` as first-party, writes nothing if
+  any module fails verification (exit 1; a write that fails part way can leave the earlier
+  records of that run, which are valid and a rerun is idempotent), and otherwise writes one record per module and per package with
+  a fixed approver (`workbench-release`) and time, so a second run changes nothing. Records
+  of an earlier release are left in place and reported with a warning, because deletion is
+  not provided; remove them by hand. With no packages it prints `no first-party packages`
+  and exits 0.
+- A first-party package changed since release has no shipped approval for its new hashes,
+  so its modules are checked against the guarded store like any other package.
 
 ## The guarded store
 
