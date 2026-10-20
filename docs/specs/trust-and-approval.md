@@ -1,7 +1,10 @@
 # Trust, approval and untrusted content
 
-Status: Current. Approved by the owner on 2026-10-19; implementation has not started. Record formats and
-setting names are proposals; the rules are the substance.
+Status: Current. Approved by the owner on 2026-10-19. The guarded store, the personal settings, approval
+records, first-party shipped approvals, the approval request and gate, the owner-run `approve` and `pin`
+commands, the inert download and the launcher are built (`module-approvals`), and "Concrete formats" records what
+the code does. Plan approval, delegation, acknowledgement and the rendering into a harness are not built yet, and
+their record formats and setting names remain proposals. The rules are the substance.
 
 Terms are defined in `terms.md`. Places and manifests are defined in
 `repository-boundary.md`. Declarations are defined in `module-contract.md`.
@@ -236,6 +239,182 @@ silent replacement.
   harness's allowance matches a path and not a hash.
 - A pulled edit to the helper changes its hash, so it loses its pre-approval until
   the change is acknowledged and the pin is updated.
+- The pin file, the launcher and the `wb` script are described under "Concrete formats".
+
+## Concrete formats
+
+Recorded from the code of `module-approvals`, which is where each item is implemented. Where the
+prose above and this section differ in precision, this section is what the code enforces.
+
+### The guarded store and the personal settings
+
+- **Location.** `~/.config/project-workbench/`, found from the account's home directory. No
+  workbench environment variable, option or file moves it, because a variable the agent can set in
+  one command would let it point the workbench at a store it controls. `HOME` is honoured as for any
+  program run by the same account. The code takes the root as an argument only so that tests use a
+  temporary one.
+- **Directories.** The store and its directories `packages/`, `cache/`, `projects/` and `bin/`
+  (and `bin/run/`) are real directories, owned by the current user, with mode exactly `0700`. A
+  symbolic link, another owner or any other mode (group or other access, setgid, sticky) is refused
+  and named; nothing is repaired. Ancestors of the store may be symbolic links, because `~/.config` is
+  often one. Every read and write is no-follow, descriptor-relative and atomic.
+- **Initialization.** Every command makes sure the store exists, then seeds `settings` if it is
+  missing, then makes sure `bin/wb` exists.
+- **Settings.** The file `settings` is strict JSON:
+  `{"checkpoints": {"<name>": "stop" | "delegate"}, "floor": ["<id>", ...], "version": 1}`. A
+  checkpoint name is lowercase kebab-case, at most 64 characters; the names themselves are defined
+  by a way of working. A checkpoint that is missing, malformed or not exactly `delegate` reads as
+  `stop`. A damaged file, a wrong version, or a file that is not a regular file is reported on the
+  command's output as a `settings:` note and is never overwritten; every checkpoint then stops. The
+  `floor` list is a copy for the owner and for harnesses to read: nothing reads it to decide what
+  applies.
+- **The floor.** The five entries of "Hard stops and the floor" are compiled into the installer
+  with the identifiers `force-or-rewrite-history`, `delete-or-overwrite-files`,
+  `publish-or-deploy`, `touch-secrets` and `install-dependencies`. The one function that combines
+  stops returns the floor followed by any additions and refuses any removal, any addition that
+  repeats a floor entry (also under another spelling) and any malformed addition.
+
+### Approval records
+
+- **File and key.** A record is `packages/<key>/approval.json`. The key is the SHA-256, in
+  lowercase hex, of `"<kind>\n<declaration hash>\n<tree hash>\n"`, so a record is found only by
+  presenting the hashes it binds to.
+- **Fields.** Strict JSON with exactly these fields and no others: `format` (1), `kind`
+  (`module` or `package`), `subject`, `declaration_hash`, `tree_hash`, `approver` (printable text,
+  at most 64 characters), `time` (UTC, `YYYY-MM-DDTHH:MM:SSZ`) and `workbench_version`. A package
+  record also has `modules` (a list of `{name, declaration_hash, tree_hash}`, unique and sorted by
+  name) and `commit` (`null` or a lowercase hex commit id).
+- **What each kind binds.** A `module` record has the subject `<package>/<module>` and binds that
+  module's declaration hash and tree hash. A `package` record has the subject `<package>` and binds
+  the package declaration's hash and the tree hash of the whole package directory, and lists the
+  modules it approved with both hashes each.
+- **A check.** It returns approved only when the record exists as a regular file in a real
+  directory, can be read, is well formed, and its kind, both hashes and its subject all equal what is
+  presented. The subject is compared as well as the hashes, so byte-identical content approved as
+  `a/m` is not approved as `b/m`. Anything else is no approval, with a reason. A check never raises.
+- **Writing.** Approving the same thing again keeps the first record and its approver and time. A
+  record that differs in subject or module list for the same hashes is not written, and a damaged
+  record is never replaced. The `commit` is provenance and not part of what a record binds:
+  identical content reached by another commit, or after a local approval, is the same approval and
+  the first record, with its commit or absence of one, is kept.
+- **Approver.** The account name from the operating system's user database, not from an
+  environment variable. It is text and grants nothing.
+
+### The `approve` command
+
+`approve (<package> | --source <url> [--ref <ref>]) [--module <name>]` is run by the owner.
+
+- It refuses unless standard input and output are both terminals, tested on the file descriptors.
+  There is no `--yes` option.
+- It verifies the package and refuses on any problem, recording nothing.
+- It prints the request and asks the owner to type the first 12 characters of the tree hash shown:
+  the package's, or with `--module` that module's. Anything else cancels.
+- It verifies again just before writing and refuses a package that changed while it was shown.
+- It writes a `module` record for each module and then the `package` record, or only the one
+  `module` record with `--module`. A harness or process module is approved on its own record.
+- With `--source` the package is first downloaded (see "Inert download"); the request, the typed
+  hash and the records all come from the cached copy, and the package record stores the resolved
+  commit as provenance. A copy that is declined or fails verification stays in the cache.
+- The typed text guards against a mistake. It is not authentication: the characters are printed by
+  `verify` and by the request, and a process that opens its own pseudo-terminal passes the terminal
+  test. The barrier is the harness's deny rule for this command and for writes to the store.
+
+### The request
+
+For a module the request shows, in this order: a `HIGH RISK` line when it applies (a `harness` or
+`process` module, or a module that blocks a core capability, which is an unprefixed name); the
+identity and source; both hashes in full; a size line with a count of each kind of entry; and then
+what it provides, requires (soft ones marked) and blocks (core capabilities marked), the slots it
+owns and fills, the paths it writes, every item it ships (`[executable]` or `[code-bearing]`), any
+other executable file in the module, the helpers it expects, and a harness module's layout, one line
+per leaf. A package request lists every module and which need an explicit approval of their own.
+Nothing a package controls is shortened, lists are shown one entry to a line, and every
+package-supplied string is shown as ASCII with anything else as a visible escape. The text is
+rendered from the verification result and not from a second read of the files.
+
+### First-party packages
+
+A package is first-party only when all of these hold: its directory is directly inside the
+distribution's `packages/` directory and is not a symbolic link; its declared name equals its
+directory name; and a shipped package record for that name matches the package's current
+declaration hash and whole-package tree hash. Only a first-party package may provide an unprefixed
+capability name. The shipped records are in `workbench/shipped_approvals/` in the same layout as the
+store, are read in place and never copied into the store, and are made at release time by
+`release-approvals`, which verifies every package under `packages/` as first-party, writes nothing if
+any module fails, and uses a fixed approver and time so a second run changes nothing. Records of
+earlier releases are left in place and reported, because nothing deletes them. A first-party
+package changed since its release is third-party until it is released again, and its modules are
+checked against the store. The shipped records count as approval because the distribution is the
+trust root; the command needs no terminal because releases may run unattended, so what a release
+changes in `workbench/shipped_approvals/` must be reviewed in its git diff.
+
+### The approval gate
+
+The gate takes the result of verifying a selection and approves it only when every module in the
+install order is approved, reading only. A module is approved by its own `module` record; a module
+whose type is exactly `module` can instead be approved by a `package` record that matches the
+package's current hashes and lists the module with exactly its two hashes. Every other type needs a
+record of its own. A refused verification, an empty selection and a malformed result are not
+approved. The gate approves what the verifier hashed and not what an installer reads later, so an
+installer must write from the verified bytes or verify and gate again from one snapshot, and must
+set each package's first-party flag from the first-party rule above.
+
+### Inert download
+
+A package is brought into `cache/<id>/` as data only: the files under `package/` and a
+`fetch.json` (source, ref, resolved commit, counts) beside them.
+
+- **Sources.** An `https://` URL without credentials, an `ssh://` URL, a `file://` URL, or a local
+  directory. Other transports, scp-style `host:path`, and anything starting with `-` or holding
+  whitespace are refused. A ref is a branch, tag or commit name of letters, digits and `._/@+-`.
+- **Nothing runs and nothing is checked out.** The ref is fetched into a private bare repository
+  outside the store, created without hooks, with a scrubbed git environment, the user's and system's
+  git configuration ignored, prompts off, only the file, https and ssh transports allowed, incoming
+  objects checked, and no tags or submodules fetched. Files are read with `ls-tree` and `cat-file`.
+- **The listing is checked before any content is read.** Every entry must be a regular file
+  (a symbolic link or a submodule refuses the download), every path must pass the path validator,
+  names that collide ignoring case are refused, and the limits are 2048 files, 16 MiB per file and
+  64 MiB in total. Files get the default mode (0644 under the usual umask), or 0755 where git
+  recorded the execute bit.
+- **Resource limits.** Each git command runs in its own process group with capped output, a
+  timeout and a limit on the size of any file it writes, and is killed with everything it started on
+  an excess. A tree can share subtrees, so the listing is read incrementally.
+- **Placement.** The files are written to a staging directory and moved into place with one rename;
+  a failure leaves nothing in the cache. A cache directory is never reused. Nothing removes cache
+  copies yet.
+- **Limits.** This does not defend against a flaw in git's own handling of objects or in the
+  network transport, and does not verify who runs the server; an `ssh` source uses the owner's ssh
+  configuration; a process killed outright can leave a temporary or `.incoming-*` directory. Whatever
+  reads a cached copy later must verify it again as untrusted.
+
+### Pinned helpers, the launcher and `wb`
+
+- **Pins.** `projects/<id>/pins` is strict JSON,
+  `{"format": 1, "pins": {"<name>": {"path", "pinned_by", "sha256", "time"}}}`. The project id is 64
+  lowercase hex digits. A helper name is letters, digits and `._+-`, at most 64 characters, starting
+  with a letter or digit. The path is relative to the project root and passes the path validator, so
+  clones at different locations share a pin. Reading fails closed.
+- **`pin <id> <name> <helper> --root <dir>`** is owner-run with the same terminal test as `approve`.
+  It refuses a helper outside the root, a symbolic link, or a file that is not regular; shows the
+  path, size, hash and the start of the file, and says if it replaces a pin; and records only when the
+  first 12 characters of the SHA-256 are typed, after checking the file again.
+- **`launch <id> <name> --root <dir> -- <args>`** takes the helper's location only from the pin,
+  reads it through the safe reader, compares the hash, writes those exact bytes to a new private file
+  under `bin/run/` and runs that copy with no shell, then removes it. A missing pin, damaged pins
+  file, missing or unreadable helper, symbolic link or hash difference runs nothing and exits 1 with
+  a reason; otherwise the helper's own exit code is returned. This is a pin check and not a sandbox.
+- **`wb`.** `bin/wb` is a short script that runs the workbench under `python3 -I` with the workbench
+  directory added by hand. It is fixed text apart from that path, and is rewritten if the path changes.
+  A warning names another `wb` on the `PATH` when the script is written. Nothing is added to the
+  `PATH`.
+
+### Invoking the workbench
+
+`python3 -m workbench` puts the current directory first on Python's module search path. Run from
+inside a project that is not trusted, a `workbench/` directory or a standard-library name in that
+project would run instead of this code, with the owner's privileges, for any command including
+`approve`. The `wb` launcher runs in isolated mode and does not have this weakness; the `python3 -m`
+form is for a trusted directory such as the workbench checkout.
 
 ## Outside content
 
@@ -311,6 +490,18 @@ instead of retrying. No dollar ceiling is required.
 - A harness without `permissions` leaves hard stops and the guarded store protected
   by instruction only.
 - The guarded store shares the owner's account.
+- The typed confirmation of `approve` and `pin` is friction, not authentication, and a process that
+  opens its own pseudo-terminal passes the terminal test. Only the harness deny rules stop an agent
+  from running those commands.
+- Shipped first-party approvals are trusted because the distribution is. Anything that can write the
+  repository can add a package and release it.
+- A hostile source can become the first pin for content that is identical to a legitimate commit. The
+  pin is provenance and the content hash is what is approved, so this can only make a later re-fetch
+  fail, not change what is installed.
+- A downloaded copy stays in the cache with its hostile content until removed; nothing reads the cache
+  without verifying it again.
+- Running `python3 -m workbench` from an untrusted directory lets that directory's code run. Use the
+  `wb` launcher there.
 - A reviewer and an author can share a blind spot.
 
 ## Deferred
@@ -320,7 +511,14 @@ instead of retrying. No dollar ceiling is required.
   `verify-opencode`; if it has none, the owner uses a separate terminal.
 - **Image handling.** Which tools open image files, and how location metadata is
   stripped from tracked copies, are decided in the `researcher-fetch-tool` candidate.
-- Record formats and setting names remain proposals.
+- **Formats still proposals.** The formats in "Concrete formats" are fixed by the code at `format: 1`.
+  The formats of plan approvals, acknowledgement baselines and delegated-approval records, and the
+  setting names for checkpoints, remain proposals until the way of working that uses them is built.
+- **Added hard stops.** A module may add hard stops, and the function that combines stops accepts
+  additions, but a module declaration has no field to declare one and no module supplies any. The owner
+  decides the field (a `module-contract` change) or defers it.
+- **Cleaning up.** Nothing removes cache copies, shipped records of earlier releases, or leftover
+  `bin/run/` directories of a launcher that was killed.
 
 ## Acceptance criteria
 
@@ -347,3 +545,21 @@ instead of retrying. No dollar ceiling is required.
   as inert text.
 - Approving an upgrade preview does not require a separate acknowledgement of the
   files in that preview.
+
+### Built and tested by `module-approvals`
+
+- A record binds its kind, subject and both hashes: a changed declaration or content, or the same bytes
+  under another subject, is not approved.
+- `approve` and `pin` record only when standard input and output are terminals and the owner types the
+  first 12 characters of the hash shown; piped input or output, a wrong answer, a package that fails
+  verification and a package that changes while it is shown record nothing.
+- A package approved from a source is bound by its content: a ref that later moves to different content
+  is not approved, and the pinned commit's content still is.
+- A download never checks anything out or runs anything, and refuses a symbolic link, a submodule, an
+  unsafe path, a name collision, an oversize or over-numerous tree, and leaves nothing in the cache.
+- Only an unchanged package in the distribution with a matching shipped record is first-party.
+- The gate approves a selection only when every module has a matching record, and a package record
+  never covers a `harness` or `process` module.
+- A pinned helper whose bytes changed is not run until it is pinned again, and what runs is the bytes
+  that were hashed.
+- Through the `wb` launcher, code in the working directory does not take the place of the workbench.

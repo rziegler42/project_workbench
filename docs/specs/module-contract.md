@@ -115,6 +115,11 @@ namespace.
   Other core names may be provided by any approved module.
 - **Third-party names** are prefixed with their package, `<package>:<name>`.
   A package may not provide an unprefixed name unless it is the first-party package.
+  A package is the first-party package only when its directory is directly inside the workbench
+  distribution's `packages/` directory and is not a symbolic link, its declared name equals its
+  directory name, and a shipped approval record for that package matches its current declaration
+  hash and whole-package tree hash (`trust-and-approval.md`, "First-party packages"). A first-party
+  package that has changed since its release is treated as third-party until it is released again.
 - **Slots.** A slot is the capability `slot:<name>`. The module that owns the slot
   provides it. The base is not a module, so the slots the base owns are provided
   implicitly by the base and are always present. A module that fills a slot has a
@@ -306,6 +311,10 @@ result is a refusal and carries no hashes and no order.
   fixed by `base-and-manifests`. Until then the verifier knows none, and a slot fill with
   no selected owner is a warning.
 - **Item naming** for harness modules: provisional, as stated under "Module files".
+- **Added hard stops.** `trust-and-approval.md` lets a module add hard stops, but the module
+  declaration has no field to declare one, so the verifier accepts none and no module supplies any.
+  The code that combines stops accepts additions and refuses any removal. The owner decides the field
+  and its format, or defers it.
 
 ## Acceptance criteria
 

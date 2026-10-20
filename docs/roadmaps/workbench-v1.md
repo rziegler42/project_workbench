@@ -59,13 +59,27 @@ meet here and the order matters.
   `self-hosting`.
 - Seven specifications are approved by the owner (2026-10-19) and read `Current`:
   `terms`, `module-contract`, `repository-boundary`, `trust-and-approval`,
-  `groundwork`, `code-work` and `harness-modules`. Implementation has not started.
-- Twelve decision records are accepted (2026-10-19), listed under Related decisions.
+  `groundwork`, `code-work` and `harness-modules`.
+- Twelve decision records are accepted (2026-10-19) and two more are proposed (2026-10-20), listed
+  under Related decisions.
 - `installer-core-verifier` is built and its language decision is accepted
   (`2026-10-19-implementation-language`, 2026-10-19): a Python 3
   package `workbench/` with the safe filesystem layer, hashing, declaration and module
   verification, set verification and `python3 -m workbench verify`. It writes nothing
   into a project. `module-contract` records the concrete schema it accepts.
+- `module-approvals` is built (plan `2026-10-19-module-approvals`, increments A to K): the guarded
+  store at a fixed location and its personal settings; the compiled hard-stop floor; approval
+  records for modules and packages; first-party approvals shipped with the workbench; the approval
+  request and gate; the owner-run `approve` command, from a directory or from a source downloaded
+  inertly into the store's cache with its commit recorded; helper pins, the `launch` command and the
+  `wb` launcher. It writes nothing into a project. `trust-and-approval`, `repository-boundary` and
+  `module-contract` record the formats and rules it built. Two decisions it proposes await the
+  owner, and the candidate is complete only when the plan's status is `Completed`, which waits for
+  those rulings.
+- Found while building it, for later candidates: `python3 -m workbench` run from inside an
+  untrusted project lets that project's code run first, so the harness must call the `wb` launcher
+  and not the `-m` form; a module has no field to declare an added hard stop; and nothing removes
+  cache copies, shipped records of earlier releases or leftover `bin/run/` directories.
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.
 
@@ -308,3 +322,8 @@ Accepted 2026-10-19, in `docs/decisions/`:
 - `2026-10-19-non-destructive-upgrades`
 - `2026-10-19-tracked-pointer-rule`
 - `2026-10-19-implementation-language`
+
+Proposed 2026-10-20, not yet accepted:
+
+- `2026-10-20-fixed-store-location`
+- `2026-10-20-first-party-by-location-and-shipped-record`

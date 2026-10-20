@@ -94,7 +94,7 @@ resolved commit and counts) or raises `FetchError` and leaves nothing in the cac
 - **The cache holds data and no repository.** Files are written into a staging directory and
   moved into place with one rename; the temporary repository is removed. A failure removes the
   staging directory. A cache directory is never reused, so every fetch makes a new one. Files
-  get mode 0644, or 0755 when git recorded the execute bit.
+  get the default mode (0644 under the usual umask), or 0755 when git recorded the execute bit.
 - **Limits:** this does not defend against a flaw in git's own handling of objects or in the
   network transport, and it does not verify who runs the server. An `ssh` source uses your ssh
   configuration and keys; an `https` source may use your credential helpers. A process killed

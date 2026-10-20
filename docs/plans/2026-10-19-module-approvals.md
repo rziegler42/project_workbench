@@ -569,11 +569,61 @@ approved the plan after it. The review is not closed.
 
 ## Result
 
-In progress. Increments A to I are committed (A `32bb04c`, B `968266f`, C `9d11c39`,
-D `79849b5`, E `ca239c6`, F `6ec0fc7`, G `d526957`, H `8b653b0`, I `c9bff41`); J is built and in review. Each had an independent
-workflow review and a security review at the owner's request, and the findings were checked
-and fixed before its commit. I to K are not started. The final Result is written when K
-completes.
+All eleven increments are built. A to J are committed (A `32bb04c`, B `968266f`, C `9d11c39`,
+D `79849b5`, E `ca239c6`, F `6ec0fc7`, G `d526957`, H `8b653b0`, I `c9bff41`, J `148b358`); K is
+the commit that carries this text. The plan stays `In Progress`: it is complete only when the
+owner has accepted or declined each of the two proposed decisions,
+`2026-10-20-fixed-store-location` and `2026-10-20-first-party-by-location-and-shipped-record`.
+The candidate `workbench-v1#module-approvals` therefore is not yet complete.
+
+**Verification.** The full suite, `python3 -B -W error -m unittest discover -s tests`, passes: 657
+tests (249 before this plan). Every increment had an independent workflow review and a security
+review at the owner's request; each finding was checked against the code, and the fixes were made
+before the commit. Each increment's tests were also mutation-checked by hand in a scratch copy
+(typically 10 to 25 deliberate breakages per increment); survivors were either equivalent changes
+or led to a stronger test. The scripts were not kept. K's spec edits and decision drafts were read
+against the code by their author and not independently reviewed (the plan asks for that only on
+request).
+
+**Test coverage by plan criterion** (files in `tests/`): settings, floor and checkpoints
+`test_settings.py`, `test_floor.py`; store `test_store.py`, `test_cli.py`; records `test_approvals.py`;
+first-party `test_firstparty.py`; gate `test_gate.py`; request `test_request.py`; `approve` and the
+source flow `test_approve.py`; download `test_fetch.py`, `test_safefs.py`; pins, launcher, `wb`
+`test_pins.py`, `test_launch.py`; verifier changes `test_verify.py`.
+
+**Acceptance criteria reached** (`trust-and-approval.md`): with no settings every checkpoint stops;
+a module whose declaration or content differs from its approval is not approved, at the gate (the
+installer that would write is not built); a committed `Status: Approved` line is never an approval,
+because nothing reads one; a pulled edit to a pinned helper is not run until it is pinned again; a
+module that tries to remove a floor entry is refused, at the function that combines stops.
+`repository-boundary.md`: a package newly named is not approved before its declaration is approved
+on this machine, though it may be downloaded inertly into the cache.
+
+**Not reached, and why:** a plan whose hashed region differs from its approval, and a plan that
+omits its risks section (plan approval, `code-work-module`); the floor appearing as deny and ask
+rules and a denied write to the store, a neutral rule list rejected for an `allow` entry
+(`claude-harness`); a change to `AGENTS.md` or a committed `.workbench/` file stopping the agent until
+acknowledged, and approving an upgrade preview without a separate acknowledgement (acknowledgement,
+`base-and-manifests` and later); a reviewer that returns no verdict producing no approval
+(delegation, `code-work-module`); the researcher and `fetch-reference` criteria
+(`researcher-fetch-tool`); a package whose content hash differs from the lock stopping attach, a
+project whose seed matches a store entry first seen elsewhere, and an upgrade that does not write an
+unapproved version (`base-and-manifests`, `ownership-and-upgrade`).
+
+**Known gaps.** No fresh-clone run of the suite. The pseudo-terminal tests ran on macOS only. Real
+`https` and `ssh` transports were never exercised; the download is tested through local `file://`
+repositories. The typed confirmation is friction and not authentication (a process with its own
+pseudo-terminal passes it), so the commands are protected only once `claude-harness` renders the
+deny rules. Nothing removes cache copies, shipped records of earlier releases or leftover
+`bin/run/` directories.
+
+**Proposed decisions, for the owner.** Accepting or declining each is the owner's act. Other choices
+made here that are durable but that I did not turn into records: the commit is provenance and not
+part of what a record binds; the subject is compared on every check although the key covers only the
+kind and hashes (a subject-keyed record would let an identical module be approved under two names);
+`python3 -m workbench` is unsafe from an untrusted directory and the `wb` launcher runs in isolated
+mode. All three are written in `trust-and-approval.md`, "Concrete formats"; the third is in the
+roadmap too.
 
 Deviations and decisions made while building, to be carried into the spec edits in K:
 

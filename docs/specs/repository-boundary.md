@@ -1,7 +1,9 @@
 # Repository boundary, manifests and upgrades
 
-Status: Current. Approved by the owner on 2026-10-19; implementation has not started. File names and
-marker syntax are proposals; the rules are the substance.
+Status: Current. Approved by the owner on 2026-10-19. The guarded store, with its approvals, cache, pins
+and launcher, is built (`module-approvals`) and the layout below records it; the manifests, install,
+attach, check and upgrade are not built yet. File names and marker syntax are proposals; the rules are the
+substance.
 
 Terms are defined in `terms.md`. The declarations the installer reads are defined in
 `module-contract.md`.
@@ -62,13 +64,21 @@ Non-goals:
     debug/<YYYY-MM-DD>-<topic>/
     refs/                   reference cache and untracked index
 ~/.config/project-workbench/
-  settings                  personal settings and the hard-stop floor
-  packages/<key>/           package approvals, keyed by tree and declaration hash
-  cache/                    inert downloads, data only, awaiting approval
-  projects/<project-id>/    plan approvals, acknowledgement baselines, pins, and
-                            where the project was first seen
+  settings                  personal settings and a copy of the hard-stop floor
+  packages/<key>/approval.json
+                            module and package approvals, keyed by kind and hashes
+  cache/<id>/               an inert download: package/ (the files) and fetch.json
+  projects/<project-id>/    one directory per project
+    pins                    pinned helpers: path relative to the project root, SHA-256
+                            (plan approvals, acknowledgement baselines and where the
+                            project was first seen are not built yet)
+  bin/wb                    the launcher script, fixed text apart from one path
+  bin/run/<uuid>/<name>     a private copy of a pinned helper, only while it runs
 ```
 
+- The store and its directories `packages/`, `cache/`, `projects/`, `bin/` and `bin/run/` are real
+  directories owned by the current user with mode exactly `0700`; anything else is refused. The
+  formats of the files in it are in `trust-and-approval.md`, "Concrete formats".
 - The names `local`, `manifest*` and `neutral` are reserved and cannot be a package
   or module name.
 - `.workbench/.gitignore` ships in the base, so every clone, including a fresh one
@@ -113,7 +123,8 @@ It never names a harness.
 ### Project ID
 
 The project ID is a hash of a unique seed generated at install and stored in the
-manifest. The seed need only be unique to the project and the same in every clone; a
+manifest. It is the SHA-256 of the seed in lowercase hex, 64 digits, which also makes it safe as a
+directory name; the store refuses any other form. The seed need only be unique to the project and the same in every clone; a
 random GUID is the default. The ID names the project's directory in the guarded
 store. A change to the seed makes existing approvals stop matching, which fails
 safe.
@@ -187,9 +198,12 @@ recorded in the manifest.
   a new clone.
 - Nothing is written or activated until the package's declaration is approved on
   this machine. A package is first downloaded inertly into a cache in the guarded
-  store, as data only, so the declaration can be shown. The first approval pins the
-  resolved commit and tree hash, and later attaches and teammates verify against it,
-  so a mutable ref cannot change what they receive.
+  store, as data only, so the declaration can be shown. The approval binds the package's
+  content by its declaration and tree hashes, and the first approval from a source also
+  records the resolved commit as provenance; identical content reached by another commit is
+  the same approval and the first record is kept. Later attaches and teammates fetch the
+  recorded commit and verify the tree hash against the approval, so a mutable ref cannot
+  change what they receive.
 - A version difference between the installed workbench and the lock produces a
   warning and attach continues. A content-hash mismatch between a package and the
   lock stops attach.
