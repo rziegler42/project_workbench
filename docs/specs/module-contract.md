@@ -1,8 +1,10 @@
 # Module and package contract
 
-Status: Current. Approved by the owner on 2026-10-19; implementation has not started. Field names are
-proposals and are marked as such; the rules they carry are the substance of this
-specification.
+Status: Current. Approved by the owner on 2026-10-19. The declaration verifier
+(`installer-core-verifier`) implements this specification, and "Concrete schema" records
+the field names, formats and limits it accepts. The rules are the substance of this
+specification; where the table descriptions and "Concrete schema" differ in precision,
+"Concrete schema" is the one the code enforces.
 
 Terms are defined in `terms.md`.
 
@@ -36,8 +38,7 @@ Non-goals:
 
 ## Package declaration
 
-A package has one declaration file at its root, `package.json`. Field names are
-proposals.
+A package has one declaration file at its root, `package.json`.
 
 | field | meaning |
 |---|---|
@@ -53,7 +54,6 @@ cannot be a package name or a module name.
 ## Module declaration
 
 Each module has one declaration file, `module.json`, at the root of its directory.
-Field names are proposals.
 
 | field | meaning |
 |---|---|
@@ -90,8 +90,12 @@ The set of types is closed and owned by the installer. A module has exactly one.
   modules.
 - Install order is: harness, then the base (which is not a module and has no type),
   then the process module, then every other module. Within a group, modules are
-  ordered so that a module follows the modules it requires. A cycle in `requires`
-  is an error. The harness module is verified and approved first, but the per-clone
+  ordered so that a module follows the modules it requires. A requirement on a module
+  in a later group is allowed and does not change the order: every requirement is
+  resolved before any file is written, so group order never decides whether one is met
+  (a process module may require a capability that an ordinary module provides). Only a
+  cycle in `requires`, within a group or across groups, is an error, and the message
+  names the cycle. A slot fill counts as a soft requirement for ordering. The harness module is verified and approved first, but the per-clone
   harness files it describes are written last, by attach, after the committed content
   (see `repository-boundary.md`).
 
@@ -211,13 +215,90 @@ supplies harness items it uses:
 - The translation mapping itself is declared by the harness module and applied by
   the installer. It is specified separately.
 
+## Concrete schema
+
+This is what the verifier accepts. Anything else is refused. Every refusal names its
+scope (the package, or one module of it) and the field or rule that failed.
+
+**Files.** A declaration is read as bytes, never evaluated. It must be UTF-8 without a
+byte-order mark, at most 1 MiB, and nested at most 32 levels. The top level is an
+object. A duplicate key, an unknown field, NaN, Infinity and any number with a fraction
+or exponent are refused. A module file is at most 16 MiB.
+
+**Formats.**
+
+| item | form |
+|---|---|
+| name (package, module, slot) | `^[a-z][a-z0-9-]*$`, at most 64 characters; `local`, `neutral` and anything beginning `manifest` are reserved |
+| version | one to four dot-separated non-negative integers, no leading zeros, compared numerically |
+| `contract` | an integer from 1 up to the highest supported (1) |
+| capability | printable ASCII, no spaces, at most 64 characters, as `name` (core), `<package>:name` (third party) or `slot:name`; dotted sub-names are refused |
+| `description` | one printable line, 1 to 200 characters |
+| helper | a plain tool name: letters, digits and `._+-`, at most 64 characters |
+| path (`writes`, `ships`, `fills` source) | relative, at most 512 characters, no empty, `.` or `..` segment, no backslash, colon or non-printable character, and no segment equal to `.git` after case folding and trimming trailing dots and spaces (nor `git~N`) |
+
+**Package fields.** `name`, `version`, `contract` and `modules` are all required. Each
+`modules` entry names a directory of the package that holds a `module.json`; no entry
+is listed twice, and no directory holding a `module.json` is left unlisted.
+
+**Module fields.** `name`, `version` and `description` are required. Optional:
+`type` (default `module`), `provides`, `requires`, `blocks`, `helpers`, `slots`,
+`fills`, `writes`, `ships` (default empty) and `layout`. The list entry in `package.json`,
+the directory name and `name` in `module.json` must be equal. No list holds a duplicate.
+
+- `requires` entries are a capability, or `{"capability": "<capability>", "soft": true}`.
+- `slots` lists the names of the slots the module owns. The module then provides
+  `slot:<name>`, so `provides` may not list a `slot:` capability.
+- `fills` entries are `{"slot": "slot:<name>", "source": "<path>"}`, one per slot.
+- `layout` is required for a `harness` module and forbidden otherwise. It is an object
+  whose keys come from `root`, `kinds`, `local_settings`, `hooks`, `exclude` and
+  `notes`; the values are checked by the harness specification, not here.
+- `provides`: a harness capability only from a `harness` module; an unprefixed name only
+  from the first-party package; a prefixed name's prefix equals the package name.
+- `writes`: a path may enter `.workbench/` only under the module's own namespace
+  `.workbench/<package>/<module>/`, and may not name the guarded store
+  (`.config/project-workbench`). Case, Unicode normalization and trailing dots and
+  spaces are folded before these checks. No two paths collide after folding or nest as
+  file and directory.
+- `ships`: each item is a file, or a directory that holds at least one file. An empty
+  directory is refused because the content hash does not cover it.
+
+**Module files.** Every file is `module.json`, a file below `harness/`, `templates/` or
+`files/` (exact case; a file of that name at the module root does not count), a
+`fills` source, or an item of `ships` or a file below one. Empty directories are
+ignored. A symbolic link, device, socket or FIFO anywhere in the module is refused. A
+module with a `harness/` directory holds `harness/neutral/` or a `harness/<name>/`
+directory and no file directly under `harness/`. `harness/<name>/manifest.json` may be
+`{"exclude": [{"item": "<kind>/<name>", "reason": "<text>"}]}` with a printable
+one-line reason of 1 to 200 characters. An item is `<kind>/<name>` read from the path
+`<kind>/<name>` or `<kind>/<name>.md` below the harness directory; this reading is
+provisional until the harness module specification fixes it.
+
+**Hashes.** Both are SHA-256, as lowercase hex. The *declaration hash* is taken over the
+declaration as written (defaults are not added), serialized as JSON with object keys
+sorted at every level, separators `,` and `:`, non-ASCII characters left as themselves
+and the result encoded as UTF-8. The *tree hash* is taken over one record per regular
+file, `<hex SHA-256 of the content> <x or -> <path>` and a newline, where `x` means the
+owner execute bit is set, with records sorted by the UTF-8 bytes of the path.
+Directories do not contribute. Known-answer tests in `tests/` fix both.
+
+**Set checks.** They run on a selection of modules, not on every module of a package.
+A selected module is named `<module>`, or `<package>/<module>` where two packages
+share a name. A module is never its own provider. A hard requirement with no provider
+among the selected modules names the capability and the unselected modules that could
+supply it. The result is all or nothing: if any package, module or set check fails the
+result is a refusal and carries no hashes and no order.
+
 ## Deferred
 
-- **Field names** in `package.json` and `module.json` remain proposals until the
-  schema is written by the `installer-core-verifier` candidate.
 - **Dotted sub-names** (`permissions.deny-read`): no module needs them yet.
-- **Overloaded terms** (design-notes review item 12): to be checked as the real
-  schema is written.
+- **Overloaded terms** (design-notes review item 12): the schema was written and no clash
+  between terms was found in the code, so the item stays open only for the harness and
+  trust specifications, which the verifier does not exercise.
+- **Base-owned slots**: the base owns slots that are always present, but which ones is
+  fixed by `base-and-manifests`. Until then the verifier knows none, and a slot fill with
+  no selected owner is a warning.
+- **Item naming** for harness modules: provisional, as stated under "Module files".
 
 ## Acceptance criteria
 

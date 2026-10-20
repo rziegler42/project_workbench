@@ -436,34 +436,57 @@ The edits made after round 3 have not been re-reviewed. The plan stays `Approved
 
 ## Result
 
-In progress. Increments A to E are committed (`89d64c6`, `3f6b6ec`, `2b53cd0`,
-`92fe5fa`, `eab70b6`) and the review fixes for E follow them (`beaf221`). Increment F is committed (`087d198`). Increment G
-(`workbench/cli.py`, `tests/test_cli.py`, `docs/development.md`) is implemented and not
-yet committed or reviewed. The full suite passes (229 tests,
-`python3 -m unittest discover -s tests`), and the documented commands were run on the
-sample package: exit 0 with a selection, exit 1 without a harness, exit 2 with no command.
-Increments B and E had a security review whose findings were fixed with tests; C, D, F
-and G had no independent review yet.
+Not complete: Increments A to G are committed and Increment H is drafted, but the plan
+stays `Approved` until the owner accepts the language decision record
+(`docs/decisions/2026-10-19-implementation-language.md`, Proposed). If the owner declines
+it, the plan is re-approved with a different language or superseded.
 
-Calls made in G: refusals and the warnings that accompany them go to stderr, an
-acceptance to stdout; control characters in anything printed are escaped; the
-"same path" test compares absolute paths without touching the filesystem.
+Commits: A `89d64c6`, B `3f6b6ec`, C `2b53cd0`, D `92fe5fa`, E `eab70b6` and its review
+fixes `beaf221`, F `087d198`, G `4700198`. H follows when the owner asks for its commit. The full suite
+passes (229 tests, `python3 -m unittest discover -s tests`). The documented `verify`
+commands were run on the sample package: exit 0 with a selection, exit 1 without a
+harness, exit 2 with no command.
 
-Calls made in F, for the owner to confirm in Increment H: a module is never its own
-provider, so requiring its own capability is unmet; a slot fill counts as a soft
-requirement for install order; a refused result carries no hashes and no order; set
-checks are skipped (with a warning) when any package or module was refused; a selected
-module is named `<module>` or `<package>/<module>`; a cycle is detected across groups
-as well as within one; a base-owned slot is not known yet, so a fill with no selected
-owner warns.
+Reviews: B and E had a security review whose findings were fixed with tests. C, D, F, G
+and H had no independent review. The plan lists one for each, to be run only if the owner
+asks.
 
-Calls made in D and E that the owner has not yet confirmed, to be written into the spec
-in Increment H: a `writes` path may enter `.workbench/` only under the module's own
-namespace; a path beginning `.config/project-workbench` is refused; `slots` lists owned
-slot names and `provides` may not list `slot:` entries; `fills` takes `slot:<name>`;
-`type` defaults to `module` and only `name`, `version` and `description` are required;
-dotted sub-names are refused; harness item naming is `<kind>/<name>` as the
-`modulefiles` docstring states; an empty directory in `ships` is refused.
+Owner ruling in H (2026-10-19): a requirement on a module in a later group is allowed and
+does not change the install order; only a cycle is an error. It is written into
+`module-contract.md`.
 
-Next: commit Increment G when the owner asks, then Increment H (the spec, the decision
-record and this Result).
+Spec: `module-contract.md` now has a "Concrete schema" section with the field names,
+formats, limits and hash serializations, and its first Deferred item is closed. Review
+item 12 (overloaded terms) stays open; no clash was found in the code. Calls made in D,
+E, F and G are written into that section as the schema, and were presented to the owner
+for reading with it: owned-slot and `fills` forms, `writes` namespace and store rules,
+defaults and required fields, dotted sub-names refused, harness item naming (marked
+provisional), empty `ships` directories refused, a module never its own provider, a slot
+fill as a soft requirement for order, set checks skipped after a refusal, a refused
+result carrying no hashes, and selection names `<module>` or `<package>/<module>`. Calls
+only about the command: refusals and their warnings go to stderr, control characters are
+escaped, and the same-path test compares absolute paths without touching the filesystem.
+
+Acceptance criteria about verification and the tests that cover them:
+
+- Unsupported or malformed package declaration, reserved names, prefix rules, `writes`
+  escapes: `tests/test_declarations.py`.
+- Hash equality and difference: `tests/test_hashing.py`.
+- Unaccounted files, missing declared paths, symbolic links and FIFOs, harness layout:
+  `tests/test_modulefiles.py`.
+- Two harness or process modules, hard and soft requirements, harness-capability
+  requirements, conflicts in either order, the provide-and-block case alone and with a
+  second provider, cross-package requirements, cycles, install order including the
+  `code-work` to `groundwork` edge, missing helpers, and all-or-nothing:
+  `tests/test_verify.py`.
+- Safe-write and reader rules: `tests/test_safefs.py`.
+- Exit codes, readable refusals naming the scope and rule, and the tree-unchanged
+  checks: `tests/test_cli.py`.
+
+Not covered: the minimum Python version was derived, not run, and the leftover items
+from the earlier reviews (unbounded total tree size, some unwrapped `OSError`s, a
+temporary file left after a kill, weak `fsync` on macOS, the `_hook` test seam in
+production code) remain open for later plans.
+
+Next: the owner reads the spec edit and accepts or declines the decision record, then
+archives the plan (`ask-codex archive` at completion is the owner's).

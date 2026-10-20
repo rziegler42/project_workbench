@@ -61,7 +61,11 @@ meet here and the order matters.
   `terms`, `module-contract`, `repository-boundary`, `trust-and-approval`,
   `groundwork`, `code-work` and `harness-modules`. Implementation has not started.
 - Eleven decision records are accepted (2026-10-19), listed under Related decisions.
-- No code exists.
+- `installer-core-verifier` is built and awaiting the owner's acceptance of its
+  language decision (`2026-10-19-implementation-language`, Proposed): a Python 3
+  package `workbench/` with the safe filesystem layer, hashing, declaration and module
+  verification, set verification and `python3 -m workbench verify`. It writes nothing
+  into a project. `module-contract` records the concrete schema it accepts.
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.
 

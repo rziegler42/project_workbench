@@ -56,3 +56,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-19-derived-completion-slugs-dated-names](2026-10-19-derived-completion-slugs-dated-names.md) | Candidate completion is derived; candidate IDs are slugs; plans and decisions are dated | Accepted |
 | [2026-10-19-non-destructive-upgrades](2026-10-19-non-destructive-upgrades.md) | Upgrades are non-destructive, by file ownership class, with no three-way merge | Accepted |
 | [2026-10-19-tracked-pointer-rule](2026-10-19-tracked-pointer-rule.md) | Nothing tracked in a document or workbench-managed file depends on untracked content | Accepted |
+| [2026-10-19-implementation-language](2026-10-19-implementation-language.md) | Python with the standard library only for the installer | Proposed |
