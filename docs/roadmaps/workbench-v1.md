@@ -68,7 +68,7 @@ meet here and the order matters.
 ## Suggested order
 
 `approve-specs`, `adopt-conventions`, `installer-core-verifier`, `module-approvals`,
-`base-and-manifests`,
+`installer-interface`, `base-and-manifests`,
 `ownership-and-upgrade`, `claude-harness`, `verify-opencode`, `opencode-harness`,
 `groundwork-module`, `researcher-fetch-tool`, `code-work-module`,
 `remote-runner-module`, `peer-review-provider`, `knowledge-base-package`,
@@ -125,16 +125,42 @@ distribution; and the `wb` launcher and its pins exist.
 No project is written, and there is no plan approval or delegation helper yet.
 **Promotion trigger:** `installer-core-verifier` complete.
 
+### installer-interface — The installer's commands and options
+
+**Outcome:** a specification of the installer's command line: the commands (install,
+attach, upgrade preview, add module, verify, check), their options, exit codes, and the
+preview and output contract. Requirements settled so far:
+
+- The target directory is one value with two spellings, a positional `<target>` or
+  `--dir <path>`, accepted by every command. If neither is given the target is `.`.
+  If both are given and resolve to the same directory that is accepted; if they
+  differ the command refuses and writes nothing.
+- The target is resolved to an absolute path once, and everything after that works
+  from the resolved path.
+- Whether a command creates a new project or works on an existing one is decided from
+  the target's state, not from the spelling: an empty or missing directory (a lone
+  `.git` is allowed) is new; a directory with a committed manifest is existing;
+  anything else is refused with nothing written.
+- Commands that write print the resolved absolute target before the preview.
+- The home directory, the filesystem root and the guarded store are refused as targets.
+
+**Dependencies:** `module-approvals`, because the approval and store behavior decides
+which options are needed.
+**Boundary:** a specification only, approved by the owner. Option names and formats stay
+proposals until the code that uses them exists. `installer-core-verifier` defines only
+its own verify command.
+**Promotion trigger:** `module-approvals` complete.
+
 ### base-and-manifests — Base, manifests and installing into an empty target
 
 **Outcome:** install creates the base content, the project seed and ID, the committed
 manifest and the tracked `.workbench/.gitignore` in a new target, from a chosen set of
 modules, without a harness step yet.
-**Dependencies:** `module-approvals`.
+**Dependencies:** `module-approvals`, `installer-interface`.
 **Boundary:** the base and the committed manifest only. Attach, upgrade and the local
 manifest are later candidates. The mandatory-harness rule is enforced when attach
 exists.
-**Promotion trigger:** `module-approvals` complete.
+**Promotion trigger:** `module-approvals` and `installer-interface` complete.
 
 ### ownership-and-upgrade — Ownership, slots and non-destructive upgrade
 
