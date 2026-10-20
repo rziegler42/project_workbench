@@ -1,7 +1,8 @@
 # The guarded store and module approvals
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-19
+Completed: 2026-10-20
 Candidate: workbench-v1#module-approvals
 Specs: trust-and-approval, repository-boundary, module-contract
 
@@ -548,7 +549,10 @@ Review: independent review of the spec edits only if the owner asks.
 
 Reviewed by Codex (model `gpt-5.6-luna`, medium effort) on 2026-10-20, at the owner's
 request, while the plan was `Proposed`. One round of the three allowed was run; the owner
-approved the plan after it. The review is not closed.
+approved the plan after it. The owner closed the review on 2026-10-20 with `ask-codex archive`
+without running the other two rounds, since the plan had been built and each increment had by then
+been reviewed independently. Codex's own outcome line reads "not converged (1 blocker or major
+finding(s) in the last round)": that is the round-1 finding below, which was applied.
 
 - **R1-F1** (blocker): `launch` had no way to find the helper to hash and run. Applied: the
   pin stores the helper's path relative to the project root, `launch` takes the location
@@ -569,12 +573,14 @@ approved the plan after it. The review is not closed.
 
 ## Result
 
-All eleven increments are built. A to J are committed (A `32bb04c`, B `968266f`, C `9d11c39`,
-D `79849b5`, E `ca239c6`, F `6ec0fc7`, G `d526957`, H `8b653b0`, I `c9bff41`, J `148b358`); K is
-the commit that carries this text. The plan stays `In Progress`: it is complete only when the
-owner has accepted or declined each of the two proposed decisions,
-`2026-10-20-fixed-store-location` and `2026-10-20-first-party-by-location-and-shipped-record`.
-The candidate `workbench-v1#module-approvals` therefore is not yet complete.
+All eleven increments are built and committed (A `32bb04c`, B `968266f`, C `9d11c39`, D `79849b5`,
+E `ca239c6`, F `6ec0fc7`, G `d526957`, H `8b653b0`, I `c9bff41`, J `148b358`, K `8680713`). The two
+decisions proposed in K were accepted by the owner on 2026-10-20
+(`2026-10-20-fixed-store-location` and `2026-10-20-first-party-by-location-and-shipped-record`),
+which completes the plan and with it the candidate `workbench-v1#module-approvals`. A third record,
+`2026-10-20-isolated-launcher-invocation`, was drafted at the owner's go-ahead and stays `Proposed`
+for the owner to accept; the plan does not depend on it. The first push to the remote was made after
+K (`main` at `8680713`).
 
 **Verification.** The full suite, `python3 -B -W error -m unittest discover -s tests`, passes: 657
 tests (249 before this plan). Every increment had an independent workflow review and a security
@@ -617,13 +623,11 @@ pseudo-terminal passes it), so the commands are protected only once `claude-harn
 deny rules. Nothing removes cache copies, shipped records of earlier releases or leftover
 `bin/run/` directories.
 
-**Proposed decisions, for the owner.** Accepting or declining each is the owner's act. Other choices
-made here that are durable but that I did not turn into records: the commit is provenance and not
-part of what a record binds; the subject is compared on every check although the key covers only the
-kind and hashes (a subject-keyed record would let an identical module be approved under two names);
-`python3 -m workbench` is unsafe from an untrusted directory and the `wb` launcher runs in isolated
-mode. All three are written in `trust-and-approval.md`, "Concrete formats"; the third is in the
-roadmap too.
+**Other durable choices.** Written in `trust-and-approval.md`, "Concrete formats", and not made into
+records: the commit is provenance and not part of what a record binds; the subject is compared on
+every check although the key covers only the kind and hashes (a subject-keyed record would let an
+identical module be approved under two names). The third choice, running the workbench through the
+isolated `wb` launcher, is the proposed record above.
 
 Deviations and decisions made while building, to be carried into the spec edits in K:
 

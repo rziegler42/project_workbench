@@ -1,6 +1,6 @@
 # A package is first-party by its place in the distribution and a matching shipped record
 
-Status: Proposed
+Status: Accepted
 Date: 2026-10-20
 
 ## Context

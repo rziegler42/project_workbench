@@ -1,6 +1,6 @@
 # The guarded store's location is fixed and nothing can move it
 
-Status: Proposed
+Status: Accepted
 Date: 2026-10-20
 
 ## Context

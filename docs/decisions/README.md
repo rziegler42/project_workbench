@@ -57,5 +57,6 @@ List every record, including rejected and superseded ones.
 | [2026-10-19-non-destructive-upgrades](2026-10-19-non-destructive-upgrades.md) | Upgrades are non-destructive, by file ownership class, with no three-way merge | Accepted |
 | [2026-10-19-tracked-pointer-rule](2026-10-19-tracked-pointer-rule.md) | Nothing tracked in a document or workbench-managed file depends on untracked content | Accepted |
 | [2026-10-19-implementation-language](2026-10-19-implementation-language.md) | Python with the standard library only for the installer | Accepted |
-| [2026-10-20-fixed-store-location](2026-10-20-fixed-store-location.md) | The guarded store's location is fixed and nothing can move it | Proposed |
-| [2026-10-20-first-party-by-location-and-shipped-record](2026-10-20-first-party-by-location-and-shipped-record.md) | A package is first-party by its place in the distribution and a matching shipped record | Proposed |
+| [2026-10-20-fixed-store-location](2026-10-20-fixed-store-location.md) | The guarded store's location is fixed and nothing can move it | Accepted |
+| [2026-10-20-first-party-by-location-and-shipped-record](2026-10-20-first-party-by-location-and-shipped-record.md) | A package is first-party by its place in the distribution and a matching shipped record | Accepted |
+| [2026-10-20-isolated-launcher-invocation](2026-10-20-isolated-launcher-invocation.md) | The workbench is run through the isolated launcher from project directories | Proposed |

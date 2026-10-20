@@ -60,8 +60,8 @@ meet here and the order matters.
 - Seven specifications are approved by the owner (2026-10-19) and read `Current`:
   `terms`, `module-contract`, `repository-boundary`, `trust-and-approval`,
   `groundwork`, `code-work` and `harness-modules`.
-- Twelve decision records are accepted (2026-10-19) and two more are proposed (2026-10-20), listed
-  under Related decisions.
+- Twelve decision records were accepted on 2026-10-19 and two more on 2026-10-20, listed under
+  Related decisions.
 - `installer-core-verifier` is built and its language decision is accepted
   (`2026-10-19-implementation-language`, 2026-10-19): a Python 3
   package `workbench/` with the safe filesystem layer, hashing, declaration and module
@@ -73,9 +73,8 @@ meet here and the order matters.
   request and gate; the owner-run `approve` command, from a directory or from a source downloaded
   inertly into the store's cache with its commit recorded; helper pins, the `launch` command and the
   `wb` launcher. It writes nothing into a project. `trust-and-approval`, `repository-boundary` and
-  `module-contract` record the formats and rules it built. Two decisions it proposes await the
-  owner, and the candidate is complete only when the plan's status is `Completed`, which waits for
-  those rulings.
+  `module-contract` record the formats and rules it built. The two decisions it proposed were
+  accepted on 2026-10-20.
 - Found while building it, for later candidates: `python3 -m workbench` run from inside an
   untrusted project lets that project's code run first, so the harness must call the `wb` launcher
   and not the `-m` form; a module has no field to declare an added hard stop; and nothing removes
@@ -323,7 +322,11 @@ Accepted 2026-10-19, in `docs/decisions/`:
 - `2026-10-19-tracked-pointer-rule`
 - `2026-10-19-implementation-language`
 
-Proposed 2026-10-20, not yet accepted:
+Accepted 2026-10-20:
 
 - `2026-10-20-fixed-store-location`
 - `2026-10-20-first-party-by-location-and-shipped-record`
+
+Proposed 2026-10-20, not yet accepted:
+
+- `2026-10-20-isolated-launcher-invocation`
