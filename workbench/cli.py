@@ -8,7 +8,7 @@ import argparse
 import os
 import sys
 
-from . import firstparty, safefs, settings, store, verify
+from . import display, firstparty, safefs, settings, store, verify
 
 PROG = "python3 -m workbench"
 USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
@@ -43,9 +43,7 @@ def _parser():
     return parser
 
 
-def _clean(text):
-    """Escape control characters so nothing read from disk can steer the terminal."""
-    return "".join(c if c.isprintable() else repr(c)[1:-1] for c in text)
+_clean = display.clean
 
 
 def _target(args):

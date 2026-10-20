@@ -76,6 +76,36 @@ the records are read from the installed workbench, never copied into the guarded
 - A first-party package changed since release has no shipped approval for its new hashes,
   so its modules are checked against the guarded store like any other package.
 
+## The approval request
+
+`workbench/request.py` builds the text the owner reads before approving. No command prints
+it yet; the `approve` command will. For a module it shows, in this order: a `HIGH RISK` line
+when it applies, the identity (package, name, version, type, description, source), both
+hashes in full, a size line with the count of each kind of entry, and then the details, one
+section each: what it provides, requires (soft ones marked) and blocks (core capabilities
+marked), the slots it owns and fills, the paths it writes into the project, every item it
+ships (`[executable]` when a file under it has the owner execute bit, otherwise
+`[code-bearing]`), any other executable file in the module (for example under `harness/` or
+`files/`), the helpers it expects, and a harness module's layout, one line per leaf.
+
+- A `harness` or `process` module, or one that blocks a core capability (an unprefixed name),
+  is flagged `HIGH RISK`. A package request lists every module and which need an explicit
+  approval of their own.
+- Nothing a package controls is shortened: paths, layout values and lists are shown in full.
+  A list of more than six entries gets a count and one line per entry, and the hashes and
+  counts come before any list, so a long list cannot push them out of sight.
+- Every package-supplied string is shown as ASCII. A non-ASCII character appears as an
+  escape such as `\u0443`, so a lookalike letter cannot pass for a Latin one, and control,
+  invisible and bidirectional characters become visible escapes.
+- The text is built from a verified declaration and the verifier's hashes. The only thing
+  read again is `executable_items(module_path)`, which lists files with the execute bit; the
+  tree hash covers that bit.
+
+`workbench/display.py` has the two cleaners. `clean` (used for the command's own messages)
+keeps ordinary letters in any script and escapes control, invisible, combining, format,
+separator and filler characters. `ascii_text` (used for the request) escapes everything
+outside printable ASCII.
+
 ## The approval gate
 
 `workbench/gate.py` answers whether a verified selection is fully approved on this machine.
