@@ -1,6 +1,6 @@
 # Python with the standard library only for the installer
 
-Status: Proposed
+Status: Accepted
 Date: 2026-10-19
 
 ## Context

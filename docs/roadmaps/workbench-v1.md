@@ -60,9 +60,9 @@ meet here and the order matters.
 - Seven specifications are approved by the owner (2026-10-19) and read `Current`:
   `terms`, `module-contract`, `repository-boundary`, `trust-and-approval`,
   `groundwork`, `code-work` and `harness-modules`. Implementation has not started.
-- Eleven decision records are accepted (2026-10-19), listed under Related decisions.
-- `installer-core-verifier` is built and awaiting the owner's acceptance of its
-  language decision (`2026-10-19-implementation-language`, Proposed): a Python 3
+- Twelve decision records are accepted (2026-10-19), listed under Related decisions.
+- `installer-core-verifier` is built and its language decision is accepted
+  (`2026-10-19-implementation-language`, 2026-10-19): a Python 3
   package `workbench/` with the safe filesystem layer, hashing, declaration and module
   verification, set verification and `python3 -m workbench verify`. It writes nothing
   into a project. `module-contract` records the concrete schema it accepts.
@@ -307,3 +307,4 @@ Accepted 2026-10-19, in `docs/decisions/`:
 - `2026-10-19-derived-completion-slugs-dated-names`
 - `2026-10-19-non-destructive-upgrades`
 - `2026-10-19-tracked-pointer-rule`
+- `2026-10-19-implementation-language`

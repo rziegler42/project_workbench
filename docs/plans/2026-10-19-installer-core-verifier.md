@@ -436,13 +436,12 @@ The edits made after round 3 have not been re-reviewed. The plan stays `Approved
 
 ## Result
 
-Not complete: Increments A to G are committed and Increment H is drafted, but the plan
-stays `Approved` until the owner accepts the language decision record
-(`docs/decisions/2026-10-19-implementation-language.md`, Proposed). If the owner declines
-it, the plan is re-approved with a different language or superseded.
+Complete pending archive: Increments A to H are committed, and the owner accepted the
+language decision (`docs/decisions/2026-10-19-implementation-language.md`) on 2026-10-19.
+The plan's status is still `Approved`; archiving it is the owner's step.
 
 Commits: A `89d64c6`, B `3f6b6ec`, C `2b53cd0`, D `92fe5fa`, E `eab70b6` and its review
-fixes `beaf221`, F `087d198`, G `4700198`. H follows when the owner asks for its commit. The full suite
+fixes `beaf221`, F `087d198`, G `4700198`. H `ffcc092`, and its review fixes `a887d22`. The full suite
 passes (229 tests, `python3 -m unittest discover -s tests`). The documented `verify`
 commands were run on the sample package: exit 0 with a selection, exit 1 without a
 harness, exit 2 with no command.
@@ -502,5 +501,4 @@ from the earlier reviews (unbounded total tree size, some unwrapped `OSError`s, 
 temporary file left after a kill, weak `fsync` on macOS, the `_hook` test seam in
 production code) remain open for later plans.
 
-Next: the owner reads the spec edit and accepts or declines the decision record, then
-archives the plan (`ask-codex archive` at completion is the owner's).
+Next: the owner archives the plan (`ask-codex archive` at completion is the owner's).
