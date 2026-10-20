@@ -223,7 +223,8 @@ class TheManifest(Fixture):
 
     def test_a_manifest_naming_a_path_it_may_not_is_refused(self):
         for bad in (".workbench/manifest.json", ".workbench/local/harness.json",
-                    ".workbench/local"):
+                    ".workbench/local", ".workbench/LOCAL/harness.json", ".workbench/Local",
+                    ".WORKBENCH/MANIFEST.JSON", ".workbench/Manifest.json"):
             with self.subTest(bad=bad):
                 document = self.document()
                 document["files"].append({"class": "module-owned", "hash": "0" * 64,
@@ -232,6 +233,12 @@ class TheManifest(Fixture):
                 self.put_manifest(document)
                 with self.assertRaises(InstalledError):
                     self.read()
+
+    def test_the_path_check_itself_ignores_case(self):
+        for bad in (".workbench/LOCAL/x", ".workbench/Local", ".WORKBENCH/MANIFEST.JSON"):
+            with self.subTest(bad=bad), self.assertRaises(InstalledError):
+                installed._check_paths({"files": [{"path": bad}]})
+        installed._check_paths({"files": [{"path": ".workbench/localx/x"}]})
 
     def test_a_manifest_path_that_escapes_is_refused(self):
         document = self.document()

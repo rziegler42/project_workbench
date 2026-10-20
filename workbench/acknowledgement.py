@@ -51,6 +51,12 @@ class UnknownProject(AcknowledgementError):
     """The store has no baselines for this project, or first saw it at another path."""
 
 
+def _is_local(name):
+    """The scratch directory's name, whatever its case: on a case-insensitive filesystem
+    ``LOCAL`` is ``local``, and the manifest may not name either."""
+    return name.casefold() == LOCAL
+
+
 def _check_id(project_id):
     if not isinstance(project_id, str) or not _ID.match(project_id):
         raise AcknowledgementError("the project id is 64 lowercase hex digits")
@@ -160,8 +166,8 @@ def _walk(reader, rel, depth, found):
         raise AcknowledgementError("cannot list %s: %s" % (rel, exc))
     for name, kind in entries or ():
         path = "%s/%s" % (rel, name)
-        if rel == WORKBENCH and name == LOCAL:
-            continue
+        if rel == WORKBENCH and _is_local(name) and kind == "dir":
+            continue    # scratch; a link or a file by that name is not scratch and is reported
         found[path] = kind
         if len(found) > MAX_WALKED:
             raise AcknowledgementError("more than %d entries under %s" % (MAX_WALKED, WORKBENCH))
@@ -183,7 +189,7 @@ def differences(reader, baselines, writes=()):
     scope = set(writes) | {MANIFEST}
     scope.update(path for path, kind in listing.items() if kind != "dir")
     scope.update(path for path in baselines if path.startswith(WORKBENCH + "/")
-                 and not path.startswith("%s/%s/" % (WORKBENCH, LOCAL)))
+                 and not path.casefold().startswith("%s/%s/" % (WORKBENCH, LOCAL)))
     found = []
     for path in sorted(scope):
         kind = listing.get(path)

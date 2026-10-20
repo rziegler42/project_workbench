@@ -229,6 +229,17 @@ class Differences(Fixture):
         self.put(".workbench/local/deep/x", b"x")
         self.assertEqual([], self.found())
 
+    def test_a_local_that_is_a_link_or_a_file_is_not_scratch_and_is_reported(self):
+        self.installed()
+        work = os.path.join(self.root, ".workbench")
+        os.symlink(self.outside, os.path.join(work, "local"))
+        self.assertEqual([(".workbench/local", ADDED, "a link")],
+                         [(d.path, d.kind, d.reason) for d in self.found()])
+        os.unlink(os.path.join(work, "local"))
+        self.put(".workbench/local", b"committed content")
+        self.assertEqual([(".workbench/local", ADDED, sha(b"committed content"))],
+                         [(d.path, d.kind, d.current) for d in self.found()])
+
     def test_a_baseline_under_local_is_not_compared(self):
         self.installed()
         self.baselines_map[".workbench/local/incomplete"] = sha(b"")

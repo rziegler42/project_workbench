@@ -90,7 +90,10 @@ def _check_paths(document):
     except safefs.SafeFsError as exc:
         raise InstalledError("the manifest names paths that cannot all be written: %s" % exc)
     for path in paths:
-        if path == MANIFEST or path == LOCAL or path.startswith(LOCAL + "/"):
+        # Compared without case: on a case-insensitive filesystem `.workbench/LOCAL/x` is a path
+        # in the scratch directory.
+        folded = path.casefold()
+        if folded == MANIFEST or folded == LOCAL or folded.startswith(LOCAL + "/"):
             raise InstalledError("the manifest names a path it may not: %s"
                                  % display.ascii_text(path)[:80])
 
