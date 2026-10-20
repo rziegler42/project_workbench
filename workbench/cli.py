@@ -8,7 +8,7 @@ import argparse
 import os
 import sys
 
-from . import (approve, display, firstparty, install, launch, pins, preview, safefs, settings,
+from . import (acknowledge, approve, display, firstparty, install, launch, pins, preview, safefs, settings,
                sources, store, target, upgrade, verify)
 
 PROG = "python3 -m workbench"
@@ -24,6 +24,7 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench install <same arguments as preview install>   (owner-run, terminal only)\n"
          "       python3 -m workbench preview upgrade [<target> | --dir <path>] [--package <source> [--ref <ref>]] ...\n"
          "                                            (read-only; no --select, no download)\n"
+         "       python3 -m workbench acknowledge [<target> | --dir <path>]   (owner-run, terminal only)\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
 
@@ -157,6 +158,24 @@ def _install(tokens, out, err, store_root, distribution, stdin):
                        distribution)
 
 
+def _acknowledge(tokens, err, out, store_root, stdin):
+    try:
+        spelling = acknowledge.parse(tokens)
+    except sources.UsageError as exc:
+        err.write("%s\n%s" % (_clean(str(exc)), USAGE))
+        return 2
+    stdin = stdin if stdin is not None else sys.stdin
+    if not acknowledge.require_terminal(stdin, out, err):
+        return 1
+    opened = _open_store(store_root, err)
+    if opened is None:
+        return 1
+    notes = opened[1] + launch.install_wrapper(opened[0], firstparty.default_distribution())
+    for note in notes:
+        err.write("warning: %s\n" % _clean(note))
+    return acknowledge.run(opened[0], spelling, stdin, out, err)
+
+
 def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=None):
     """Run a command. `store_root`, `distribution` and `stdin` are for tests; the command
     line cannot set them."""
@@ -174,6 +193,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         argv, passthrough = argv[:split], argv[split + 1:]
     if argv and argv[0] == "preview":
         return _preview(argv, out, err, store_root, distribution)
+    if argv and argv[0] == "acknowledge":
+        return _acknowledge(argv[1:], err, out, store_root, stdin)
     if argv and argv[0] == "install":
         return _install(argv[1:], out, err, store_root, distribution, stdin)
     try:
