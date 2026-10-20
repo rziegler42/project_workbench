@@ -321,6 +321,26 @@ class RequirementTest(Base):
         result = self.accepted(self.run_set(path, ["h", "filler"]))
         self.assertTrue(any("slot:x" in w for w in result.warnings))
 
+    def test_fill_of_base_slot_does_not_warn(self):
+        for slot in ("policy", "docs-index"):
+            path = self.package("p" + slot[:3], {"h": HARNESS, "filler": {
+                "fills": [{"slot": "slot:" + slot, "source": "x.md"}]}})
+            with open(os.path.join(path, "filler", "x.md"), "w") as handle:
+                handle.write("x")
+            result = self.accepted(self.run_set(path, ["h", "filler"]))
+            self.assertEqual(result.warnings, [], slot)
+
+    def test_a_hard_requirement_on_a_base_slot_is_met(self):
+        path = self.package("p", {"h": HARNESS, "a": {"requires": ["slot:policy"]}})
+        result = self.accepted(self.run_set(path, ["h", "a"]))
+        self.assertEqual(result.warnings, [])
+
+    def test_module_owning_a_base_slot_refused(self):
+        path = self.package("p", {"h": HARNESS, "x": {"slots": ["policy"]}})
+        result = self.run_set(path, ["h", "x"])
+        self.assertEqual(self.rules(result), ["slot-owner"])
+        self.accepted(self.run_set(path, ["h"]))
+
     def test_a_module_does_not_satisfy_its_own_requirement(self):
         path = self.package("p", {"h": HARNESS,
                                   "a": {"provides": ["p:x"], "requires": ["p:x"]}})

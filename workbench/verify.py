@@ -21,7 +21,8 @@ Rules applied to the selection (``module-contract``):
 * a module's ``blocks`` conflicts with any other selected module that provides the
   capability, whichever is listed first; a module never conflicts with itself;
 * ``slots`` are provided as ``slot:<name>``, and a slot has one owner among the
-  selected modules;
+  selected modules. The base owns ``policy`` and ``docs-index``: they are always present, a
+  fill or requirement of either is met, and a module that owns either is refused;
 * a helper not found on ``PATH`` is a warning. Looking it up does not run it.
 
 Install order is the selected harness module, then the process module, then the rest.
@@ -34,7 +35,7 @@ cycle.
 import collections
 import shutil
 
-from . import declarations, hashing, modulefiles, safefs
+from . import base, declarations, hashing, modulefiles, safefs
 
 # `module` is the parsed Module the hashes were taken for, and `executable` the module's files
 # with the owner execute bit, from the same walk that produced the tree hash. A caller that
@@ -138,6 +139,9 @@ def _resolve(select, declared, problems):
     return selected
 
 
+_BASE_CAPABILITIES = frozenset("slot:" + slot for slot in base.BASE_SLOTS)
+
+
 def _provided(module):
     return set(module.provides) | set("slot:" + slot for slot in module.slots)
 
@@ -188,12 +192,19 @@ def _check_set(selected, modules, harness_required, which, problems, warnings):
             problems.append(_problem("slot:" + slot, "slot-owner", "more than one selected "
                                      "module owns the slot: %s" % ", ".join(who)))
 
+    for key, module in chosen:
+        for slot in module.slots:
+            if slot in base.BASE_SLOTS:
+                problems.append(declarations.DeclarationError(
+                    "module", module.name, "slot-owner", "owns slot %r, which the base owns"
+                    % slot, key[0]))
+
     deps = {key: set() for key in keys}
     for key, module in chosen:
         for capability, soft in _requirements(module):
             providers = [other for other in keys if other != key and capability in provided[other]]
             deps[key].update(providers)
-            if providers:
+            if providers or capability in _BASE_CAPABILITIES:
                 continue
             if soft or _always_soft(capability):
                 warnings.append("module '%s' (package '%s'): nothing selected provides %r"
