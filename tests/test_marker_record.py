@@ -128,6 +128,7 @@ class InstallRecord(test_install.InstallBase):
         self.assertEqual(3, code, err)
         record = unfinished.parse(marker_bytes(place))
         self.assertEqual(2, len(record.store))
+        self.assertEqual({None}, {entry.before for entry in record.store})
         self.assertIn(MANIFEST, {f.path for f in record.files})
 
     def test_an_interrupt_leaves_the_record(self):
@@ -197,6 +198,9 @@ class UpgradeRecord(test_upgrade.Upgrade):
     def test_a_failure_among_the_files_leaves_the_plan_in_the_marker(self):
         new = self.ready(notes=base_tests.NOTES2)
         old_script, old_manifest = self.read(SCRIPT), self.read(MANIFEST)
+        with open(os.path.join(self.store_root, "projects", self.project_id, "baselines"),
+                  "rb") as handle:
+            old_baselines = handle.read()
         original = projectfs.Writer.replace_file
 
         def failing(writer, rel, *a, **k):
@@ -217,6 +221,8 @@ class UpgradeRecord(test_upgrade.Upgrade):
                          (by_path[MANIFEST].op, by_path[MANIFEST].before))
         self.assertEqual((), record.git)
         self.assertEqual(["projects/%s/baselines" % self.project_id], [s.path for s in record.store])
+        self.assertEqual(sha(old_baselines), record.store[0].before)
+        self.assertNotEqual(record.store[0].before, record.store[0].after)
 
     def test_the_record_equals_what_a_finished_upgrade_wrote(self):
         new = self.ready(notes=test_upgrade.NOTES3)

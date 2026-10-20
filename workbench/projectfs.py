@@ -304,6 +304,72 @@ class Writer:
             for each in fds:
                 os.close(each)
 
+    def dir_holds(self, rel, ignore=()):
+        """Whether directory `rel` holds any entry not named in `ignore`: None when it is not
+        there, else True or False. A link or a file in the way is a conflict. Reads at most the
+        first entries; never follows a link."""
+        parts = safefs.validate_relpath(rel)
+        fds = []
+        try:
+            try:
+                dirfd = self._walk(parts, fds, False)
+            except FileNotFoundError:
+                return None
+            try:
+                with os.scandir(dirfd) as entries:
+                    return any(entry.name not in ignore for entry in entries)
+            except OSError as exc:
+                raise _os_error("list", self._shown(rel), exc)
+        finally:
+            for each in fds:
+                os.close(each)
+
+    def git_entry(self, rel="", limit=65536):
+        """What is at `rel` below ``.git`` (the empty string is ``.git`` itself): None when it is
+        not there, ``("dir", None)`` for a directory, ``("file", sha256)`` for a regular file of at
+        most `limit` bytes with one link. Nothing is followed; a link, another kind of file or a
+        larger file is a conflict. Read-only, for looking at a ``.git`` the workbench made."""
+        parts = [".git"] + (rel.split("/") if rel else [])
+        for part in parts[1:]:
+            safefs.validate_relpath("git/" + part)
+        shown = self._shown("/".join(parts))
+        fds = []
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        try:
+            current = self._live_fd()
+            for name in parts[:-1]:
+                try:
+                    current = os.open(name, flags, dir_fd=current)
+                except FileNotFoundError:
+                    return None
+                except OSError as exc:
+                    if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+                        raise WriteConflict("a link or a file is in the way: %s" % shown)
+                    raise _os_error("open", shown, exc)
+                fds.append(current)
+            try:
+                info = os.stat(parts[-1], dir_fd=current, follow_symlinks=False)
+            except FileNotFoundError:
+                return None
+            except OSError as exc:
+                raise _os_error("read", shown, exc)
+            if stat.S_ISDIR(info.st_mode):
+                return ("dir", None)
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink > 1 or info.st_size > limit:
+                raise WriteConflict("not a plain small regular file: %s" % shown)
+            got = self._open_regular(parts[-1], current, shown)
+            if got is None:
+                return None
+            fd, _ = got
+            try:
+                data = self._read_all(fd, shown)
+            finally:
+                os.close(fd)
+            return ("file", hashlib.sha256(data).hexdigest())
+        finally:
+            for each in fds:
+                os.close(each)
+
     def replace_file(self, rel, expected_hash, data, executable=False):
         """Replace the regular file `rel`, whose SHA-256 must be `expected_hash`, with `data`.
 

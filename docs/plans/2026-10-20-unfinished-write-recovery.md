@@ -302,4 +302,41 @@ Rounds used 2 of 3. R2-F1 and R2-F2 were recorded as `applied`. The owner chose 
   pass over A to C should try them again. A plan of more than about 5,000 files cannot be
   recorded (1 MiB bound) and is refused with nothing written; note this in Increment E.
   Suite after the fixes: 1177 tests, passing.
-- Next: Increment B (examine and report).
+### Increment B — done, not yet committed
+
+- `unfinished.examine(writer, store_root)` and `render`. Each recorded file is read through
+  `Writer.read_file` (no-follow, regular, one link) and classed before/after/other, with a
+  cumulative read budget of 256 MiB (the rest is "not read"). Recorded directories are
+  absent/empty/holds/other (`Writer.dir_holds`: child names that are recorded directories, and
+  `local` under `.workbench`, do not count as content). The `.git` skeleton is read with the new
+  `Writer.git_entry` (no-follow, regular files of at most 64 KiB). Store entries are read through
+  `store.Tree`. Summaries: files before/after/mixed, store none/all/partial; any `other` makes
+  files mixed and the store partial.
+- Deviation from the plan, found by the first test run: for `upgrade` and `add` the baselines
+  entry already exists before the write, so "absent/after/other" cannot describe it. Each
+  recorded store write now also carries `before` (null for `install`, the hash of the existing
+  baselines for `upgrade` and `add`), and a store entry is before/after/other. This changes the
+  record format that Increment A introduced; nothing outside this plan reads it. `upgrade.
+  record_of` now takes the store and reads the current baselines.
+- A complete `.git` skeleton with no file written is "before" (a lone `.git` is a target that
+  `install` accepts); a partial or foreign `.git` is "mixed" and listed.
+- `target.open_target` builds the report when it meets a marker; `UnfinishedMarker` carries it as
+  `report`, and the five places that print a target refusal now call `target.write_refusal`, so
+  the text is identical for `preview`, `install`, `upgrade`, `add` and `acknowledge`.
+- Hints: `RECOVERY`, `RECOVERY_FILES_DONE` and `confirm.report_failure` name `wb recover`, which
+  is built in Increment C; until then the name is not a working command.
+- Tests: `tests/test_unfinished_examine.py` (26) cover each stop point, links, a directory, a
+  hard link, an unreadable file, a foreign store entry, a missing store, a foreign file in a
+  recorded directory, the read budget, no-record markers, escaping, the 500 cap, no writes while
+  examining, and the identical refusal across commands. Suite: 1203 tests, passing.
+- Independent read-only review of B (`workflow-reviewer`, partial: it ran out of turns and could
+  not run scratch code). Fixed with tests: a quadratic scan of recorded directories (a forged
+  marker with ~100k directories hung every command; now one pass and a 10,000 entry cap in
+  `parse`); the report listed directories that legitimately hold files after a finished write;
+  a record with no files or no store writes read as "before"/"none" (now mixed/partial, so C
+  must never treat them as safe); `upgrade.record_of` recorded a non-file baselines entry as
+  absent (now refused before any write); store reads now count against the read budget. Added
+  tests for `install`/`preview install` refusals, a `.git` link, a recorded directory that is a
+  file, a FIFO, `dir_holds`/`git_entry`, and fd closing in `open_target`. Suite: 1217 tests,
+  passing. Not exercised: case-insensitive variants of `dir_holds` ignore names.
+- Next: Increment C (`wb recover`).

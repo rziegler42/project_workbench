@@ -14,7 +14,7 @@ import os
 import pwd
 import stat
 
-from . import safefs
+from . import display, projectfs, safefs, unfinished
 
 STATES = ("new-missing", "new-empty", "new-git", "existing")
 
@@ -23,6 +23,14 @@ _MARKER = (".workbench", "local", "incomplete")
 
 class TargetError(Exception):
     """A refusal. The message names the place."""
+
+
+class UnfinishedMarker(TargetError):
+    """A marker of an unfinished write is here. `report` is the examination, as lines."""
+
+    def __init__(self, message, report=()):
+        TargetError.__init__(self, message)
+        self.report = list(report)
 
 
 class TargetUsage(TargetError):
@@ -244,8 +252,9 @@ def _real_dir_at(name, dirfd):
 def _classify(fd, resolved):
     names = set(os.listdir(fd))
     if ".workbench" in names and _real_dir_at(".workbench", fd) and _marker_present(fd):
-        raise TargetError("refused: an unfinished install or upgrade is here (.workbench/local/incomplete "
-                          "exists), so this is not an existing project: %s" % resolved)
+        raise UnfinishedMarker(
+            "refused: an unfinished install or upgrade is here (.workbench/local/incomplete "
+            "exists), so this is not an existing project: %s" % resolved)
     if not names:
         return "new-empty"
     git = _lstat_at(".git", fd) if ".git" in names else None
@@ -312,9 +321,32 @@ def open_target(spelling, store_root, home=None):
         if state is None:
             state = _classify(fd, resolved)
         return Target(resolved, state, fd, name, held)
+    except UnfinishedMarker as exc:
+        try:
+            exc.report = _examination(Target(resolved, "existing", fd, name, held), store_root)
+        finally:
+            os.close(fd)
+        raise
     except BaseException:
         os.close(fd)
         raise
+
+
+def _examination(held, store_root):
+    """The lines that describe what a marked project holds; never raises."""
+    try:
+        return unfinished.render(unfinished.examine(projectfs.Writer(held), store_root))
+    except Exception as exc:
+        return ["the marker could not be examined: %s" % display.ascii_text(str(exc))[:200]]
+
+
+def write_refusal(err, exc):
+    """Print a refusal for a ``TargetError`` and return exit code 1. Every command uses this, so
+    the report a marked target carries reads the same everywhere."""
+    err.write("refused: %s\n" % display.clean(str(exc)).replace("refused: ", "", 1))
+    for line in getattr(exc, "report", ()):
+        err.write("  %s\n" % display.clean(line))
+    return 1
 
 
 def _open_held(resolved, info):

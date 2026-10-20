@@ -85,5 +85,7 @@ def report_failure(progress, cause, err, what="install", hint=""):
         err.write("the project's files are written but its guarded store entries are not\n")
     err.write("the %s is unfinished: %s is left in place, so this directory is not "
               "accepted as a project\n" % (what, projectfs.MARKER))
+    err.write("run `wb recover` yourself to see what the project holds and where it is safe to "
+              "clear the marker\n")
     if hint:
         err.write("%s\n" % hint)

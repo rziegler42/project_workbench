@@ -36,11 +36,12 @@ ENDING = preview.ENDING
 LISTED = 40
 RECOVERY = ("a file already replaced no longer matches the manifest, so a second run would call "
             "it edited, and there is no automatic repair: put the files listed as written back "
-            "from version control or a copy, remove the marker yourself, and run the command "
-            "again")
+            "from version control or a copy, then run `wb recover` yourself to clear the marker "
+            "and run the command again")
 RECOVERY_FILES_DONE = ("the project's files and manifest are complete; only the store entry or "
-                       "the marker is left: remove the marker yourself, then run "
-                       "`wb acknowledge` and review what it lists")
+                       "the marker is left: run `wb recover` yourself to see what the project "
+                       "holds and clear the marker, then run `wb acknowledge` and review what "
+                       "it lists")
 MAX_PACKAGE_JSON = 1 << 20
 
 
@@ -270,8 +271,7 @@ def run_preview(guarded, parsed, out, err, distribution=None, version=None,
             text = upgradeplan.render(done["plan"], done["existing"], done["selection"],
                                       held.path, held.identity, approvals=done["approvals"])
     except target.TargetError as exc:
-        err.write("refused: %s\n" % display.clean(str(exc)).replace("refused: ", "", 1))
-        return 1
+        return target.write_refusal(err, exc)
     except preview.Refused as exc:
         for index, line in enumerate(exc.lines):
             err.write(("refused: %s\n" if not line.startswith("  ") or not index else "%s\n")
@@ -316,14 +316,20 @@ class NotStarted(Exception):
     """The marker could not be made, so nothing of the upgrade was written."""
 
 
-def record_of(plan):
+def record_of(guarded, plan):
     """The bytes of the marker for `plan`: what is about to be written, for ``wb recover``.
 
     Built from the plan after its digest is fixed, so it never changes the digest. Raises
     ``unfinished.UnfinishedError`` when the plan cannot be recorded."""
     files = [(w.path, w.op, w.expected if w.op == "replace" else None, w.hash)
              for w in plan.writes]
-    store = [(path, unfinished.sha(data)) for path, data in upgradeplan.store_writes(plan)]
+    store = []
+    for path, data in upgradeplan.store_writes(plan):
+        kind = guarded.kind(path)
+        if kind not in (None, "file"):
+            raise unfinished.UnfinishedError("the store entry %s is a %s, not a file" % (path, kind))
+        store.append((path, unfinished.sha(guarded.read(path)) if kind else None,
+                      unfinished.sha(data)))
     return unfinished.build(plan.mode, manifest.project_id(plan.document["seed"]),
                             plan.document["workbench"], files, plan.dirs, (), store)
 
@@ -435,8 +441,8 @@ def _run(guarded, parsed, stdin, out, err, distribution, version, which, progres
                                   held.identity) != digest:
                 return _refuse(err, "the plan changed while it was shown; nothing was written")
             try:
-                record = record_of(plan)
-            except unfinished.UnfinishedError as exc:
+                record = record_of(guarded, plan)
+            except (unfinished.UnfinishedError, safefs.SafeFsError) as exc:
                 return _refuse(err, "the plan cannot be recorded in the marker (%s); nothing was "
                                     "written" % exc)
             progress.plan = _shown(plan)
@@ -460,7 +466,7 @@ def _run(guarded, parsed, stdin, out, err, distribution, version, which, progres
                 pass
             return 0
     except target.TargetError as exc:
-        return _refuse(err, display.clean(str(exc)).replace("refused: ", "", 1))
+        return target.write_refusal(err, exc)
     except preview.Refused as exc:
         _lines(err, exc)
         return 1

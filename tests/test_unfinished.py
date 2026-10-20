@@ -11,7 +11,7 @@ def good(**changes):
     values = dict(command="install", project=PROJECT, version="0.1.0",
                   files=[("AGENTS.md", "create", None, H1), ("docs/a.md", "replace", H2, H3)],
                   dirs=[".workbench", "docs"], git=installplan.GIT_SKELETON,
-                  store=[("projects/%s/baselines" % PROJECT, H1)])
+                  store=[("projects/%s/baselines" % PROJECT, None, H1)])
     values.update(changes)
     return unfinished.build(**values)
 
@@ -32,7 +32,7 @@ class Build(unittest.TestCase):
         self.assertEqual(
             [unfinished.FileWrite("AGENTS.md", "create", None, H1),
              unfinished.FileWrite("docs/a.md", "replace", H2, H3)], list(record.files))
-        self.assertEqual(unfinished.StoreWrite("projects/%s/baselines" % PROJECT, H1),
+        self.assertEqual(unfinished.StoreWrite("projects/%s/baselines" % PROJECT, None, H1),
                          record.store[0])
 
     def test_the_git_skeleton_is_recorded_with_a_hash_for_each_file_and_none_for_a_directory(self):
@@ -60,7 +60,7 @@ class Build(unittest.TestCase):
                 {"files": [("a", "create", H1, H1)]},
                 {"dirs": [".workbench/local"]}, {"dirs": ["a", "a"]},
                 {"dirs": ["docs"], "files": [("docs", "create", None, H1)]},
-                {"store": [("../x", H1)]}, {"git": [("../x", None)]},
+                {"store": [("../x", None, H1)]}, {"git": [("../x", None)]},
                 {"version": "bad version"}, {"project": "short"}):
             with self.subTest(changes), self.assertRaises(unfinished.UnfinishedError):
                 good(**changes)
@@ -69,6 +69,21 @@ class Build(unittest.TestCase):
         files = [("dir/file-%06d.md" % n, "create", None, H1) for n in range(12000)]
         with self.assertRaises(unfinished.UnfinishedError):
             good(files=files)
+
+
+class Bounds(unittest.TestCase):
+    def test_a_record_with_too_many_entries_is_refused(self):
+        count = unfinished.MAX_ENTRIES + 1
+        with self.assertRaises(unfinished.UnfinishedError):
+            good(dirs=["d%d" % n for n in range(count)], git=[], store=[], files=[])
+        with self.assertRaises(unfinished.UnfinishedError):
+            good(dirs=["d%d" % n for n in range(count // 2 + 1)], git=[], store=[],
+                 files=[("f%d" % n, "create", None, H1) for n in range(count // 2 + 1)])
+
+    def test_the_most_entries_allowed_read_back(self):
+        record = unfinished.parse(good(dirs=["d%d" % n for n in range(unfinished.MAX_ENTRIES - 3)],
+                                       git=[], store=[], files=[("f", "create", None, H1)]))
+        self.assertEqual(unfinished.MAX_ENTRIES - 3, len(record.dirs))
 
 
 class Parse(unittest.TestCase):
@@ -140,10 +155,11 @@ class Parse(unittest.TestCase):
                 {"git": [{"path": "objects", "hash": "bad"}]},
                 {"git": [{"path": "objects", "hash": None}] * 2},
                 {"git": [{"path": "objects"}]}, {"git": ["objects"]},
-                {"store": [{"path": "../x", "after": H1}]},
-                {"store": [{"path": "/x", "after": H1}]},
-                {"store": [{"path": "a", "after": "bad"}]},
-                {"store": [{"path": "a", "after": H1}] * 2}, {"store": [{"path": "a"}]}):
+                {"store": [{"path": "../x", "before": None, "after": H1}]},
+                {"store": [{"path": "/x", "before": None, "after": H1}]},
+                {"store": [{"path": "a", "before": None, "after": "bad"}]},
+                {"store": [{"path": "a", "before": "bad", "after": H1}]},
+                {"store": [{"path": "a", "before": None, "after": H1}] * 2}, {"store": [{"path": "a", "after": H1}]}):
             with self.subTest(changes):
                 self.refused(edited(**changes))
 
@@ -188,7 +204,8 @@ class Parse(unittest.TestCase):
         self.refused(edited(dirs=["a/b"], files=[entry("A")]))
         self.refused(edited(git=[{"path": "HEAD", "hash": None},
                                  {"path": "head", "hash": None}]))
-        self.refused(edited(store=[{"path": "a/B", "after": H1}, {"path": "A/b", "after": H1}]))
+        self.refused(edited(store=[{"path": "a/B", "before": None, "after": H1},
+                                 {"path": "A/b", "before": None, "after": H1}]))
         self.assertTrue(unfinished.parse(edited(dirs=["docs/sub"], files=[entry("docs/a.md")])))
 
 

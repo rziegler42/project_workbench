@@ -100,7 +100,7 @@ def record_of(plan):
     files = [(a.path, "create", None, a.hash) for a in plan.actions
              if a.kind == "create-file" and a.path != installplan.MARKER_PATH]
     dirs = [".workbench"] + [a.path for a in plan.actions if a.kind == "create-dir"]
-    store = [(path, unfinished.sha(data)) for path, data in plan.store_writes]
+    store = [(path, None, unfinished.sha(data)) for path, data in plan.store_writes]
     return unfinished.build("install", plan.project_id, plan.manifest["workbench"], files, dirs,
                             installplan.GIT_SKELETON if plan.git_init else (), store)
 
@@ -198,7 +198,7 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
             _finish(held, progress, out)
             return 0
     except target.TargetError as exc:
-        return _refuse(err, display.clean(str(exc)).replace("refused: ", "", 1))
+        return target.write_refusal(err, exc)
     except preview.Refused as exc:
         for line in exc.lines:
             err.write("refused: %s\n" % display.clean(line))

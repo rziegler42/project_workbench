@@ -16,12 +16,14 @@ version) or does not parse is "no record" and is never trusted.
 import collections
 import hashlib
 import json
+import os
 import re
 import unicodedata
 
-from . import declarations, safefs
+from . import declarations, display, projectfs, safefs, store as store_module
 
 FORMAT = 1
+MAX_ENTRIES = 10000          # files, directories, .git entries and store entries together
 COMMANDS = ("install", "upgrade", "add")
 OPERATIONS = ("create", "replace")
 _LOCAL = (".workbench", "local")
@@ -32,11 +34,11 @@ _WORKBENCH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}\Z")
 TOP_KEYS = ("command", "dirs", "files", "format", "git", "project", "store", "workbench")
 FILE_KEYS = ("after", "before", "op", "path")
 GIT_KEYS = ("hash", "path")
-STORE_KEYS = ("after", "path")
+STORE_KEYS = ("after", "before", "path")
 
 FileWrite = collections.namedtuple("FileWrite", "path op before after")
 GitEntry = collections.namedtuple("GitEntry", "path hash")
-StoreWrite = collections.namedtuple("StoreWrite", "path after")
+StoreWrite = collections.namedtuple("StoreWrite", "path before after")
 Record = collections.namedtuple("Record", "command project workbench dirs files git store")
 
 
@@ -102,6 +104,8 @@ def _git_path(value):
 def _list(value, what):
     if not isinstance(value, list):
         _fail("%s is not a list" % what)
+    if len(value) > MAX_ENTRIES:
+        _fail("%s has more than %d entries" % (what, MAX_ENTRIES))
     return value
 
 
@@ -152,7 +156,8 @@ def _check_store(items):
             safefs.validate_relpath(path)
         except safefs.SafeFsError as exc:
             _fail("a store path: %s" % exc)
-        store.append(StoreWrite(path, _hex(item["after"], "a store hash")))
+        store.append(StoreWrite(path, _hex(item["before"], "a store before hash", allow_none=True),
+                                _hex(item["after"], "a store hash")))
     _unique([s.path for s in store], "store entries")
     return tuple(store)
 
@@ -190,6 +195,8 @@ def check(document):
     record = Record(document["command"], project, version, _check_dirs(document["dirs"]),
                     _check_files(document["files"]), _check_git(document["git"]),
                     _check_store(document["store"]))
+    if len(record.dirs) + len(record.files) + len(record.git) + len(record.store) > MAX_ENTRIES:
+        _fail("the record has more than %d entries" % MAX_ENTRIES)
     _check_overlap(record)
     return record
 
@@ -201,7 +208,7 @@ def _document(record):
                   for f in record.files],
         "git": [{"hash": g.hash, "path": g.path} for g in record.git],
         "project": record.project,
-        "store": [{"after": s.after, "path": s.path} for s in record.store],
+        "store": [{"after": s.after, "before": s.before, "path": s.path} for s in record.store],
         "workbench": record.workbench,
     }
 
@@ -219,7 +226,7 @@ def build(command, project, version, files, dirs=(), git=(), store=()):
 
     `files` are ``(path, op, before, after)``; `dirs` are the paths of directories the plan
     creates; `git` is the skeleton as ``(path, content or None)`` where None is a directory;
-    `store` is ``(path, after hash)``. Raises UnfinishedError when the plan cannot be recorded,
+    `store` is ``(path, before hash or None, after hash)``; None means the entry is not there yet. Raises UnfinishedError when the plan cannot be recorded,
     which includes a record the reader would refuse (too large, a bad path); the caller then
     writes nothing.
     """
@@ -250,3 +257,205 @@ def parse(data):
     if _serialize(record) != data:
         _fail("the marker is not in its canonical form")
     return record
+
+
+# --- examining -------------------------------------------------------------------
+
+BUDGET = 256 * 1024 * 1024       # bytes read in one examination; beyond it a path is not read
+MAX_LISTED = 500
+
+# `kind` is "file", "dir", "git" or "store"; `state` is before/after/other for a file,
+# absent/empty/holds/other for a directory, absent/after/other for a .git entry, before/after/other
+# for a store entry (before: absent for an install, the old baselines for an upgrade or add).
+Item = collections.namedtuple("Item", "kind path state detail")
+# `record` is None when the marker has no usable record, and `problem` says why. `files` is
+# "before", "after" or "mixed" and `store` is "none", "all" or "partial"; both None without a record.
+Examination = collections.namedtuple("Examination", "record problem items files store")
+
+
+def _no_record(problem):
+    return Examination(None, problem, (), None, None)
+
+
+def _file_item(writer, entry, spent):
+    if spent[0] > BUDGET:
+        return Item("file", entry.path, "other", "not read: the examination's read budget is spent")
+    try:
+        state = writer.read_file(entry.path)
+    except (safefs.SafeFsError, OSError) as exc:
+        return Item("file", entry.path, "other", _short(exc))
+    if state is None:
+        return Item("file", entry.path, "before" if entry.op == "create" else "other",
+                    "" if entry.op == "create" else "missing; it was to be replaced")
+    spent[0] += len(state.data)
+    if state.hash == entry.after:
+        return Item("file", entry.path, "after", "")
+    if entry.op == "replace" and state.hash == entry.before:
+        return Item("file", entry.path, "before", "")
+    return Item("file", entry.path, "other", "holds other content")
+
+
+def _children(dirs):
+    """{directory: names of the recorded directories directly below it}, in one pass."""
+    found = collections.defaultdict(set)
+    for directory in dirs:
+        parent, _, name = directory.rpartition("/")
+        found[parent].add(name)
+    return found
+
+
+def _dir_item(writer, path, children):
+    """A recorded directory holds something when it has an entry that is neither the local
+    directory of the marker nor another recorded directory (that one has its own item)."""
+    ignore = set(children.get(path, ()))
+    if path == ".workbench":
+        ignore.add("local")
+    try:
+        holds = writer.dir_holds(path, ignore=ignore)
+    except (safefs.SafeFsError, OSError) as exc:
+        return Item("dir", path, "other", _short(exc))
+    return Item("dir", path, "absent" if holds is None else "holds" if holds else "empty", "")
+
+
+def _git_item(writer, entry):
+    try:
+        found = writer.git_entry(entry.path)
+    except (safefs.SafeFsError, OSError) as exc:
+        return Item("git", ".git/" + entry.path, "other", _short(exc))
+    shown = ".git/" + entry.path
+    if found is None:
+        return Item("git", shown, "absent", "")
+    kind, got = found
+    if (kind == "dir") == (entry.hash is None) and got == entry.hash:
+        return Item("git", shown, "after", "")
+    return Item("git", shown, "other", "is not what the workbench wrote")
+
+
+def _git_state(writer, record, items):
+    """"before", "after", "other", or None when the plan made no .git."""
+    if not record.git:
+        return None
+    try:
+        top = writer.git_entry("")
+    except (safefs.SafeFsError, OSError) as exc:
+        items.append(Item("git", ".git", "other", _short(exc)))
+        return "other"
+    states = {item.state for item in items if item.kind == "git"}
+    if top is None and states == {"absent"}:
+        return "before"
+    if top == ("dir", None) and states == {"after"}:
+        return "after"
+    items.append(Item("git", ".git", "other", "is not a directory" if top not in (
+        None, ("dir", None)) else "is only partly written"))
+    return "other"
+
+
+def _store_item(tree, entry, spent):
+    if spent[0] > BUDGET:
+        return Item("store", entry.path, "other", "not read: the examination's read budget is spent")
+    try:
+        kind = tree.kind(entry.path) if os.path.lexists(tree.root) else None
+        if kind is None:
+            return Item("store", entry.path, "before" if entry.before is None else "other",
+                        "" if entry.before is None else "missing; it held the old baselines")
+        if kind != "file":
+            return Item("store", entry.path, "other", "is not a file")
+        data = tree.read(entry.path)
+    except (safefs.SafeFsError, store_module.StoreError, OSError) as exc:
+        return Item("store", entry.path, "other", _short(exc))
+    spent[0] += len(data)
+    if sha(data) == entry.after:
+        return Item("store", entry.path, "after", "")
+    if entry.before is not None and sha(data) == entry.before:
+        return Item("store", entry.path, "before", "")
+    return Item("store", entry.path, "other", "holds other content")
+
+
+def _short(exc):
+    return display.ascii_text(str(exc))[:200]
+
+
+def _summary_files(record, items, git):
+    files = [i.state for i in items if i.kind == "file"]
+    dirs = [i.state for i in items if i.kind == "dir"]
+    if "other" in dirs or not files:
+        return "mixed"
+    # A complete .git skeleton with no file written is a lone .git, which install accepts.
+    if all(s == "before" for s in files) and git != "other" \
+            and not any(s == "holds" for s in dirs):
+        return "before"
+    if all(s == "after" for s in files) and git in (None, "after"):
+        return "after"
+    return "mixed"
+
+
+def examine(writer, store_root):
+    """Read the marker's record and say what the project and the guarded store hold now.
+
+    Read-only and bounded: every project path is read through no-follow descriptors, a
+    regular file at a time, with a cumulative byte budget; the store is read through its own
+    reader. Nothing in the project or the store is changed. A marker that has no usable record
+    gives an ``Examination`` with ``record`` None and the reason.
+    """
+    try:
+        held = writer.read_file(projectfs.MARKER)
+    except (safefs.SafeFsError, OSError) as exc:
+        return _no_record("the marker cannot be read: %s" % _short(exc))
+    if held is None:
+        return _no_record("the marker is not there")
+    try:
+        record = parse(held.data)
+    except UnfinishedError as exc:
+        return _no_record(display.ascii_text(str(exc))[:200])
+    spent = [0]
+    items = [_file_item(writer, entry, spent) for entry in record.files]
+    children = _children(record.dirs)
+    items += [_dir_item(writer, path, children) for path in record.dirs]
+    items += [_git_item(writer, entry) for entry in record.git]
+    git = _git_state(writer, record, items)
+    tree = store_module.Tree(store_root)
+    items += [_store_item(tree, entry, spent) for entry in record.store]
+    stored = [i.state for i in items if i.kind == "store"]
+    if not stored:
+        store_summary = "partial"      # a record that names no store write is not one to trust
+    elif all(s == "before" for s in stored):
+        store_summary = "none"
+    elif all(s == "after" for s in stored):
+        store_summary = "all"
+    else:
+        store_summary = "partial"
+    return Examination(record, "", tuple(items), _summary_files(record, items, git), store_summary)
+
+
+def render(found):
+    """The examination as lines of ASCII text for a person to read (not printed with a prefix)."""
+    if found.record is None:
+        return ["the marker has no usable record (%s)" % found.problem,
+                "restore any files the failed command wrote from version control or a copy and "
+                "remove the marker yourself; `wb recover` needs a record and cannot help"]
+    record = found.record
+    project = record.project[:12] if record.project else "unknown"
+    count = collections.Counter((i.kind, i.state) for i in found.items)
+    lines = [
+        "the marker records an unfinished %s (workbench %s, project %s); the record is "
+        "unauthenticated text" % (record.command, display.ascii_text(record.workbench), project),
+        "the project holds: files %s (%d before, %d after, %d other), store %s (%d of %d "
+        "written)" % (found.files, count[("file", "before")], count[("file", "after")],
+                      count[("file", "other")], found.store, count[("store", "after")],
+                      len(record.store)),
+    ]
+    shown = []
+    for item in found.items:
+        if item.state == "other" or (item.state == "holds" and found.files != "after") or (
+                found.files == "mixed" and item.kind in ("file", "git") and item.state == "after"):
+            shown.append("  %s %s%s" % (
+                "written" if item.state == "after" else item.state,
+                display.ascii_text(item.path)[:160],
+                " (%s)" % item.detail if item.detail else ""))
+    if shown:
+        lines.append("to deal with before `wb recover` can clear it:")
+        lines += shown[:MAX_LISTED]
+        if len(shown) > MAX_LISTED:
+            lines.append("  and %d more" % (len(shown) - MAX_LISTED))
+    lines.append("run `wb recover` yourself to clear the marker where this is safe")
+    return lines

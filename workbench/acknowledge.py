@@ -226,7 +226,7 @@ def _run(guarded, spelling, stdin, out, err, version):
                       % display.clean(line))
         return 1
     except target.TargetError as exc:
-        return _refuse(err, display.clean(str(exc)).replace("refused: ", "", 1))
+        return target.write_refusal(err, exc)
     except safefs.SafeFsError as exc:
         return _refuse(err, str(exc))
 

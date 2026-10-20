@@ -84,8 +84,7 @@ def run(guarded, parsed, out, err, distribution=None, seed=None, version=None,
                                      seed or manifest.new_seed(), version or __version__, which)
             text = installplan.render(plan, held.path)
     except target.TargetError as exc:
-        err.write("refused: %s\n" % display.clean(str(exc)).replace("refused: ", "", 1))
-        return 1
+        return target.write_refusal(err, exc)
     except Refused as exc:
         for line in exc.lines:
             err.write("refused: %s\n" % display.clean(line))
