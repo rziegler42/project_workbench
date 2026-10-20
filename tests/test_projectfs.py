@@ -45,6 +45,22 @@ class WriterTest(unittest.TestCase):
         self.assertEqual(b"hello", self.read("docs/a.md"))
         self.assertEqual(["docs/", "docs/a.md", "b.txt"], writer.written)
 
+    def test_create_git_makes_the_skeleton_and_refuses_any_existing_git(self):
+        skeleton = (("objects", None), ("objects/pack", None), ("HEAD", b"ref: x\n"))
+        writer = self.writer()
+        writer.create_git(skeleton)
+        self.assertEqual([".git/"], writer.written)
+        self.assertEqual(b"ref: x\n", self.read(".git/HEAD"))
+        self.assertTrue(os.path.isdir(os.path.join(self.root, ".git", "objects", "pack")))
+        with self.assertRaises(WriteConflict):
+            writer.create_git(skeleton)
+
+    def test_create_git_does_not_follow_a_planted_link(self):
+        os.symlink(self.outside, os.path.join(self.root, ".git"))
+        with self.assertRaises(WriteConflict):
+            self.writer().create_git((("HEAD", b"x"),))
+        self.assertEqual([], os.listdir(self.outside))
+
     def test_existing_file_is_a_conflict_not_overwritten(self):
         with open(os.path.join(self.root, "a"), "wb") as handle:
             handle.write(b"keep")

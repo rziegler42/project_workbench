@@ -8,8 +8,8 @@ import argparse
 import os
 import sys
 
-from . import (approve, display, firstparty, launch, pins, preview, safefs, settings, sources,
-               store, target, verify)
+from . import (approve, display, firstparty, install, launch, pins, preview, safefs, settings,
+               sources, store, target, verify)
 
 PROG = "python3 -m workbench"
 USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
@@ -21,6 +21,7 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench release-approvals\n"
          "       python3 -m workbench preview install [<target> | --dir <path>] --package <source> [--ref <ref>] ...\n"
          "                                            [--package ...] --select <module> ...   (read-only)\n"
+         "       python3 -m workbench install <same arguments as preview install>   (owner-run, terminal only)\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
 
@@ -113,14 +114,14 @@ def _open_store(store_root, err):
         return None
 
 
-def _preview(argv, out, err, store_root, distribution):
+def _project_command(tokens, out, err, store_root, distribution):
+    """Parse and open for ``preview install`` and ``install``: ``(command, guarded)`` or an exit
+    code."""
     try:
-        if len(argv) < 2 or argv[1] != "install":
-            raise _Usage("preview takes install (upgrade and add are not built yet)")
-        parsed = sources.parse_install(argv[2:])
+        parsed = sources.parse_install(tokens)
         command = sources.Command(target.choose(parsed.positional, parsed.dir_option),
                                   parsed.packages, parsed.select)
-    except (_Usage, sources.UsageError, target.TargetUsage) as exc:
+    except (sources.UsageError, target.TargetUsage) as exc:
         err.write("%s\n%s" % (_clean(str(exc)), USAGE))
         return 2
     opened = _open_store(store_root, err)
@@ -130,7 +131,25 @@ def _preview(argv, out, err, store_root, distribution):
     notes += launch.install_wrapper(guarded, distribution or firstparty.default_distribution())
     for note in notes:
         err.write("warning: %s\n" % _clean(note))
-    return preview.run(guarded, command, out, err, distribution)
+    return command, guarded
+
+
+def _preview(argv, out, err, store_root, distribution):
+    if len(argv) < 2 or argv[1] != "install":
+        err.write("preview takes install (upgrade and add are not built yet)\n%s" % USAGE)
+        return 2
+    opened = _project_command(argv[2:], out, err, store_root, distribution)
+    if isinstance(opened, int):
+        return opened
+    return preview.run(opened[1], opened[0], out, err, distribution)
+
+
+def _install(tokens, out, err, store_root, distribution, stdin):
+    opened = _project_command(tokens, out, err, store_root, distribution)
+    if isinstance(opened, int):
+        return opened
+    return install.run(opened[1], opened[0], stdin if stdin is not None else sys.stdin, out, err,
+                       distribution)
 
 
 def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=None):
@@ -150,6 +169,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         argv, passthrough = argv[:split], argv[split + 1:]
     if argv and argv[0] == "preview":
         return _preview(argv, out, err, store_root, distribution)
+    if argv and argv[0] == "install":
+        return _install(argv[1:], out, err, store_root, distribution, stdin)
     try:
         args = _parser().parse_args(argv)
         if args.command == "launch":

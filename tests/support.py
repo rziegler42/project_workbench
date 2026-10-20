@@ -37,7 +37,8 @@ def drive_pty(case, command, env, cwd, answer=None, prompt=b"> ", between=None,
     """Run `command` in a child whose terminals are real pseudo-terminals and type `answer`.
 
     Returns ``(exit code, terminal output, standard error)``. `between` runs once the prompt
-    has appeared and before the answer is typed.
+    has appeared and before the answer is typed. `answer` may be a function of the terminal
+    output so far, for a text the child prints.
     """
     import os
     import pty
@@ -71,7 +72,8 @@ def drive_pty(case, command, env, cwd, answer=None, prompt=b"> ", between=None,
                 sent = True
                 if between:
                     between()
-                os.write(master, (answer + "\n").encode())
+                typed = answer(output.decode("utf-8", "replace")) if callable(answer) else answer
+                os.write(master, (typed + "\n").encode())
         else:
             proc.kill()
             case.fail("the command did not finish: %r" % output[-300:])

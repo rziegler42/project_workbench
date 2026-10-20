@@ -105,6 +105,8 @@ def normalize_source(source):
                                  % display.ascii_text(scheme)[:20])
             if scheme == "https" and (parts.username is not None or parts.password is not None):
                 raise FetchError("an https source may not carry credentials in the URL")
+            if scheme == "ssh" and re.search(r"[?#]", source.partition("://")[2].partition("/")[0]):
+                raise FetchError("an ssh source may not hold ? or # before its path")
             if scheme != "file" and not parts.hostname:
                 raise FetchError("the source has no host")
             if parts.hostname and (parts.hostname.startswith("-") or not parts.hostname.isascii()):
@@ -205,14 +207,16 @@ def read_objects(output, entries):
 # --- running git ----------------------------------------------------------------
 
 
-def _git_executable():
+def git_executable():
     found = shutil.which("git")
     if not found:
         raise FetchError("git is not installed or not on PATH")
-    return found
+    # A relative PATH entry must not make the program depend on the directory it is run in.
+    return os.path.abspath(found)
 
 
-def _environment():
+def git_environment():
+    """The scrubbed environment every git command of the workbench runs in."""
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     env.update({
         "GIT_TERMINAL_PROMPT": "0",
@@ -313,7 +317,7 @@ def fetch(store, source, ref="HEAD", *, now=None):
     """
     url = normalize_source(source)
     check_ref(ref)
-    git, env = _git_executable(), _environment()
+    git, env = git_executable(), git_environment()
     try:
         workdir = tempfile.mkdtemp(prefix="workbench-fetch-")
     except OSError as exc:

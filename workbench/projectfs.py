@@ -13,7 +13,8 @@ Limits, recorded on purpose:
   part-way is listed too, since it exists.
 * A process killed mid-write can leave a part-written file. The install marker
   (``.workbench/local/incomplete``) is how a later command finds that directory.
-* A created directory is made with the mode the process umask gives.
+* A created directory is made with mode 0755 and a file with 0644 (0755 when executable), both
+  reduced by the process umask and never widened by it.
 """
 
 import errno
@@ -54,7 +55,7 @@ class Writer:
             raise safefs.SafeFsError("the target already exists: %s" % held.path)
         held.recheck()
         try:
-            os.mkdir(held.name, 0o777, dir_fd=held.fd)
+            os.mkdir(held.name, 0o755, dir_fd=held.fd)
         except FileExistsError:
             raise WriteConflict("the target appeared: %s" % held.path)
         except OSError as exc:
@@ -97,7 +98,7 @@ class Writer:
                 raise WriteConflict("a link or a file is in the way: %s" % shown)
             raise _os_error("open", shown, exc)
         try:
-            os.mkdir(name, 0o777, dir_fd=dirfd)
+            os.mkdir(name, 0o755, dir_fd=dirfd)
             self.written.append(record_prefix + "/")
         except FileExistsError:
             pass
@@ -147,7 +148,7 @@ class Writer:
             safefs._fire("projectfs_walked", root=self.target.path, rel=rel)
             try:
                 fd = os.open(parts[-1], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-                             0o666, dir_fd=dirfd)
+                             0o644, dir_fd=dirfd)
             except FileExistsError:
                 raise WriteConflict("the path already exists: %s" % shown)
             except OSError as exc:
@@ -169,6 +170,54 @@ class Writer:
         finally:
             for each in fds:
                 os.close(each)
+
+    def create_git(self, skeleton):
+        """Create an empty ``.git`` from `skeleton`, a sequence of ``(path, content or None)``
+        where None is a directory, parents first.
+
+        ``.git`` is made with ``mkdir``, which refuses an existing path of any kind (a link
+        included), and everything below it is made through descriptors held from that
+        directory, so nothing here resolves a path and no program is run.
+        """
+        top = self._live_fd()
+        try:
+            os.mkdir(".git", 0o755, dir_fd=top)
+        except FileExistsError:
+            raise WriteConflict(".git already exists: %s" % self._shown(".git"))
+        except OSError as exc:
+            raise _os_error("create", self._shown(".git"), exc)
+        self.written.append(".git/")
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        held = {}
+        try:
+            try:
+                held[""] = os.open(".git", flags, dir_fd=top)
+            except OSError as exc:
+                raise WriteConflict("the new .git cannot be opened: %s" % (exc.strerror or exc))
+            for rel, data in skeleton:
+                parent, _, name = rel.rpartition("/")
+                shown = self._shown(".git/" + rel)
+                try:
+                    if data is None:
+                        os.mkdir(name, 0o755, dir_fd=held[parent])
+                        held[rel] = os.open(name, flags, dir_fd=held[parent])
+                        continue
+                    fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                 0o644, dir_fd=held[parent])
+                except OSError as exc:
+                    raise _os_error("create", shown, exc)
+                try:
+                    view = memoryview(data)
+                    while view:
+                        view = view[os.write(fd, view):]
+                    os.fsync(fd)
+                except OSError as exc:
+                    raise _os_error("write", shown, exc)
+                finally:
+                    os.close(fd)
+        finally:
+            for fd in held.values():
+                os.close(fd)
 
     def remove_marker(self):
         """Unlink ``.workbench/local/incomplete`` and nothing else."""

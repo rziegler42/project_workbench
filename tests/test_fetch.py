@@ -738,5 +738,29 @@ class GitInvocationTest(Base):
         self.nothing_left()
 
 
+class FindingsTest(unittest.TestCase):
+    def test_git_is_found_by_an_absolute_path_even_from_a_relative_path_entry(self):
+        with tempfile.TemporaryDirectory() as holder:
+            os.mkdir(os.path.join(holder, "bin"))
+            tool = os.path.join(holder, "bin", "git")
+            with open(tool, "w") as handle:
+                handle.write("#!/bin/sh\n")
+            os.chmod(tool, 0o755)
+            old = os.getcwd()
+            os.chdir(holder)
+            try:
+                with unittest.mock.patch.dict(os.environ, {"PATH": "bin"}):
+                    found = fetch.git_executable()
+            finally:
+                os.chdir(old)
+            self.assertTrue(os.path.isabs(found))
+
+    def test_an_ssh_source_with_a_hash_or_query_in_its_authority_is_refused(self):
+        for source in ("ssh://u:p#w@host/repo", "ssh://u:p?w@host/repo", "ssh://host?x/repo"):
+            with self.subTest(source=source):
+                with self.assertRaises(fetch.FetchError):
+                    fetch.normalize_source(source)
+
+
 if __name__ == "__main__":
     unittest.main()

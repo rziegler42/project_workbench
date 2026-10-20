@@ -3,6 +3,7 @@ import json
 import os
 import tempfile
 import unittest
+import unittest.mock
 
 from workbench import base, installplan, manifest, snapshot, target, verify
 from workbench.installplan import PlanError
@@ -333,6 +334,34 @@ class PlanTest(unittest.TestCase):
     def test_public_source(self):
         self.assertEqual("https://h.test/a/b", installplan.public_source("https://u:p@h.test/a/b?q=1#f"))
         self.assertEqual("/local/dir", installplan.public_source("/local/dir"))
+
+    def test_the_skeleton_is_bound_by_the_digest_and_shown(self):
+        plan = self.plan({"h": (HARNESS, {})}, ["h"])
+        (action,) = [a for a in plan.actions if a.kind == "git-init"]
+        self.assertEqual(installplan.GIT_DETAIL, action.detail)
+        self.assertEqual(installplan._skeleton_hash(), action.hash)
+        self.assertIn("git: creates an empty repository", installplan.render(plan, "/t"))
+        self.assertNotIn("git init", installplan.render(plan, "/t"))
+        with unittest.mock.patch.object(installplan, "GIT_SKELETON",
+                                        installplan.GIT_SKELETON[:-1] + (("config", b"x"),)):
+            other = self.plan({"h": (HARNESS, {})}, ["h"])
+        self.assertNotEqual(plan.digest, other.digest)
+
+
+class PublicSourceTest(unittest.TestCase):
+    def test_credentials_query_and_fragment_are_removed_whatever_they_hold(self):
+        for source, expected in (
+                ("https://user:pw@example.test/p.git?token=1#frag", "https://example.test/p.git"),
+                ("ssh://u:p#w@host/repo", "ssh://host/repo"),
+                ("ssh://u:p?w@host:22/repo?x=a@b", "ssh://host:22/repo"),
+                ("file:///srv/p.git", "file:///srv/p.git"),
+                ("https://host?x=1", "https://host"),
+                ("/plain/path", "/plain/path")):
+            with self.subTest(source=source):
+                shown = installplan.public_source(source)
+                self.assertEqual(expected, shown)
+                for secret in ("pw", "u:p", "token"):
+                    self.assertNotIn(secret, shown)
 
 
 if __name__ == "__main__":

@@ -5,9 +5,10 @@ same inputs, so what an agent previews is what the owner is shown and what is wr
 here touches the disk, the network, git or the store.
 
 The plan holds, in the order they are carried out: making a missing target, the install marker
-``.workbench/local/incomplete``, ``git init`` (when the target has no ``.git``), the remaining
-directories, then every file. The marker comes before ``git init`` so a failure in git is found
-by the marker. The files are the base (with the blocks modules fill into its slots), each
+``.workbench/local/incomplete``, the empty ``.git`` (when the target has none), the remaining
+directories, then every file. The workbench writes the ``.git`` skeleton itself and never runs
+git, so no program resolves a path inside the target; the marker still comes first so a failure
+part-way is found by it. The files are the base (with the blocks modules fill into its slots), each
 non-harness module's namespace copy, the files a module ``writes``, ``.workbench/.gitignore`` and
 the committed manifest. A harness module is verified and approved but writes nothing and is not
 in the manifest.
@@ -23,7 +24,7 @@ never encode alike.
 import collections
 import hashlib
 import json
-import urllib.parse
+import re
 
 from . import base as base_module
 from . import display, manifest, safefs
@@ -37,7 +38,15 @@ Plan = collections.namedtuple(
             "git_init digest")
 
 MARKER_PATH = ".workbench/local/incomplete"
-GIT_DETAIL = "git init --initial-branch=main"
+GIT_DETAIL = "an empty repository on branch main, written by the workbench; git is not run"
+# What ``git init --template=`` leaves, in the order it is created: a directory has no content.
+GIT_SKELETON = (
+    ("objects", None), ("objects/info", None), ("objects/pack", None), ("refs", None),
+    ("refs/heads", None), ("refs/tags", None),
+    ("HEAD", b"ref: refs/heads/main\n"),
+    ("config", b"[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n"
+               b"\tbare = false\n\tlogallrefupdates = true\n"),
+)
 BASE_ORIGIN = "the base"
 
 
@@ -46,12 +55,18 @@ class PlanError(Exception):
 
 
 def public_source(source):
-    """A source with any user name, password, query and fragment removed."""
-    parts = urllib.parse.urlsplit(source)
-    if not parts.scheme or not parts.netloc:
+    """A source with any user name, password, query and fragment removed.
+
+    The authority is everything up to the first ``/``, as git reads it, so a ``#`` or ``?`` inside
+    the user information cannot hide the rest of it.
+    """
+    scheme, found, rest = source.partition("://")
+    if not found or not scheme:
         return source
-    host = parts.netloc.rsplit("@", 1)[-1]
-    return urllib.parse.urlunsplit((parts.scheme, host, parts.path, "", ""))
+    authority, slash, path = rest.partition("/")
+    host = re.split(r"[?#]", authority.rsplit("@", 1)[-1])[0]
+    path = re.split(r"[?#]", path)[0]
+    return "%s://%s%s%s" % (scheme, host, slash, path)
 
 
 def _sha(data):
@@ -260,7 +275,8 @@ def build(target, selection, snapshots, base, seed, workbench_version):
         actions.append(Action("make-target", ".", "scratch", "-", 0, "", "", None))
     actions.append(_file_action(MARKER_PATH, b"", "scratch", False, "install marker"))
     if git_init:
-        actions.append(Action("git-init", ".git", "scratch", "-", 0, "", GIT_DETAIL, None))
+        actions.append(Action("git-init", ".git", "scratch", "-", _skeleton_size(),
+                              _skeleton_hash(), GIT_DETAIL, None))
     made = {".workbench", ".workbench/local"}
     for directory in sorted({"/".join(p.split("/")[:n]) for p in files.order
                              for n in range(1, len(p.split("/")))} - made):
@@ -297,6 +313,15 @@ def build(target, selection, snapshots, base, seed, workbench_version):
     }
     return Plan(target.identity, target.state, tuple(actions), modules, document, seed,
                 project, store_writes, git_init, digest_of(fields))
+
+
+def _skeleton_size():
+    return sum(len(data) for _, data in GIT_SKELETON if data is not None)
+
+
+def _skeleton_hash():
+    return _sha(_json([[path, None if data is None else _sha(data)]
+                       for path, data in GIT_SKELETON]).encode("ascii"))
 
 
 def _file_action(path, data, owner_class, executable, detail):
@@ -343,7 +368,7 @@ def render(plan, target_path, show_digest=False):
     for path, data in plan.store_writes:
         lines.append("  write %s sha256 %s" % (path, _sha(data)))
     if plan.git_init:
-        lines.append("git: runs %s" % GIT_DETAIL)
+        lines.append("git: creates %s" % GIT_DETAIL)
     else:
         lines.append("git: an existing .git is used as it is; no remote is recorded")
     lines.append("harness: not attached (attach is not built yet)")

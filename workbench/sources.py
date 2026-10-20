@@ -108,7 +108,7 @@ def _is_url(source):
     return "://" in source
 
 
-def _local_package(source):
+def local_package(source):
     if _is_url(source):
         return None
     absolute = os.path.abspath(source)
@@ -150,7 +150,7 @@ def resolve_cached(store, source, ref):
 
     Returns a ``Resolved``. Raises ``SourceError`` for a source that is not usable and names it.
     """
-    local = _local_package(source)
+    local = local_package(source)
     if local is not None:
         if ref is not None:
             raise SourceError("a --ref cannot apply to the local package directory %s"

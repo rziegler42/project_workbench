@@ -157,6 +157,21 @@ class UsageTest(CliBase):
                 self.assertEqual((code, out), (2, ""))
                 self.assertIn("usage:", err)
 
+    def test_install_usage_is_listed_and_bad_forms_exit_2(self):
+        for argv in (["install"], ["install", "--select", "a"], ["install", "x", "y", "--package",
+                                                                  "p", "--select", "h"]):
+            with self.subTest(argv=argv):
+                code, out, err = run(*argv)
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn("python3 -m workbench install", err)
+
+    def test_install_without_a_terminal_refuses_and_names_preview(self):
+        code, out, err = run("install", os.path.join(self.base, "x"), "--package", self.path,
+                             "--select", "a")
+        self.assertEqual((code, out), (1, ""))
+        self.assertIn("refused: install is owner-run", err)
+        self.assertFalse(os.path.exists(os.path.join(self.base, "x")))
+
     def test_two_different_paths_are_refused(self):
         code, _, err = run("verify", self.path, "--dir", os.path.join(self.base, "other"))
         self.assertEqual(code, 2)
