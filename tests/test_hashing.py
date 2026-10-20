@@ -190,3 +190,23 @@ class TreeHashTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TreeHashOfTest(unittest.TestCase):
+    def test_tree_hash_of_matches_hash_tree(self):
+        with tempfile.TemporaryDirectory() as holder:
+            root = make_tree(os.path.join(os.path.realpath(holder), "t"))
+            info = hashing.hash_tree(root, "module", keep=lambda rel: True)
+            self.assertEqual(info.hash,
+                             hashing.tree_hash_of(info.contents, set(info.executable)))
+            self.assertEqual(TREE_HASH, hashing.tree_hash_of(info.contents, {"bin/run.sh"}))
+            self.assertEqual(TREE_HASH_NO_EXEC, hashing.tree_hash_of(info.contents, set()))
+
+    def test_tree_hash_of_empty_and_refusals(self):
+        self.assertEqual(EMPTY_TREE_HASH, hashing.tree_hash_of({}, ()))
+        with self.assertRaises(hashing.HashError):
+            hashing.tree_hash_of({"a": b"x"}, {"b"})
+        with self.assertRaises(hashing.HashError):
+            hashing.tree_hash_of({"a": "text"}, ())
+        with self.assertRaises(safefs.SafeFsError):
+            hashing.tree_hash_of({"../a": b"x"}, ())

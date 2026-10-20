@@ -126,11 +126,32 @@ def hash_tree(root_path, what="module", keep=None):
             records.append((entry.rel.encode("utf-8"),
                             hashlib.sha256(data).hexdigest(),
                             "x" if entry.executable else "-"))
-    records.sort()
+    return TreeInfo(_digest(records), sorted(files), sorted(dirs), contents, sorted(executable))
+
+
+def _digest(records):
     digest = hashlib.sha256()
-    for path, content, flag in records:
+    for path, content, flag in sorted(records):
         digest.update(content.encode("ascii") + b" " + flag.encode("ascii") + b" " + path + b"\n")
-    return TreeInfo(digest.hexdigest(), sorted(files), sorted(dirs), contents, sorted(executable))
+    return digest.hexdigest()
+
+
+def tree_hash_of(files, executable=()):
+    """The tree hash of an in-memory tree: ``{relative path: bytes}`` and the paths that
+    have the execute bit. It is the same rule as ``hash_tree``, so a tree read once and held
+    in memory hashes to the value a walk of the directory gave."""
+    executable = set(executable)
+    if not executable <= set(files):
+        raise HashError("executable names a file that is not in the tree: %s"
+                        % sorted(executable - set(files))[0])
+    records = []
+    for rel, data in files.items():
+        safefs.validate_relpath(rel)
+        if not isinstance(data, bytes):
+            raise HashError("content is not bytes: %s" % rel)
+        records.append((rel.encode("utf-8"), hashlib.sha256(data).hexdigest(),
+                        "x" if rel in executable else "-"))
+    return _digest(records)
 
 
 def tree_hash(root_path, what="module"):
