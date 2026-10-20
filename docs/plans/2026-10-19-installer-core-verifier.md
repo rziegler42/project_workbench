@@ -437,9 +437,19 @@ The edits made after round 3 have not been re-reviewed. The plan stays `Approved
 ## Result
 
 In progress. Increments A to E are committed (`89d64c6`, `3f6b6ec`, `2b53cd0`,
-`92fe5fa`, `eab70b6`) and the review fixes for E follow them. The full suite passes
-(165 tests, `python3 -m unittest discover -s tests`). Increments B and E had a security
-review whose findings were fixed with tests; C and D had no independent review yet.
+`92fe5fa`, `eab70b6`) and the review fixes for E follow them (`beaf221`). Increment F
+(`workbench/verify.py`, `tests/test_verify.py`) is implemented and not yet committed or
+reviewed. The full suite passes (212 tests, `python3 -m unittest discover -s tests`).
+Increments B and E had a security review whose findings were fixed with tests; C, D and F
+had no independent review yet.
+
+Calls made in F, for the owner to confirm in Increment H: a module is never its own
+provider, so requiring its own capability is unmet; a slot fill counts as a soft
+requirement for install order; a refused result carries no hashes and no order; set
+checks are skipped (with a warning) when any package or module was refused; a selected
+module is named `<module>` or `<package>/<module>`; a cycle is detected across groups
+as well as within one; a base-owned slot is not known yet, so a fill with no selected
+owner warns.
 
 Calls made in D and E that the owner has not yet confirmed, to be written into the spec
 in Increment H: a `writes` path may enter `.workbench/` only under the module's own
@@ -449,4 +459,4 @@ slot names and `provides` may not list `slot:` entries; `fills` takes `slot:<nam
 dotted sub-names are refused; harness item naming is `<kind>/<name>` as the
 `modulefiles` docstring states; an empty directory in `ships` is refused.
 
-Next: Increment F (set verification and the all-or-nothing result).
+Next: commit Increment F when the owner asks, then Increment G (the verify command).
