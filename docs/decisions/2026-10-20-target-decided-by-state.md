@@ -1,6 +1,6 @@
 # A project target is decided by the directory's state, from files and without git
 
-Status: Proposed
+Status: Accepted
 Date: 2026-10-20
 
 ## Context

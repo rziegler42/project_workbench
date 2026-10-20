@@ -1,6 +1,6 @@
 # A project write is previewed read-only and then written by an owner-run command
 
-Status: Proposed
+Status: Accepted
 Date: 2026-10-20
 
 ## Context
@@ -15,7 +15,9 @@ command.
 ## Decision
 
 - `wb preview install|upgrade|add` is read-only and may be run by an agent. It prints the preview
-  and no token to type.
+  and no token to type. It contacts no network and writes nothing, not even a cache directory:
+  it reads only trees that `approve` has already cached, so an agent cannot make the workbench
+  contact an address it chose.
 - `wb install`, `wb upgrade` and `wb add` write, are owner-run and terminal-only, and are denied to
   an agent by the harness, as are `attach`, `approve`, `pin` and `release-approvals`.
 - A write command computes the preview in its own process, shows it, and asks for the first 12
@@ -38,7 +40,8 @@ command.
 
 - The harness modules must render a `deny` for the seven owner-run commands. That requirement is
   in `trust-and-approval.md`, "Rendering rules", and no harness renders it yet.
-- An agent can still tell the owner what a write would do, by running `preview`.
+- An agent can still tell the owner what a write would do, by running `preview`, but only for
+  modules the owner has already approved, because `preview` never fetches.
 
 ## Verification
 

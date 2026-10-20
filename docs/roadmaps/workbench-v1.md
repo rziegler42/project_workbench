@@ -60,7 +60,7 @@ meet here and the order matters.
 - Seven specifications are approved by the owner (2026-10-19) and read `Current`:
   `terms`, `module-contract`, `repository-boundary`, `trust-and-approval`,
   `groundwork`, `code-work` and `harness-modules`.
-- Twelve decision records were accepted on 2026-10-19 and three more on 2026-10-20, listed under
+- Twelve decision records were accepted on 2026-10-19 and five more on 2026-10-20, listed under
   Related decisions.
 - `installer-core-verifier` is built and its language decision is accepted
   (`2026-10-19-implementation-language`, 2026-10-19): a Python 3
@@ -335,3 +335,5 @@ Accepted 2026-10-20:
 - `2026-10-20-fixed-store-location`
 - `2026-10-20-first-party-by-location-and-shipped-record`
 - `2026-10-20-isolated-launcher-invocation`
+- `2026-10-20-target-decided-by-state`
+- `2026-10-20-preview-then-owner-run-write`
