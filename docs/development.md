@@ -2,8 +2,14 @@
 
 ## Setup
 
-There is no code yet, so there is nothing to set up. The repository assumes git, a
-POSIX shell and `python3`, as `docs/specs/repository-boundary.md` states.
+There is nothing to set up and no dependency is installed. The code is Python 3 using
+only the standard library, and the repository assumes git, a POSIX shell and `python3`,
+as `docs/specs/repository-boundary.md` states.
+
+Minimum Python version: 3.6, the lowest minor version that has every language feature
+written so far (f-strings are the newest). The checks have been run only on 3.14; the
+minimum is derived from the features used, not from running older interpreters. Raise
+it here whenever a later increment uses a newer feature.
 
 ## Commands
 
@@ -12,15 +18,15 @@ ambiguous blank.
 
 | Purpose | Command |
 |---|---|
-| Setup | not applicable (no code yet) |
-| Run locally | not applicable (no code yet) |
-| One focused test | not applicable (no code yet) |
-| Full tests | not applicable (no code yet) |
+| Setup | not applicable (standard library only; nothing to install) |
+| Run locally | `python3 -m workbench` |
+| One focused test | `python3 -m unittest tests.test_package` |
+| Full tests | `python3 -m unittest discover -s tests` |
 | Format | not applicable (no code yet) |
 | Lint or static analysis | not applicable (no code yet) |
 | Type check | not applicable (no code yet) |
 | Build | not applicable (no code yet) |
-| All required checks | not applicable (no code yet); document checks are run by the owner in session, as `docs/README.md` states |
+| All required checks | `python3 -m unittest discover -s tests`; document checks are run by the owner in session, as `docs/README.md` states |
 
 ## Verification workflow
 
@@ -50,7 +56,8 @@ tests instead.
 
 ## Debugging
 
-Not applicable until code exists.
+Run `python3 -m unittest discover -s tests -v` for per-test output. Run all
+commands from the repository root.
 
 ## Tool-specific guidance
 

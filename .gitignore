@@ -14,3 +14,6 @@ Thumbs.db
 # Editor temporary files; never commit.
 *.swp
 *~
+
+# Python bytecode; never commit.
+__pycache__/
