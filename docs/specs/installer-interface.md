@@ -16,7 +16,7 @@ Terms are defined in `terms.md`. What each operation does to a project is in
 This specification defines the installer's command line: which commands there are, what
 each takes, how the directory a command works on (the target) is chosen and checked, and
 what each command reads, writes and refuses. The preview and approval flow, the output and
-the exit codes are defined in later sections of this document.
+the exit codes are defined in the sections of this document that follow the commands.
 
 Non-goals:
 
@@ -152,11 +152,12 @@ says so.
 
 | command | kind | takes | writes | terminal only | state |
 |---|---|---|---|---|---|
-| `install` | project | target, a module selection | committed content, manifest, the project's store directory, then per-clone harness files | decided with the approval flow | proposed |
+| `install` | project | target, a module selection | committed content, manifest, the project's store directory, then per-clone harness files | yes, owner-run | proposed |
+| `preview` | project | `install`, `upgrade` or `add` and their arguments | nothing in the project; a cache directory if it fetches | no | proposed |
 | `attach` | project | target, `--harness` | per-clone harness files, `.git/info/exclude`, the local manifest | no, but owner-run (harness deny rule) | proposed |
 | `check` | project | target | nothing | no | proposed |
-| `upgrade` | project | target | after an approved preview, new content, left uncommitted | decided with the approval flow | proposed |
-| add a module | project | target, a module | the same as `upgrade`, new files and blocks only | decided with the approval flow | proposed |
+| `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run | proposed |
+| add a module | project | target, a module | the same as `upgrade`, new files and blocks only | yes, owner-run | proposed |
 | `verify` | package | a package directory (`<package>` or `--dir`), `--select`, `--no-harness-required` | nothing | no | built |
 | `approve` | package | a package directory, or `--source` with an optional `--ref`; `--module` | the guarded store: approval records, the cache | yes | built; `--dir` proposed |
 | `pin` | package | a project id, a name, a helper, `--root` | the guarded store: a pin | yes | built |
@@ -214,7 +215,7 @@ publishes, and none edits a living or historical document** (`repository-boundar
   every path, owner class and byte to be written. After the approval and before the first
   write the command verifies again from the bytes it will write, and for each replaced file
   re-checks the hash on the held descriptor. Any difference refuses and writes nothing. The
-  details are in the preview section (Increment C).
+  details are in the preview section.
 - **Baselines.** Approving an install or an upgrade preview updates the acknowledgement
   baselines for exactly the files in that preview (`trust-and-approval.md`).
 
@@ -237,8 +238,7 @@ publishes, and none edits a living or historical document** (`repository-boundar
   including counts, conflicts, requirements and install order); and that every module of the
   selection, the harness first, is approved on this machine (the gate,
   `trust-and-approval.md`). Install never records an approval.
-- **Then:** the preview and its approval (see "The preview and approval", written by
-  Increment C). Nothing is written to the target before the owner has approved the preview.
+- **Then:** the preview and its approval (see "The preview and approval"). Nothing is written to the target before the owner has approved the preview.
 - **Writes**, after approval, in the order `module-contract.md` gives: the harness is verified
   and approved first, and its per-clone files are written last; the base, the process module,
   then the other modules; the project seed and ID; the committed manifest and
@@ -247,11 +247,12 @@ publishes, and none edits a living or historical document** (`repository-boundar
   last, attach for the chosen harness, which writes the per-clone harness files, the
   `.git/info/exclude` entries and the local manifest. Everything is left uncommitted.
 - **Refuses** any verification failure, any missing approval, a state other than new, and a
-  refused target. After a failure part-way, the report says what was written (Increment C).
+  refused target. After a failure part-way, the report says what was written ("Failure part-way").
 - **Contacts the network and writes a cache directory** for each source that is not a local
   directory.
-- **Agent may run it:** the command may be run by an agent, but it writes nothing until the
-  owner approves the preview; who gives that approval is decided in Increment C.
+- **Agent may run it:** no *(owner)*. The owner runs `install`, from a terminal, and approves the
+  preview there. An agent runs `wb preview install ...` to see the same preview and write
+  nothing (the preview and approval section).
 
 ### `attach` (proposed)
 
@@ -305,7 +306,7 @@ publishes, and none edits a living or historical document** (`repository-boundar
 - **Options:** none in this version.
 - **Agent may run it:** yes. Any question it asks git is subject to the git rule in the states
   section.
-- How it signals a problem is in the exit codes (Increment C).
+- It exits 1 when it reports a problem and 0 when it reports none (exit codes).
 
 ### `upgrade` and adding a module (proposed)
 
@@ -324,8 +325,7 @@ publishes, and none edits a living or historical document** (`repository-boundar
   slot owners and order are checked as for an install.
 - **Preview:** every change, classified as replace, skip, conflict or append, with the
   declaration change shown. It writes nothing. A declined append is reported with the marker
-  to add and a suggested place. (Its exact shape and approval are in the preview section,
-  Increment C.)
+  to add and a suggested place. (Its shape and approval are in the preview section.)
 - **Writes**, only after the preview is approved: replacements of module-owned files and
   blocks whose hash still equals the installed hash; new files and new blocks; appended blocks
   where the owner approved the append; the updated `.workbench/manifest.json` (hashes, lock and
@@ -341,7 +341,8 @@ publishes, and none edits a living or historical document** (`repository-boundar
   version recorded in the manifest.
 - **Removing a module is not a command** in this version.
 - **Contacts the network and writes a cache directory** for each source it fetches.
-- **Agent may run it:** the preview, yes; applying it is decided in Increment C.
+- **Agent may run it:** `wb preview upgrade ...` and `wb preview add ...`, yes. `upgrade` and
+  `add` themselves are owner-run, from a terminal *(owner)*.
 
 ## The existing commands
 
@@ -379,7 +380,160 @@ the rules above are named so a later plan can change them; this plan changes non
 - **Usage text and name.** The usage text and the program name say `python3 -m workbench`;
   the rule above is `wb`. A later plan changes the text.
 
-## Decisions on the package and helper commands
+## The preview and approval
+
+Applies to `install`, `upgrade` and adding a module. The split between a read-only `preview`
+and an owner-run write is a **rule** *(owner)*; the layout of the text is a proposal.
+
+1. **Two verbs.** `wb preview <install | upgrade | add> ...` takes the same arguments as the
+   command it previews. It is read-only, may be run by an agent, and prints the preview. It
+   exits 0 when a preview was produced and 1 when the command would have been refused. It
+   prints no typing token. `wb install`, `wb upgrade` and `wb add` write, and are owner-run.
+2. **The write commands are owner-run and terminal-only.** They need a terminal on both
+   standard input and standard output, checked on file descriptors as `approve` does, and
+   refuse with `refused:` and exit 1 otherwise. They are denied to an agent by the harness,
+   exactly as `approve`, `pin` and `attach` are. **rule:** the harness modules render a `deny`
+   for `wb install`, `wb upgrade`, `wb add`, `wb attach`, `wb approve`, `wb pin` and
+   `wb release-approvals`, and the neutral rule list carries them (`harness-modules.md`,
+   "Permissions"; `trust-and-approval.md`, "Rendering rules"). *(This requirement is not yet
+   in those two specifications; the plan `2026-10-20-installer-interface` adds it.)*
+3. **One process, nothing stored.** A write command computes the preview itself, in its own
+   process, shows it, and asks. No preview is stored between steps and no digest is accepted
+   from another run or another place, so there is nothing to edit or forge in between. The
+   preview an agent saw with `preview` is only a courtesy: the owner approves the preview the
+   write command shows in the owner's terminal.
+4. **The owner approves by typing.** After the preview the command asks for the first 12
+   characters of the preview's digest and a press of Enter. The input is read after discarding
+   anything already typed ahead (`termios.tcflush`), is length-bounded, and is compared to
+   the digest held in the process. Anything else prints `cancelled: nothing was written` and
+   exits 1. This is friction and not authentication: a process that opens its own
+   pseudo-terminal passes the test, and the barrier is the harness's `deny` rule, as for
+   `approve` and `pin` (`trust-and-approval.md`, "Residual risk"). A second factor read from
+   the terminal does not help, because a same-account process that owns a pseudo-terminal
+   reads it too.
+5. **After approval, verify again, then write.** Before the first write the command takes
+   everything it depends on into memory once: the package bytes from the cache, the gate
+   result, and each replaced file's hash on its held descriptor. It checks the target against
+   the held identity (device and inode, on the descriptor and on the path) immediately
+   before the first write, recomputes the digest from the exact in-memory bytes it will write,
+   and writes from those bytes, never re-reading the cache or the package. If the digest
+   differs from the approved one, or anything fails, it prints `refused:`, writes nothing, and
+   exits 1.
+6. **A package approval is not a preview approval.** The modules must already be approved on
+   this machine (`approve`). The preview approval covers the files written and nothing else.
+   A single approval covers every action shown, appends included: there is no per-item choice,
+   and an owner who does not want an append cancels, or removes it from the project first.
+7. **Writing walks one component at a time.** Every write goes from the held target
+   descriptor one path component at a time, each directory opened with no-follow and
+   directory-only flags. A link at any component is a conflict, whether it is the path of a
+   new file, a module-owned file, `.git/info/exclude` or `.workbench/local`. Parent
+   directories are created through the held descriptor.
+
+### What a preview shows
+
+- The resolved absolute target first, then the command, the target's state, and the workbench
+  version. (Rule 8 of the target rules.)
+- A summary before the detail, so a long list cannot bury it: counts by action, and any
+  high-risk flag (a module that blocks a core capability, a hook or executable shipped, a
+  harness or process module). Nothing is truncated.
+- Each module: package, name, version, declaration hash and tree hash in full, whether it is
+  approved and by what record, and for an upgrade the change in its declaration. A source URL
+  is shown with any user name, password and query removed, and so is any error message that
+  repeats one; stored provenance carries no credentials.
+- Each path the command would touch: the path, its owner class, the action (create, replace,
+  skip, conflict or append), and the mode when it is executable. A conflict says why. An
+  append shows the block and where it goes. A replacement shows the hash the file has now
+  and the hash it would have. The preview never prints the content of an existing file, only
+  its hash and the reason for a conflict.
+- Directories to be created, the `.git/info/exclude` lines, the local manifest, the harness
+  files, and every write to the guarded store (the project's directory, its first-seen
+  record, the baselines).
+- The digest, shown in full on the owner's terminal only.
+- **rule:** every path, name and package-supplied string in a preview is shown through
+  `display.ascii_text`, with the backslash escaped, so look-alike letters and a literal `\n`
+  cannot pass for something else. Only fixed program text contains raw characters, and the
+  prompt goes through the same cleaning.
+
+### The digest
+
+- **rule:** the digest is a SHA-256 over an injective encoding of the complete write plan, for
+  example a JSON array with explicit field names, never a joined string (a plain join of path,
+  action and hash collides for `"a b" + "create"` and `"a" + "b create"`).
+- It covers: the command and the selection; the target's device and inode; the workbench
+  version; every module's declaration and tree hash; every path to be written, with its
+  class, action, mode, size and content hash, and every directory to be created; every
+  `.git/info/exclude` line; the local manifest; every harness file; every write to the
+  guarded store; and, for a replacement, the hash the file has now.
+- Anything generated for the write, such as the project seed and ID, is generated before the
+  preview, held in memory, and included. Nothing is generated after the digest is computed.
+
+## Output
+
+- **rule:** results and previews go to standard output. Every line on standard error begins
+  with exactly one of `refused:` (nothing was done), `failed:` (stopped after writing; see
+  below), `cancelled:` (the owner declined), `problem:` (a `check` finding) or `warning:`.
+  A continuation line is indented two spaces. No text from a package, a project or the network
+  is placed at the start of a line. A `check` that cannot run, because the target is refused or
+  is not an existing project, says `refused:`; `problem:` is only for what it found.
+  *(From the code: `approve` and `pin` print `cancelled:` to standard output and a few
+  unprefixed follow-on lines, and `verify` prints warnings to standard output when it accepts.
+  The new commands follow the rule; a later plan may change the built ones.)*
+- **rule:** any text that comes from a package, a project or the network is cleaned with
+  `display.clean` before it is printed, so a hostile name cannot move the cursor or hide
+  text, and a preview uses the stricter rule above. A path that the terminal's encoding cannot
+  show is escaped, never a traceback.
+- **rule:** a command that writes ends standard output with a line saying what was written:
+  the count of paths, and that nothing was committed. A `preview` ends with `preview only:
+  nothing was written`. An `upgrade` that finds nothing to change says `nothing to change`
+  and exits 0. Any other ending is a failure.
+- There is no machine-readable output form in this version *(owner)*. The prefixes above are
+  the contract a script may rely on; the wording after them is not.
+- There is no colour and no prompt other than the typed digest.
+
+## Exit codes
+
+| code | meaning |
+|---|---|
+| 0 | done: the command did what it was asked, a `preview` was produced, or `check` found nothing to report as a problem (warnings alone do not change it) |
+| 1 | refused or cancelled, nothing was done; or `check` reported a problem |
+| 2 | usage error: an unknown command or option, a missing or empty value, two spellings of the target that differ. The guarded store is not touched. `--help` exits 0 |
+| 3 | stopped after writing: the report lists what was written *(my call)* |
+
+- `launch` returns the helper's own exit code instead of these, so a helper that exits 1, 2 or
+  3 looks like one of these by code alone; the text on standard error tells them apart. A
+  helper killed by a signal exits `128` plus the signal number *(from the code)*.
+- **rule:** a command that is interrupted (Ctrl-C) or whose output is closed (a broken pipe)
+  ends through a top-level handler, never a traceback: before the first write it prints
+  `cancelled:` and exits 130; during the write it is a failure part-way. An uncaught error
+  is a failure and is reported as `refused:` or `failed:` according to whether anything was
+  written.
+- A write command without a terminal refuses with exit 1 and a message that says to run it
+  in a terminal, or use `preview` to see the changes.
+- Exit codes are the contract; the numbers and their meanings do not change without a new
+  version of this specification.
+
+## Failure part-way
+
+- **rule:** a refusal before the first write writes nothing in the project. Once writing has
+  started, a failure (an I/O error, an interrupt) stops at once. The command prints
+  `failed:` with the cause, then exactly which paths it wrote and which it did not, and
+  exits 3. It never deletes or reverts anything it did not itself create, and it never
+  continues after an error.
+- **rule:** `install` creates `.workbench/local/incomplete` before anything else it writes
+  and removes it last. A directory holding it is not an existing project: `check`, `attach`,
+  `upgrade` and `add` report it and refuse, and only a completed install removes it. This
+  closes the window in which a part-written manifest would otherwise make a half-installed
+  directory read as a real project. A kill that gives no chance to report (power loss,
+  `SIGKILL`) is found by the marker. *(My call; the marker is untracked, so it grants no
+  authority.)*
+- Recovery is by the owner. A part-written new project is deleted by hand and installed
+  again. An upgrade's changes are uncommitted, so git can revert them. The report says which
+  applies.
+- An implementation may write to a staging area and rename into place so that a failure
+  leaves the target as it was. That is a proposal; the rule above holds either way.
+- Interrupting a command before the first write is safe.
+
+## Decisions recorded by the owner
 
 Answered by the owner on 2026-10-20.
 
@@ -396,6 +550,14 @@ Answered by the owner on 2026-10-20.
    installer would act on another. The user gives the real path to proceed.
 4. **A project is existing by its files and not by git** (the states table). A fresh install
    is an existing project before it is committed.
+5. **Preview and write are separate verbs, with no stored state between them.** `wb preview
+   install|upgrade|add` is read-only and may be run by an agent. `wb install|upgrade|add` is
+   owner-run, terminal-only and denied to agents by the harness; it computes and shows the
+   preview itself and the owner types the first 12 characters of its digest. This replaced an
+   earlier answer (one command that previews without a terminal and exits 3), after review
+   showed an agent with a pseudo-terminal could complete it.
+6. **No machine-readable output** in this version; text with the `refused:`, `failed:`,
+   `cancelled:`, `problem:` and `warning:` prefixes.
 
 ## Departures from the roadmap's wording
 
@@ -410,8 +572,8 @@ For the owner to see in one place:
 
 ## Deferred
 
-- The preview, approval flow, output contract and exit codes: later sections of this
-  document, written by the same plan.
+- A machine-readable output form, until something needs to parse the output.
+- Colour, a quiet or verbose option, and shell completion.
 - Whether a target must be owned by the current user, or not a mount point. An empty
   directory such as a shared or system one is a new project today *(noted by review)*.
 - Removing a module, format migration and three-way merge, which no command performs in
