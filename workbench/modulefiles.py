@@ -30,6 +30,7 @@ from . import declarations, hashing, safefs
 
 RESERVED_DIRS = ("harness", "templates", "files")
 MANIFEST = "manifest.json"
+MAX_REASON_CHARS = 200
 
 ModuleResult = collections.namedtuple(
     "ModuleResult", "problems warnings declaration_hash tree_hash")
@@ -86,7 +87,8 @@ def _accounted(module, files, bad):
     sources = set(source for _, source in module.fills)
     for rel in sorted(files):
         parts = rel.split("/")
-        if rel == "module.json" or parts[0] in RESERVED_DIRS or rel in sources:
+        if (rel == "module.json" or (len(parts) > 1 and parts[0] in RESERVED_DIRS)
+                or rel in sources):
             continue
         if any("/".join(parts[:n]) in ships for n in range(1, len(parts) + 1)):
             continue
@@ -99,8 +101,13 @@ def _declared_paths(module, files, dirs, bad):
         if source not in files:
             bad("fills", "source %s for %s does not exist as a file" % (source, slot))
     for item in module.ships:
-        if item not in files and item not in dirs:
+        if item in files:
+            continue
+        if item not in dirs:
             bad("ships", "%s does not exist" % item)
+        elif not any(rel.startswith(item + "/") for rel in files):
+            # An empty directory is not in the tree hash, so an approval would not cover it.
+            bad("ships", "%s is an empty directory" % item)
     for rel in module.writes:
         if "files/" + rel not in files:
             bad("writes", "%s has no source file at files/%s" % (rel, rel))
@@ -187,9 +194,11 @@ def _exclusions(base, contents, neutral, overrides, bad, warnings):
     for entry in entries:
         if (not isinstance(entry, dict) or set(entry) != {"item", "reason"}
                 or not isinstance(entry["item"], str) or not isinstance(entry["reason"], str)
-                or not entry["reason"].strip()):
+                or not entry["reason"].strip() or len(entry["reason"]) > MAX_REASON_CHARS
+                or not entry["reason"].isprintable()):
             bad("harness-layout", "%s: each exclusion needs exactly an 'item' and a non-empty "
-                                  "'reason'" % where)
+                                  "printable 'reason' of at most %d characters"
+                    % (where, MAX_REASON_CHARS))
             continue
         item = entry["item"]
         if item not in neutral:

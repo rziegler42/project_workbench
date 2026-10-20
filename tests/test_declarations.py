@@ -191,6 +191,12 @@ class ModuleTest(unittest.TestCase):
             d.parse_module(dump(decl), "sample", "manifest-a")
         self.assertEqual(ctx.exception.rule, "reserved-name")
 
+    def test_a_trailing_newline_is_not_part_of_a_name(self):
+        self.refused("slots", slots=["a\n"])
+        self.refused("helpers", helpers=["git\n"])
+        self.refused("version", version="1.0\n")
+        self.refused("requires", requires=["a\n"])
+
     def test_description(self):
         for value in ("", "two\nlines", 5, "x" * 201, "tab\there"):
             self.refused("description", description=value)

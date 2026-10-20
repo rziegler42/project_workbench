@@ -436,4 +436,17 @@ The edits made after round 3 have not been re-reviewed. The plan stays `Approved
 
 ## Result
 
-Not started.
+In progress. Increments A to E are committed (`89d64c6`, `3f6b6ec`, `2b53cd0`,
+`92fe5fa`, `eab70b6`) and the review fixes for E follow them. The full suite passes
+(165 tests, `python3 -m unittest discover -s tests`). Increments B and E had a security
+review whose findings were fixed with tests; C and D had no independent review yet.
+
+Calls made in D and E that the owner has not yet confirmed, to be written into the spec
+in Increment H: a `writes` path may enter `.workbench/` only under the module's own
+namespace; a path beginning `.config/project-workbench` is refused; `slots` lists owned
+slot names and `provides` may not list `slot:` entries; `fills` takes `slot:<name>`;
+`type` defaults to `module` and only `name`, `version` and `description` are required;
+dotted sub-names are refused; harness item naming is `<kind>/<name>` as the
+`modulefiles` docstring states; an empty directory in `ships` is refused.
+
+Next: Increment F (set verification and the all-or-nothing result).

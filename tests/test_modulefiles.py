@@ -73,6 +73,17 @@ class AccountingTest(Base):
         self.put("sample-notes/Templates/x.txt")
         self.refused("unaccounted-file")
 
+    def test_a_file_named_like_a_reserved_directory_is_unaccounted(self):
+        for name in ("harness", "templates"):
+            with self.subTest(name=name):
+                self.put("sample-notes/" + name)
+                self.refused("unaccounted-file")
+                os.remove(os.path.join(self.path, "sample-notes", name))
+        self.edit_module(writes=[])
+        shutil.rmtree(os.path.join(self.path, "sample-notes", "files"))
+        self.put("sample-notes/files")
+        self.refused("unaccounted-file")
+
     def test_all_unaccounted_files_are_reported(self):
         self.put("sample-notes/a.txt")
         self.put("sample-notes/b.txt")
@@ -87,6 +98,17 @@ class AccountingTest(Base):
         self.edit_module(ships=["scripts"])
         self.put("sample-notes/scripts/more/run.sh")
         self.assertEqual(self.check().problems, [])
+
+    def test_ships_directory_must_hold_a_file(self):
+        self.edit_module(ships=["scripts/check.sh", "empty"])
+        os.mkdir(os.path.join(self.path, "sample-notes", "empty"))
+        result = self.refused("ships")
+        self.assertIn("empty directory", str(result.problems[0]))
+
+    def test_ships_directory_holding_only_empty_directories_is_refused(self):
+        self.edit_module(ships=["scripts/check.sh", "empty"])
+        os.makedirs(os.path.join(self.path, "sample-notes", "empty", "inner"))
+        self.refused("ships")
 
     def test_fills_source_is_accounted(self):
         self.edit_module(fills=[{"slot": "slot:notes", "source": "blocks/a.md"}])
@@ -249,6 +271,14 @@ class HarnessLayoutTest(Base):
                  json.dumps({"exclude": [{"item": "skills/a", "reason": "r"}]}))
         self.put(self.base + "/codex/skills/a.md")
         self.assertEqual(self.check().problems, [])
+
+    def test_exclusion_reason_must_be_printable_and_short(self):
+        self.put(self.base + "/neutral/skills/a.md")
+        for reason in ("\x1b[2J\x1b]0;pwn\x07hi", "two\nlines", "x" * 201):
+            with self.subTest(reason=reason):
+                self.put(self.base + "/claude/manifest.json",
+                         json.dumps({"exclude": [{"item": "skills/a", "reason": reason}]}))
+                self.refused("harness-layout")
 
     def test_bad_manifests(self):
         self.put(self.base + "/neutral/skills/a.md")

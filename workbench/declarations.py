@@ -60,10 +60,10 @@ PACKAGE_FIELDS = ("name", "version", "contract", "modules")
 MODULE_FIELDS = ("name", "version", "type", "description", "provides", "requires", "blocks",
                  "helpers", "slots", "fills", "writes", "ships", "layout")
 
-_NAME = re.compile(r"^[a-z][a-z0-9-]*$")
-_VERSION = re.compile(r"^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){0,3}$")
+_NAME = re.compile(r"^[a-z][a-z0-9-]*\Z")
+_VERSION = re.compile(r"^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){0,3}\Z")
 NAME_RE = _NAME
-_HELPER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+_HELPER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*\Z")
 
 Package = collections.namedtuple("Package", "name version contract modules declaration")
 Module = collections.namedtuple(
