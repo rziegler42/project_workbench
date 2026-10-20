@@ -531,6 +531,7 @@ class Chain(base_tests.UpgradePreview):
         self.assertEqual(1, code)
         self.assertIn("not approved", err)
         approved = self.newer(notes=base_tests.NOTES2)
+        before = (self.files(), self.tree(self.store_root))
         for answer in ("", "no"):
             outs, errs = io.StringIO(), io.StringIO()
 
@@ -541,6 +542,7 @@ class Chain(base_tests.UpgradePreview):
             self.assertEqual(1, cli.main(["upgrade", self.place, "--package", approved], outs, errs,
                                          store_root=self.store_root, stdin=Ask("")))
         self.assertEqual(before[0], self.files())
+        self.assertEqual(before[1], self.tree(self.store_root))
 
     def test_a_lower_workbench_version_is_refused(self):
         document = manifest.parse(self.read(MANIFEST))

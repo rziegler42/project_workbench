@@ -154,12 +154,12 @@ says so.
 | command | kind | takes | writes | terminal only | state |
 |---|---|---|---|---|---|
 | `install` | project | target, a module selection | committed content, manifest, the project's store directory, then per-clone harness files | yes, owner-run | built (without attach) |
-| `preview` | project | `install`, `upgrade` or `add` and their arguments | nothing; no network, it reads only the approved cache | no | `install` built; `upgrade` and `add` proposed |
+| `preview` | project | `install`, `upgrade` or `add` and their arguments | nothing; no network, it reads only the approved cache | no | built |
 | `attach` | project | target, `--harness` | per-clone harness files, `.git/info/exclude`, the local manifest | no, but owner-run (harness deny rule) | proposed |
 | `check` | project | target | nothing | no | proposed |
-| `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run | proposed |
-| add a module | project | target, a module | the same as `upgrade`, new files and blocks only | yes, owner-run | proposed |
-| `acknowledge` | project | target | the guarded store: the project's acknowledgement baselines | yes, owner-run | proposed |
+| `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run | built |
+| add a module | project | target, a module | the same as `upgrade`, new files and blocks only | yes, owner-run | built |
+| `acknowledge` | project | target | the guarded store: the project's acknowledgement baselines | yes, owner-run | built |
 | `verify` | package | a package directory (`<package>` or `--dir`), `--select`, `--no-harness-required` | nothing | no | built |
 | `approve` | package | a package directory, or `--source` with an optional `--ref`; `--module` | the guarded store: approval records, the cache | yes | built; `--dir` proposed |
 | `pin` | package | a project id, a name, a helper, `--root` | the guarded store: a pin | yes | built |
@@ -335,7 +335,7 @@ publishes, and none edits a living or historical document** (`repository-boundar
   section.
 - It exits 1 when it reports a problem and 0 when it reports none (exit codes).
 
-### `upgrade` and adding a module (proposed)
+### `upgrade` and adding a module (built by `ownership-and-upgrade`)
 
 `wb upgrade [<target> | --dir <path>] [--package <source> [--ref <ref>] ...]`
 `wb add [<target> | --dir <path>] --package <source> [--ref <ref>] --select <module> ...`
@@ -382,15 +382,26 @@ publishes, and none edits a living or historical document** (`repository-boundar
   not restored.
 - **Removing a module is not a command** in this version.
 - **Contacts no network** and writes no cache directory.
+- **As built.** `wb preview upgrade|add` and `wb upgrade|add` read the project, check it against
+  the baselines a second time with the files the plan writes into, and bind every replace to
+  the baseline hash. The write order is the marker `.workbench/local/incomplete`, directories,
+  created files, replaced files and block edits, the manifest, the store's baselines, a
+  read-back of every written file against the plan, and last the marker's removal. A failure
+  after the marker exits 3 with the written and unwritten lists; a marker that cannot be made
+  exits 1 with nothing written; an interrupt after writing began exits 3. `add` refuses a change
+  to an installed module, a replaced file, and a change to where an installed package comes
+  from. A module its package no longer declares is left in place. Details and limits are in
+  `docs/development.md`, "Acknowledging, upgrading and adding".
 
-### `acknowledge` (proposed)
+### `acknowledge` (built by `ownership-and-upgrade`)
 
 `wb acknowledge [<target> | --dir <path>]`
 
 - **Needs:** an existing project known on this machine. Owner-run and terminal-only, checked
   before anything is read, as `install` and `approve` are.
-- **Lists** each difference between the project and its baselines: the manifest, each baseline
-  path in scope and each file added or removed under `.workbench/` outside `local/`, with the
+- **Lists** each difference between the project and its baselines: the manifest, every path
+  that has a baseline (an upgrade also refuses an edited seeded file it would write a block
+  into) and each file added or removed under `.workbench/` outside `local/`, with the
   path, the baseline hash, the current hash and the reason, and a parsed summary of the manifest
   (packages, sources, refs, commits, module declaration hashes). The store keeps hashes and not
   old bytes, so this is not a line diff.
@@ -399,6 +410,12 @@ publishes, and none edits a living or historical document** (`repository-boundar
   other answer writes nothing and exits 1; no differences says `nothing to acknowledge` and
   exits 0.
 - **Agent may run it:** no. It is denied to an agent by the harness as `approve` is.
+- **As built.** A link, a directory or another non-regular file where a file is expected cannot
+  be acknowledged and is refused; so are more than 500 differences. The digest covers the
+  differences, the manifest hash, the baselines before and after and the target's identity;
+  the project is read again after the answer and a different digest is refused. The summary
+  lists every file entry of the manifest. The baselines are replaced in one atomic store
+  write and nothing in the project is written.
 - **Agent may run it:** `wb preview upgrade ...` and `wb preview add ...`, yes. `upgrade` and
   `add` themselves are owner-run, from a terminal *(owner)*.
 

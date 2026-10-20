@@ -32,6 +32,11 @@ ambiguous blank.
 | Owner-run: pin a helper's content (terminal only) | `python3 -m workbench pin <project-id> <name> <helper> --root <project-dir>` |
 | Preview an install (read-only) | `python3 -m workbench preview install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Owner-run: install a new project (terminal only) | `python3 -m workbench install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
+| Owner-run: accept changes made to a project (terminal only) | `python3 -m workbench acknowledge [<target> \| --dir <path>]` |
+| Preview an upgrade (read-only) | `python3 -m workbench preview upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
+| Owner-run: upgrade a project (terminal only) | `python3 -m workbench upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
+| Preview adding a module (read-only) | `python3 -m workbench preview add [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
+| Owner-run: add a module (terminal only) | `python3 -m workbench add [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Run a pinned helper | `python3 -m workbench launch <project-id> <name> --root <project-dir> -- <args>` |
 | Release time: write the approvals shipped with first-party packages | `python3 -m workbench release-approvals` |
 | Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
@@ -157,14 +162,15 @@ package approval stores the resolved commit as the pin.
 
 `python3 -m workbench preview install [<target> | --dir <path>] --package <source> [--ref <ref>] ...
 --select <module> ...` shows what an install would do and writes nothing. `python3 -m workbench
-install` takes the same arguments and writes the project. `upgrade` and `add` are not built.
+install` takes the same arguments and writes the project. `upgrade`, `add` and `acknowledge` are
+in "Acknowledging, upgrading and adding" below.
 The target goes before `--select`, or use `--dir`; `--package` may repeat and a `--ref` binds to
 the `--package` before it. Options are not abbreviated.
 
 - **A target** is a missing directory whose parent exists, an empty directory, or a directory
   holding only a real `.git`. A symbolic link, the root, a home directory, the guarded store
   or anything containing it, a directory with other content, an existing project and a
-  directory holding `.workbench/local/incomplete` (an unfinished install) are refused, before
+  directory holding `.workbench/local/incomplete` (an unfinished install or upgrade) are refused, before
   any source is read (`docs/specs/installer-interface.md`, "The target").
 - **A source** is a local package directory (it holds `package.json`; a link is refused and a
   `--ref` cannot apply) or a URL. `preview` never fetches: a URL must already be in the cache
@@ -200,6 +206,89 @@ the `--package` before it. Options are not abbreviated.
 | 2 | usage error |
 | 3 | stopped after writing; the marker is left |
 | 130 | interrupted before anything was written |
+
+## Acknowledging, upgrading and adding
+
+Four commands work on an existing project, and each refuses a target that is not one (use
+`install` for a new one).
+
+```
+python3 -m workbench acknowledge [<target> | --dir <path>]                    (owner-run)
+python3 -m workbench preview upgrade [<target> | --dir <path>] [--package <source> [--ref <ref>]] ...
+python3 -m workbench upgrade         <the same arguments>                     (owner-run)
+python3 -m workbench preview add [<target> | --dir <path>] --package <source> [--ref <ref>] ...
+                                 --select <module> ...
+python3 -m workbench add             <the same arguments>                     (owner-run)
+```
+
+- **Before any of them acts.** The project must be known on this machine: the guarded store holds
+  `projects/<id>/baselines` and a `seen` record at this resolved path. A copied or moved project is
+  treated as new and refused. The manifest, every file under `.workbench/` outside `local/` (a
+  file added or removed counts) and every file the command would write into must equal the
+  baselines; any difference is refused, naming the paths, and the owner runs `acknowledge`. A
+  project written by a higher workbench version than the running one is refused.
+- **Packages.** Nothing is fetched. Each package the manifest records comes from `--package` when
+  given, else from the newest cached download of its recorded source and ref (filled by `approve
+  --source`); a package recorded as `local:<name>` must be given with `--package <directory>`.
+  Every installed module is verified again and must be approved on this machine, even one whose
+  files do not change; the harness-required rule is off, because `attach` is not built. A module
+  the package no longer declares is left in place.
+- **The preview** classifies every path as `create`, `append`, `replace`, `skip` or `conflict`
+  and shows each module with its declaration change, the directories and file writes with hashes,
+  the store write, and `git: not run; nothing is committed`. A module-owned file is replaced only
+  if it still equals what was installed; an edited, removed or retagged one is a conflict and is
+  left alone. A seeded file's own text is never changed; only the blocks in the plan are written
+  into it. A slot block is replaced only if its text is as
+  installed, appended with its marker where the slot marker is missing, and skipped as "slot gone"
+  where the owner removed the markers. Nothing is ever deleted. A preview ends `preview only:
+  nothing was written`, or `nothing to change`.
+- **`upgrade`** (owner-run) refuses unless standard input and output are terminals, prints the
+  same plan with its digest and asks for the first 12 characters. It then re-reads the project
+  and the packages, rebuilds the plan and refuses a different digest. It writes
+  `.workbench/local/incomplete`, the new directories, the created files, the replaced files (each
+  a hash-checked whole-file replace that keeps the original's narrower mode, never setuid, and
+  0755 only for an executable), the manifest, the store's baselines, reads every written file
+  back against the plan, and last removes the marker. It ends with the count of paths written, the
+  conflicts and notes left as they are, and `nothing was committed; committing the result as one
+  change makes it revertable`. Git is not run and no clean-tree check is made.
+- **`add`** is the same pipeline with the modules named by `--select` added to those the project
+  has. A selected module must be new (`<module>` or `<package>/<module>`; a harness cannot be
+  added), the installed ones are verified and approved with it, and counts, conflicts,
+  requirements, slot owners and order are checked together. It writes only new files, new blocks
+  and the manifest: a change to an installed module, a replaced file, or a package given from
+  another source, ref or commit than the recorded one is refused and `upgrade` is named.
+- **`acknowledge`** (owner-run) lists every difference (path, kind, baseline hash, current hash)
+  for the manifest, every file under `.workbench/` outside `local/`, and every other path with a
+  baseline, with a summary of the manifest (packages, sources, refs, commits, module hashes and
+  every file entry). It asks for the first 12 characters of the digest, re-reads, and replaces
+  the baselines of exactly the listed paths in one atomic store write. It writes nothing in the
+  project. A link, a directory or another non-regular file where a file is expected cannot be
+  acknowledged, and more than 500 differences are refused. With none it prints `nothing to
+  acknowledge`.
+- **Failure.** A failure after the marker was made prints `failed:` with the cause, the paths
+  written and not written, and a hint, leaves the marker, and exits 3; the directory is then not
+  an existing project until the owner removes the marker by hand. If only the store entry or the
+  marker is left, the files and manifest are complete and the owner runs `acknowledge`. If a
+  file was replaced before the manifest, a second run would call it edited and there is no
+  automatic repair: put the files back from version control or a copy. A marker that cannot be
+  made exits 1 with nothing written. An interrupt after writing began exits 3.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | done, previewed, or nothing to change or acknowledge |
+| 1 | refused or cancelled; nothing was written |
+| 2 | usage error |
+| 3 | stopped after writing began; the marker is left |
+| 130 | interrupted before anything was written |
+
+**Limits.** The check of a file's hash and the rename that replaces it are not one operation, so
+a write by another process in between is lost; the typed text is friction, not authentication,
+and the harness's deny rule is the barrier. A rerun after a part-way failure can rewrite the
+manifest while file conflicts remain (writing the planned manifest hash into the marker would
+close this and is not built). After a reinstall at the same path, a manifest carrying an old seed
+from git history is checked against the baselines kept for that seed, and `acknowledge` shows
+the project id but does not highlight a change in it. A manifest source with
+credentials stripped may not match the cache record. `attach` and `check` are not built.
 
 ## The distribution layout
 

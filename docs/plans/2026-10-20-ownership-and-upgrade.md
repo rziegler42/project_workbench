@@ -584,4 +584,116 @@ None yet. An independent review of this plan happens only when the owner asks.
 
 ## Result
 
-Not started.
+Increments A to M are done, each as one local commit with the trailer
+`Plan: 2026-10-20-ownership-and-upgrade#<label>`. Nothing is pushed.
+
+| Increment | Commit | What it added |
+|---|---|---|
+| plan, A | `57c060f` | this plan, approved, and the owner's answers and formats in the specs; two `Proposed` decision records |
+| B | `b61df48` | `workbench/confirm.py`: the typed digest and failure report shared with `install` |
+| C | `4bf8323` | `workbench/blocks.py`: a strict slot-block scanner and exact insert, replace and append edits |
+| D | `e6085c8` | `projectfs.Writer.read_file` and the hash-checked `replace_file` |
+| E | `ec1c99f` | `workbench/acknowledgement.py`: readers for the baselines and first-seen record, and the comparison |
+| F | `ed6a5f4` | `workbench/installed.py`: the manifest and the state of each entry of an existing project |
+| G | `d2e2371` | `workbench/upgradeplan.py`: classification, the new manifest and the new baselines |
+| H | `8b6597c` | the upgrade digest and preview text; the directories a plan creates |
+| I | `4e70d87` | `workbench/upgrade.py` and `wb preview upgrade` |
+| J | `d7ef1e6` | `workbench/acknowledge.py` and `wb acknowledge` |
+| K | `305aaed` | `wb upgrade`: the owner-run write |
+| L | `7d15e6f` | `wb add` and `wb preview add` |
+| M | this commit | the documents and this Result |
+
+**Tests.** The suite went from 814 (the count when `base-and-manifests` finished) to 1140 passing
+(`python3 -B -W error -m unittest discover -s tests`), rising by the new tests only, and
+`git diff --check` was clean at each commit. No test touches the real guarded store or the
+network. The completion criteria are pinned by these tests: `tests/test_upgrade.py` (`Chain`: a
+project made by the real `wb install`, acknowledged clean, then upgraded through create, replace,
+block replace, skip, conflict, append, "slot gone" and "left in place", with bytes outside the
+markers and every seeded file byte-identical, the manifest and baselines hashes equal to those in
+the preview, and no file deleted), `tests/test_upgrade_preview.py` and `tests/test_upgradeplan.py`
+(hostile markers, paths, links, swapped and edited files, version order), `tests/test_acknowledge.py`
+(including a hand-edited manifest, an added and a removed `.workbench/` file, an edited seeded
+file, an unknown project and a `seen` at another path), and `tests/test_add.py`.
+
+**A recorded run** under pseudo-terminals in a scratch directory: `install` of a package with
+modules `h`, `notes` and `a` wrote 20 paths; a line of the owner's own appended to `AGENTS.md`;
+`acknowledge` listed that one path and replaced its baseline; `upgrade` with a newer package
+(`notes` changed, `a` with a new fill) printed 5 replace and 6 skip, took the digest, wrote 5
+paths and ended `nothing was committed; committing the result as one change makes it revertable`;
+the owner's line and the seeded files were unchanged, the `a` block read the new text, and a
+second `acknowledge` printed `nothing to acknowledge`.
+
+**Reviews.** Increments G to L were challenged by an advisor before commit, and J, K and L were
+also attacked by a separate agent in a scratch copy (findings treated as untrusted and checked);
+the findings of A to F are in those commits' messages and tests. Fixed:
+
+- G: a block with an existing entry was replaced without checking its holder file (a retagged or
+  dropped file entry could be rewritten); the version was not compared; both closed with tests.
+- I: a swapped file between the two reads (every replace now carries the baseline hash), a
+  `package.json` FIFO or link, a package-name cross-check, and a module removed upstream now "left
+  in place".
+- J: an edited seeded file could not be acknowledged (scope widened to every baselined path); the
+  summary and the baselined manifest hash came from two reads (now one, checked); per-file
+  manifest entries and full-length paths are shown; the terminal check precedes the store.
+- K: a marker that cannot be made gave a false partial-write report (now exit 1, nothing written);
+  the written files are read back against the plan before the marker is removed; a marker already
+  gone is a warning, any other failure exit 3; an interrupt after writing began exits 3 and one
+  while printing exits 0; the recovery hint depends on how far the write got.
+- L: `add` could move an installed module's record on an edited file or take over an installed
+  package's source, ref or commit (both refused now); only a missing marker is a warning.
+- Test support: the pty helper typed its answer before the command had flushed typed-ahead input,
+  so the answer was lost and the command waited (3 failures in about 24 runs of the two new pty classes); it now waits 0.3 s. This is
+  probably the earlier unexplained one-off failure, which has not been shown.
+
+**Deviations from the plan's text** (the plan is not edited):
+
+- `upgradeplan.build` also takes `reader` and `baselines`; `UpgradePlan` has `dirs`; the preview
+  shows each module's approval record; `Entry` gained `slot` and `installed.look` is public;
+  `installplan.assemble`, `without_blocks`, `manifest_document` and `json_store` are public and
+  file items hold `texts`.
+- There is no list of living paths: a module-owned entry outside `.workbench/` is a conflict and
+  any other entry with no counterpart is left in place. A seeded file keeps its recorded hash
+  whatever blocks it receives.
+- `blocks.slot_state` has four states, not three; `acknowledgement.check_known` takes `(baselines,
+  seen, path)` and `differences` takes `writes`; `Writer.list_dir` was added in E; the replace
+  mode is the original's mode & 0o644, or 0755 for an executable; `installed` has a fifth state
+  `gone` and owns the version rule.
+- `acknowledge` lists every path with a baseline, not only `.workbench/`; it refuses a non-regular
+  file and more than 500 differences; `acknowledge.parse` is a new parser and `run` takes a parsed
+  target.
+- `upgrade` writes in this order: marker, directories, created files, replaced files and block
+  edits, manifest, baselines, read-back, marker removed; the terminal check runs before usage
+  parsing; `.workbench/local/` may be left behind; `report_failure` gained `what` and `hint`; the
+  unfinished-install refusal also names an upgrade; `projectfs.MarkerMissing` is new.
+- `add` takes the mode through `prepare(add=)`, `run`, `run_preview` and `require_terminal`; a bare
+  name matching an installed module in another package is refused unless spelled
+  `<package>/<module>`; it is refused whenever any installed module, base file or installed
+  package's origin changed, so `upgrade` comes first; it bumps the manifest's `workbench` and
+  `base`; a given copy of a recorded package replaces that package's record.
+- `parse_install` gained `upgrade=`; two older usage tests moved from `preview upgrade` to
+  `preview add` and then needed no change.
+- The roadmap's stale line "Three decisions it proposed await the owner" was corrected.
+
+**Known limits.**
+
+- A rerun after a part-way failure can rewrite the manifest while file conflicts remain, because the
+  marker holds no plan identity. Writing the planned manifest hash into the marker and refusing
+  while it names an unfinished plan would close it; it is not built.
+- A file changed in the window between the hash check and the rename is overwritten, and one moved
+  away then can be reported only by the read-back. The written bytes are always those shown.
+- After a reinstall at the same path, a manifest carrying an old seed from git history is checked
+  against that seed's baselines; `acknowledge` does not highlight a changed project id.
+- A manifest source with credentials stripped may not match the cache record's source.
+- The read-back does not cover directories, the executable bit or the baselines write.
+- Not exercised by the reviewers: BrokenPipe paths, a real-terminal over-long answer, hostile
+  manifest strings through the rendered plan, a new package name colliding with a reserved name,
+  and `add` with a changed `base`.
+- Only J, K and L were reviewed by a separate agent, and the fixes made after those reviews were
+  checked by tests only. D's mode-fix reorder was not re-reviewed on its own, and E, F, G and I
+  were not attacked by a separate agent. One completion criterion asks for a security review of D,
+  J, K and L with no unresolved finding; the partial-failure finding on K is recorded here as a limit.
+
+**Open for the owner.** Accept or reject the two `Proposed` decisions
+`2026-10-20-acknowledge-before-upgrade` and `2026-10-20-upgrade-needs-no-git`; push the 13 local
+commits after a check for secrets; decide whether the marker-content hardening is a new plan or
+increment; ask for further security reviews if wanted. `claude-harness` is the next candidate.

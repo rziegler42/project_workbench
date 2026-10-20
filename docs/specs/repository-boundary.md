@@ -1,8 +1,8 @@
 # Repository boundary, manifests and upgrades
 
 Status: Current. Approved by the owner on 2026-10-19. The guarded store, with its approvals, cache, pins
-and launcher, is built (`module-approvals`) and the layout below records it; attach, check and
-upgrade are not built yet. `base-and-manifests` built the base, the committed
+and launcher, is built (`module-approvals`) and the layout below records it; attach and check are not
+built yet; upgrade and add are built (`ownership-and-upgrade`). `base-and-manifests` built the base, the committed
 manifest, the seed, the baselines and `install` (the formats below are those it wrote), without attach.
 File names and marker syntax are as built.
 
@@ -72,8 +72,8 @@ Non-goals:
   projects/<project-id>/    one directory per project
     pins                    pinned helpers: path relative to the project root, SHA-256
     seen                    where the project was first seen (written by install)
-    baselines               acknowledgement baselines, path to SHA-256 (written by install;
-                            nothing reads them yet)
+    baselines               acknowledgement baselines, path to SHA-256 (written by install,
+                            upgrade, add and acknowledge)
                             (plan approvals are not built yet)
   bin/wb                    the launcher script, fixed text apart from one path
   bin/run/<uuid>/<name>     a private copy of a pinned helper, only while it runs
@@ -184,7 +184,8 @@ project in a second clone (at attach). Nothing reads `seen` yet.
 **Baselines.** `install` writes `projects/<id>/baselines` as strict JSON,
 `{"baselines": {"<path>": "<sha256 hex of the bytes written>"}, "format": 1}`, with sorted
 keys, for exactly the files in the approved preview. Reading, comparing and acknowledging
-are for `ownership-and-upgrade` and later.
+were built by `ownership-and-upgrade`; `upgrade` and `add` replace the entries for exactly the
+files they write and `acknowledge` for exactly the files it lists.
 
 ## The local manifest
 
@@ -212,7 +213,7 @@ recorded in the manifest.
   filled block is a `slot block`. The declaration has no field to choose the class, and
   `ownership-and-upgrade` defers one: the fixed mapping stands, and a field can be added later
   without breaking it *(owner)*.
-- **Classification on upgrade** *(proposed; built by `ownership-and-upgrade`)*. Each path of
+- **Classification on upgrade** *(built by `ownership-and-upgrade`)*. Each path of
   the desired state is compared with its manifest entry and the disk:
   no entry and absent is **create**; no entry and present is **conflict**; module-owned with
   the desired hash equal to the installed one is **skip**; module-owned and different, disk
@@ -223,7 +224,11 @@ recorded in the manifest.
   **skip** otherwise, and edited is **conflict**; a block whose markers are gone is **skip**,
   reported "slot gone"; an entry with no counterpart in the desired state is **skip**, reported
   "left in place". Nothing is ever deleted. An appended block is followed by its slot's marker
-  line, so the slot is an ordinary filled slot afterwards.
+  line, so the slot is an ordinary filled slot afterwards. As built, a path's class comes from the
+  declaration or the base and never from the manifest (a different class in the manifest is a
+  conflict); every block edit needs its file recorded as seeded, present and readable; a seeded
+  file keeps its recorded hash whatever blocks it receives; a module-owned manifest entry outside
+  `.workbench/` is a conflict; and `add` plans only creates, appends and the manifest.
 - **A module's namespace holds a copy of its whole tree** (declaration, templates, files and
   the rest), because a template stays in its module and is used when something is created. A
   harness module writes nothing committed.

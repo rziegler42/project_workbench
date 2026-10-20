@@ -89,9 +89,17 @@ meet here and the order matters.
   committed manifest with the project seed and ID, the write plan with its digest, `wb preview
   install` (read-only) and the owner-run `wb install` into a missing, empty or lone-`.git` target,
   with the acknowledgement baselines and the first-seen record written to the guarded store.
-  Attach is not built, so `install` ends with `harness not attached`. Three decisions it proposed
-  await the owner. It writes the empty `.git` itself and runs no program in the target, after a
+  Attach is not built, so `install` ends with `harness not attached`. Its three decisions were
+  accepted on 2026-10-20. It writes the empty `.git` itself and runs no program in the target, after a
   security review found that `git init` followed a link planted at `.git`.
+- `ownership-and-upgrade` is implemented (plan `2026-10-20-ownership-and-upgrade`, increments A to M;
+  its completion is derived from that plan): strict slot blocks, the hash-checked file replace, the
+  readers for the acknowledgement baselines and the existing project, the owner-run `wb acknowledge`,
+  `wb preview upgrade` and `wb preview add` (read-only), and the owner-run `wb upgrade` and `wb add`,
+  with classification of every path, a marker and read-back on the write, and no git and no
+  deletion. Two decisions it proposed (`2026-10-20-acknowledge-before-upgrade`,
+  `2026-10-20-upgrade-needs-no-git`) await the owner. The owner-class declaration field is
+  deferred; a rerun after a part-way failure is not repaired (the plan's Result lists the limits).
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.
 

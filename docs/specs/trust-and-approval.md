@@ -3,8 +3,9 @@
 Status: Current. Approved by the owner on 2026-10-19. The guarded store, the personal settings, approval
 records, first-party shipped approvals, the approval request and gate, the owner-run `approve` and `pin`
 commands, the inert download and the launcher are built (`module-approvals`), and "Concrete formats" records what
-the code does. Plan approval, delegation, acknowledgement and the rendering into a harness are not built yet, and
-their record formats and setting names remain proposals. The rules are the substance.
+the code does. Acknowledgement (the baseline check and `wb acknowledge`) is built (`ownership-and-upgrade`). Plan approval,
+delegation and the rendering into a harness are not built yet, and their record formats and setting names
+remain proposals. The rules are the substance.
 
 Terms are defined in `terms.md`. Places and manifests are defined in
 `repository-boundary.md`. Declarations are defined in `module-contract.md`.
@@ -231,8 +232,8 @@ reviewed. It protects against text changed by someone else.
 - **Baselines file (built by `base-and-manifests`).** `projects/<id>/baselines` is strict JSON,
   `{"baselines": {"<path relative to the project root>": "<sha256 hex of the bytes>"}, "format": 1}`,
   with sorted keys. `install` writes it for the files it wrote. `upgrade`, `add` and
-  `acknowledge` read it *(proposed; built by `ownership-and-upgrade`)*.
-- **What a command checks before it acts on a project** *(proposed; owner)*. The project must have
+  `acknowledge` read it *(built by `ownership-and-upgrade`)*.
+- **What a command checks before it acts on a project** *(built by `ownership-and-upgrade`; owner)*. The project must have
   `projects/<id>/baselines` and a `seen` record at the resolved target path on this machine, else
   it is treated as new here and the command refuses. It then compares the committed manifest,
   every file under `.workbench/` outside `local/` (a file added or removed counts) and every
@@ -243,7 +244,9 @@ reviewed. It protects against text changed by someone else.
   terminal-only. It lists each difference (path, baseline hash, current hash, reason) and a
   parsed summary of the manifest, asks for the first 12 characters of the digest of the list,
   and on a match replaces the baselines for exactly the listed paths. The store keeps hashes,
-  not old bytes, so the listing is not a line diff.
+  not old bytes, so the listing is not a line diff. As built, the list covers the manifest, every
+  file under `.workbench/` outside `local/` and every other path that has a baseline, so an
+  edited seeded file that an upgrade would write a block into can be accepted too.
 - Scratch under `.workbench/local/` is not covered. It grants no authority.
 
 ## Pinned helpers
@@ -533,8 +536,8 @@ instead of retrying. No dollar ceiling is required.
 - **Image handling.** Which tools open image files, and how location metadata is
   stripped from tracked copies, are decided in the `researcher-fetch-tool` candidate.
 - **Formats still proposals.** The formats in "Concrete formats" are fixed by the code at `format: 1`.
-  The formats of plan approvals, acknowledgement baselines and delegated-approval records, and the
-  setting names for checkpoints, remain proposals until the way of working that uses them is built.
+  The formats of plan approvals and delegated-approval records, and the setting names for
+  checkpoints, remain proposals (the baselines format is built) until the way of working that uses them is built.
 - **Added hard stops.** A module may add hard stops, and the function that combines stops accepts
   additions, but a module declaration has no field to declare one and no module supplies any. The owner
   decides the field (a `module-contract` change) or defers it.
