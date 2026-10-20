@@ -30,6 +30,7 @@ or an evidence note.
 | [`module-contract.md`](module-contract.md) | Package and module declarations, types, capabilities, conflicts |
 | [`repository-boundary.md`](repository-boundary.md) | Places, manifests, ownership classes, install, attach, check, upgrade |
 | [`trust-and-approval.md`](trust-and-approval.md) | Authority, approvals, hard stops, untrusted content |
+| [`installer-interface.md`](installer-interface.md) | The installer's commands: the target, options, preview and approval, output and exit codes (Draft) |
 | [`groundwork.md`](groundwork.md) | Specs, roadmaps, decisions and references |
 | [`code-work.md`](code-work.md) | The programming way of working |
 | [`harness-modules.md`](harness-modules.md) | How a harness module describes one AI runtime |

@@ -1,7 +1,7 @@
 # Roadmap: workbench-v1
 
 Status: Active
-Updated: 2026-10-19
+Updated: 2026-10-20
 
 This roadmap is direction only. It does not authorize implementation and does not
 change any plan. A candidate is referred to as `workbench-v1#<id>`. Candidates are
@@ -79,6 +79,11 @@ meet here and the order matters.
   untrusted project lets that project's code run first, so the harness must call the `wb` launcher
   and not the `-m` form (decision `2026-10-20-isolated-launcher-invocation`, accepted); a module has no field to declare an added hard stop; and nothing removes
   cache copies, shipped records of earlier releases or leftover `bin/run/` directories.
+- `installer-interface` is being written (plan `2026-10-20-installer-interface`): the draft spec
+  `docs/specs/installer-interface.md` covers the target rules, the commands, the preview and
+  approval, the output and the exit codes, and awaits the owner's approval. It changes no code. It
+  departs from the wording of the candidate below in three places, listed in the spec under
+  "Departures from the roadmap's wording".
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.
 
@@ -149,15 +154,15 @@ attach, upgrade preview, add module, verify, check), their options, exit codes, 
 preview and output contract. Requirements settled so far:
 
 - The target directory is one value with two spellings, a positional `<target>` or
-  `--dir <path>`, accepted by every command. If neither is given the target is `.`.
+  `--dir <path>`, accepted by every project command. If neither is given the target is `.`.
   If both are given and resolve to the same directory that is accepted; if they
   differ the command refuses and writes nothing.
 - The target is resolved to an absolute path once, and everything after that works
   from the resolved path.
 - Whether a command creates a new project or works on an existing one is decided from
   the target's state, not from the spelling: an empty or missing directory (a lone
-  `.git` is allowed) is new; a directory with a committed manifest is existing;
-  anything else is refused with nothing written.
+  `.git` is allowed) is new; a directory with its own `.git` and a manifest file is existing,
+  decided from files without running git; anything else is refused with nothing written.
 - Commands that write print the resolved absolute target before the preview.
 - The home directory, the filesystem root and the guarded store are refused as targets.
 

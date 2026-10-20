@@ -200,6 +200,11 @@ Rules:
 - The neutral rule list contains only `ask` and `deny`. It never contains `allow`.
   A convenience allowance is personal and lives in the owner's own configuration.
 - A rule is rendered into local, uncommitted harness configuration only.
+- A harness that provides `permissions` renders a `deny` for each owner-run command, so an
+  agent cannot run it: `wb install`, `wb upgrade`, `wb add`, `wb attach`, `wb approve`,
+  `wb pin` and `wb release-approvals`. The read-only `wb preview` is not denied. The commands
+  are listed in `installer-interface.md`. *(Required by that specification; not yet
+  rendered by any harness module, which is for `claude-harness` and `opencode-harness`.)*
 
 ## Acknowledgement
 
@@ -490,7 +495,7 @@ instead of retrying. No dollar ceiling is required.
 - A harness without `permissions` leaves hard stops and the guarded store protected
   by instruction only.
 - The guarded store shares the owner's account.
-- The typed confirmation of `approve` and `pin` is friction, not authentication, and a process that
+- The typed confirmation of `approve`, `pin` and the project write commands (`installer-interface.md`) is friction, not authentication, and a process that
   opens its own pseudo-terminal passes the terminal test. Only the harness deny rules stop an agent
   from running those commands.
 - Shipped first-party approvals are trusted because the distribution is. Anything that can write the

@@ -176,6 +176,11 @@ recorded in the manifest.
 
 ## Operations
 
+This section says what each operation does and refuses to do. How a command is invoked, how
+its target is named and checked, its arguments and options, the preview and its approval,
+the output and the exit codes are in [`installer-interface.md`](installer-interface.md) and
+are not repeated here.
+
 ### install
 
 - First ensures the guarded store exists and is seeded (see `trust-and-approval.md`),
