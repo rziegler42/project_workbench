@@ -275,11 +275,14 @@ class Writer:
             for each in fds:
                 os.close(each)
 
-    def list_dir(self, rel):
+    BAD_NAME = "badname"
+
+    def list_dir(self, rel, lenient=False):
         """The entries of directory `rel` as sorted ``(name, kind)`` pairs, `kind` being what
         ``safefs.classify`` says of the entry itself (a link is ``symlink``, never followed), or
         None when the directory is not there. A link or a file in the way of the directory is a
-        conflict. A name that fails the path validator is refused."""
+        conflict. A name that fails the path validator is refused, or with `lenient` is listed
+        with the kind ``BAD_NAME`` and is not examined further."""
         parts = safefs.validate_relpath(rel)
         fds = []
         try:
@@ -291,7 +294,13 @@ class Writer:
                 names = sorted(os.listdir(dirfd))
                 found = []
                 for name in names:
-                    safefs.validate_relpath(name)
+                    try:
+                        safefs.validate_relpath(name)
+                    except safefs.SafeFsError:
+                        if not lenient:
+                            raise
+                        found.append((name, self.BAD_NAME))
+                        continue
                     try:
                         info = os.stat(name, dir_fd=dirfd, follow_symlinks=False)
                     except FileNotFoundError:

@@ -341,7 +341,7 @@ Rounds used 2 of 3. R2-F1 and R2-F2 were recorded as `applied`. The owner chose 
   file, a FIFO, `dir_holds`/`git_entry`, and fd closing in `open_target`. Suite: 1217 tests,
   passing. Not exercised: case-insensitive variants of `dir_holds` ignore names.
 
-### Increment C — done, not yet committed
+### Increment C — done, committed as `6ecff5d`
 
 - New `workbench/recover.py` (modelled on `acknowledge.py`), routed by `cli.py` and listed in the
   usage text. Terminal check first; then `unfinished.examine`, the rendering and a typed 12
@@ -401,4 +401,36 @@ Rounds used 2 of 3. R2-F1 and R2-F2 were recorded as `applied`. The owner chose 
   name after the second examination (already recorded above). Not run: concurrent processes
   (swaps were simulated by patching), the full read budget, a pty run by the reviewer. A
   regression test for the case-variant refusal was added.
-- Next: Increment D (scan limits).
+
+### Increment D — done, committed (see the `#D` trailer)
+
+- `projectfs.Writer.list_dir(rel, lenient=False)`: with `lenient`, a name that fails the path
+  validator (control character, non-UTF-8, colon, backslash, `.git`) is listed with the kind
+  `badname` instead of refusing the listing. The strict default is unchanged.
+- `acknowledgement._walk` lists leniently and never enters a `badname` entry. `differences` reports
+  it as an `added` difference with the reason "a name that cannot be accepted", so `upgrade` and
+  `add` refuse with it listed and `acknowledge` shows it under "cannot be acknowledged" and
+  writes nothing, instead of the whole scan refusing with no path to act on.
+- `acknowledgement.MAX_READ_BYTES` (256 MiB, as the examination's budget): `differences` counts
+  the bytes of every file it reads and refuses with "the files to compare hold more than N bytes"
+  past it. The per-file (16 MiB), entry (20000) and depth (32) limits are unchanged.
+- Tests: `test_acknowledgement.Differences` (control character, newline, colon, backslash, a
+  non-UTF-8 name where the filesystem allows one, a hostile directory listed and not entered, the
+  other differences still listed, the budget refused and a scan within it unchanged),
+  `test_acknowledge.Declining` (the hostile name and the budget, each with no write), and
+  `test_projectfs` (strict and lenient listing, a non-UTF-8 name through a patched listing, since
+  this volume refuses to create one). The scan and `acknowledge` tests failed before the change
+  (run: 9 errors, 1 failure); the two `list_dir` tests were added after it. Suite with
+  `-W error`: 1279 tests, passing, 1 skipped (the non-UTF-8 create on this volume).
+- Independent read-only review (`workflow-reviewer`): no Critical, High or Medium findings. A
+  bad name cannot be read, entered, acknowledged or reach a digest or baseline; budget counted
+  once per scan. Fixed: the "cannot be acknowledged" header now also names unacceptable names
+  (asserted in the test); the no-op patch in the non-UTF-8 listing test was dropped. Not run by
+  the reviewer: the full suite, real non-UTF-8 names, a case-insensitive volume. No separate
+  security-reviewer pass was asked for.
+- Known limits: the budget counts file content only, and the project reader (`installed.read`)
+  has no cumulative budget (Deferred work). `acknowledge` compares every baselined file, so a
+  project whose baselined files total over 256 MiB cannot be acknowledged or upgraded (the
+  message says to deal with it by hand); `upgrade` scans twice, each with a fresh budget.
+  Document in E.
+- Next: Increment E (documentation).

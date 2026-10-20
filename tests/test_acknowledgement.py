@@ -361,6 +361,56 @@ class Differences(Fixture):
         self.assertEqual([(".workbench/big", ADDED)], [(d.path, d.kind) for d in found])
         self.assertTrue(found[0].reason.startswith("unreadable"))
 
+    def hostile(self, name):
+        """Create `.workbench/pkg/<name>`; skip when the filesystem refuses that name."""
+        try:
+            self.put(".workbench/pkg/" + name, b"x")
+        except OSError as exc:
+            self.skipTest("this filesystem refuses the name: %s" % exc)
+
+    def test_a_name_the_scan_cannot_accept_is_a_difference_not_a_refusal(self):
+        self.installed()
+        for index, name in enumerate(("ctl\x01char", "new\nline", "bad\udcffbytes", "colon:name",
+                                      "back\\slash")):
+            with self.subTest(name=name):
+                self.hostile(name)
+                found = [d for d in self.found() if d.path.endswith(name)]
+                self.assertEqual([(".workbench/pkg/" + name, ADDED, None, None)],
+                                 [(d.path, d.kind, d.baseline, d.current) for d in found])
+                self.assertEqual("a name that cannot be accepted", found[0].reason)
+
+    def test_a_hostile_name_does_not_hide_the_other_differences(self):
+        self.installed()
+        self.hostile("ctl\x01char")
+        self.put(".workbench/pkg/mod/a.md", b"edited")
+        self.assertEqual({".workbench/pkg/ctl\x01char", ".workbench/pkg/mod/a.md"},
+                         {d.path for d in self.found()})
+
+    def test_a_directory_with_a_hostile_name_is_listed_and_not_entered(self):
+        self.installed()
+        try:
+            os.mkdir(os.path.join(self.root, ".workbench", "pkg", "dir\x01"))
+        except OSError as exc:
+            self.skipTest("this filesystem refuses the name: %s" % exc)
+        self.put(".workbench/pkg/dir\x01/inside", b"x")
+        self.assertEqual([(".workbench/pkg/dir\x01", ADDED, "a name that cannot be accepted")],
+                         [(d.path, d.kind, d.reason) for d in self.found()])
+
+    def test_a_scan_past_the_byte_budget_is_refused_with_the_limit_in_the_message(self):
+        self.installed()
+        with unittest.mock.patch.object(acknowledgement, "MAX_READ_BYTES", 10):
+            self.put(".workbench/bulk/one", b"x" * 6)
+            self.put(".workbench/bulk/two", b"x" * 6)
+            with self.assertRaises(AcknowledgementError) as caught:
+                self.found()
+        self.assertIn("more than 10 bytes", str(caught.exception))
+
+    def test_a_scan_within_the_byte_budget_is_unchanged(self):
+        self.installed()
+        total = sum(len(d) for d in (b"{}", b"a", b"local/\n", b"agents"))
+        with unittest.mock.patch.object(acknowledgement, "MAX_READ_BYTES", total):
+            self.assertEqual([], self.found(["AGENTS.md"]))
+
     def test_nothing_is_written(self):
         self.installed()
         before = sorted(self.tree())

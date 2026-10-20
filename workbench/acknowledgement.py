@@ -30,6 +30,7 @@ WORKBENCH = ".workbench"
 LOCAL = "local"
 MAX_WALKED = 20000      # entries visited under .workbench/ before the walk gives up
 MAX_DEPTH = 32
+MAX_READ_BYTES = 256 * 1024 * 1024      # bytes of file content one comparison reads in all
 
 _ID = re.compile(r"\A[0-9a-f]{64}\Z")
 _HEX = re.compile(r"\A[0-9a-f]{64}\Z")
@@ -143,16 +144,23 @@ def check_known(baselines, seen, resolved_path):
 # --- comparing -------------------------------------------------------------------------------
 
 
-def _current(reader, rel):
+def _current(reader, rel, spent):
     """(hash, reason) of the file at `rel`: the hash is None when it is not there or not a plain
-    file, and the reason says why when it is not a plain file."""
+    file, and the reason says why when it is not a plain file. `spent` is a one-item list of the
+    bytes read so far; the comparison stops once it passes ``MAX_READ_BYTES``."""
     try:
         state = reader.read_file(rel)
     except projectfs.WriteConflict:
         return None, "not a regular file"
     except safefs.SafeFsError as exc:
         return None, "unreadable (%s)" % display.ascii_text(str(exc))[:80]
-    return (None, "") if state is None else (state.hash, "")
+    if state is None:
+        return None, ""
+    spent[0] += len(state.data)
+    if spent[0] > MAX_READ_BYTES:
+        raise AcknowledgementError("the files to compare hold more than %d bytes; deal with the "
+                                   "project by hand first" % MAX_READ_BYTES)
+    return state.hash, ""
 
 
 def _walk(reader, rel, depth, found):
@@ -161,14 +169,14 @@ def _walk(reader, rel, depth, found):
     if depth > MAX_DEPTH:
         raise AcknowledgementError("%s is nested more than %d directories deep" % (rel, MAX_DEPTH))
     try:
-        entries = reader.list_dir(rel)
+        entries = reader.list_dir(rel, lenient=True)
     except safefs.SafeFsError as exc:
         raise AcknowledgementError("cannot list %s: %s" % (rel, exc))
     for name, kind in entries or ():
         path = "%s/%s" % (rel, name)
         if rel == WORKBENCH and _is_local(name) and kind == "dir":
             continue    # scratch; a link or a file by that name is not scratch and is reported
-        found[path] = kind
+        found[path] = kind      # a name that fails the path rules is listed, never entered
         if len(found) > MAX_WALKED:
             raise AcknowledgementError("more than %d entries under %s" % (MAX_WALKED, WORKBENCH))
         if kind == "dir":
@@ -191,13 +199,16 @@ def differences(reader, baselines, writes=()):
     scope.update(path for path in baselines if path.startswith(WORKBENCH + "/")
                  and not path.casefold().startswith("%s/%s/" % (WORKBENCH, LOCAL)))
     found = []
+    spent = [0]
     for path in sorted(scope):
         kind = listing.get(path)
         if kind is not None and kind != "file":
             now, reason = None, ("a directory" if kind == "dir" else
-                                 "a link" if kind == "symlink" else "not a regular file")
+                                 "a link" if kind == "symlink" else
+                                 "a name that cannot be accepted" if kind == projectfs.Writer.BAD_NAME
+                                 else "not a regular file")
         else:
-            now, reason = _current(reader, path)
+            now, reason = _current(reader, path, spent)
         was = baselines.get(path)
         if was is None and now is None and not reason:
             continue

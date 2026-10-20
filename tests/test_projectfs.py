@@ -553,6 +553,21 @@ class ReadReplaceTest(Fixture):
             with self.subTest(rel=rel), self.assertRaises(WriteConflict):
                 self.writer().list_dir(rel)
 
+    def test_list_dir_refuses_a_bad_name_unless_lenient(self):
+        os.mkdir(os.path.join(self.root, "d"))
+        self.put("d/ok", b"1")
+        self.put("d/ctl\x01name", b"2")
+        with self.assertRaises(safefs.SafeFsError):
+            self.writer().list_dir("d")
+        self.assertEqual([("ctl\x01name", "badname"), ("ok", "file")],
+                         self.writer().list_dir("d", lenient=True))
+
+    def test_list_dir_lenient_lists_a_name_that_is_not_utf8(self):
+        os.mkdir(os.path.join(self.root, "d"))
+        with unittest.mock.patch.object(os, "listdir", return_value=["ok", "bad\udcff"]):
+            found = self.writer().list_dir("d", lenient=True)
+        self.assertEqual([("bad\udcff", "badname")], [f for f in found if f[0] != "ok"])
+
     def test_list_dir_changes_nothing(self):
         os.mkdir(os.path.join(self.root, "d"))
         writer = self.writer()

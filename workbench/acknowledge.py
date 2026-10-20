@@ -124,7 +124,8 @@ def examine(guarded, held, version):
                        "the project by hand first" % (len(found), MAX_LISTED)])
     stuck = [d for d in found if d.reason]
     if stuck:
-        lines = ["these paths cannot be acknowledged, because they are not regular files:"]
+        lines = ["these paths cannot be acknowledged, because they are not regular files or their "
+                 "names cannot be accepted:"]
         lines += ["  %s (%s)" % (display.ascii_text(d.path)[:120], d.reason) for d in stuck[:20]]
         lines.append("  put a regular file back, or remove the path yourself, then run this again")
         raise Refused(lines)

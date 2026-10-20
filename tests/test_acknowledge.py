@@ -331,6 +331,27 @@ class Declining(Acknowledge):
         self.assertIn("cannot be acknowledged", err)
         self.assertEqual(before, self.snapshot())
 
+    def test_a_hostile_name_is_listed_as_not_acknowledgeable_and_nothing_is_written(self):
+        self.installed_project()
+        self.edit(SCRIPT, lambda data: data + b"# edited\n")
+        with open(os.path.join(self.place, ".workbench", "ctl\x01name"), "wb") as handle:
+            handle.write(b"x")
+        before = self.snapshot()
+        code, out, err = self.run_it()
+        self.assertEqual((1, ""), (code, out))
+        self.assertIn("or their names cannot be accepted", err)
+        self.assertIn(".workbench/ctl\\x01name (a name that cannot be accepted)", err)
+        self.assertEqual(before, self.snapshot())
+
+    def test_a_scan_past_the_byte_budget_is_refused_and_nothing_is_written(self):
+        self.installed_project()
+        before = self.snapshot()
+        with unittest.mock.patch.object(acknowledgement, "MAX_READ_BYTES", 10):
+            code, out, err = self.run_it()
+        self.assertEqual((1, ""), (code, out))
+        self.assertIn("more than 10 bytes", err)
+        self.assertEqual(before, self.snapshot())
+
     def test_a_project_unknown_here_is_refused(self):
         self.install(self.version(), store_writes=False)
         code, out, err = self.run_it()
