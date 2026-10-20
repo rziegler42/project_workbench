@@ -186,7 +186,39 @@ class StoreTest(CliBase):
         self.assertFalse(os.path.exists(self.store_root))
         self.assertEqual(run("verify", self.path)[0], 0)
         self.assertEqual(sorted(os.listdir(self.store_root)),
-                         ["bin", "cache", "packages", "projects"])
+                         ["bin", "cache", "packages", "projects", "settings"])
+
+    def test_a_damaged_settings_file_is_reported_and_kept(self):
+        self.assertEqual(run("verify", self.path)[0], 0)
+        path = os.path.join(self.store_root, "settings")
+        with open(path, "wb") as handle:
+            handle.write(b"{ broken")
+        code, out, err = run("verify", self.path)
+        self.assertEqual((code, err), (0, ""))
+        self.assertIn("warning: settings: settings are damaged", out)
+        with open(path, "rb") as handle:
+            self.assertEqual(handle.read(), b"{ broken")
+
+    def test_hostile_settings_never_raise_out_of_main(self):
+        self.assertEqual(run("verify", self.path)[0], 0)
+        path = os.path.join(self.store_root, "settings")
+        hostile = [b"[" * 100000, b'{"version": ' + b"9" * 5000 + b"}", b'{"a": "\\ud800"}',
+                   b"\xff\xfe\x00", b"x" * (2 * 1024 * 1024), b'{"version": 1, "evil\\u001b[31m": 1}']
+        for data in hostile:
+            with self.subTest(data=data[:20]):
+                with open(path, "wb") as handle:
+                    handle.write(data)
+                code, out, err = run("verify", self.path)
+                self.assertEqual(code, 0, err)
+                self.assertNotIn("\x1b", out + err)
+
+    def test_a_damaged_settings_file_is_reported_on_stderr_when_refused(self):
+        self.assertEqual(run("verify", self.path)[0], 0)
+        with open(os.path.join(self.store_root, "settings"), "wb") as handle:
+            handle.write(b"[]")
+        code, out, err = run("verify", os.path.join(self.base, "nowhere"))
+        self.assertEqual((code, out), (1, ""))
+        self.assertIn("warning: settings: settings are damaged", err)
 
     def test_the_store_is_created_even_when_the_package_is_refused(self):
         self.assertEqual(run("verify", os.path.join(self.base, "nowhere"))[0], 1)

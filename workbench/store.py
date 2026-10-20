@@ -99,6 +99,38 @@ class Store:
         finally:
             os.close(fd)
 
+    def kind(self, rel):
+        """What is at `rel`: None when absent, else "file", "dir", "symlink" or "other".
+
+        Every directory on the way is opened with no-follow flags, so a link planted
+        inside the store is refused, not followed. Only the last component may be a link
+        and it is reported as one.
+        """
+        parts = safefs.validate_relpath(rel)
+        fds = []
+        with safefs.Root(self.root, "guarded store") as root:
+            try:
+                current = root._live_fd()
+                shown = self.root
+                for part in parts[:-1]:
+                    shown = shown + "/" + part
+                    try:
+                        os.stat(part, dir_fd=current, follow_symlinks=False)
+                    except FileNotFoundError:
+                        return None
+                    current = safefs._open_dir(part, current, shown)
+                    fds.append(current)
+                try:
+                    info = os.stat(parts[-1], dir_fd=current, follow_symlinks=False)
+                except FileNotFoundError:
+                    return None
+                return safefs.classify(info.st_mode)
+            except OSError as exc:
+                raise StoreError("cannot look at %s/%s: %s" % (self.root, rel, exc.strerror or exc))
+            finally:
+                for fd in fds:
+                    os.close(fd)
+
     def read(self, rel):
         with safefs.Root(self.root, "guarded store") as root:
             return root.read_file(rel)

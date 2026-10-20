@@ -49,11 +49,25 @@ and prints the install order. A harness module is required in a selection unless
 
 Every command first makes sure the guarded store, `~/.config/project-workbench/`, exists.
 It creates the directory and `packages/`, `cache/`, `projects/` and `bin/` with mode
-`0700` when they are missing, and does nothing when they are there. A store or one of
+`0700` when they are missing, and does nothing when they are there. The command line then
+seeds the personal settings if they are missing (`Store.ensure` itself only makes the
+directories, so settings depend on the store and not the reverse). A failure to seed ends
+the command with exit code 1. Notes about the settings are printed with the verify
+warnings and start with `settings:`. A store or one of
 those directories that is a symbolic link, is owned by another user, or has any mode
 other than `0700` (group or other access, setgid, sticky) is refused with exit code 1, and nothing is repaired. A usage error or
 `-h` does not create it.
 
+- The personal settings are the file `settings` in the store: strict JSON with a
+  `version`, a `checkpoints` object (`stop` or `delegate` per checkpoint name) and a
+  copy of the hard-stop floor's ids. A missing file is created. With no settings, or with
+  any entry that is missing or not exactly `delegate`, a checkpoint stops. A damaged file
+  is never overwritten: the command prints a `settings:` warning and everything stops
+  until the owner repairs it.
+- The hard-stop floor is compiled into `workbench/floor.py`. The copy in `settings` is for
+  reading and rendering only; editing or deleting it changes nothing. `effective_stops`
+  can combine added stops with the floor and refuses any removal; no module declares an
+  added stop yet.
 - The location is fixed. No workbench environment variable moves it; `HOME` decides it,
   as for any program run by the same account.
 - The store is a mechanical barrier, not an operating-system one, and it shares the

@@ -8,7 +8,7 @@ import argparse
 import os
 import sys
 
-from . import safefs, store, verify
+from . import safefs, settings, store, verify
 
 PROG = "python3 -m workbench"
 USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
@@ -76,8 +76,12 @@ def main(argv, out=None, err=None, *, store_root=None):
         return exc.code if isinstance(exc.code, int) else 2
 
     # Every command first makes sure the guarded store exists, before any check.
+    # The personal settings are seeded when missing and reported when damaged; a damaged
+    # file is never overwritten and every checkpoint then stops.
     try:
-        store.Store(store_root if store_root is not None else store.default_root()).ensure()
+        guarded = store.Store(store_root if store_root is not None else store.default_root())
+        guarded.ensure()
+        notes = ["settings: " + problem for problem in settings.initialize(guarded).problems]
     except safefs.SafeFsError as exc:
         err.write("refused: %s\n" % _clean(str(exc)))
         return 1
@@ -94,6 +98,6 @@ def main(argv, out=None, err=None, *, store_root=None):
     else:
         for problem in result.problems:
             err.write("refused: %s\n" % _clean(str(problem)))
-    for warning in result.warnings:
+    for warning in notes + list(result.warnings):
         (out if result.accepted else err).write("warning: %s\n" % _clean(warning))
     return 0 if result.accepted else 1
