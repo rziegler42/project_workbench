@@ -494,6 +494,31 @@ class Writer:
             for fd in held.values():
                 os.close(fd)
 
+    def remove_empty_dir(self, rel):
+        """Remove directory `rel` with ``rmdir``, which refuses one that holds anything. True
+        when removed, False when it is not there. A link or a file in the way is a conflict and
+        is left alone; the target itself cannot be named."""
+        parts = safefs.validate_relpath(rel)
+        shown = self._shown(rel)
+        fds = []
+        try:
+            try:
+                dirfd = self._walk(parts[:-1], fds, False)
+                info = os.stat(parts[-1], dir_fd=dirfd, follow_symlinks=False)
+            except FileNotFoundError:
+                return False
+            if not stat.S_ISDIR(info.st_mode):
+                raise WriteConflict("not a real directory: %s" % shown)
+            os.rmdir(parts[-1], dir_fd=dirfd)
+            return True
+        except FileNotFoundError:
+            return False
+        except OSError as exc:
+            raise _os_error("remove", shown, exc)
+        finally:
+            for each in fds:
+                os.close(each)
+
     def remove_marker(self):
         """Unlink ``.workbench/local/incomplete`` and nothing else."""
         parts = MARKER.split("/")

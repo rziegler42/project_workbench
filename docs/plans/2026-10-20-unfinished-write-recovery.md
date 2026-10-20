@@ -302,7 +302,8 @@ Rounds used 2 of 3. R2-F1 and R2-F2 were recorded as `applied`. The owner chose 
   pass over A to C should try them again. A plan of more than about 5,000 files cannot be
   recorded (1 MiB bound) and is refused with nothing written; note this in Increment E.
   Suite after the fixes: 1177 tests, passing.
-### Increment B — done, not yet committed
+
+### Increment B — done, committed as `8208f2b`
 
 - `unfinished.examine(writer, store_root)` and `render`. Each recorded file is read through
   `Writer.read_file` (no-follow, regular, one link) and classed before/after/other, with a
@@ -339,4 +340,65 @@ Rounds used 2 of 3. R2-F1 and R2-F2 were recorded as `applied`. The owner chose 
   tests for `install`/`preview install` refusals, a `.git` link, a recorded directory that is a
   file, a FIFO, `dir_holds`/`git_entry`, and fd closing in `open_target`. Suite: 1217 tests,
   passing. Not exercised: case-insensitive variants of `dir_holds` ignore names.
-- Next: Increment C (`wb recover`).
+
+### Increment C — done, not yet committed
+
+- New `workbench/recover.py` (modelled on `acknowledge.py`), routed by `cli.py` and listed in the
+  usage text. Terminal check first; then `unfinished.examine`, the rendering and a typed 12
+  character digest. The digest covers the marker's canonical bytes (`unfinished.fingerprint`),
+  the examination items, the removal steps, the summaries and the target's device and inode.
+  After the answer the target is rechecked and examined again; a different digest, or a state
+  that is no longer acceptable, removes nothing. Exit codes: 0 done or nothing to recover, 1
+  refused or cancelled, 3 removal failed or interrupted, 130 interrupted at the prompt.
+- Accepted states: files before with store none (marker and recorded empty directories go);
+  files after with store all (marker goes); `upgrade` and `add` with files after and store none
+  (marker goes, `wb acknowledge` is named). `install` with files after and store none or partial
+  is refused with the advice to put the project back and install again. Everything else is
+  refused with the paths to deal with, and nothing is written. A forged record with no files or
+  no store writes, a partial or foreign `.git`, a marker that is a link or a directory, and a
+  recorded directory that holds anything (also `.workbench/local` holding more than the marker)
+  are refused.
+- Removal order: recorded empty directories deepest first, then the marker, then (only when the
+  plan made `.workbench`) `.workbench/local` and `.workbench`, so a directory that cannot be
+  removed leaves the marker and the record in place. Only `rmdir` and the existing
+  `remove_marker` are used (`Writer.remove_empty_dir` is new: no-follow walk, a link or file in
+  the way is a conflict, the target cannot be named). The target directory is never removed.
+- `target.open_target(..., marked=True)` returns a marked target as `existing`; every other
+  refusal is unchanged (tested for a link, a file and the home directory).
+- Known limits: the marker is unlinked by name a moment after the second examination, so a
+  marker swapped inside that window is removed instead of the one shown (the same check-then-act
+  limit as `replace_file`); the new marker is also just a marker. `recover` for an `install` is
+  possible only from the before state, which means the owner has put things back by hand first.
+- Tests: `tests/test_recover.py` (49): both from-before and from-after states for `install`,
+  `upgrade` and `add` with the rerun compared to an uninterrupted run (tree and store entries);
+  `recover`, `acknowledge`, `upgrade` chains for `upgrade` and `add`; each stop point of
+  criterion 5b including every prefix of the `.git` skeleton; store none, partial and all; no
+  record, link, directory and forged markers; recorded directories holding a file, a link or a
+  directory; a swapped target; a project and a marker changed after the list; typed-ahead input;
+  no terminals; usage; the exit codes 3 and 130; and three pty cases that run the real command
+  in a pseudo-terminal. Suite with `-W error`: 1266 tests, passing.
+- Hand run in a pseudo-terminal (forced failure of the first file of an install, `recover`, then
+  the install again), 2026-10-20: the install exited 3 and named `wb recover`; `recover` showed
+  `files before (8 before, 0 after, 0 other), store none (0 of 2 written)`, the nine removals
+  (eight directories and the marker) and a digest; typing its first 12 characters printed
+  `cleared the marker` and exited 0; the target held only `.git`; the install then exited 0.
+- Independent read-only review of C (`workflow-reviewer`): no Critical or High findings; nothing
+  but the marker and recorded empty directories can be removed. Two Low findings fixed with
+  tests: the digest covered more removals than the 500 listed (now refused past 500, as
+  `acknowledge` does), and a marker that vanished before the unlink, or an interrupt after it,
+  was reported as "still there" (now counted as removed / reported as gone). Case-variant
+  recorded paths are read as safe (`.WORKBENCH` is "holds" and refused) but have no test.
+  Suite: 1269 tests, passing under `-W error`.
+- Adversarial `security-reviewer` pass over A to C (scratch copy, real experiments): no
+  Critical, High or Medium findings. Verified by experiment: case variants of `.workbench` (on a
+  case-insensitive volume), hostile and bidi names, links and FIFOs at recorded paths and at the
+  marker, a recorded directory or parent swapped for a link before and after the second
+  examination (the outside tree survived), `.workbench/local` as a link, oversized, deeply
+  nested and 9,000-directory records (0.2 to 0.4 s), a 15 MiB file at a recorded path. Two Low
+  findings, both accepted: (1) a forged record can make `recover` remove empty directories the
+  user made themselves, since `rmdir` only refuses non-empty ones; they are listed before the
+  digest is typed and the record is shown as unauthenticated; (2) the marker is unlinked by
+  name after the second examination (already recorded above). Not run: concurrent processes
+  (swaps were simulated by patching), the full read budget, a pty run by the reviewer. A
+  regression test for the case-variant refusal was added.
+- Next: Increment D (scan limits).

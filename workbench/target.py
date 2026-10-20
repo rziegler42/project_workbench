@@ -249,9 +249,11 @@ def _real_dir_at(name, dirfd):
     return info is not None and stat.S_ISDIR(info.st_mode)
 
 
-def _classify(fd, resolved):
+def _classify(fd, resolved, marked=False):
     names = set(os.listdir(fd))
     if ".workbench" in names and _real_dir_at(".workbench", fd) and _marker_present(fd):
+        if marked:
+            return "existing"
         raise UnfinishedMarker(
             "refused: an unfinished install or upgrade is here (.workbench/local/incomplete "
             "exists), so this is not an existing project: %s" % resolved)
@@ -287,11 +289,13 @@ def _classify(fd, resolved):
 # --- opening ------------------------------------------------------------------
 
 
-def open_target(spelling, store_root, home=None):
+def open_target(spelling, store_root, home=None, marked=False):
     """Inspect, resolve once, open and classify a target; return a held ``Target``.
 
     Raises TargetError naming the place and the reason. Nothing is created. `home` replaces
     ``HOME`` for the refused-place check; the account database's home is always checked too.
+    `marked` is for the command that clears an unfinished write: a target with a marker is then
+    returned as ``existing`` instead of refused; every other check is the same.
     """
     safefs.require_support()
     if spelling == "":
@@ -319,7 +323,7 @@ def open_target(spelling, store_root, home=None):
     fd, held = opened
     try:
         if state is None:
-            state = _classify(fd, resolved)
+            state = _classify(fd, resolved, marked)
         return Target(resolved, state, fd, name, held)
     except UnfinishedMarker as exc:
         try:

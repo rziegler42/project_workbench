@@ -8,8 +8,8 @@ import argparse
 import os
 import sys
 
-from . import (acknowledge, approve, display, firstparty, install, launch, pins, preview, safefs, settings,
-               sources, store, target, upgrade, verify)
+from . import (acknowledge, approve, display, firstparty, install, launch, pins, preview, recover,
+               safefs, settings, sources, store, target, upgrade, verify)
 
 PROG = "python3 -m workbench"
 USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
@@ -29,6 +29,7 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "                                        --select <module> ...   (read-only; no download)\n"
          "       python3 -m workbench add <same arguments as preview add>   (owner-run, terminal only)\n"
          "       python3 -m workbench acknowledge [<target> | --dir <path>]   (owner-run, terminal only)\n"
+         "       python3 -m workbench recover [<target> | --dir <path>]   (owner-run, terminal only)\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
 
@@ -191,6 +192,24 @@ def _acknowledge(tokens, err, out, store_root, stdin):
     return acknowledge.run(opened[0], spelling, stdin, out, err)
 
 
+def _recover(tokens, err, out, store_root, stdin):
+    try:
+        spelling = recover.parse(tokens)
+    except sources.UsageError as exc:
+        err.write("%s\n%s" % (_clean(str(exc)), USAGE))
+        return 2
+    stdin = stdin if stdin is not None else sys.stdin
+    if not recover.require_terminal(stdin, out, err):
+        return 1
+    opened = _open_store(store_root, err)
+    if opened is None:
+        return 1
+    notes = opened[1] + launch.install_wrapper(opened[0], firstparty.default_distribution())
+    for note in notes:
+        err.write("warning: %s\n" % _clean(note))
+    return recover.run(opened[0], spelling, stdin, out, err)
+
+
 def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=None):
     """Run a command. `store_root`, `distribution` and `stdin` are for tests; the command
     line cannot set them."""
@@ -210,6 +229,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         return _preview(argv, out, err, store_root, distribution)
     if argv and argv[0] == "acknowledge":
         return _acknowledge(argv[1:], err, out, store_root, stdin)
+    if argv and argv[0] == "recover":
+        return _recover(argv[1:], err, out, store_root, stdin)
     if argv and argv[0] in ("upgrade", "add"):
         return _upgrade(argv[1:], out, err, store_root, distribution, stdin, argv[0])
     if argv and argv[0] == "install":

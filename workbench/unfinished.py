@@ -242,6 +242,12 @@ def build(command, project, version, files, dirs=(), git=(), store=()):
     return data
 
 
+def fingerprint(record):
+    """The SHA-256 of the marker a record was read from (a record is accepted only in the
+    canonical form, so it stands for exactly those bytes)."""
+    return sha(_serialize(record))
+
+
 def parse(data):
     """The ``Record`` in the marker's bytes. Raises UnfinishedError for an empty marker, one that
     is not exactly what ``build`` writes, or one over the manifest's size bound."""
@@ -427,8 +433,9 @@ def examine(writer, store_root):
     return Examination(record, "", tuple(items), _summary_files(record, items, git), store_summary)
 
 
-def render(found):
-    """The examination as lines of ASCII text for a person to read (not printed with a prefix)."""
+def render(found, hint=True):
+    """The examination as lines of ASCII text for a person to read (not printed with a prefix).
+    `hint` ends them with the line that names `wb recover`; that command itself leaves it out."""
     if found.record is None:
         return ["the marker has no usable record (%s)" % found.problem,
                 "restore any files the failed command wrote from version control or a copy and "
@@ -457,5 +464,6 @@ def render(found):
         lines += shown[:MAX_LISTED]
         if len(shown) > MAX_LISTED:
             lines.append("  and %d more" % (len(shown) - MAX_LISTED))
-    lines.append("run `wb recover` yourself to clear the marker where this is safe")
+    if hint:
+        lines.append("run `wb recover` yourself to clear the marker where this is safe")
     return lines
