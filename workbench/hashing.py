@@ -30,6 +30,7 @@ Tree hash
 Every file is read once, through safefs, with its size limit.
 """
 
+import collections
 import hashlib
 import json
 
@@ -68,17 +69,32 @@ def declaration_hash(declaration):
     return hashlib.sha256(canonical_bytes(declaration)).hexdigest()
 
 
-def tree_hash(root_path, what="module"):
-    """Hash every regular file below `root_path`; see the module docstring."""
+TreeInfo = collections.namedtuple("TreeInfo", "hash files dirs contents")
+
+
+def hash_tree(root_path, what="module", keep=None):
+    """Hash every regular file below `root_path`; see the module docstring.
+
+    Returns a ``TreeInfo``: the hash, the sorted regular-file paths, the sorted
+    directory paths, and a dict of content for each file `keep(rel)` selects. Each
+    file is read once, so the hash and the kept content come from the same bytes.
+    """
     records = []
+    files = []
+    dirs = []
+    contents = {}
     with safefs.Root(root_path, what) as root:
         for entry in root.walk():
             if entry.kind == "dir":
+                dirs.append(entry.rel)
                 continue
             if entry.kind != "file":
                 raise HashError("%s contains a %s, which is not allowed: %s/%s"
                                 % (what, entry.kind, root_path, entry.rel))
             data = root.read_file(entry.rel, expected=entry.identity)
+            files.append(entry.rel)
+            if keep is not None and keep(entry.rel):
+                contents[entry.rel] = data
             records.append((entry.rel.encode("utf-8"),
                             hashlib.sha256(data).hexdigest(),
                             "x" if entry.executable else "-"))
@@ -86,4 +102,8 @@ def tree_hash(root_path, what="module"):
     digest = hashlib.sha256()
     for path, content, flag in records:
         digest.update(content.encode("ascii") + b" " + flag.encode("ascii") + b" " + path + b"\n")
-    return digest.hexdigest()
+    return TreeInfo(digest.hexdigest(), sorted(files), sorted(dirs), contents)
+
+
+def tree_hash(root_path, what="module"):
+    return hash_tree(root_path, what).hash

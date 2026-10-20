@@ -62,6 +62,7 @@ MODULE_FIELDS = ("name", "version", "type", "description", "provides", "requires
 
 _NAME = re.compile(r"^[a-z][a-z0-9-]*$")
 _VERSION = re.compile(r"^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){0,3}$")
+NAME_RE = _NAME
 _HELPER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 
 Package = collections.namedtuple("Package", "name version contract modules declaration")
