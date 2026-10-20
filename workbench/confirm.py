@@ -64,7 +64,7 @@ def _group(title, items, err):
         err.write("  and %d more\n" % (len(items) - LISTED))
 
 
-def report_failure(progress, cause, err):
+def report_failure(progress, cause, err, what="install", hint=""):
     writer, plan = progress.writer, progress.plan
     written = list(writer.written)
     if writer.made_target:
@@ -83,5 +83,7 @@ def report_failure(progress, cause, err):
     _group("not written", missing, err)
     if len(missing) and not [path for path in planned if path not in have]:
         err.write("the project's files are written but its guarded store entries are not\n")
-    err.write("the install is unfinished: %s is left in place, so this directory is not "
-              "accepted as a project\n" % projectfs.MARKER)
+    err.write("the %s is unfinished: %s is left in place, so this directory is not "
+              "accepted as a project\n" % (what, projectfs.MARKER))
+    if hint:
+        err.write("%s\n" % hint)

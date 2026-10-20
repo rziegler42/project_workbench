@@ -24,6 +24,7 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench install <same arguments as preview install>   (owner-run, terminal only)\n"
          "       python3 -m workbench preview upgrade [<target> | --dir <path>] [--package <source> [--ref <ref>]] ...\n"
          "                                            (read-only; no --select, no download)\n"
+         "       python3 -m workbench upgrade <same arguments as preview upgrade>   (owner-run, terminal only)\n"
          "       python3 -m workbench acknowledge [<target> | --dir <path>]   (owner-run, terminal only)\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
@@ -150,6 +151,16 @@ def _preview(argv, out, err, store_root, distribution):
     return preview.run(opened[1], opened[0], out, err, distribution)
 
 
+def _upgrade(tokens, out, err, store_root, distribution, stdin):
+    stdin = stdin if stdin is not None else sys.stdin
+    if not upgrade.require_terminal(stdin, out, err):
+        return 1
+    opened = _project_command(tokens, out, err, store_root, distribution, upgrading=True)
+    if isinstance(opened, int):
+        return opened
+    return upgrade.run(opened[1], opened[0], stdin, out, err, distribution)
+
+
 def _install(tokens, out, err, store_root, distribution, stdin):
     opened = _project_command(tokens, out, err, store_root, distribution)
     if isinstance(opened, int):
@@ -195,6 +206,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         return _preview(argv, out, err, store_root, distribution)
     if argv and argv[0] == "acknowledge":
         return _acknowledge(argv[1:], err, out, store_root, stdin)
+    if argv and argv[0] == "upgrade":
+        return _upgrade(argv[1:], out, err, store_root, distribution, stdin)
     if argv and argv[0] == "install":
         return _install(argv[1:], out, err, store_root, distribution, stdin)
     try:

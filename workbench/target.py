@@ -244,7 +244,7 @@ def _real_dir_at(name, dirfd):
 def _classify(fd, resolved):
     names = set(os.listdir(fd))
     if ".workbench" in names and _real_dir_at(".workbench", fd) and _marker_present(fd):
-        raise TargetError("refused: an unfinished install is here (.workbench/local/incomplete "
+        raise TargetError("refused: an unfinished install or upgrade is here (.workbench/local/incomplete "
                           "exists), so this is not an existing project: %s" % resolved)
     if not names:
         return "new-empty"

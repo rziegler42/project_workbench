@@ -73,6 +73,9 @@ def drive_pty(case, command, env, cwd, answer=None, prompt=b"> ", between=None,
                 if between:
                     between()
                 typed = answer(output.decode("utf-8", "replace")) if callable(answer) else answer
+                # The command discards typed-ahead input right after it prints the prompt; an
+                # answer typed before that is discarded with it and the command waits forever.
+                time.sleep(0.3)
                 os.write(master, (typed + "\n").encode())
         else:
             proc.kill()

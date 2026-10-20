@@ -1,4 +1,5 @@
-"""``wb preview upgrade``: show exactly what an upgrade of an existing project would do.
+"""``wb preview upgrade`` and ``wb upgrade``: show, and after the owner types the digest do, an
+upgrade of an existing project.
 
 ``prepare`` is the whole read-only pipeline from a held target to a plan, in the order the spec
 gives, and refuses with a reason at the first step that fails: the project is read
@@ -8,19 +9,34 @@ records is verified and gated, and only then is the plan built. The project is c
 its baselines a second time with the files the plan would write into. The write command calls
 the same function.
 
-Nothing here writes the project or the store, and nothing contacts the network.
+``preview upgrade`` writes nothing. ``upgrade`` is owner-run and terminal-only like ``install``:
+it prints the plan with its digest, reads the typed first twelve characters, rebuilds the plan
+from the packages as they are now and refuses if its digest differs, then writes in this order:
+the marker ``.workbench/local/incomplete``, the directories, the created files, the files
+replaced (each by a whole-file replace that checks the hash in the plan), the manifest, the
+store's baselines, and last removes the marker. Writing is not atomic: a failure stops at once,
+lists what was written and what was not, leaves the marker and exits 3. Nothing is committed and
+nothing is deleted. Nothing contacts the network.
 """
 
+import collections
 import os
 import shutil
 import stat
 
-from . import (__version__, acknowledgement, base, declarations, display, firstparty, gate,
-               installed, installplan, manifest, preview, projectfs, safefs, snapshot, sources,
-               target, upgradeplan, verify)
+from . import (__version__, acknowledgement, approve, base, confirm, declarations, display,
+               firstparty, gate, installed, installplan, manifest, preview, projectfs, safefs,
+               snapshot, sources, target, upgradeplan, verify)
 
 ENDING = preview.ENDING
 LISTED = 40
+RECOVERY = ("a file already replaced no longer matches the manifest, so a second run would call "
+            "it edited, and there is no automatic repair: put the files listed as written back "
+            "from version control or a copy, remove the marker yourself, and run the upgrade "
+            "again")
+RECOVERY_FILES_DONE = ("the project's files and manifest are complete; only the store entry or "
+                       "the marker is left: remove the marker yourself, then run "
+                       "`wb acknowledge` and review what it lists")
 MAX_PACKAGE_JSON = 1 << 20
 
 
@@ -209,3 +225,199 @@ def run_preview(guarded, parsed, out, err, distribution=None, version=None,
         out.write("nothing to change\n")
     out.write(ENDING + "\n")
     return 0
+
+
+# --- the write ------------------------------------------------------------------------------
+
+_Action = collections.namedtuple("_Action", "kind path")
+_Shown = collections.namedtuple("_Shown", "actions store_writes")
+
+
+def _shown(plan):
+    """The plan as the failure report reads it: what was to be created or replaced."""
+    actions = [_Action("create-dir", path) for path in plan.dirs]
+    actions += [_Action("create-file", w.path) for w in plan.writes]
+    return _Shown(actions, upgradeplan.store_writes(plan))
+
+
+def _ordered(plan):
+    """The file writes in the order they are made: created files, then replaced files, and the
+    manifest, which records them, last."""
+    manifest_path = upgradeplan.MANIFEST
+    creates = [w for w in plan.writes if w.op == "create"]
+    replaces = [w for w in plan.writes if w.op == "replace" and w.path != manifest_path]
+    last = [w for w in plan.writes if w.path == manifest_path]
+    return creates + replaces + last
+
+
+class NotStarted(Exception):
+    """The marker could not be made, so nothing of the upgrade was written."""
+
+
+def _write(guarded, held, plan, progress):
+    writer = progress.writer = projectfs.Writer(held)
+    try:
+        writer.create_file(projectfs.MARKER, b"")
+    except safefs.SafeFsError as exc:
+        if projectfs.MARKER in writer.written:
+            raise
+        raise NotStarted("the marker %s cannot be made (%s); no file of the project was written"
+                         % (projectfs.MARKER, exc))
+    progress.started = True
+    progress.stage = "files"
+    for path in plan.dirs:
+        writer.create_dir(path)
+    for write in _ordered(plan):
+        if write.op == "create":
+            writer.create_file(write.path, write.data, executable=write.executable)
+        else:
+            writer.replace_file(write.path, write.expected, write.data,
+                                executable=write.executable)
+    progress.stage = "store"
+    for path, data in upgradeplan.store_writes(plan):
+        guarded.write(path, data)
+        progress.stored.append(path)
+    # What is on disk must be what was shown: a file or a directory moved away after the check
+    # would otherwise be reported as written.
+    for write in plan.writes:
+        state = writer.read_file(write.path)
+        if state is None or state.hash != write.hash:
+            raise safefs.SafeFsError("%s is not what was written" % display.ascii_text(
+                write.path)[:120])
+    progress.stage = "marker"
+    try:
+        writer.remove_marker()
+    except safefs.SafeFsError:
+        if held.has_incomplete_marker():
+            raise
+        progress.warnings.append("the marker %s was already gone" % projectfs.MARKER)
+
+
+def _finish(plan, progress, held, out, err):
+    for warning in progress.warnings:
+        err.write("warning: %s\n" % display.clean(warning))
+    # The marker and the `.workbench/local/` made for it are the command's own bookkeeping.
+    done = [path for path in progress.writer.written
+            if path not in (projectfs.MARKER, projectfs.MARKER.rsplit("/", 1)[0] + "/")]
+    try:
+        out.write("wrote %d paths in %s\n" % (len(done), display.ascii_text(held.path)))
+        notes = [r for r in plan.rows if r.kind == upgradeplan.CONFLICT
+                 or (r.kind == upgradeplan.SKIP and r.detail)]
+        if notes:
+            out.write("left as they are:\n")
+            for row in notes[:LISTED]:
+                out.write("  %s %s%s (%s)\n" % (
+                    row.kind, display.ascii_text(row.path)[:120],
+                    (" block %s slot %s" % (display.ascii_text(row.block),
+                                            display.ascii_text(row.slot))) if row.block else "",
+                    display.ascii_text(row.detail)[:160]))
+            if len(notes) > LISTED:
+                out.write("  and %d more\n" % (len(notes) - LISTED))
+        out.write("nothing was committed; committing the result as one change makes it "
+                  "revertable\n")
+        out.flush()
+    except BrokenPipeError:
+        pass
+
+
+def _refuse(err, text):
+    err.write("refused: %s\n" % display.clean(text))
+    return 1
+
+
+def _lines(err, exc):
+    for index, line in enumerate(exc.lines):
+        err.write(("refused: %s\n" if not line.startswith("  ") or not index else "%s\n")
+                  % display.clean(line))
+
+
+def _run(guarded, parsed, stdin, out, err, distribution, version, which, progress):
+    try:
+        with target.open_target(parsed.target, guarded.root) as held:
+            done = prepare(guarded, held, parsed.packages, distribution, version, which)
+            plan, existing, selection = done["plan"], done["existing"], done["selection"]
+            for warning in done["warnings"]:
+                err.write("warning: %s\n" % display.clean(warning))
+            out.write(upgradeplan.render(plan, existing, selection, held.path, held.identity,
+                                         show_digest=True, approvals=done["approvals"]))
+            if not plan.writes:
+                out.write("nothing to change\n")
+                return 0
+            digest = upgradeplan.digest(plan, existing, selection, held.identity)
+            out.write("\nTo upgrade, type the first %d characters of the digest shown above and "
+                      "press Enter.\nAnything else cancels and writes nothing.\n> "
+                      % confirm.CONFIRM_CHARS)
+            out.flush()
+            if not confirm.typed_matches(stdin, digest):
+                out.write("cancelled: nothing was written\n")
+                return 1
+            held.recheck()
+            try:
+                again = prepare(guarded, held, parsed.packages, distribution, version, which)
+            except preview.Refused as exc:
+                raise preview.Refused(["the project or its packages changed while the plan was "
+                                       "shown: %s; nothing was written" % "; ".join(exc.lines)])
+            if upgradeplan.digest(again["plan"], again["existing"], again["selection"],
+                                  held.identity) != digest:
+                return _refuse(err, "the plan changed while it was shown; nothing was written")
+            progress.plan = _shown(plan)
+            try:
+                _write(guarded, held, plan, progress)
+            except NotStarted as exc:
+                return _refuse(err, str(exc))
+            except (Exception, KeyboardInterrupt) as exc:
+                cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
+                if progress.writer is None:
+                    raise
+                confirm.report_failure(
+                    progress, cause, err, what="upgrade",
+                    hint=RECOVERY_FILES_DONE if progress.stage in ("store", "marker")
+                    else RECOVERY)
+                return 3
+            _finish(plan, progress, held, out, err)
+            return 0
+    except target.TargetError as exc:
+        return _refuse(err, display.clean(str(exc)).replace("refused: ", "", 1))
+    except preview.Refused as exc:
+        _lines(err, exc)
+        return 1
+    except safefs.SafeFsError as exc:
+        return _refuse(err, str(exc))
+
+
+def require_terminal(stdin, out, err):
+    """True when both streams are terminals; otherwise print the refusal and return False."""
+    if approve.is_terminal(stdin) and approve.is_terminal(out):
+        return True
+    _refuse(err, "upgrade is owner-run: standard input and output must both be terminals. Run "
+                 "this command yourself, from your own terminal; `preview upgrade` shows the "
+                 "same plan without writing.")
+    return False
+
+
+def run(guarded, parsed, stdin, out, err, distribution=None, version=None, which=shutil.which):
+    """Upgrade after the owner types the digest. Returns the exit code: 0 done or nothing to
+    change, 1 refused or cancelled, 3 stopped after writing began, 130 interrupted before it."""
+    if not require_terminal(stdin, out, err):
+        return 1
+    progress = confirm.Progress()
+    progress.warnings = []
+    progress.stage = "files"
+    try:
+        return _run(guarded, parsed, stdin, out, err, distribution, version or __version__,
+                    which, progress)
+    except KeyboardInterrupt:
+        if progress.started:
+            try:
+                err.write("\ninterrupted after writing began: the project may be partly "
+                          "upgraded; check %s\n" % projectfs.MARKER)
+            except OSError:
+                pass
+            return 3
+        try:
+            out.write("\ncancelled: nothing was written\n")
+        except OSError:
+            pass
+        return 130
+    except BrokenPipeError:
+        return 3 if progress.started else 1
