@@ -16,6 +16,8 @@ Limits, recorded on purpose:
   part-way is listed too, since it exists.
 * A process killed mid-write can leave a part-written file. The install marker
   (``.workbench/local/incomplete``) is how a later command finds that directory.
+* A file with more than one hard link is refused by every read and replace, since its other name
+  may be outside the project. A file whose mode allows no read cannot be replaced.
 * A replace checks the original's hash and then renames; the two steps are not one operation, so
   a write made to the file in between is lost. The check is against the project's owner or a
   tool run beside this command, not against an attacker the hash gate already excludes.
@@ -217,6 +219,9 @@ class Writer:
             if not stat.S_ISREG(opened.st_mode) or (opened.st_dev, opened.st_ino) != (
                     info.st_dev, info.st_ino):
                 raise WriteConflict("the file changed while it was opened: %s" % shown)
+            if opened.st_nlink > 1:
+                # A name that is also another path may be a file outside the project.
+                raise WriteConflict("the file has more than one hard link: %s" % shown)
             if opened.st_size > safefs.MAX_FILE_BYTES:
                 raise safefs.SafeFsError("file too large (%d bytes, limit %d): %s"
                                          % (opened.st_size, safefs.MAX_FILE_BYTES, shown))

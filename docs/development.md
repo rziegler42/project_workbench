@@ -281,7 +281,8 @@ python3 -m workbench add             <the same arguments>                     (o
 | 3 | stopped after writing began; the marker is left |
 | 130 | interrupted before anything was written |
 
-**Limits.** The check of a file's hash and the rename that replaces it are not one operation, so
+**Limits.** A file with more than one hard link is refused, since its other name may be outside the
+project. The check of a file's hash and the rename that replaces it are not one operation, so
 a write by another process in between is lost; the typed text is friction, not authentication,
 and the harness's deny rule is the barrier. A rerun after a part-way failure can rewrite the
 manifest while file conflicts remain (writing the planned manifest hash into the marker would

@@ -277,6 +277,19 @@ class ReadReplaceTest(Fixture):
         with self.assertRaises(safefs.SafeFsError):
             self.writer().read_file("big")
 
+    def test_read_and_replace_refuse_a_file_with_another_hard_link(self):
+        outside = os.path.join(self.outside, "victim")
+        with open(outside, "wb") as handle:
+            handle.write(b"OUTSIDE")
+        os.link(outside, os.path.join(self.root, "linked"))
+        with self.assertRaises(WriteConflict):
+            self.writer().read_file("linked")
+        with self.assertRaises(WriteConflict):
+            self.writer().replace_file("linked", sha(b"OUTSIDE"), b"new")
+        with open(outside, "rb") as handle:
+            self.assertEqual(b"OUTSIDE", handle.read())
+        self.assertEqual([], self.litter())
+
     def test_read_validates_the_path(self):
         for rel in ("", "/abs", "a/../b", "a//b"):
             with self.subTest(rel=rel), self.assertRaises(safefs.SafeFsError):

@@ -601,9 +601,10 @@ Increments A to M are done, each as one local commit with the trailer
 | J | `d7ef1e6` | `workbench/acknowledge.py` and `wb acknowledge` |
 | K | `305aaed` | `wb upgrade`: the owner-run write |
 | L | `7d15e6f` | `wb add` and `wb preview add` |
-| M | this commit | the documents and this Result |
+| M | `f4556d0` | the documents and this Result |
+| after M | the commit that updated this Result | the review of D: a file with another hard link is refused by every read and replace |
 
-**Tests.** The suite went from 814 (the count when `base-and-manifests` finished) to 1140 passing
+**Tests.** The suite went from 814 (the count when `base-and-manifests` finished) to 1141 passing
 (`python3 -B -W error -m unittest discover -s tests`), rising by the new tests only, and
 `git diff --check` was clean at each commit. No test touches the real guarded store or the
 network. The completion criteria are pinned by these tests: `tests/test_upgrade.py` (`Chain`: a
@@ -623,10 +624,14 @@ paths and ended `nothing was committed; committing the result as one change make
 the owner's line and the seeded files were unchanged, the `a` block read the new text, and a
 second `acknowledge` printed `nothing to acknowledge`.
 
-**Reviews.** Increments G to L were challenged by an advisor before commit, and J, K and L were
+**Reviews.** Increments G to L were challenged by an advisor before commit, and D, J, K and L were
 also attacked by a separate agent in a scratch copy (findings treated as untrusted and checked);
 the findings of A to F are in those commits' messages and tests. Fixed:
 
+- D (reviewed after the plan's last increment, by a separate agent, with no Critical, High or Medium
+  finding): the mode handling, the order of the permission fix, the hash check and the rename, link,
+  FIFO and directory swaps, parent swaps and injected failures held in experiments. A file with
+  another hard link was readable and replaceable as project data; `_open_regular` now refuses it.
 - G: a block with an existing entry was replaced without checking its holder file (a retagged or
   dropped file entry could be rewritten); the version was not compared; both closed with tests.
 - I: a swapped file between the two reads (every replace now carries the baseline hash), a
@@ -688,12 +693,18 @@ the findings of A to F are in those commits' messages and tests. Fixed:
 - Not exercised by the reviewers: BrokenPipe paths, a real-terminal over-long answer, hostile
   manifest strings through the rendered plan, a new package name colliding with a reserved name,
   and `add` with a changed `base`.
-- Only J, K and L were reviewed by a separate agent, and the fixes made after those reviews were
-  checked by tests only. D's mode-fix reorder was not re-reviewed on its own, and E, F, G and I
-  were not attacked by a separate agent. One completion criterion asks for a security review of D,
-  J, K and L with no unresolved finding; the partial-failure finding on K is recorded here as a limit.
+- Only D, J, K and L were reviewed by a separate agent, and the fixes made after those reviews were
+  checked by tests only; E, F, G and I were not attacked by a separate agent. One completion
+  criterion asks for a security review of D, J, K and L with no unresolved finding; the
+  partial-failure finding on K is recorded above as a limit, and D's remaining findings are below.
+- From the review of D: a file whose mode allows no read cannot be replaced (it fails closed);
+  `list_dir` has no entry-count limit, and one control-character name makes a listing refuse;
+  ownership, ACLs and extended attributes are not kept by a replace; there is no directory fsync
+  after the rename; a process killed between creating the sibling and the rename can leave a
+  `.workbench-<pid>-<hex>.tmp`; case-insensitive and Unicode-normalising filesystems were not
+  tested for name collisions.
 
 **Open for the owner.** Accept or reject the two `Proposed` decisions
-`2026-10-20-acknowledge-before-upgrade` and `2026-10-20-upgrade-needs-no-git`; push the 13 local
+`2026-10-20-acknowledge-before-upgrade` and `2026-10-20-upgrade-needs-no-git`; push the local
 commits after a check for secrets; decide whether the marker-content hardening is a new plan or
 increment; ask for further security reviews if wanted. `claude-harness` is the next candidate.
