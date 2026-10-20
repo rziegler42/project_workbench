@@ -132,6 +132,15 @@ def parse_json(data):
     return value
 
 
+def _check_text(item):
+    # A lone surrogate is valid JSON but cannot be encoded, hashed or printed.
+    if isinstance(item, str):
+        try:
+            item.encode("utf-8")
+        except UnicodeEncodeError:
+            raise ValueError("a string is not valid Unicode (lone surrogate)")
+
+
 def _check_depth(value):
     # Iterative, so a hostile document cannot exhaust the stack here.
     stack = [(value, 1)]
@@ -140,8 +149,15 @@ def _check_depth(value):
         if isinstance(item, (dict, list)):
             if depth > MAX_DEPTH:
                 raise ValueError("nested deeper than %d levels" % MAX_DEPTH)
-            children = item.values() if isinstance(item, dict) else item
+            if isinstance(item, dict):
+                for key in item:
+                    _check_text(key)
+                children = item.values()
+            else:
+                children = item
             stack.extend((child, depth + 1) for child in children)
+        else:
+            _check_text(item)
 
 
 # --- value checks -------------------------------------------------------------------
@@ -166,7 +182,8 @@ class _Checker:
         return value
 
     def version(self, value, field="version"):
-        if not isinstance(value, str) or not _VERSION.match(value):
+        if (not isinstance(value, str) or len(value) > MAX_NAME_CHARS
+                or not _VERSION.match(value)):
             self.fail(field, "%r is not one to four dot-separated integers without leading zeros"
                       % (value,))
         return tuple(int(part) for part in value.split("."))
@@ -179,6 +196,8 @@ class _Checker:
     def unique(self, items, field):
         seen = set()
         for item in items:
+            if not isinstance(item, str):
+                self.fail(field, "each entry must be a string")
             if item in seen:
                 self.fail(field, "%r is listed twice" % (item,))
             seen.add(item)
@@ -214,6 +233,12 @@ class _Checker:
                 self.fail(field, "missing key %r" % key)
 
 
+def _shown(text):
+    """Text from a declaration, escaped and shortened for a message."""
+    text = repr(text)[1:-1]
+    return text if len(text) <= 64 else text[:61] + "..."
+
+
 def _fold(segment):
     return unicodedata.normalize("NFC", segment).rstrip(" .").casefold()
 
@@ -230,7 +255,7 @@ def parse_package(data, shown="package"):
         check.fail("package.json", str(exc))
     for key in declaration:
         if key not in PACKAGE_FIELDS:
-            check.fail(key, "unknown field")
+            check.fail(_shown(key), "unknown field")
     for key in PACKAGE_FIELDS:
         if key not in declaration:
             check.fail(key, "missing field")
@@ -262,7 +287,7 @@ def parse_module(data, package_name, expected_name, first_party=False):
         check.fail("module.json", str(exc))
     for key in declaration:
         if key not in MODULE_FIELDS:
-            check.fail(key, "unknown field")
+            check.fail(_shown(key), "unknown field")
     for key in ("name", "version", "description"):
         if key not in declaration:
             check.fail(key, "missing field")

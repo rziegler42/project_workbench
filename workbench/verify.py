@@ -20,7 +20,8 @@ Rules applied to the selection (``module-contract``):
   supply it; a soft one is a warning. A module is never its own provider;
 * a module's ``blocks`` conflicts with any other selected module that provides the
   capability, whichever is listed first; a module never conflicts with itself;
-* ``slots`` are provided as ``slot:<name>``;
+* ``slots`` are provided as ``slot:<name>``, and a slot has one owner among the
+  selected modules;
 * a helper not found on ``PATH`` is a warning. Looking it up does not run it.
 
 Install order is the selected harness module, then the process module, then the rest.
@@ -54,8 +55,11 @@ def verify_packages(paths, select=None, harness_required=True, first_party=(),
     `first_party` lists the paths, as given, of packages that may provide unprefixed
     capability names; by default none do. `which` finds a helper on ``PATH``.
     """
-    if not paths:
-        raise ValueError("no package given")
+    if not paths or isinstance(paths, str):
+        raise ValueError("paths must be a non-empty list of package paths")
+    if select is not None and (isinstance(select, str)
+                               or not all(isinstance(name, str) for name in select)):
+        raise ValueError("select must be a list of module names")
     problems = []
     warnings = []
     verified = []
@@ -134,7 +138,8 @@ def _requirements(module):
 
 
 def _always_soft(capability):
-    return capability in declarations.HARNESS_CAPABILITIES or capability.startswith("slot:")
+    # A slot fill is soft too, but it enters as a soft requirement (see _requirements).
+    return capability in declarations.HARNESS_CAPABILITIES
 
 
 def _label(key):
@@ -158,6 +163,15 @@ def _check_set(selected, modules, harness_required, which, problems, warnings):
         elif required and not of_type:
             problems.append(_problem(mtype, mtype + "-count", "no %s module is selected"
                                      % mtype))
+
+    owners = collections.defaultdict(list)
+    for key, module in chosen:
+        for slot in module.slots:
+            owners[slot].append(_label(key))
+    for slot, who in sorted(owners.items()):
+        if len(who) > 1:
+            problems.append(_problem("slot:" + slot, "slot-owner", "more than one selected "
+                                     "module owns the slot: %s" % ", ".join(who)))
 
     deps = {key: set() for key in keys}
     for key, module in chosen:
@@ -196,7 +210,11 @@ def _check_set(selected, modules, harness_required, which, problems, warnings):
 
     for key, module in chosen:
         for helper in module.helpers:
-            if which(helper) is None:
+            try:
+                found = which(helper)
+            except OSError:
+                found = None
+            if found is None:
                 warnings.append("module '%s' (package '%s'): helper %r was not found on PATH"
                                 % (module.name, key[0], helper))
 

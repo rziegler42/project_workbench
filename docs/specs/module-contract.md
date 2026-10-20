@@ -223,14 +223,15 @@ scope (the package, or one module of it) and the field or rule that failed.
 **Files.** A declaration is read as bytes, never evaluated. It must be UTF-8 without a
 byte-order mark, at most 1 MiB, and nested at most 32 levels. The top level is an
 object. A duplicate key, an unknown field, NaN, Infinity and any number with a fraction
-or exponent are refused. A module file is at most 16 MiB.
+or exponent are refused, and so is a string that is not valid Unicode (a lone surrogate).
+A module file is at most 16 MiB.
 
 **Formats.**
 
 | item | form |
 |---|---|
 | name (package, module, slot) | `^[a-z][a-z0-9-]*$`, at most 64 characters; `local`, `neutral` and anything beginning `manifest` are reserved |
-| version | one to four dot-separated non-negative integers, no leading zeros, compared numerically |
+| version | one to four dot-separated non-negative integers, no leading zeros, at most 64 characters, compared numerically |
 | `contract` | an integer from 1 up to the highest supported (1) |
 | capability | printable ASCII, no spaces, at most 64 characters, as `name` (core), `<package>:name` (third party) or `slot:name`; dotted sub-names are refused |
 | `description` | one printable line, 1 to 200 characters |
@@ -277,14 +278,20 @@ provisional until the harness module specification fixes it.
 **Hashes.** Both are SHA-256, as lowercase hex. The *declaration hash* is taken over the
 declaration as written (defaults are not added), serialized as JSON with object keys
 sorted at every level, separators `,` and `:`, non-ASCII characters left as themselves
-and the result encoded as UTF-8. The *tree hash* is taken over one record per regular
+and the result encoded as UTF-8. In a string only the quote, the backslash and the
+control characters are escaped (`\n`, `\r`, `\t`, `\b`, `\f`, otherwise lowercase
+`\u00xx`); `/` is not. Integers are plain decimal. Keys sort by code point, and no
+Unicode normalization is applied. The *tree hash* is taken over one record per regular
 file, `<hex SHA-256 of the content> <x or -> <path>` and a newline, where `x` means the
 owner execute bit is set, with records sorted by the UTF-8 bytes of the path.
-Directories do not contribute. Known-answer tests in `tests/` fix both.
+Directories do not contribute, so a tree of only empty directories hashes like an
+empty one. Known-answer tests in `tests/` fix both.
 
 **Set checks.** They run on a selection of modules, not on every module of a package.
 A selected module is named `<module>`, or `<package>/<module>` where two packages
-share a name. A module is never its own provider. A hard requirement with no provider
+share a name. A module is never its own provider. A `requires` entry for a `slot:` capability is hard
+unless marked `soft`, like any other; only a slot fill is always soft. A slot has one
+owner among the selected modules. A hard requirement with no provider
 among the selected modules names the capability and the unselected modules that could
 supply it. The result is all or nothing: if any package, module or set check fails the
 result is a refusal and carries no hashes and no order.

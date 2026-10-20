@@ -79,6 +79,54 @@ class ParseJsonTest(unittest.TestCase):
         self.assertEqual(d.parse_json(b'{"a": "__import__(\'os\')"}'), {"a": "__import__('os')"})
 
 
+class HostileValueTest(unittest.TestCase):
+    def test_lone_surrogates_are_refused_by_the_loader(self):
+        for data in (b'{"a": "\\ud800"}', b'{"\\udc00": 1}', b'{"a": ["x", {"b": "\\ud800"}]}'):
+            with self.subTest(data=data):
+                with self.assertRaises(ValueError):
+                    d.parse_json(data)
+
+    def test_a_surrogate_in_a_layout_value_is_a_refusal(self):
+        decl = copy.deepcopy(HARNESS)
+        decl["layout"] = {"notes": "\ud800"}
+        raw = json.dumps(decl).encode("ascii")
+        with self.assertRaises(d.DeclarationError):
+            d.parse_module(raw, "sample", "sample-harness")
+
+    def test_unhashable_list_entries_are_refusals_not_crashes(self):
+        for field in ("provides", "requires", "blocks", "helpers", "slots", "fills", "ships",
+                      "writes"):
+            for bad in ([1], {}, None):
+                with self.subTest(field=field, bad=bad):
+                    decl = module(**{field: [bad]})
+                    with self.assertRaises(d.DeclarationError):
+                        d.parse_module(dump(decl), "sample", "sample-notes")
+
+    def test_a_long_version_is_a_refusal_not_a_crash(self):
+        huge = "1" * 5000
+        with self.assertRaises(d.DeclarationError):
+            d.parse_module(dump(module(version=huge)), "sample", "sample-notes")
+        package = dict(PACKAGE, version=huge)
+        with self.assertRaises(d.DeclarationError):
+            d.parse_package(dump(package))
+
+    def test_an_unknown_key_is_escaped_and_short_in_the_message(self):
+        for key in ("\x1b]0;pwned\x07", "k" * 100000):
+            with self.subTest(key=key[:10]):
+                decl = module(**{key: 1})
+                with self.assertRaises(d.DeclarationError) as ctx:
+                    d.parse_module(dump(decl), "sample", "sample-notes")
+                text = str(ctx.exception)
+                self.assertNotIn("\x1b", text)
+                self.assertNotIn("\x07", text)
+                self.assertLess(len(text), 400)
+                package = dict(PACKAGE, **{key: 1})
+                with self.assertRaises(d.DeclarationError) as ctx:
+                    d.parse_package(dump(package))
+                self.assertNotIn("\x1b", str(ctx.exception))
+                self.assertLess(len(str(ctx.exception)), 400)
+
+
 class PackageTest(unittest.TestCase):
     def refused(self, changes, rule):
         decl = copy.deepcopy(PACKAGE)

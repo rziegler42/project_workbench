@@ -11,7 +11,8 @@ from . import verify
 
 PROG = "python3 -m workbench"
 USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
-         "[--select <module> ...] [--no-harness-required]\n")
+         "[--select <module> ...] [--no-harness-required]\n"
+         "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
 
 class _Usage(Exception):
@@ -24,9 +25,10 @@ class _Parser(argparse.ArgumentParser):
 
 
 def _parser():
-    parser = _Parser(prog=PROG)
+    parser = _Parser(prog=PROG, allow_abbrev=False)
     commands = parser.add_subparsers(dest="command", parser_class=_Parser)
-    check = commands.add_parser("verify", help="verify a package and, optionally, a selection")
+    check = commands.add_parser("verify", help="verify a package and, optionally, a selection",
+                                allow_abbrev=False)
     check.add_argument("package", nargs="?", help="the package directory (default: .)")
     check.add_argument("--dir", dest="dir", metavar="PATH",
                        help="the package directory, same as the positional argument")
@@ -43,19 +45,21 @@ def _clean(text):
 
 
 def _target(args):
-    if args.package is not None and args.dir is not None:
-        if os.path.abspath(args.package) != os.path.abspath(args.dir):
-            raise _Usage("two different packages were given: %r and --dir %r"
-                         % (args.package, args.dir))
-    for value in (args.package, args.dir):
-        if value is not None:
-            if not value:
-                raise _Usage("the package path is empty")
-            return value
-    return "."
+    given = [value for value in (args.package, args.dir) if value is not None]
+    if not all(given):
+        raise _Usage("the package path is empty")
+    # Same directory means the same place on disk: symlinks and .. are resolved.
+    if len(given) == 2 and os.path.realpath(given[0]) != os.path.realpath(given[1]):
+        raise _Usage("two different packages were given: %r and --dir %r" % tuple(given))
+    return given[0] if given else "."
 
 
 def main(argv, out=None, err=None):
+    if out is None and err is None:
+        for stream in (sys.stdout, sys.stderr):
+            if hasattr(stream, "reconfigure"):
+                # A path the terminal's encoding cannot show must not become a traceback.
+                stream.reconfigure(errors="backslashreplace")
     out = out or sys.stdout
     err = err or sys.stderr
     try:

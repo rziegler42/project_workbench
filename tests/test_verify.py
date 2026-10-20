@@ -201,10 +201,22 @@ class RequirementTest(Base):
         result = self.accepted(self.run_set(path, ["h", "a"]))
         self.assertEqual(result.warnings, [])
 
-    def test_a_slot_requirement_is_always_soft(self):
+    def test_a_hard_slot_requirement_is_hard(self):
         path = self.package("p", {"h": HARNESS, "a": {"requires": ["slot:x"]}})
+        result = self.run_set(path, ["h", "a"])
+        self.assertEqual(self.rules(result), ["requires"])
+
+    def test_a_soft_slot_requirement_warns(self):
+        path = self.package("p", {"h": HARNESS, "a": {"requires": [
+            {"capability": "slot:x", "soft": True}]}})
         result = self.accepted(self.run_set(path, ["h", "a"]))
         self.assertTrue(any("slot:x" in w for w in result.warnings))
+
+    def test_two_owners_of_one_slot_are_refused(self):
+        path = self.package("p", {"h": HARNESS, "x": {"slots": ["s"]}, "y": {"slots": ["s"]}})
+        result = self.run_set(path, ["h", "x", "y"])
+        self.assertEqual(self.rules(result), ["slot-owner"])
+        self.accepted(self.run_set(path, ["h", "x"]))
 
     def test_a_slot_fill_is_soft_and_met_by_the_owner(self):
         path = self.package("p", {"h": HARNESS, "owner": {"slots": ["x"]},
@@ -351,7 +363,31 @@ class OrderTest(Base):
         self.assertEqual(first, second)
 
 
+class ArgumentTest(Base):
+    def test_select_must_be_a_list_of_names(self):
+        path = self.package("p", {"h": HARNESS})
+        for bad in ("h", [None], [1], ["h", b"h"]):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    verify.verify_packages([path], bad)
+
+    def test_paths_must_be_a_list(self):
+        for bad in ("p", [], ()):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    verify.verify_packages(bad)
+
+
 class HelperTest(Base):
+    def test_a_failing_lookup_is_a_warning(self):
+        path = self.package("p", {"h": HARNESS, "a": {"helpers": ["tool-x"]}})
+
+        def broken(name):
+            raise OSError("no")
+
+        result = self.accepted(self.run_set(path, ["h", "a"], which=broken))
+        self.assertTrue(any("tool-x" in w for w in result.warnings))
+
     def test_a_missing_helper_is_only_a_warning(self):
         path = self.package("p", {"h": HARNESS, "a": {"helpers": ["tool-x", "git"]}})
         result = self.accepted(self.run_set(path, ["h", "a"],

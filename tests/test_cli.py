@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import io
 import json
@@ -60,10 +61,17 @@ class VerifyTest(CliBase):
         self.assertIn("install order: sample/sample-harness sample/sample-notes", out)
 
     def test_missing_helper_is_a_warning_not_a_refusal(self):
+        rel = os.path.join(self.path, "sample-notes", "module.json")
+        with open(rel) as handle:
+            decl = json.load(handle)
+        decl["helpers"] = ["no-such-tool-for-workbench-tests"]
+        with open(rel, "w") as handle:
+            json.dump(decl, handle)
         code, out, err = run("verify", "--dir", self.path, "--select", "sample-harness",
                              "sample-notes")
         self.assertEqual(code, 0)
         self.assertEqual(err, "")
+        self.assertIn("warning: module 'sample-notes' (package 'sample'): helper", out)
 
     def test_no_harness_required(self):
         args = ("verify", self.path, "--select", "sample-notes")
@@ -114,7 +122,9 @@ class VerifyTest(CliBase):
 class UsageTest(CliBase):
     def test_usage_errors_exit_2(self):
         for argv in ([], ["bogus"], ["verify", "--nope"], ["verify", "a", "b"],
-                     ["verify", "--select"], ["verify", ""], ["verify", "--dir", ""]):
+                     ["verify", "--select"], ["verify", ""], ["verify", "--dir", ""],
+                     ["verify", ".", "--dir", ""], ["verify", "", "--dir", "."],
+                     ["verify", "--sel", "a"], ["verify", "--no-harness"]):
             with self.subTest(argv=argv):
                 code, out, err = run(*argv)
                 self.assertEqual((code, out), (2, ""))
@@ -124,6 +134,30 @@ class UsageTest(CliBase):
         code, _, err = run("verify", self.path, "--dir", os.path.join(self.base, "other"))
         self.assertEqual(code, 2)
         self.assertIn("two different packages", err)
+
+    def test_help_exits_0(self):
+        with contextlib.redirect_stdout(io.StringIO()) as shown:
+            code, _, _ = run("verify", "-h")
+        self.assertEqual(code, 0)
+        self.assertIn("--select", shown.getvalue())
+
+    def test_same_directory_through_a_symlink_is_the_same_path(self):
+        link = os.path.join(self.base, "link")
+        os.symlink(self.path, link)
+        # Not a usage error: the paths agree. The package itself is refused because its
+        # root is a symbolic link.
+        code, _, err = run("verify", link, "--dir", self.path)
+        self.assertEqual(code, 1)
+        self.assertIn("symbolic link", err)
+
+    def test_dot_dot_through_a_symlink_is_resolved(self):
+        elsewhere = os.path.join(self.base, "elsewhere", "deep")
+        os.makedirs(elsewhere)
+        link = os.path.join(self.base, "lnk")
+        os.symlink(elsewhere, link)
+        # lnk/../pkg is elsewhere/pkg on disk, not pkg beside lnk.
+        code, _, err = run("verify", os.path.join(link, "..", "pkg"), "--dir", self.path)
+        self.assertEqual(code, 2)
 
     def test_the_same_path_given_both_ways_is_accepted(self):
         self.assertEqual(run("verify", self.path, "--dir", self.path)[0], 0)

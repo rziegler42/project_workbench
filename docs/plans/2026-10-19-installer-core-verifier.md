@@ -447,9 +447,23 @@ passes (229 tests, `python3 -m unittest discover -s tests`). The documented `ver
 commands were run on the sample package: exit 0 with a selection, exit 1 without a
 harness, exit 2 with no command.
 
-Reviews: B and E had a security review whose findings were fixed with tests. C, D, F, G
-and H had no independent review. The plan lists one for each, to be run only if the owner
-asks.
+Reviews: B and E had a security review whose findings were fixed with tests. C and G had
+an independent workflow review and D and F a security review, at the owner's request after
+Increment H. Their findings were checked against the code before they were fixed, with
+tests, in one follow-up commit: a lone surrogate crashed hashing (now refused in the loader
+and in the hash); `provides` with an unhashable entry and a 5000-digit `version` crashed
+the parser (now refusals); an unknown key was echoed raw in messages (now escaped and
+shortened); a hard `requires` of a slot capability was treated as soft, against the spec
+(now hard; only a fill is soft); two owners of one slot were accepted (now refused);
+`verify . --dir ""` was accepted, "same path" compared text instead of the place on disk,
+and options could be abbreviated (all fixed); the hash serialization text and known-answer
+tests were extended (escapes, code-point key order, integers, byte-order path sort, the empty
+tree). The fixes were not mutation-tested against the old code, and H had no review.
+Observed and left for later plans: a package directory that holds `.git` is refused, which
+matters when `module-approvals` downloads packages; `shutil.which` with an empty `PATH`
+entry looks in the working directory; an exclusion `reason` is package-supplied text
+shown to an approver; `.config/PROJEC~1` 8.3 aliases and trailing-dot collisions matter
+only on Windows.
 
 Owner ruling in H (2026-10-19): a requirement on a module in a later group is allowed and
 does not change the install order; only a cycle is an error. It is written into
