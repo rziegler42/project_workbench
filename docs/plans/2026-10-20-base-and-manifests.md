@@ -722,4 +722,109 @@ run.
 
 ## Result
 
-Not started.
+Increments A to J are done, each as one local commit with the trailer
+`Plan: 2026-10-20-base-and-manifests#<label>`. Nothing is pushed.
+
+| Increment | Commit | What it added |
+|---|---|---|
+| plan | `47dc677` | this plan, approved |
+| A | `8841895` | the owner's answers and the formats in the specs; three `Proposed` decision records |
+| B | `8961e1f` | `workbench/target.py`: choosing, resolving, classifying and holding a target |
+| C | `f6ea39e` | `workbench/projectfs.py`: the no-follow project writer |
+| D | `05fb0ad` | `workbench/manifest.py`: canonical manifest, seed, project ID |
+| E | `79fe90e` | `base/`, `workbench/base.py`, the base-owned slots in `verify` |
+| F | `7053471` | `workbench/snapshot.py` and `hashing.tree_hash_of`: module bytes proved against the verified hashes |
+| G | `9f28855` | `workbench/installplan.py`: the write plan, its digest and the preview text |
+| H | `b0285dc` | `workbench/sources.py`, `workbench/preview.py`, `wb preview install` |
+| I | `dd4b32d` | `workbench/install.py`, `wb install`, and the fixes from the security review |
+| J | this commit | the documents |
+
+**Tests.** The suite went from 657 to 814 passing (`python3 -B -W error -m unittest discover
+-s tests`), the count rising by the new tests only. `git diff --check` was clean at each commit.
+No test touches the real guarded store or the network. A recorded run under a pseudo-terminal in
+a scratch directory: `install` printed the plan, took the digest, wrote 17 paths and exited 0;
+`git status` in the target showed `.workbench/`, `AGENTS.md` and `docs/` untracked; a second
+`install` into it was refused as an existing project.
+
+**Security review** (Increments B, C and I, asked for by the owner; the reviewer was a separate
+agent that ran experiments in a scratch copy, and its findings were treated as untrusted and
+checked). Findings and what was done:
+
+- Medium: `git init` followed a symbolic link planted at `.git` after the check and wrote a
+  repository into another directory (15 of 15 trials). Fixed by not running git: `Writer.create_git`
+  makes `.git` with `mkdir` and writes a fixed skeleton through held descriptors; the skeleton's
+  hash is in the digest. The second round found the symlink and rename-then-symlink attacks
+  refused in 10 of 10 trials, and real git accepted the result.
+- Low: `fetch.git_executable()` could return a relative path (now absolute); `public_source` could
+  leak part of the user information when it held `#` or `?` (now reads the authority as git does,
+  and `normalize_source` refuses `?` and `#` in an ssh authority); created files followed the
+  umask (now 0644 and 0755, narrowed by the umask only).
+- Not changed: a long plan can scroll the high-risk and `.git` warnings off screen before the
+  digest prompt; `fetch.json` keeps the raw URL in the private store; git's stderr in a download
+  error is not redacted; a process with its own pseudo-terminal passes the terminal guard, as
+  the specs already accept.
+- Not tested by the reviewer: races on ancestors of the target, non-UTF-8 argv, huge inputs.
+
+**Deviations from the plan's text.**
+
+- `Action` has a `data` field (the bytes to write), `Plan` has `state` and `modules`, and
+  `Selection(modules, packages)` is a new type; `Target.identity` was added; `sources.Resolved`
+  and the `Command(target, packages, select)` tuple carry what a command works from.
+  `install.run` takes that `Command`, not raw arguments, and optional `seed`, `version` and `which`
+  for tests. `fetch.git_environment`, `fetch.git_executable` and `sources.local_package` are public.
+- The `.git` is written by the workbench and git is not run (above). The approved text of this
+  plan still says `git init` (Goal, the one-subprocess risk, Increments G and I); it was not
+  edited, and this Result is the record of the departure. The `Proposed` decision
+  `install-creates-git` and the specs were edited to match.
+- `install` fetches each URL source itself after the target checks; `preview` resolves from the
+  cache only. A local directory is recorded in the manifest as `local:<package>`.
+- The second plan build after the answer compares digests only; the bytes written come from the
+  plan the owner saw.
+- A store entry that already exists is a failure after writing (exit 3), never an overwrite.
+- An interrupt after the first write exits 3 (`failed: interrupted`); exit 130 is for an
+  interrupt before any write.
+- `tests/support.drive_pty` accepts a function as the answer, so a test can type a digest it
+  could not know in advance.
+
+**Judgment calls settled in session** (2026-10-20, "go with your recommendation"): a package
+directory is recognised by `package.json` and a plain directory gets its own message; the
+newest matching cache copy is used and the gate decides; each preview uses a fresh seed, so its
+digest is not shown; `test_cli.py` gained usage tests.
+
+**Sample preview** (condensed from a real run; the ASCII-escaped text is what an agent sees):
+
+```
+target: /tmp/proj
+command: install
+state: new-missing
+summary: 1 make-target, 6 create-dir, 9 create-file, 1 git-init; 2 store writes
+high risk: harness module p/h
+modules:
+  p/h 1.0.0 (harness)
+  p/notes 1.0.0 (module)
+  package p from local:p
+actions:
+  make-target .
+  create-file .workbench/local/incomplete [scratch] - 0 bytes sha256 e3b0c4... (install marker)
+  git-init .git (an empty repository on branch main, written by the workbench; git is not run)
+  create-file AGENTS.md [seeded] - 551 bytes sha256 7df181...
+  create-file .workbench/manifest.json [module-owned] - 1533 bytes sha256 625bff...
+guarded store:
+  write projects/<id>/baselines sha256 1223aa...
+  write projects/<id>/seen sha256 0a0150...
+git: creates an empty repository on branch main; git is not run
+harness: not attached (attach is not built yet)
+preview only: nothing was written
+```
+
+**Unresolved, for the owner.**
+
+- Accept, reject or revise the three `Proposed` decisions: `base-ships-in-distribution`,
+  `install-creates-git` (revised as above) and `harness-module-writes-nothing-committed`.
+- Optionally record R1-F1 and R1-F2 with `ask-codex decide`, and archive the review with
+  `ask-codex archive --plan docs/plans/2026-10-20-base-and-manifests.md`.
+- Mark this plan `Completed` once satisfied; it was left `Approved`.
+- Push: eleven commits (`47dc677` to this one) are local only.
+- The skeleton `config` omits `ignorecase` and `precomposeunicode`, which git sets from the
+  filesystem; the plan already refuses paths that differ only by case.
+- Deferred work is listed above and unchanged; attach is the next step for `install`.

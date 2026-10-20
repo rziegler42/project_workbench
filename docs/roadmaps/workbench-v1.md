@@ -84,6 +84,14 @@ meet here and the order matters.
   approval, the output and the exit codes, and awaits the owner's approval. It changes no code. It
   departs from the wording of the candidate below in three places, listed in the spec under
   "Departures from the roadmap's wording".
+- `base-and-manifests` is implemented (plan `2026-10-20-base-and-manifests`, increments A to I; its
+  completion is derived from that plan): the `base/` content and its loader, the canonical
+  committed manifest with the project seed and ID, the write plan with its digest, `wb preview
+  install` (read-only) and the owner-run `wb install` into a missing, empty or lone-`.git` target,
+  with the acknowledgement baselines and the first-seen record written to the guarded store.
+  Attach is not built, so `install` ends with `harness not attached`. Three decisions it proposed
+  await the owner. It writes the empty `.git` itself and runs no program in the target, after a
+  security review found that `git init` followed a link planted at `.git`.
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.
 

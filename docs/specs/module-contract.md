@@ -171,10 +171,10 @@ namespace.
   inside another module's namespace.
 - A harness module additionally writes the per-clone harness files described by its
   own layout. Those paths are not committed.
-- **A harness module declares no `writes` and no `fills`** *(proposed; `base-and-manifests`)*.
+- **A harness module declares no `writes` and no `fills`** *(built by `base-and-manifests`)*.
   Its files are per-clone, and a committed file would name the harness. A declaration that gives
   either is refused at install.
-- **Base-owned slots** *(proposed; `base-and-manifests`)*: `policy`, in `AGENTS.md`, and
+- **Base-owned slots** *(built by `base-and-manifests`)*: `policy`, in `AGENTS.md`, and
   `docs-index`, in `docs/README.md`. A fill of either needs no selected owner and gives no
   warning, and a module whose `slots` names one is refused, because a slot has one owner. A
   slot fill with no owner and not base-owned is still a warning.

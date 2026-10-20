@@ -1,10 +1,10 @@
 # Repository boundary, manifests and upgrades
 
 Status: Current. Approved by the owner on 2026-10-19. The guarded store, with its approvals, cache, pins
-and launcher, is built (`module-approvals`) and the layout below records it; the manifests, install,
-attach, check and upgrade are not built yet. `base-and-manifests` builds the committed manifest and
-install; the formats it will build are written below and are proposals until it is complete. File names
-and marker syntax are proposals; the rules are the substance.
+and launcher, is built (`module-approvals`) and the layout below records it; attach, check and
+upgrade are not built yet. `base-and-manifests` built the base, the committed
+manifest, the seed, the baselines and `install` (the formats below are those it wrote), without attach.
+File names and marker syntax are as built.
 
 Terms are defined in `terms.md`. The declarations the installer reads are defined in
 `module-contract.md`.
@@ -71,9 +71,9 @@ Non-goals:
   cache/<id>/               an inert download: package/ (the files) and fetch.json
   projects/<project-id>/    one directory per project
     pins                    pinned helpers: path relative to the project root, SHA-256
-    seen                    where the project was first seen (written by install; proposed)
+    seen                    where the project was first seen (written by install)
     baselines               acknowledgement baselines, path to SHA-256 (written by install;
-                            nothing reads them yet; proposed)
+                            nothing reads them yet)
                             (plan approvals are not built yet)
   bin/wb                    the launcher script, fixed text apart from one path
   bin/run/<uuid>/<name>     a private copy of a pinned helper, only while it runs
@@ -94,7 +94,7 @@ The base is the content the workbench itself puts in every project before any mo
 of the workbench distribution, in `base/` at the distribution root, and is trusted as the
 workbench code is (`trust-and-approval.md`, the distribution is the trust root); it is not a
 module, has no type and has no approval record. Its tree hash and the workbench version are
-recorded in the committed manifest. *(Proposed; `base-and-manifests`.)*
+recorded in the committed manifest. *(Built by `base-and-manifests`.)*
 
 - `AGENTS.md`: the project's policy headings and the `policy` slot marker. Seeded.
 - `docs/README.md`: an index of the project's documents and the `docs-index` slot marker. Seeded.
@@ -141,7 +141,7 @@ line so that two developers adding different modules do not conflict. It records
 
 It never names a harness.
 
-**Format (proposed; `base-and-manifests` builds it).** `.workbench/manifest.json` is UTF-8 JSON
+**Format (built by `base-and-manifests`).** `.workbench/manifest.json` is UTF-8 JSON
 with a final newline. Top-level keys are sorted: `base`, `files`, `packages`, `seed`, `version`,
 `workbench`. `version` is the schema version, 1. `base` is the base's tree hash. `workbench` is
 the installing workbench's version. `packages` is a list, one object per line, sorted by name,
@@ -169,7 +169,11 @@ also records where the project was first seen: its canonical remote URL, or its 
 when it has no remote. A mismatch is treated as a new project that needs fresh
 approvals, and warns. If a remote legitimately moves, the owner confirms once.
 
-**The seed and the first-seen record (proposed).** The seed is a random UUID4 string. `install`
+**A local package directory** given to `install` is recorded in the manifest as the source
+`local:<package name>` and with no ref or commit, so that no path of this machine is committed.
+A source that is a URL is recorded without its credentials, query or fragment.
+
+**The seed and the first-seen record.** The seed is a random UUID4 string. `install`
 writes `projects/<id>/seen` as strict JSON, `{"format": 1, "kind": "path", "value": "<resolved
 absolute path of the target>"}`. Reading a remote needs `.git/config`, which is hostile input,
 so `install` records the path and no remote; a freshly initialized repository has no remote
@@ -177,7 +181,7 @@ anyway. When the target was an existing lone `.git`, `install` warns that no rem
 recorded. Recording and comparing a remote is settled by the candidate that first meets a
 project in a second clone (at attach). Nothing reads `seen` yet.
 
-**Baselines (proposed).** `install` writes `projects/<id>/baselines` as strict JSON,
+**Baselines.** `install` writes `projects/<id>/baselines` as strict JSON,
 `{"baselines": {"<path>": "<sha256 hex of the bytes written>"}, "format": 1}`, with sorted
 keys, for exactly the files in the approved preview. Reading, comparing and acknowledging
 are for `ownership-and-upgrade` and later.
@@ -202,7 +206,7 @@ recorded in the manifest.
 
 - A template is not installed as a placeholder file. It stays in its module and is
   used when something is created, so an upgrade has no empty file to overwrite.
-- **Classes at install (proposed).** The base's `AGENTS.md` and `docs/README.md` are `seeded`.
+- **Classes at install.** The base's `AGENTS.md` and `docs/README.md` are `seeded`.
   `.workbench/.gitignore` is `module-owned`, as is each file under a module's namespace
   `.workbench/<package>/<module>/`. A file written from a module's `writes` is `seeded`. A
   filled block is a `slot block`. The declaration has no field to choose the class; a field is
@@ -214,7 +218,7 @@ recorded in the manifest.
 - If the markers of a block have been removed, the installer takes that as the
   project's choice, does not add them back, and reports that the slot is gone.
 
-### Slots and blocks (proposed syntax)
+### Slots and blocks
 
 - Slots exist only in Markdown files in this version, because the markers are HTML
   comments. Markers for other file types are deferred.
@@ -224,7 +228,7 @@ recorded in the manifest.
 - **A filled slot keeps its marker.** The file holds, in install order, one BEGIN/END block
   per filler, then the `<!-- @slot: <name> -->` marker line, so a later module can add its
   block before the marker and the interface stays append-only. A fill source that contains a
-  marker line of its own is refused. *(Proposed; `base-and-manifests`.)*
+  marker line of its own is refused. *(Built by `base-and-manifests`.)*
 - Slots are a public, append-only interface. A slot that has been published is not
   removed or renamed. The base ships a small, generous set of coarse slots from the
   first version.
@@ -249,12 +253,14 @@ are not repeated here.
   and the committed manifest, and creates the project's directory in the guarded
   store. Last of all it performs attach for the chosen harness, which writes only
   per-clone harness files.
-- **`.git` (proposed).** A target that has no `.git` is given one by `install` itself, with
-  `git init --initial-branch=main`, an empty template directory and a scrubbed environment (the
-  same arrangement the download uses). A target that already holds a lone `.git` is used as
-  it is, and its configuration is never read or run. Git is never run in a directory that
-  already has one.
-- **Until attach is built (proposed; `base-and-manifests`).** The harness module is required,
+- **`.git`.** A target that has no `.git` is given an empty one by `install` itself. Git is not
+  run: `install` makes `.git` with `mkdir` (which refuses an existing path, a link included) and
+  writes a fixed skeleton through descriptors it holds, so no program resolves a path inside
+  the target. The skeleton is `HEAD` (`ref: refs/heads/main`), a `config` of four `[core]` keys
+  and the empty `objects/` and `refs/` directories, and its hash is covered by the plan's
+  digest. A target that already holds a lone `.git` is used as it is, and its configuration is
+  never read or run.
+- **Until attach is built (`base-and-manifests`).** The harness module is required,
   verified and approved as above, but `install` writes nothing for it, skips attach, and
   prints `harness not attached: attach is not built yet`. A harness module declares no
   `writes` or `fills`, because its files are per-clone and a committed file would name the

@@ -30,6 +30,8 @@ ambiguous blank.
 | Run locally | `python3 -m workbench verify [<package> \| --dir <path>] [--select <module> ...] [--no-harness-required]` |
 | Owner-run: approve a package or one module (terminal only) | `python3 -m workbench approve (<package> \| --source <url> [--ref <ref>]) [--module <name>]` |
 | Owner-run: pin a helper's content (terminal only) | `python3 -m workbench pin <project-id> <name> <helper> --root <project-dir>` |
+| Preview an install (read-only) | `python3 -m workbench preview install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
+| Owner-run: install a new project (terminal only) | `python3 -m workbench install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Run a pinned helper | `python3 -m workbench launch <project-id> <name> --root <project-dir> -- <args>` |
 | Release time: write the approvals shipped with first-party packages | `python3 -m workbench release-approvals` |
 | Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
@@ -62,8 +64,7 @@ and prints the install order. A harness module is required in a selection unless
 ## Inert download
 
 `workbench/fetch.py` brings a package into the guarded store's cache as data only, so the
-owner can read its declaration before approving anything. No command calls it yet; the next
-increment wires it into `approve`. `fetch.fetch(store, source, ref)` returns the new
+owner can read its declaration before approving anything. `approve --source` and `install` call it. `fetch.fetch(store, source, ref)` returns the new
 directory `cache/<id>/package/` (and `cache/<id>/fetch.json` beside it, with the source, ref,
 resolved commit and counts) or raises `FetchError` and leaves nothing in the cache.
 
@@ -151,6 +152,61 @@ package approval stores the resolved commit as the pin.
   decline or that fails stays in the cache so it can be read again; the command prints where.
   Nothing removes cache copies yet.
 - A later install fetches the pinned commit and compares the tree hash with the approved one.
+
+## Previewing and installing a project
+
+`python3 -m workbench preview install [<target> | --dir <path>] --package <source> [--ref <ref>] ...
+--select <module> ...` shows what an install would do and writes nothing. `python3 -m workbench
+install` takes the same arguments and writes the project. `upgrade` and `add` are not built.
+The target goes before `--select`, or use `--dir`; `--package` may repeat and a `--ref` binds to
+the `--package` before it. Options are not abbreviated.
+
+- **A target** is a missing directory whose parent exists, an empty directory, or a directory
+  holding only a real `.git`. A symbolic link, the root, a home directory, the guarded store
+  or anything containing it, a directory with other content, an existing project and a
+  directory holding `.workbench/local/incomplete` (an unfinished install) are refused, before
+  any source is read (`docs/specs/installer-interface.md`, "The target").
+- **A source** is a local package directory (it holds `package.json`; a link is refused and a
+  `--ref` cannot apply) or a URL. `preview` never fetches: a URL must already be in the cache
+  from `approve --source`, and the newest matching copy is used. `install` downloads each URL
+  source into the cache, inertly, after the target is accepted and before it prints the plan.
+  Every module must be approved on this machine (the gate); neither command records an approval.
+- **The preview** lists the target and its state, each module with its hashes, every action
+  (directories, files with class, mode, size and hash, the `.git`) and the two store entries,
+  and ends `preview only: nothing was written`. It uses a fresh seed each time, so its digest is
+  not shown and differs from one run to the next.
+- **`install`** is owner-run: it refuses unless standard input and output are terminals. It
+  prints the same plan with its digest and asks for the first 12 characters of the digest.
+  Anything else, an empty answer included, prints `cancelled: nothing was written` and exits 1.
+  Input typed ahead is discarded and the answer is read to at most 200 characters. The typed
+  text is friction and not authentication; the barrier is the harness's deny rule.
+- **After the answer** it checks the target again (same directory, same contents), rebuilds the
+  plan from the packages as they are now and refuses a different digest. The bytes written are
+  those of the plan that was shown.
+- **The write** creates `.workbench/local/incomplete` first, then the `.git` when there is none,
+  the directories and files (the manifest last), the two store entries and last removes the
+  marker. Git is not run: the empty `.git` is made with `mkdir` and a fixed skeleton written
+  through held descriptors. Nothing is overwritten, and files get 0644 (0755 when
+  executable), directories 0755, narrowed by the umask. It ends with the count of paths,
+  `nothing was committed` and `harness not attached: attach is not built yet`.
+- **A failure after the first write** prints `failed:` with the cause, the paths written and not
+  written, and that the marker is left; the directory is then refused as an existing project
+  until the owner deletes it by hand. Nothing is cleaned up.
+
+| Exit code | Meaning |
+|---|---|
+| 0 | done (`install`) or previewed (`preview install`) |
+| 1 | refused or cancelled; nothing was written |
+| 2 | usage error |
+| 3 | stopped after writing; the marker is left |
+| 130 | interrupted before anything was written |
+
+## The distribution layout
+
+The repository root is the distribution: `workbench/` (the code and `shipped_approvals/`),
+`base/` (the content every project gets before any module: `AGENTS.md` and `docs/README.md`,
+each holding a slot marker), the first-party packages, `docs/` and `tests/`. `base/` is trusted as
+the code is and has no approval record; its tree hash is recorded in each project's manifest.
 
 ## Pins and the launcher
 
@@ -263,8 +319,7 @@ outside printable ASCII.
 ## The approval gate
 
 `workbench/gate.py` answers whether a verified selection is fully approved on this machine.
-No command calls it yet; the installer that writes a project will call it first, and it
-only reads. It takes the result of `verify_packages` for a selection and reports each
+`preview install` and `install` call it first, and it only reads. It takes the result of `verify_packages` for a selection and reports each
 module in install order:
 
 - A module is approved by a `module` record for its `<package>/<module>`, declaration hash

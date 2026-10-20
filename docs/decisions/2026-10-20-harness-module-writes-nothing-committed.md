@@ -33,8 +33,9 @@ yet; the interface specification said it ends with attach. A module may also dec
 
 ## Verification
 
-Not built. The build will test that a harness module's files are absent from the written tree
-and the manifest, and that a harness module declaring `writes` or `fills` is refused.
+Built and tested (`tests/test_installplan.py`, `tests/test_install.py`): a harness module's files
+are absent from the written tree and the manifest, and a harness module declaring `writes` or
+`fills` is refused.
 
 ## Related files and decisions
 

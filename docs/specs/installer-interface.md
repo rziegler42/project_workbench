@@ -2,8 +2,8 @@
 
 Status: Current. Approved by the owner on 2026-10-20. Only the commands marked built exist;
 the rest are proposals until their candidates are built. The approval covers the rules; the
-git mechanism in "States of a target" is untested and must be proved against a hostile
-configuration when it is built. Rules are marked **rule**; option and command spellings are
+git mechanism in "States of a target" was proved against a hostile configuration when
+`install` was built (see "`install`"). Rules are marked **rule**; option and command spellings are
 **proposals** and may change when the code that uses them exists. A statement the owner has
 decided is marked *(owner)*; a statement that is the author's choice and not the owner's is
 marked *(my call)*; a statement read from the current code and not from a spec is marked
@@ -153,8 +153,8 @@ says so.
 
 | command | kind | takes | writes | terminal only | state |
 |---|---|---|---|---|---|
-| `install` | project | target, a module selection | committed content, manifest, the project's store directory, then per-clone harness files | yes, owner-run | proposed |
-| `preview` | project | `install`, `upgrade` or `add` and their arguments | nothing; no network, it reads only the approved cache | no | proposed |
+| `install` | project | target, a module selection | committed content, manifest, the project's store directory, then per-clone harness files | yes, owner-run | built (without attach) |
+| `preview` | project | `install`, `upgrade` or `add` and their arguments | nothing; no network, it reads only the approved cache | no | `install` built; `upgrade` and `add` proposed |
 | `attach` | project | target, `--harness` | per-clone harness files, `.git/info/exclude`, the local manifest | no, but owner-run (harness deny rule) | proposed |
 | `check` | project | target | nothing | no | proposed |
 | `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run | proposed |
@@ -220,7 +220,7 @@ publishes, and none edits a living or historical document** (`repository-boundar
 - **Baselines.** Approving an install or an upgrade preview updates the acknowledgement
   baselines for exactly the files in that preview (`trust-and-approval.md`).
 
-### `install` (proposed)
+### `install` (built by `base-and-manifests`, without attach)
 
 `wb install [<target> | --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...`
 
@@ -254,11 +254,14 @@ publishes, and none edits a living or historical document** (`repository-boundar
   approves the harness module as above, writes nothing for it, skips attach and prints
   `harness not attached: attach is not built yet`; `claude-harness` adds the attach step to this
   command. A harness module that declares `writes` or `fills` is refused.
-- **`.git`** *(owner)*: where the target has no `.git`, `install` runs `git init
-  --initial-branch=main` itself, as an action of the preview covered by the digest, with a
-  scrubbed `GIT_*` environment, global and system configuration ignored and an empty template
-  directory. In a target that already holds a `.git` it never runs git, and never reads its
-  configuration. The first-seen record is the resolved path (`repository-boundary.md`); a lone
+- **`.git`** *(owner; changed in the build after a security review)*: where the target has no
+  `.git`, `install` creates an empty one itself, as an action of the preview covered by the
+  digest. It does not run git: it makes `.git` with `mkdir`, which refuses any existing path
+  including a link, and writes a fixed skeleton (`HEAD` on `main`, a four-line `config`,
+  `objects/` and `refs/`) through descriptors it holds. Running `git init` was built first and
+  withdrawn, because git resolves the path itself, and a link planted at `.git` between the
+  check and the call sent the new repository into another directory. In a target that already
+  holds a `.git` it never runs anything and never reads its configuration. The first-seen record is the resolved path (`repository-boundary.md`); a lone
   `.git` target warns that no remote was recorded.
 - **Refuses** any verification failure, any missing approval, a state other than new, and a
   refused target. After a failure part-way, the report says what was written ("Failure part-way").
@@ -577,8 +580,9 @@ Answered by the owner on 2026-10-20.
    preview itself and the owner types the first 12 characters of its digest. This replaced an
    earlier answer (one command that previews without a terminal and exits 3), after review
    showed an agent with a pseudo-terminal could complete it.
-6. **Built by `base-and-manifests`, answered 2026-10-20:** `install` runs `git init` itself and
-   only when there is no `.git`; the harness module is required and gated but nothing is
+6. **Built by `base-and-manifests`, answered 2026-10-20:** `install` creates the `.git` itself
+   (first as `git init`, then, after the security review, as a skeleton it writes, with no
+   program run) and only when there is no `.git`; the harness module is required and gated but nothing is
    written for it and attach is skipped; `preview` and `install` accept a local package
    directory; `--package` repeats and `--ref` binds to the nearest preceding `--package`; the
    baselines are written and the first-seen record is the resolved path.

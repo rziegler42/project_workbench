@@ -34,9 +34,10 @@ trusted. A module needs an approval record; the base has no author other than th
 
 ## Verification
 
-Not built. The specification is `docs/specs/repository-boundary.md`, "The base". The build will
-test that the base is hashed from the bytes read, contains no harness file name, and holds each
-slot marker exactly once.
+Built and tested (`tests/test_base.py`, `tests/test_verify.py`): the base is hashed from the bytes
+read, contains no harness file name, holds each slot marker exactly once, refuses links, special
+files and executables, and a module that owns a base slot is refused. The specification is
+`docs/specs/repository-boundary.md`, "The base".
 
 ## Related files and decisions
 
