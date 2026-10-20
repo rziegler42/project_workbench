@@ -1,6 +1,6 @@
 # Unfinished-write recovery
 
-Status: Approved
+Status: Completed
 Created: 2026-10-20
 Candidate: none (follow-up to `workbench-v1#ownership-and-upgrade`: it closes limits recorded in
 that plan's Result and is not a roadmap candidate)
@@ -434,7 +434,7 @@ Rounds used 2 of 3. R2-F1 and R2-F2 were recorded as `applied`. The owner chose 
   message says to deal with it by hand); `upgrade` scans twice, each with a fresh budget.
   Documented in E.
 
-### Increment E — done, not yet committed
+### Increment E — done, committed as `ce41d81`
 
 - `docs/development.md`: `recover` in the command table; a new section "Recovering from an
   unfinished write" (the record, the report every command gives, the accepted states, what it
@@ -451,4 +451,11 @@ Rounds used 2 of 3. R2-F1 and R2-F2 were recorded as `applied`. The owner chose 
   names and budgets). Not matched to a run: the "about 5000 files" figure is an estimate from the
   1 MiB bound, whose refusal is tested with a patched bound. Documents only: no code changed;
   the plan's status is left for the owner.
-- Next: the owner marks the plan complete when satisfied.
+
+### Completion
+
+Archived as `Completed` at the owner's request on 2026-10-20. Criteria 1 to 6 are met by the
+tests and reviews recorded under A to D (commits `87cf6e9`, `8208f2b`, `6ecff5d`, `ef4c19c`);
+criterion 7 by the documentation commit `ce41d81` and the full suite under `-W error` (1279
+tests, passing, 1 skipped). Known limits are recorded under C, D and E. None of the commits is
+pushed.
