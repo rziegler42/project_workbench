@@ -1,6 +1,6 @@
 # Ownership, slots and non-destructive upgrade
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-20
 Candidate: workbench-v1#ownership-and-upgrade
 Specs: installer-interface, repository-boundary, trust-and-approval, module-contract
@@ -704,7 +704,13 @@ the findings of A to F are in those commits' messages and tests. Fixed:
   `.workbench-<pid>-<hex>.tmp`; case-insensitive and Unicode-normalising filesystems were not
   tested for name collisions.
 
-**Open for the owner.** Accept or reject the two `Proposed` decisions
-`2026-10-20-acknowledge-before-upgrade` and `2026-10-20-upgrade-needs-no-git`; push the local
+**Completion.** The owner had this plan marked `Completed` on 2026-10-20. The criteria above were
+checked against the tests and the recorded run; the unresolved items are the limits listed above
+(the partial-failure state after a failed write, the reviews not made by a separate agent, and the
+low and informational findings), which the owner accepted by completing the plan. The owner
+then accepted the two decisions it proposed (`2026-10-20-acknowledge-before-upgrade`, after a wording
+fix that records the wider acknowledge scope, and `2026-10-20-upgrade-needs-no-git`) on 2026-10-20.
+
+**Open for the owner.** Push the local
 commits after a check for secrets; decide whether the marker-content hardening is a new plan or
 increment; ask for further security reviews if wanted. `claude-harness` is the next candidate.
