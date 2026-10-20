@@ -30,7 +30,7 @@ import stat
 
 from . import (__version__, acknowledgement, approve, base, confirm, declarations, display,
                firstparty, gate, installed, installplan, manifest, preview, projectfs, safefs,
-               snapshot, sources, target, upgradeplan, verify)
+               snapshot, sources, target, unfinished, upgradeplan, verify)
 
 ENDING = preview.ENDING
 LISTED = 40
@@ -316,10 +316,22 @@ class NotStarted(Exception):
     """The marker could not be made, so nothing of the upgrade was written."""
 
 
-def _write(guarded, held, plan, progress):
+def record_of(plan):
+    """The bytes of the marker for `plan`: what is about to be written, for ``wb recover``.
+
+    Built from the plan after its digest is fixed, so it never changes the digest. Raises
+    ``unfinished.UnfinishedError`` when the plan cannot be recorded."""
+    files = [(w.path, w.op, w.expected if w.op == "replace" else None, w.hash)
+             for w in plan.writes]
+    store = [(path, unfinished.sha(data)) for path, data in upgradeplan.store_writes(plan)]
+    return unfinished.build(plan.mode, manifest.project_id(plan.document["seed"]),
+                            plan.document["workbench"], files, plan.dirs, (), store)
+
+
+def _write(guarded, held, plan, progress, record):
     writer = progress.writer = projectfs.Writer(held)
     try:
-        writer.create_file(projectfs.MARKER, b"")
+        writer.create_file(projectfs.MARKER, record)
     except safefs.SafeFsError as exc:
         if projectfs.MARKER in writer.written:
             raise
@@ -422,9 +434,14 @@ def _run(guarded, parsed, stdin, out, err, distribution, version, which, progres
             if upgradeplan.digest(again["plan"], again["existing"], again["selection"],
                                   held.identity) != digest:
                 return _refuse(err, "the plan changed while it was shown; nothing was written")
+            try:
+                record = record_of(plan)
+            except unfinished.UnfinishedError as exc:
+                return _refuse(err, "the plan cannot be recorded in the marker (%s); nothing was "
+                                    "written" % exc)
             progress.plan = _shown(plan)
             try:
-                _write(guarded, held, plan, progress)
+                _write(guarded, held, plan, progress, record)
             except NotStarted as exc:
                 return _refuse(err, str(exc))
             except (Exception, KeyboardInterrupt) as exc:

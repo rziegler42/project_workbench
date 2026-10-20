@@ -26,7 +26,7 @@ import shutil
 import stat
 
 from . import (__version__, approve, confirm, display, fetch, installplan, manifest, preview,
-               projectfs, safefs, sources, target)
+               projectfs, safefs, sources, target, unfinished)
 
 CONFIRM_CHARS = confirm.CONFIRM_CHARS
 MAX_ANSWER = confirm.MAX_ANSWER
@@ -92,7 +92,20 @@ def _still_the_same(held):
 # --- the write ----------------------------------------------------------------------------
 
 
-def _write(guarded, held, plan, progress):
+def record_of(plan):
+    """The bytes of the marker for `plan`: what is about to be written, for ``wb recover``.
+
+    Built from the plan after its digest is fixed, so it never changes the digest. Raises
+    ``unfinished.UnfinishedError`` when the plan cannot be recorded."""
+    files = [(a.path, "create", None, a.hash) for a in plan.actions
+             if a.kind == "create-file" and a.path != installplan.MARKER_PATH]
+    dirs = [".workbench"] + [a.path for a in plan.actions if a.kind == "create-dir"]
+    store = [(path, unfinished.sha(data)) for path, data in plan.store_writes]
+    return unfinished.build("install", plan.project_id, plan.manifest["workbench"], files, dirs,
+                            installplan.GIT_SKELETON if plan.git_init else (), store)
+
+
+def _write(guarded, held, plan, progress, record):
     writer = progress.writer = projectfs.Writer(held)
     progress.started = True
     for action in plan.actions:
@@ -102,6 +115,8 @@ def _write(guarded, held, plan, progress):
             _git_init(held, writer)
         elif action.kind == "create-dir":
             writer.create_dir(action.path)
+        elif action.path == installplan.MARKER_PATH:
+            writer.create_file(action.path, record)
         else:
             writer.create_file(action.path, action.data, executable=action.mode == "x")
     for path, data in plan.store_writes:
@@ -170,7 +185,12 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
             if again.digest != plan.digest:
                 return _refuse(err, "the plan changed while it was shown; nothing was written")
             try:
-                _write(guarded, held, plan, progress)
+                record = record_of(plan)
+            except unfinished.UnfinishedError as exc:
+                return _refuse(err, "the plan cannot be recorded in the marker (%s); nothing was "
+                                    "written" % exc)
+            try:
+                _write(guarded, held, plan, progress, record)
             except (Exception, KeyboardInterrupt) as exc:
                 cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
                 confirm.report_failure(progress, cause, err)

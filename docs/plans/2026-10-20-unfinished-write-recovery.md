@@ -271,4 +271,35 @@ Rounds used 2 of 3. R2-F1 and R2-F2 were recorded as `applied`. The owner chose 
 
 ## Result
 
-Not started.
+### Increment A — done
+
+- New `workbench/unfinished.py` (`build`, `parse`, `UnfinishedError`). The record is canonical
+  JSON (format 1) with the command, project id, workbench version, directories, file writes
+  (path, op, before, after), the `.git` skeleton (path, hash or none for a directory) and store
+  writes (path, after). `parse` takes only the writer's own layout, goes through the manifest's
+  JSON reader (1 MiB bound, duplicate keys and nesting refused), uses `safefs.validate_relpath`
+  for project and store paths, refuses paths at or under `.workbench/local`, duplicates and a
+  path that is both file and directory. An empty marker is "no record".
+- `install.record_of` and `upgrade.record_of` build the record from the final plan after its
+  digest is fixed; `installplan.py` is unchanged, so the digest and the rendered plan are
+  unchanged. A plan that cannot be recorded is refused before anything is written. The marker
+  stays first in the write order and is created with the record instead of empty bytes.
+- Known difference: the rendered install plan still shows the marker action as 0 bytes; the
+  file written is the record. The marker is bookkeeping and is not in the digest or baselines.
+- Tests: `tests/test_unfinished.py` (18) and `tests/test_marker_record.py` (13): the record
+  after a failure among the files, at the git skeleton, at the store and on an interrupt for
+  `install`; after a file failure and a store failure for `upgrade` and `add`; the record
+  against what an uninterrupted run writes; an unrecordable plan writes nothing. Full suite
+  with `-W error`: 1174 tests, passing.
+- Not covered by a test yet: an `upgrade` plan that creates a new directory (the record's
+  `dirs` is covered for `install` only); the record's use is Increment B.
+- Independent read-only review of A (`workflow-reviewer`): the record matched what the commands
+  write; two hardening findings were fixed with tests. Paths are now compared as a
+  case-insensitive, Unicode-normalizing filesystem would (NFC, case folded, trailing dots and
+  spaces ignored): `.workbench/LOCAL/x` and `.workbench/local /x` are refused, duplicates and a
+  file below another file or a directory below a file are refused on folded names. The reviewer
+  could not run scratch experiments, so these rest on the new tests; the `security-reviewer`
+  pass over A to C should try them again. A plan of more than about 5,000 files cannot be
+  recorded (1 MiB bound) and is refused with nothing written; note this in Increment E.
+  Suite after the fixes: 1177 tests, passing.
+- Next: Increment B (examine and report).
