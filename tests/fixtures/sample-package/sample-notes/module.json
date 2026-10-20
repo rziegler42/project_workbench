@@ -1,0 +1,11 @@
+{
+  "name": "sample-notes",
+  "version": "1.2.0",
+  "description": "A module that writes one document.",
+  "provides": ["sample:notes"],
+  "requires": [{"capability": "sample:harness", "soft": true}],
+  "helpers": ["git"],
+  "slots": ["notes"],
+  "writes": ["docs/notes.md"],
+  "ships": ["scripts/check.sh"]
+}

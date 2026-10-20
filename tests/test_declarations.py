@@ -1,0 +1,401 @@
+import copy
+import json
+import os
+import shutil
+import tempfile
+import unittest
+
+from workbench import declarations as d
+
+FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "sample-package")
+
+
+def dump(obj):
+    return json.dumps(obj).encode("utf-8")
+
+
+def read_json(*parts):
+    with open(os.path.join(FIXTURE, *parts), "rb") as handle:
+        return json.loads(handle.read().decode("utf-8"))
+
+
+PACKAGE = read_json("package.json")
+NOTES = read_json("sample-notes", "module.json")
+HARNESS = read_json("sample-harness", "module.json")
+
+
+def module(**changes):
+    decl = copy.deepcopy(NOTES)
+    for key, value in changes.items():
+        if value is DELETE:
+            decl.pop(key, None)
+        else:
+            decl[key] = value
+    return decl
+
+
+DELETE = object()
+
+
+class ParseJsonTest(unittest.TestCase):
+    def refused(self, data):
+        with self.assertRaises(ValueError):
+            d.parse_json(data)
+
+    def test_accepts_an_object(self):
+        self.assertEqual(d.parse_json(b'{"a": 1}'), {"a": 1})
+
+    def test_duplicate_key(self):
+        self.refused(b'{"a": 1, "a": 2}')
+
+    def test_nested_duplicate_key(self):
+        self.refused(b'{"a": {"b": 1, "b": 2}}')
+
+    def test_not_an_object(self):
+        for data in (b"[]", b'"x"', b"1", b"null"):
+            self.refused(data)
+
+    def test_invalid_utf8(self):
+        self.refused(b'{"a": "\xff"}')
+
+    def test_byte_order_mark(self):
+        self.refused(b'\xef\xbb\xbf{"a": 1}')
+
+    def test_nan_infinity_and_floats(self):
+        for data in (b'{"a": NaN}', b'{"a": Infinity}', b'{"a": 1.5}', b'{"a": 1e3}'):
+            self.refused(data)
+
+    def test_trailing_garbage(self):
+        self.refused(b'{"a": 1} x')
+
+    def test_too_large(self):
+        self.refused(b'{"a": "' + b"x" * d.MAX_DECLARATION_BYTES + b'"}')
+
+    def test_deep_nesting(self):
+        self.refused(b'{"a":' + b"[" * 100000 + b"]" * 100000 + b"}")
+
+    def test_nothing_is_evaluated(self):
+        # A string that looks like code stays a string.
+        self.assertEqual(d.parse_json(b'{"a": "__import__(\'os\')"}'), {"a": "__import__('os')"})
+
+
+class PackageTest(unittest.TestCase):
+    def refused(self, changes, rule):
+        decl = copy.deepcopy(PACKAGE)
+        for key, value in changes.items():
+            if value is DELETE:
+                decl.pop(key, None)
+            else:
+                decl[key] = value
+        with self.assertRaises(d.DeclarationError) as ctx:
+            d.parse_package(dump(decl))
+        self.assertEqual(ctx.exception.scope, "package")
+        self.assertEqual(ctx.exception.rule, rule)
+        self.assertIn("package", str(ctx.exception))
+        return ctx.exception
+
+    def test_valid(self):
+        package = d.parse_package(dump(PACKAGE))
+        self.assertEqual((package.name, package.version, package.contract),
+                         ("sample", (1, 0, 0), 1))
+        self.assertEqual(package.modules, ("sample-harness", "sample-notes"))
+
+    def test_unsupported_contract(self):
+        err = self.refused({"contract": 2}, "contract")
+        self.assertIn("newer", str(err))
+        self.assertIn("'sample'", str(err))
+
+    def test_bad_contract_values(self):
+        for value in (0, -1, True, "1", None):
+            self.refused({"contract": value}, "contract")
+
+    def test_malformed_names(self):
+        for value in ("Sample", "1abc", "a b", "a_b", "", "x" * 65, 5, None, "-a"):
+            self.refused({"name": value}, "name")
+
+    def test_reserved_names(self):
+        for value in ("local", "neutral", "manifest", "manifest-x"):
+            self.refused({"name": value}, "reserved-name")
+
+    def test_reserved_and_malformed_module_names(self):
+        self.refused({"modules": ["local"]}, "reserved-name")
+        self.refused({"modules": ["Bad"]}, "modules")
+        self.refused({"modules": ["a", "a"]}, "modules")
+        self.refused({"modules": "a"}, "modules")
+
+    def test_versions(self):
+        for value in ("1.2.3", "0", "10.0.0.1"):
+            d.parse_package(dump(dict(PACKAGE, version=value)))
+        for value in ("", "01.0", "1.2.3.4.5", "1..2", "v1", 1, "1.0-beta", "1.-1"):
+            self.refused({"version": value}, "version")
+
+    def test_unknown_and_missing_fields(self):
+        self.refused({"extra": 1}, "extra")
+        for field in d.PACKAGE_FIELDS:
+            self.refused({field: DELETE}, field)
+
+    def test_malformed_document(self):
+        for data in (b"{", b"[]", b'{"name": "a", "name": "b"}'):
+            with self.assertRaises(d.DeclarationError) as ctx:
+                d.parse_package(data)
+            self.assertEqual(ctx.exception.rule, "package.json")
+
+
+class ModuleTest(unittest.TestCase):
+    def parse(self, decl, **kw):
+        return d.parse_module(dump(decl), kw.pop("package", "sample"),
+                              kw.pop("expected", decl.get("name", "sample-notes")), **kw)
+
+    def refused(self, rule, first_party=False, **changes):
+        decl = module(**changes)
+        with self.assertRaises(d.DeclarationError) as ctx:
+            self.parse(decl, expected="sample-notes", first_party=first_party)
+        err = ctx.exception
+        self.assertEqual(err.scope, "module")
+        self.assertEqual(err.rule, rule)
+        self.assertIn("module 'sample-notes' (package 'sample')", str(err))
+        return err
+
+    def test_valid_fixture_modules(self):
+        notes = self.parse(NOTES)
+        self.assertEqual(notes.type, "module")
+        self.assertEqual(notes.requires, (("sample:harness", True),))
+        self.assertEqual(notes.writes, ("docs/notes.md",))
+        harness = self.parse(HARNESS)
+        self.assertEqual(harness.type, "harness")
+        self.assertEqual(harness.layout["root"], "none")
+
+    def test_minimal_module(self):
+        minimal = {"name": "m", "version": "0.1", "description": "d"}
+        got = self.parse(minimal)
+        self.assertEqual((got.provides, got.requires, got.blocks, got.type),
+                         ((), (), (), "module"))
+
+    def test_declared_name_must_equal_entry(self):
+        err = self.refused("name", name="other-name")
+        self.assertIn("differs", str(err))
+
+    def test_unknown_and_missing_fields(self):
+        self.refused("extra", extra=1)
+        for field in ("name", "version", "description"):
+            self.refused(field, **{field: DELETE})
+
+    def test_types(self):
+        for value in ("harness-x", "Module", None, 3):
+            self.refused("type", type=value)
+        self.parse(module(type="process"))
+
+    def test_reserved_module_name(self):
+        decl = module(name="manifest-a")
+        with self.assertRaises(d.DeclarationError) as ctx:
+            d.parse_module(dump(decl), "sample", "manifest-a")
+        self.assertEqual(ctx.exception.rule, "reserved-name")
+
+    def test_description(self):
+        for value in ("", "two\nlines", 5, "x" * 201, "tab\there"):
+            self.refused("description", description=value)
+
+    def test_capability_formats(self):
+        for bad in ("has space", "UPPER", "a:b:c", ":x", "x:", "x" * 65, "é", "perm.deny", 7, ""):
+            self.refused("requires", requires=[bad])
+            self.refused("blocks", blocks=[bad])
+
+    def test_duplicates(self):
+        self.refused("requires", requires=["a", {"capability": "a", "soft": True}])
+        self.refused("blocks", blocks=["a", "a"])
+        self.refused("provides", provides=["sample:a", "sample:a"])
+        self.refused("slots", slots=["a", "a"])
+        self.refused("helpers", helpers=["git", "git"])
+
+    def test_requires_shapes(self):
+        self.refused("requires", requires=[{"capability": "a", "soft": "yes"}])
+        self.refused("requires", requires=[{"soft": True}])
+        self.refused("requires", requires=[{"capability": "a", "extra": 1}])
+        self.refused("requires", requires="a")
+        self.parse(module(requires=["a", {"capability": "b"}]))
+
+    def test_unprefixed_provides_needs_first_party(self):
+        self.refused("provides", provides=["plans"])
+        self.parse(module(provides=["plans"]), first_party=True)
+
+    def test_third_party_prefix_must_match_package(self):
+        self.refused("provides", provides=["other:thing"])
+        self.parse(module(provides=["sample:thing"]))
+
+    def test_harness_capability_only_from_a_harness_module(self):
+        for cap in d.HARNESS_CAPABILITIES:
+            self.refused("provides", first_party=True, provides=[cap])
+        decl = copy.deepcopy(HARNESS)
+        decl["provides"] = list(d.HARNESS_CAPABILITIES)
+        self.parse(decl, first_party=True)
+
+    def test_slots_are_declared_in_slots(self):
+        self.refused("provides", provides=["slot:x"])
+        self.refused("slots", slots=["Bad"])
+        self.refused("slots", slots=["slot:x"])
+
+    def test_fills(self):
+        self.parse(module(fills=[{"slot": "slot:notes", "source": "templates/a.md"}]))
+        self.refused("fills", fills=[{"slot": "notes", "source": "a.md"}])
+        self.refused("fills", fills=[{"slot": "slot:x"}])
+        self.refused("fills", fills=[{"slot": "slot:x", "source": "../a"}])
+        self.refused("fills", fills=[{"slot": "slot:x", "source": "a", "extra": 1}])
+        self.refused("fills", fills=["slot:x"])
+        self.refused("fills", fills=[{"slot": "slot:x", "source": "a"},
+                                     {"slot": "slot:x", "source": "b"}])
+
+    def test_helpers(self):
+        for bad in ("a b", "/bin/sh", "", "-x", "a;b", 3):
+            self.refused("helpers", helpers=[bad])
+
+    def test_layout_rules(self):
+        decl = copy.deepcopy(HARNESS)
+        del decl["layout"]
+        with self.assertRaises(d.DeclarationError) as ctx:
+            self.parse(decl)
+        self.assertEqual(ctx.exception.rule, "layout")
+        decl["layout"] = []
+        with self.assertRaises(d.DeclarationError):
+            self.parse(decl)
+        decl["layout"] = {"bogus": 1}
+        with self.assertRaises(d.DeclarationError):
+            self.parse(decl)
+        self.refused("layout", layout={})
+
+    def test_ships_paths(self):
+        for bad in ("/abs", "a/../b", "a\\b", "C:x", ".git/hooks/x", "a//b"):
+            self.refused("ships", ships=[bad])
+
+    def test_writes_path_rules(self):
+        bad = ["/etc/passwd", "../x", "a/../../x", "a\\b", "C:/x", ".git/config", ".GIT/config",
+               ".git./config", "GIT~1/config", "a/.git/x", "link/../x", ".config/project-workbench/s",
+               ".Config/Project-Workbench/x", ".workbench", ".workbench/sample",
+               ".workbench/sample/other-module/x", ".workbench/other-package/sample-notes/x",
+               ".workbench/sample/sample-notes", ".WORKBENCH/sample/other/x", "", "a\x00b"]
+        for rel in bad:
+            with self.subTest(rel=rel):
+                self.refused("writes", writes=[rel])
+
+    def test_writes_inside_own_namespace_is_allowed(self):
+        self.parse(module(writes=[".workbench/sample/sample-notes/state.json", "docs/a.md"]))
+
+    def test_writes_collisions(self):
+        self.refused("writes", writes=["Docs/a.md", "docs/A.md"])
+        self.refused("writes", writes=["docs", "docs/a.md"])
+        self.refused("writes", writes=["a.md", "a.md"])
+
+
+class LoadPackageTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = os.path.join(os.path.realpath(self.tmp.name), "pkg")
+        shutil.copytree(FIXTURE, self.path)
+
+    def write(self, rel, text):
+        full = os.path.join(self.path, rel)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "w") as handle:
+            handle.write(text)
+
+    def load(self, **kw):
+        return d.load_package(self.path, **kw)
+
+    def only_problem(self, loaded):
+        self.assertEqual(len(loaded.problems), 1, [str(p) for p in loaded.problems])
+        return loaded.problems[0]
+
+    def test_valid_package(self):
+        loaded = self.load()
+        self.assertEqual(loaded.problems, [])
+        self.assertEqual([m.name for m in loaded.modules], ["sample-harness", "sample-notes"])
+        self.assertEqual(loaded.package.name, "sample")
+
+    def test_package_level_refusal_names_the_package(self):
+        self.write("package.json", json.dumps(dict(PACKAGE, contract=2)))
+        loaded = self.load()
+        self.assertIsNone(loaded.package)
+        err = self.only_problem(loaded)
+        self.assertEqual((err.scope, err.subject, err.rule), ("package", "sample", "contract"))
+
+    def test_missing_package_json(self):
+        os.remove(os.path.join(self.path, "package.json"))
+        err = self.only_problem(self.load())
+        self.assertEqual(err.scope, "package")
+        self.assertEqual(err.rule, "package.json")
+
+    def test_module_level_refusal_names_the_module(self):
+        self.write("sample-notes/module.json", json.dumps(module(type="bogus")))
+        loaded = self.load()
+        err = self.only_problem(loaded)
+        self.assertEqual((err.scope, err.subject, err.rule), ("module", "sample-notes", "type"))
+        self.assertEqual([m.name for m in loaded.modules], ["sample-harness"])
+
+    def test_list_entry_directory_and_declared_name_disagree(self):
+        self.write("sample-notes/module.json", json.dumps(module(name="renamed")))
+        err = self.only_problem(self.load())
+        self.assertEqual((err.scope, err.subject, err.rule), ("module", "sample-notes", "name"))
+
+    def test_listed_module_without_directory(self):
+        shutil.rmtree(os.path.join(self.path, "sample-notes"))
+        err = self.only_problem(self.load())
+        self.assertEqual((err.subject, err.rule), ("sample-notes", "directory"))
+
+    def test_listed_module_without_module_json(self):
+        os.remove(os.path.join(self.path, "sample-notes", "module.json"))
+        err = self.only_problem(self.load())
+        self.assertEqual((err.scope, err.subject, err.rule), ("module", "sample-notes", "module.json"))
+
+    def test_extra_module_directory(self):
+        self.write("stray/module.json", json.dumps(module(name="stray")))
+        err = self.only_problem(self.load())
+        self.assertEqual((err.scope, err.rule), ("package", "modules"))
+        self.assertIn("stray", str(err))
+
+    def test_other_directories_are_not_modules(self):
+        self.write("docs/readme.md", "hello")
+        self.assertEqual(self.load().problems, [])
+
+    def test_listed_module_that_is_a_symlink(self):
+        shutil.move(os.path.join(self.path, "sample-notes"), os.path.join(self.path, "real"))
+        os.symlink("real", os.path.join(self.path, "sample-notes"))
+        problems = self.load().problems
+        self.assertTrue(any(p.subject == "sample-notes" for p in problems))
+
+    def test_module_json_that_is_a_symlink(self):
+        target = os.path.join(self.path, "sample-notes", "module.json")
+        shutil.move(target, os.path.join(self.path, "elsewhere.json"))
+        os.symlink("../elsewhere.json", target)
+        err = self.only_problem(self.load())
+        self.assertEqual(err.subject, "sample-notes")
+
+    def test_package_root_symlink_is_refused(self):
+        link = self.path + "-link"
+        os.symlink(self.path, link)
+        loaded = d.load_package(link)
+        self.assertIsNone(loaded.package)
+        self.assertEqual(loaded.problems[0].scope, "package")
+
+    def test_oversized_declaration(self):
+        self.write("sample-notes/module.json", "{" + " " * (d.MAX_DECLARATION_BYTES + 1) + "}")
+        err = self.only_problem(self.load())
+        self.assertEqual(err.subject, "sample-notes")
+
+    def test_the_load_writes_nothing(self):
+        def listing():
+            out = []
+            for base, dirs, files in os.walk(self.path):
+                out += [os.path.join(base, n) for n in dirs + files]
+            return sorted(out)
+        before = listing()
+        self.load()
+        self.assertEqual(listing(), before)
+
+    def test_first_party_flag_reaches_modules(self):
+        self.write("sample-notes/module.json", json.dumps(module(provides=["plans"])))
+        self.assertEqual(len(self.load().problems), 1)
+        self.assertEqual(self.load(first_party=True).problems, [])
+
+
+if __name__ == "__main__":
+    unittest.main()

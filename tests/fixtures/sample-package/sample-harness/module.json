@@ -1,0 +1,8 @@
+{
+  "name": "sample-harness",
+  "version": "1.0.0",
+  "type": "harness",
+  "description": "A harness module for tests.",
+  "provides": ["sample:harness"],
+  "layout": {"root": "none", "local_settings": "none", "hooks": "none"}
+}

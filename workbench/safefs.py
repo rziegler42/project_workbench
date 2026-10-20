@@ -353,6 +353,9 @@ def _check_tree_paths(rels):
     return rels
 
 
+check_tree_paths = _check_tree_paths  # public name for declaration checks
+
+
 def _existing_dest(name, dirfd, shown):
     """Refuse a destination that is a symbolic link, a non-file or read-only; None if absent."""
     try:

@@ -1,0 +1,435 @@
+"""Parsing and validation of ``package.json`` and ``module.json``.
+
+Declarations are data. They are read through ``safefs`` as bytes, decoded as
+UTF-8, parsed by a strict JSON loader and never evaluated. The loader refuses a
+duplicate key, a non-object top level, NaN, Infinity, any float, and a
+declaration over ``MAX_DECLARATION_BYTES`` or nested deeper than ``MAX_DEPTH``. Unknown fields are refused.
+
+Every refusal is a ``DeclarationError`` that names its scope: the package, or one
+module of it, and the field or rule that failed.
+
+Formats (proposals until the specs record them):
+
+name        ``^[a-z][a-z0-9-]*$``, at most 64 characters. ``local``, ``neutral``
+            and anything beginning ``manifest`` are reserved.
+version     one to four dot-separated non-negative integers, no leading zeros.
+contract    an integer from 1 up to ``SUPPORTED_CONTRACT``.
+capability  printable ASCII, at most 64 characters, in one of three forms:
+            ``name`` (core), ``<package>:name`` (third party) or ``slot:name``.
+            A name part is the ``name`` format above; dotted sub-names are not
+            defined yet and are refused.
+requires    each entry a capability, or ``{"capability": ..., "soft": bool}``.
+fills       each entry ``{"slot": "slot:<name>", "source": "<relative path>"}``.
+slots       the names of the slots the module owns; the module provides
+            ``slot:<name>`` for each, so ``provides`` may not list one.
+helpers     tool names to look up on ``PATH``: letters, digits and ``._+-``.
+writes,
+ships       lists of relative paths, checked by ``safefs.validate_relpath``.
+layout      present exactly for a harness module: an object whose keys come from
+            ``LAYOUT_KEYS``. Its values are not checked beyond being JSON data;
+            that belongs to the harness specification.
+
+Optional fields (``type``, ``provides``, ``requires``, ``blocks``, ``helpers``,
+``slots``, ``fills``, ``writes``, ``ships``) default to ``module`` and empty. The
+declaration hash covers the declaration as written, never the defaults.
+
+A ``writes`` path may not name the guarded store and may not enter ``.workbench/``
+except under the module's own namespace ``.workbench/<package>/<module>/``. That is
+stricter than "another module's namespace": another package's tree is also
+another module's namespace.
+"""
+
+import collections
+import json
+import re
+import unicodedata
+
+from . import safefs
+
+SUPPORTED_CONTRACT = 1
+MAX_DECLARATION_BYTES = 1024 * 1024
+MAX_NAME_CHARS = 64
+MAX_DESCRIPTION_CHARS = 200
+MAX_DEPTH = 32
+
+TYPES = ("harness", "process", "module")
+HARNESS_CAPABILITIES = ("instructions", "skills", "agents", "commands", "hooks", "permissions")
+LAYOUT_KEYS = ("root", "kinds", "local_settings", "hooks", "exclude", "notes")
+
+PACKAGE_FIELDS = ("name", "version", "contract", "modules")
+MODULE_FIELDS = ("name", "version", "type", "description", "provides", "requires", "blocks",
+                 "helpers", "slots", "fills", "writes", "ships", "layout")
+
+_NAME = re.compile(r"^[a-z][a-z0-9-]*$")
+_VERSION = re.compile(r"^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){0,3}$")
+_HELPER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+
+Package = collections.namedtuple("Package", "name version contract modules declaration")
+Module = collections.namedtuple(
+    "Module", "name version type description provides requires blocks helpers slots fills "
+              "writes ships layout declaration")
+Loaded = collections.namedtuple("Loaded", "package modules problems")
+
+
+class DeclarationError(Exception):
+    """A declaration is refused. `scope` is "package" or "module"."""
+
+    def __init__(self, scope, subject, rule, message, package=None):
+        self.scope = scope
+        self.subject = subject
+        self.rule = rule
+        self.message = message
+        self.package = package
+        super().__init__(str(self))
+
+    def __str__(self):
+        if self.scope == "module" and self.package:
+            who = "module '%s' (package '%s')" % (self.subject, self.package)
+        else:
+            who = "%s '%s'" % (self.scope, self.subject)
+        return "%s: %s: %s" % (who, self.rule, self.message)
+
+
+# --- strict loader -------------------------------------------------------------
+
+
+def _no_duplicates(pairs):
+    seen = {}
+    for key, value in pairs:
+        if key in seen:
+            raise ValueError("duplicate key %r" % key)
+        seen[key] = value
+    return seen
+
+
+def _refuse_constant(text):
+    raise ValueError("%s is not allowed" % text)
+
+
+def _refuse_float(text):
+    raise ValueError("numbers with a fraction or exponent are not allowed: %s" % text)
+
+
+def parse_json(data):
+    """Parse declaration bytes into a JSON object; raise ValueError with a reason."""
+    if len(data) > MAX_DECLARATION_BYTES:
+        raise ValueError("larger than %d bytes" % MAX_DECLARATION_BYTES)
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError("not valid UTF-8")
+    try:
+        value = json.loads(text, object_pairs_hook=_no_duplicates,
+                           parse_constant=_refuse_constant, parse_float=_refuse_float)
+    except RecursionError:
+        raise ValueError("nested too deeply")
+    except json.JSONDecodeError as exc:
+        raise ValueError("not valid JSON (%s)" % exc.msg)
+    if not isinstance(value, dict):
+        raise ValueError("the top level must be an object")
+    _check_depth(value)
+    return value
+
+
+def _check_depth(value):
+    # Iterative, so a hostile document cannot exhaust the stack here.
+    stack = [(value, 1)]
+    while stack:
+        item, depth = stack.pop()
+        if isinstance(item, (dict, list)):
+            if depth > MAX_DEPTH:
+                raise ValueError("nested deeper than %d levels" % MAX_DEPTH)
+            children = item.values() if isinstance(item, dict) else item
+            stack.extend((child, depth + 1) for child in children)
+
+
+# --- value checks -------------------------------------------------------------------
+
+
+class _Checker:
+    def __init__(self, scope, subject, package=None):
+        self.scope = scope
+        self.subject = subject
+        self.package = package
+
+    def fail(self, rule, message):
+        raise DeclarationError(self.scope, self.subject, rule, message, self.package)
+
+    def name(self, value, field, what="name"):
+        if (not isinstance(value, str) or len(value) > MAX_NAME_CHARS
+                or not _NAME.match(value)):
+            self.fail(field, "%s %r must be lowercase kebab-case, starting with a letter, "
+                             "at most %d characters" % (what, value, MAX_NAME_CHARS))
+        if value in ("local", "neutral") or value.startswith("manifest"):
+            self.fail("reserved-name", "%r is a reserved name" % value)
+        return value
+
+    def version(self, value, field="version"):
+        if not isinstance(value, str) or not _VERSION.match(value):
+            self.fail(field, "%r is not one to four dot-separated integers without leading zeros"
+                      % (value,))
+        return tuple(int(part) for part in value.split("."))
+
+    def string_list(self, value, field):
+        if not isinstance(value, list):
+            self.fail(field, "must be a list")
+        return value
+
+    def unique(self, items, field):
+        seen = set()
+        for item in items:
+            if item in seen:
+                self.fail(field, "%r is listed twice" % (item,))
+            seen.add(item)
+
+    def capability(self, value, field):
+        """Return (prefix, name) for a valid capability; prefix is None for a core name."""
+        if (not isinstance(value, str) or not value or len(value) > MAX_NAME_CHARS
+                or not all(33 <= ord(c) <= 126 for c in value)):
+            self.fail(field, "capability %r must be printable ASCII without spaces, "
+                             "at most %d characters" % (value, MAX_NAME_CHARS))
+        prefix, sep, rest = value.partition(":")
+        if not sep:
+            prefix, rest = None, value
+        if (prefix is not None and not _NAME.match(prefix)) or not _NAME.match(rest):
+            self.fail(field, "capability %r must be 'name', '<package>:name' or 'slot:name'"
+                      % value)
+        return prefix, rest
+
+    def path(self, value, field):
+        try:
+            return safefs.validate_relpath(value)
+        except safefs.SafeFsError as exc:
+            self.fail(field, "path %r refused: %s" % (value, exc))
+
+    def exact_keys(self, value, field, required, optional=()):
+        if not isinstance(value, dict):
+            self.fail(field, "each entry must be an object")
+        for key in value:
+            if key not in required and key not in optional:
+                self.fail(field, "unknown key %r" % key)
+        for key in required:
+            if key not in value:
+                self.fail(field, "missing key %r" % key)
+
+
+def _fold(segment):
+    return unicodedata.normalize("NFC", segment).rstrip(" .").casefold()
+
+
+# --- package ---------------------------------------------------------------------------
+
+
+def parse_package(data, shown="package"):
+    """Validate the bytes of ``package.json``; return a ``Package``."""
+    check = _Checker("package", shown)
+    try:
+        declaration = parse_json(data)
+    except ValueError as exc:
+        check.fail("package.json", str(exc))
+    for key in declaration:
+        if key not in PACKAGE_FIELDS:
+            check.fail(key, "unknown field")
+    for key in PACKAGE_FIELDS:
+        if key not in declaration:
+            check.fail(key, "missing field")
+    name = check.name(declaration["name"], "name", "package name")
+    check = _Checker("package", name)
+    version = check.version(declaration["version"])
+    contract = declaration["contract"]
+    if isinstance(contract, bool) or not isinstance(contract, int) or contract < 1:
+        check.fail("contract", "%r is not a positive integer" % (contract,))
+    if contract > SUPPORTED_CONTRACT:
+        check.fail("contract", "contract %d is newer than the highest supported (%d)"
+                   % (contract, SUPPORTED_CONTRACT))
+    modules = check.string_list(declaration["modules"], "modules")
+    for entry in modules:
+        check.name(entry, "modules", "module name")
+    check.unique(modules, "modules")
+    return Package(name, version, contract, tuple(modules), declaration)
+
+
+# --- module ------------------------------------------------------------------------------
+
+
+def parse_module(data, package_name, expected_name, first_party=False):
+    """Validate the bytes of one ``module.json``; return a ``Module``."""
+    check = _Checker("module", expected_name, package_name)
+    try:
+        declaration = parse_json(data)
+    except ValueError as exc:
+        check.fail("module.json", str(exc))
+    for key in declaration:
+        if key not in MODULE_FIELDS:
+            check.fail(key, "unknown field")
+    for key in ("name", "version", "description"):
+        if key not in declaration:
+            check.fail(key, "missing field")
+
+    name = check.name(declaration["name"], "name", "module name")
+    if name != expected_name:
+        check.fail("name", "declared name %r differs from the package list entry and "
+                           "directory %r" % (name, expected_name))
+    version = check.version(declaration["version"])
+
+    description = declaration["description"]
+    if (not isinstance(description, str) or not description.strip()
+            or len(description) > MAX_DESCRIPTION_CHARS
+            or not description.isprintable()):
+        check.fail("description", "must be one printable line of at most %d characters"
+                   % MAX_DESCRIPTION_CHARS)
+
+    mtype = declaration.get("type", "module")
+    if mtype not in TYPES:
+        check.fail("type", "%r is not one of %s" % (mtype, ", ".join(TYPES)))
+
+    provides = check.string_list(declaration.get("provides", []), "provides")
+    check.unique(provides, "provides")
+    for cap in provides:
+        prefix, rest = check.capability(cap, "provides")
+        if prefix == "slot":
+            check.fail("provides", "%r: declare a slot in 'slots', not in 'provides'" % cap)
+        if prefix is None:
+            if cap in HARNESS_CAPABILITIES and mtype != "harness":
+                check.fail("provides", "harness capability %r may be provided only by a "
+                                       "harness module" % cap)
+            if not first_party:
+                check.fail("provides", "unprefixed capability %r is reserved for the "
+                                       "first-party package" % cap)
+        elif prefix != package_name:
+            check.fail("provides", "capability %r must be prefixed with the package name %r"
+                       % (cap, package_name))
+
+    requires = []
+    raw_requires = check.string_list(declaration.get("requires", []), "requires")
+    for entry in raw_requires:
+        soft = False
+        if isinstance(entry, dict):
+            check.exact_keys(entry, "requires", ("capability",), ("soft",))
+            cap = entry["capability"]
+            soft = entry.get("soft", False)
+            if not isinstance(soft, bool):
+                check.fail("requires", "'soft' must be true or false")
+        else:
+            cap = entry
+        check.capability(cap, "requires")
+        requires.append((cap, soft))
+    check.unique([cap for cap, _ in requires], "requires")
+
+    blocks = check.string_list(declaration.get("blocks", []), "blocks")
+    for cap in blocks:
+        check.capability(cap, "blocks")
+    check.unique(blocks, "blocks")
+
+    helpers = check.string_list(declaration.get("helpers", []), "helpers")
+    for helper in helpers:
+        if (not isinstance(helper, str) or len(helper) > MAX_NAME_CHARS
+                or not _HELPER.match(helper)):
+            check.fail("helpers", "%r is not a plain tool name" % (helper,))
+    check.unique(helpers, "helpers")
+
+    slots = check.string_list(declaration.get("slots", []), "slots")
+    for slot in slots:
+        check.name(slot, "slots", "slot name")
+    check.unique(slots, "slots")
+
+    fills = []
+    for entry in check.string_list(declaration.get("fills", []), "fills"):
+        check.exact_keys(entry, "fills", ("slot", "source"))
+        prefix, rest = check.capability(entry["slot"], "fills")
+        if prefix != "slot":
+            check.fail("fills", "%r is not a slot; write 'slot:<name>'" % (entry["slot"],))
+        check.path(entry["source"], "fills")
+        fills.append((entry["slot"], entry["source"]))
+    check.unique([slot for slot, _ in fills], "fills")
+
+    ships = check.string_list(declaration.get("ships", []), "ships")
+    for rel in ships:
+        check.path(rel, "ships")
+    check.unique(ships, "ships")
+
+    writes = check.string_list(declaration.get("writes", []), "writes")
+    own = (".workbench", _fold(package_name), _fold(name))
+    for rel in writes:
+        parts = [_fold(part) for part in check.path(rel, "writes")]
+        if parts[:2] == [".config", "project-workbench"]:
+            check.fail("writes", "%r names the guarded store" % rel)
+        if parts[0] == ".workbench" and (len(parts) <= 3 or tuple(parts[:3]) != own):
+            check.fail("writes", "%r enters .workbench/ outside this module's own namespace "
+                                 ".workbench/%s/%s/" % (rel, package_name, name))
+    try:
+        safefs.check_tree_paths(writes)
+    except safefs.SafeFsError as exc:
+        check.fail("writes", str(exc))
+
+    layout = declaration.get("layout")
+    if mtype == "harness":
+        if "layout" not in declaration:
+            check.fail("layout", "a harness module must declare a layout")
+        if not isinstance(layout, dict):
+            check.fail("layout", "must be an object")
+        for key in layout:
+            if key not in LAYOUT_KEYS:
+                check.fail("layout", "unknown key %r (expected one of %s)"
+                           % (key, ", ".join(LAYOUT_KEYS)))
+    elif "layout" in declaration:
+        check.fail("layout", "only a harness module declares a layout")
+
+    return Module(name, version, mtype, description, tuple(provides), tuple(requires),
+                  tuple(blocks), tuple(helpers), tuple(slots), tuple(fills), tuple(writes),
+                  tuple(ships), layout, declaration)
+
+
+# --- from a directory ------------------------------------------------------------------------
+
+
+def load_package(path, first_party=False):
+    """Read and validate a package directory; return ``Loaded``.
+
+    Problems are collected, not raised. A package-level failure leaves no modules.
+    """
+    shown = path
+    try:
+        with safefs.Root(path, "package") as root:
+            entries = root.walk()
+            kinds = {entry.rel: entry.kind for entry in entries}
+            data = _read(root, "package.json", kinds)
+            package = parse_package(data, shown)
+            problems = []
+            modules = []
+            for name in package.modules:
+                try:
+                    modules.append(_load_module(root, kinds, package, name, first_party))
+                except DeclarationError as exc:
+                    problems.append(exc)
+                except safefs.SafeFsError as exc:
+                    problems.append(DeclarationError("module", name, "module.json", str(exc),
+                                                     package.name))
+            listed = set(package.modules)
+            for rel, kind in sorted(kinds.items()):
+                if "/" in rel or kind != "dir" or rel in listed:
+                    continue
+                if kinds.get(rel + "/module.json") == "file":
+                    problems.append(DeclarationError(
+                        "package", package.name, "modules",
+                        "directory %r holds a module.json but is not listed in 'modules'" % rel))
+            return Loaded(package, modules, problems)
+    except DeclarationError as exc:
+        return Loaded(None, [], [exc])
+    except safefs.SafeFsError as exc:
+        return Loaded(None, [], [DeclarationError("package", shown, "package.json", str(exc))])
+
+
+def _read(root, rel, kinds):
+    if kinds.get(rel) != "file":
+        raise safefs.SafeFsError("%s is missing or is not a regular file" % rel)
+    return root.read_file(rel, limit=MAX_DECLARATION_BYTES)
+
+
+def _load_module(root, kinds, package, name, first_party):
+    if kinds.get(name) != "dir":
+        raise DeclarationError("module", name, "directory",
+                               "listed in 'modules' but there is no directory of that name",
+                               package.name)
+    data = _read(root, name + "/module.json", kinds)
+    return parse_module(data, package.name, name, first_party)
