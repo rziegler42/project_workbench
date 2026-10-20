@@ -80,6 +80,11 @@ class ReadBack(Fixture):
         self.assertIn(("AGENTS.md", "p/a"), self.states())
         self.assertIn(("AGENTS.md", "p/b"), self.states())
 
+    def test_a_block_entry_carries_its_slot_and_a_file_entry_does_not(self):
+        slots = {(e.path, e.block): e.slot for e in self.read().entries}
+        self.assertEqual("policy", slots[("AGENTS.md", "p/a")])
+        self.assertIsNone(slots[("AGENTS.md", None)])
+
     def test_the_manifest_hash_is_that_of_the_file(self):
         with open(self.path(".workbench/manifest.json"), "rb") as handle:
             self.assertEqual(hashlib.sha256(handle.read()).hexdigest(),

@@ -96,7 +96,7 @@ class _Files:
             raise PlanError("%s and %s both write %s" % (earlier, origin, path))
         self.order.append(path)
         self.items[path] = {"data": data, "class": owner_class, "x": executable,
-                            "origin": origin, "blocks": []}
+                            "origin": origin, "blocks": [], "texts": {}}
 
 
 def _marker_line(slot):
@@ -145,11 +145,17 @@ def _apply_fill(files, verified, slot_name, source_bytes, blocks):
     item["data"] = b"\n".join(lines[:at]) + (b"\n" if at else b"") + block \
         + b"\n".join(lines[at:])
     item["blocks"].append((slot, who))
+    item["texts"][(who, slot)] = (block, source_bytes)
     blocks.append({"block": who, "class": "slot block", "hash": _sha(block), "path": path,
                    "slot": slot})
 
 
-def _assemble(selection, snapshots, base):
+def assemble(selection, snapshots, base):
+    """The files and the blocks an install of `selection` over `base` would write, with no
+    target: ``(files, blocks)``. For each file, ``items[path]`` holds the bytes (with its blocks
+    in), the owner class, whether it is executable, who supplied it, ``blocks`` (the
+    ``(slot, who)`` pairs) and ``texts`` ({(who, slot): (block text, body)}), which an upgrade
+    needs to edit a project that already exists."""
     files = _Files()
     for rel in sorted(base.files):
         files.add(rel, base.files[rel], "seeded", False, BASE_ORIGIN)
@@ -186,13 +192,13 @@ def _assemble(selection, snapshots, base):
 # --- the manifest ------------------------------------------------------------------
 
 
-def _manifest_document(selection, files, blocks, base, seed, workbench_version):
+def manifest_document(selection, files, blocks, base, seed, workbench_version):
     entries = []
     for path in files.order:
         item = files.items[path]
         original = item["data"]
         if item["blocks"]:
-            original = _without_blocks(original)
+            original = without_blocks(original)
         entries.append({"class": item["class"], "hash": _sha(original), "path": path})
     entries.extend(blocks)
     entries.sort(key=lambda e: (e["path"].encode("utf-8"), e.get("block", "")))
@@ -214,7 +220,7 @@ def _manifest_document(selection, files, blocks, base, seed, workbench_version):
             "version": manifest.VERSION, "workbench": workbench_version}
 
 
-def _without_blocks(data):
+def without_blocks(data):
     """The file with every BEGIN/END block removed: what the base or module supplied."""
     out = []
     inside = False
@@ -255,8 +261,8 @@ def build(target, selection, snapshots, base, seed, workbench_version):
         project = manifest.project_id(seed)
     except manifest.ManifestError as exc:
         raise PlanError(str(exc))
-    files, blocks = _assemble(selection, snapshots, base)
-    document = _manifest_document(selection, files, blocks, base, seed, workbench_version)
+    files, blocks = assemble(selection, snapshots, base)
+    document = manifest_document(selection, files, blocks, base, seed, workbench_version)
     try:
         manifest_bytes = manifest.serialize(document)
     except manifest.ManifestError as exc:

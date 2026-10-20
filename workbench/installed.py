@@ -40,9 +40,10 @@ UNREADABLE = "unreadable"
 
 _VERSION = re.compile(r"\A[0-9]{1,9}(\.[0-9]{1,9}){0,7}\Z")
 
-# One manifest entry and what is on disk behind it. `block` is the block id for a slot block and
-# None for a file; `hash` is the recorded hash; `current` is the hash found now, or None.
-Entry = collections.namedtuple("Entry", "path block owner_class hash state current detail")
+# One manifest entry and what is on disk behind it. `block` and `slot` are the block id and the slot
+# name for a slot block and None for a file; `hash` is the recorded hash; `current` is the hash
+# found now, or None.
+Entry = collections.namedtuple("Entry", "path block slot owner_class hash state current detail")
 Installed = collections.namedtuple("Installed", "document manifest_hash entries")
 
 
@@ -109,7 +110,7 @@ def _strip(data, scan, wanted):
     return b"".join(out)
 
 
-def _look(held, path):
+def look(held, path):
     """(FileState or None, detail): `detail` is non-empty when the path is unreadable."""
     try:
         return held.read_file(path), ""
@@ -131,7 +132,7 @@ def read(held, workbench_version):
 
     entries = []
     for path, items in by_path.items():
-        found, problem = _look(held, path)
+        found, problem = look(held, path)
         recorded = {(item["block"], item["slot"]) for item in items if "block" in item}
         scan, scan_problem = None, ""
         if found is not None and recorded:
@@ -150,7 +151,8 @@ def read(held, workbench_version):
 
 def _entry(path, item, block_id, found, problem, scan, scan_problem, recorded):
     def make(state, current=None, detail=""):
-        return Entry(path, block_id, item["class"], item["hash"], state, current, detail)
+        return Entry(path, block_id, item.get("slot"), item["class"], item["hash"], state,
+                     current, detail)
 
     if problem:
         return make(UNREADABLE, detail=problem)
