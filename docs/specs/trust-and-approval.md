@@ -201,8 +201,8 @@ Rules:
   A convenience allowance is personal and lives in the owner's own configuration.
 - A rule is rendered into local, uncommitted harness configuration only.
 - A harness that provides `permissions` renders a `deny` for each owner-run command, so an
-  agent cannot run it: `wb install`, `wb upgrade`, `wb add`, `wb attach`, `wb approve`,
-  `wb pin` and `wb release-approvals`. The read-only `wb preview` is not denied. The commands
+  agent cannot run it: `wb install`, `wb upgrade`, `wb add`, `wb attach`, `wb acknowledge`,
+  `wb approve`, `wb pin` and `wb release-approvals`. The read-only `wb preview` is not denied. The commands
   are listed in `installer-interface.md`. *(Required by that specification; not yet
   rendered by any harness module, which is for `claude-harness` and `opencode-harness`.)*
 
@@ -230,8 +230,20 @@ reviewed. It protects against text changed by someone else.
   change.
 - **Baselines file (built by `base-and-manifests`).** `projects/<id>/baselines` is strict JSON,
   `{"baselines": {"<path relative to the project root>": "<sha256 hex of the bytes>"}, "format": 1}`,
-  with sorted keys. `install` writes it for the files it wrote. Nothing reads it yet; reading,
-  comparing and acknowledging are for `ownership-and-upgrade` and later.
+  with sorted keys. `install` writes it for the files it wrote. `upgrade`, `add` and
+  `acknowledge` read it *(proposed; built by `ownership-and-upgrade`)*.
+- **What a command checks before it acts on a project** *(proposed; owner)*. The project must have
+  `projects/<id>/baselines` and a `seen` record at the resolved target path on this machine, else
+  it is treated as new here and the command refuses. It then compares the committed manifest,
+  every file under `.workbench/` outside `local/` (a file added or removed counts) and every
+  file the command would write into with the baselines, and refuses on any difference, naming
+  the paths. A file the command writes into must equal its baseline, so a baseline update never
+  accepts an unreviewed edit.
+- **`wb acknowledge`** is the owner's way to accept the differences. It is owner-run and
+  terminal-only. It lists each difference (path, baseline hash, current hash, reason) and a
+  parsed summary of the manifest, asks for the first 12 characters of the digest of the list,
+  and on a match replaces the baselines for exactly the listed paths. The store keeps hashes,
+  not old bytes, so the listing is not a line diff.
 - Scratch under `.workbench/local/` is not covered. It grants no authority.
 
 ## Pinned helpers

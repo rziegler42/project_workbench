@@ -65,3 +65,5 @@ List every record, including rejected and superseded ones.
 | [2026-10-20-base-ships-in-distribution](2026-10-20-base-ships-in-distribution.md) | The base ships in the distribution and is trusted as the workbench is | Accepted |
 | [2026-10-20-install-creates-git](2026-10-20-install-creates-git.md) | Install creates the `.git` directory itself, and only when there is none | Accepted |
 | [2026-10-20-harness-module-writes-nothing-committed](2026-10-20-harness-module-writes-nothing-committed.md) | A harness module writes nothing committed | Accepted |
+| [2026-10-20-acknowledge-before-upgrade](2026-10-20-acknowledge-before-upgrade.md) | Baselines gate every upgrade, and the owner accepts a change with `wb acknowledge` | Proposed |
+| [2026-10-20-upgrade-needs-no-git](2026-10-20-upgrade-needs-no-git.md) | An upgrade asks no git question; cleanliness is decided by file hashes | Proposed |

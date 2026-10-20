@@ -159,6 +159,7 @@ says so.
 | `check` | project | target | nothing | no | proposed |
 | `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run | proposed |
 | add a module | project | target, a module | the same as `upgrade`, new files and blocks only | yes, owner-run | proposed |
+| `acknowledge` | project | target | the guarded store: the project's acknowledgement baselines | yes, owner-run | proposed |
 | `verify` | package | a package directory (`<package>` or `--dir`), `--select`, `--no-harness-required` | nothing | no | built |
 | `approve` | package | a package directory, or `--source` with an optional `--ref`; `--module` | the guarded store: approval records, the cache | yes | built; `--dir` proposed |
 | `pin` | package | a project id, a name, a helper, `--root` | the guarded store: a pin | yes | built |
@@ -200,12 +201,21 @@ publishes, and none edits a living or historical document** (`repository-boundar
   hash still equals the installed hash.
 - **The manifest is acknowledged first.** A changed committed manifest, or a changed file
   under `.workbench/`, is first-tier content (`trust-and-approval.md`, Acknowledgement). A
-  command that acts on it refuses until the owner has acknowledged the change.
+  command that acts on it refuses until the owner has acknowledged the change with
+  `wb acknowledge`. The check compares the manifest, every file under `.workbench/` outside
+  `local/` (a file added or removed counts), and every file the command would write into with
+  the project's acknowledgement baselines, and a project with no baselines on this machine, or
+  whose first-seen record is another path, is refused (`trust-and-approval.md`, Acknowledgement)
+  *(owner)*.
 - **Approvals come before a preview.** Every module a command would write must already be
   approved on this machine before a preview is produced. A missing approval refuses and names
   the modules; the owner runs `approve`. No preview is shown for something that cannot be
   applied.
-- **A fetch is for what is approved.** `attach`, `upgrade` and `add` contact a source only for
+- **`upgrade` and `add` never fetch** in this version *(owner)*: they read a local package
+  directory or the cache that `approve --source` filled (the newest cached download of the
+  source and ref), so the owner brings a new version in with `approve` and then upgrades. The
+  manifest's recorded source and ref are used only to look up that cache.
+- **A fetch is for what is approved.** `attach` contacts a source only for
   a package whose declaration and tree hashes already have an approval on this machine, and
   verify the fetched tree against those hashes. A source that only the committed manifest
   names is not contacted until the owner has approved that package here, so an agent-run
@@ -335,12 +345,20 @@ publishes, and none edits a living or historical document** (`repository-boundar
   where the change comes from: a newer workbench or newer module versions (`upgrade`), or a
   module the project does not have (`add`).
 - **Reads:** the committed manifest; the current files and their hashes; the new declarations
-  and trees, read from the cache that `approve` filled (a write command may fetch an approved
-  source again; `preview` never does); and the approval of every new or changed module, which must
+  and trees, read from a local package directory or the cache that `approve` filled (neither
+  `upgrade`, `add` nor `preview` fetches); and the approval of every module, which must
   exist before the preview is produced. A changed declaration or tree is a different subject
-  and needs a new `approve`. `add` verifies the new module together with the modules already
-  installed, so counts (one harness, at most one process module), conflicts, requirements,
-  slot owners and order are checked as for an install.
+  and needs a new `approve`. Every package the manifest records is resolved: from `--package`
+  when given, else from the recorded source and ref in the cache, and a package recorded as
+  `local:<name>` must be given with `--package <directory>`. The whole set is verified and
+  gated, so the manifest cannot shrink it. The manifest never names a harness and `attach` is
+  not built, so the harness-required rule is off here; counts of the other types (at most one
+  process module), conflicts, requirements, slot owners and order are checked as for an install
+  *(my call)*.
+- **Acknowledged first:** the project must be known on this machine and every difference from
+  its baselines acknowledged (rules common to the project commands). Every file it writes into
+  must equal its baseline, so the baseline update in the preview never accepts an edit nobody
+  reviewed *(my call)*.
 - **Preview:** every change, classified as replace, skip, conflict or append, with the
   declaration change shown. It writes nothing. A declined append is reported with the marker
   to add and a suggested place. (Its shape and approval are in the preview section.)
@@ -351,15 +369,36 @@ publishes, and none edits a living or historical document** (`repository-boundar
   acknowledgement baselines for exactly the files in the preview. It never touches a seeded
   file, a plan, a spec, a decision, a roadmap or a reference, and never an edited module-owned
   file or block, which it reports as a conflict. `add` writes only new files and new blocks.
-- **Requires** a clean working tree for the affected paths, and leaves its changes
-  uncommitted so the owner can commit them as one revertable change. Cleanliness is decided
-  under the git rule in the states section, or by comparing file hashes with the manifest. A
-  fresh install is uncommitted by design, so an upgrade straight after it is refused until the
-  owner commits; that is intended. It refuses when the installed workbench is older than the
-  version recorded in the manifest.
+- **No git and no clean-tree check** *(owner)*. A path is replaced only when its hash equals
+  the installed hash, which is the classification itself, so no git question is asked. The
+  command leaves its changes uncommitted and ends by saying nothing was committed and that
+  committing the result as one change makes it revertable; on an install that was never
+  committed git has nothing to revert to.
+- **Version order** *(my call)*: workbench versions are dotted decimal numbers compared
+  numerically. It refuses when the installed workbench is lower than the version recorded in
+  the manifest, and when either version is not dotted decimal.
+- **Never deletes.** A file or block the manifest records and the new content no longer has is
+  left in place and reported. A module-owned file removed by the project is a conflict and is
+  not restored.
 - **Removing a module is not a command** in this version.
-- **Contacts the network and writes a cache directory** for each source it fetches, in the write
-  command and never in `preview`.
+- **Contacts no network** and writes no cache directory.
+
+### `acknowledge` (proposed)
+
+`wb acknowledge [<target> | --dir <path>]`
+
+- **Needs:** an existing project known on this machine. Owner-run and terminal-only, checked
+  before anything is read, as `install` and `approve` are.
+- **Lists** each difference between the project and its baselines: the manifest, each baseline
+  path in scope and each file added or removed under `.workbench/` outside `local/`, with the
+  path, the baseline hash, the current hash and the reason, and a parsed summary of the manifest
+  (packages, sources, refs, commits, module declaration hashes). The store keeps hashes and not
+  old bytes, so this is not a line diff.
+- **Asks** for the first 12 characters of the digest of that list, with the same input rules as
+  the preview approval. On a match it replaces the baselines for exactly the listed paths. Any
+  other answer writes nothing and exits 1; no differences says `nothing to acknowledge` and
+  exits 0.
+- **Agent may run it:** no. It is denied to an agent by the harness as `approve` is.
 - **Agent may run it:** `wb preview upgrade ...` and `wb preview add ...`, yes. `upgrade` and
   `add` themselves are owner-run, from a terminal *(owner)*.
 
@@ -417,7 +456,7 @@ and an owner-run write is a **rule** *(owner)*; the layout of the text is a prop
    standard input and standard output, checked on file descriptors as `approve` does, and
    refuse with `refused:` and exit 1 otherwise. They are denied to an agent by the harness,
    exactly as `approve`, `pin` and `attach` are. **rule:** the harness modules render a `deny`
-   for `wb install`, `wb upgrade`, `wb add`, `wb attach`, `wb approve`, `wb pin` and
+   for `wb install`, `wb upgrade`, `wb add`, `wb attach`, `wb acknowledge`, `wb approve`, `wb pin` and
    `wb release-approvals`, and the neutral rule list carries them (`harness-modules.md`,
    "Permissions"; `trust-and-approval.md`, "Rendering rules"). *(This requirement is not yet
    in those two specifications; the plan `2026-10-20-installer-interface` adds it.)*

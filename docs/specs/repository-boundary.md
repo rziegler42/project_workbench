@@ -209,8 +209,21 @@ recorded in the manifest.
 - **Classes at install.** The base's `AGENTS.md` and `docs/README.md` are `seeded`.
   `.workbench/.gitignore` is `module-owned`, as is each file under a module's namespace
   `.workbench/<package>/<module>/`. A file written from a module's `writes` is `seeded`. A
-  filled block is a `slot block`. The declaration has no field to choose the class; a field is
-  for `ownership-and-upgrade` to add.
+  filled block is a `slot block`. The declaration has no field to choose the class, and
+  `ownership-and-upgrade` defers one: the fixed mapping stands, and a field can be added later
+  without breaking it *(owner)*.
+- **Classification on upgrade** *(proposed; built by `ownership-and-upgrade`)*. Each path of
+  the desired state is compared with its manifest entry and the disk:
+  no entry and absent is **create**; no entry and present is **conflict**; module-owned with
+  the desired hash equal to the installed one is **skip**; module-owned and different, disk
+  equal to installed, is **replace**, disk different is **conflict**; module-owned and absent is
+  **conflict** (not restored); seeded with an entry is **skip** always; a slot block with no
+  entry is **create** where its slot marker is present and **append** where it is not; a block
+  with an entry, text equal to installed, is **replace** when the desired block differs and
+  **skip** otherwise, and edited is **conflict**; a block whose markers are gone is **skip**,
+  reported "slot gone"; an entry with no counterpart in the desired state is **skip**, reported
+  "left in place". Nothing is ever deleted. An appended block is followed by its slot's marker
+  line, so the slot is an ordinary filled slot afterwards.
 - **A module's namespace holds a copy of its whole tree** (declaration, templates, files and
   the rest), because a template stays in its module and is used when something is created. A
   harness module writes nothing committed.
@@ -308,8 +321,11 @@ are not repeated here.
 - Applies a newer workbench to an existing project without destroying work.
 - It first shows a complete preview of every change, classified as replace, skip,
   conflict or append, and writes nothing until the owner approves the preview.
-- It requires a clean working tree for the affected paths and leaves its changes
-  uncommitted, so the owner can commit them as one revertable change.
+- It asks no git question: a path is replaced only when its hash equals the installed hash,
+  and the project must be known on this machine with every difference from its baselines
+  acknowledged (`wb acknowledge`) *(owner)*. It leaves its changes uncommitted, so the owner can
+  commit them as one revertable change; on an install never committed there is nothing to
+  revert to.
 - It never rewrites living or historical content. A format change is never applied
   in place. Tools that read project documents must read both the old and the new
   format, so work in progress keeps working, and a migration is a separate opt-in
