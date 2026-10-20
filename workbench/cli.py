@@ -1,13 +1,14 @@
 """The command line: ``python3 -m workbench verify``.
 
-Exit codes: 0 accepted, 1 refused, 2 usage error. The command only reads.
+Exit codes: 0 accepted, 1 refused, 2 usage error. The command reads the package and
+writes nothing there; every command first creates the guarded store if it is missing.
 """
 
 import argparse
 import os
 import sys
 
-from . import verify
+from . import safefs, store, verify
 
 PROG = "python3 -m workbench"
 USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
@@ -54,7 +55,8 @@ def _target(args):
     return given[0] if given else "."
 
 
-def main(argv, out=None, err=None):
+def main(argv, out=None, err=None, *, store_root=None):
+    """Run a command. `store_root` is for tests; the command line cannot set it."""
     if out is None and err is None:
         for stream in (sys.stdout, sys.stderr):
             if hasattr(stream, "reconfigure"):
@@ -72,6 +74,13 @@ def main(argv, out=None, err=None):
         return 2
     except SystemExit as exc:  # --help
         return exc.code if isinstance(exc.code, int) else 2
+
+    # Every command first makes sure the guarded store exists, before any check.
+    try:
+        store.Store(store_root if store_root is not None else store.default_root()).ensure()
+    except safefs.SafeFsError as exc:
+        err.write("refused: %s\n" % _clean(str(exc)))
+        return 1
 
     result = verify.verify_package(path, select=args.select,
                                    harness_required=not args.no_harness_required)

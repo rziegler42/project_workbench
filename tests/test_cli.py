@@ -9,15 +9,20 @@ import sys
 import tempfile
 import unittest
 
+import support
 from workbench import cli
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIXTURE = os.path.join(ROOT, "tests", "fixtures", "sample-package")
 
+# The guarded store of the test in progress, set by CliBase.setUp. It lives beside the
+# package directory, not in it, so a run can be shown to leave the package untouched.
+STORE_ROOT = [None]
+
 
 def run(*argv):
     out, err = io.StringIO(), io.StringIO()
-    code = cli.main(list(argv), out, err)
+    code = cli.main(list(argv), out, err, store_root=STORE_ROOT[0])
     return code, out.getvalue(), err.getvalue()
 
 
@@ -42,6 +47,17 @@ class CliBase(unittest.TestCase):
         self.base = os.path.realpath(self.tmp.name)
         self.path = os.path.join(self.base, "pkg")
         shutil.copytree(FIXTURE, self.path)
+        support.forbid_real_store(self)
+        self.home_tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.home_tmp.cleanup)
+        self.home = os.path.realpath(self.home_tmp.name)
+        self.store_root = os.path.join(self.home, ".config", "project-workbench")
+        STORE_ROOT[0] = self.store_root
+        self.addCleanup(STORE_ROOT.__setitem__, 0, None)
+
+    def child_env(self, **extra):
+        # A child process finds the store from HOME, so it gets a temporary one.
+        return dict(os.environ, HOME=self.home, **extra)
 
 
 class VerifyTest(CliBase):
@@ -140,6 +156,7 @@ class UsageTest(CliBase):
             code, _, _ = run("verify", "-h")
         self.assertEqual(code, 0)
         self.assertIn("--select", shown.getvalue())
+        self.assertFalse(os.path.exists(self.store_root))
 
     def test_same_directory_through_a_symlink_is_the_same_path(self):
         link = os.path.join(self.base, "link")
@@ -164,7 +181,41 @@ class UsageTest(CliBase):
         self.assertEqual(run("verify", self.path, "--dir", self.path + "/")[0], 0)
 
 
+class StoreTest(CliBase):
+    def test_a_command_creates_the_store_first(self):
+        self.assertFalse(os.path.exists(self.store_root))
+        self.assertEqual(run("verify", self.path)[0], 0)
+        self.assertEqual(sorted(os.listdir(self.store_root)),
+                         ["bin", "cache", "packages", "projects"])
+
+    def test_the_store_is_created_even_when_the_package_is_refused(self):
+        self.assertEqual(run("verify", os.path.join(self.base, "nowhere"))[0], 1)
+        self.assertTrue(os.path.isdir(self.store_root))
+
+    def test_usage_errors_do_not_create_the_store(self):
+        self.assertEqual(run("verify", "a", "b")[0], 2)
+        self.assertFalse(os.path.exists(self.store_root))
+
+    def test_a_bad_store_stops_the_command_before_verifying(self):
+        os.makedirs(self.store_root, mode=0o755)
+        os.chmod(self.store_root, 0o755)
+        code, out, err = run("verify", self.path)
+        self.assertEqual((code, out), (1, ""))
+        self.assertIn("refused: guarded store directory is open to other users", err)
+
+    def test_a_child_process_uses_home_for_the_store(self):
+        env = self.child_env(PYTHONPATH=ROOT)
+        done = subprocess.run([sys.executable, "-B", "-m", "workbench", "verify", self.path],
+                              cwd=self.base, env=env, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertTrue(os.path.isdir(self.store_root))
+
+
 class ReadOnlyTest(CliBase):
+    # The store is outside self.base on purpose: these snapshots show that a run adds
+    # nothing to the package's surroundings. That the store is created is StoreTest's job.
+
     def test_accepted_run_changes_nothing_and_creates_nothing(self):
         before = snapshot(self.base)
         self.assertEqual(run("verify", self.path, "--select", "sample-harness",
@@ -181,7 +232,7 @@ class ReadOnlyTest(CliBase):
     def test_module_run_leaves_no_bytecode_or_file_in_the_working_directory(self):
         cwd = os.path.join(self.base, "cwd")
         os.makedirs(cwd)
-        env = dict(os.environ, PYTHONPATH=ROOT, PYTHONDONTWRITEBYTECODE="1")
+        env = self.child_env(PYTHONPATH=ROOT, PYTHONDONTWRITEBYTECODE="1")
         before = snapshot(self.base)
         done = subprocess.run([sys.executable, "-B", "-m", "workbench", "verify", self.path],
                               cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -189,7 +240,7 @@ class ReadOnlyTest(CliBase):
         self.assertEqual(snapshot(self.base), before)
 
     def test_module_exit_codes(self):
-        env = dict(os.environ, PYTHONPATH=ROOT)
+        env = self.child_env(PYTHONPATH=ROOT)
         for argv, expected in ((["verify", self.path], 0), (["verify", "a", "b"], 2),
                                ([], 2)):
             with self.subTest(argv=argv):

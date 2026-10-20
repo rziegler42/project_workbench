@@ -1,6 +1,6 @@
 # The guarded store and module approvals
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-19
 Candidate: workbench-v1#module-approvals
 Specs: trust-and-approval, repository-boundary, module-contract

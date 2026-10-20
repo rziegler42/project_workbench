@@ -31,7 +31,8 @@ ambiguous blank.
 
 ## The verify command
 
-`verify` reads a package and writes nothing. The package is the positional argument or
+`verify` reads a package and writes nothing into it or anywhere else except the guarded
+store (see below). The package is the positional argument or
 `--dir`, defaulting to `.`; the same path given both ways is accepted, two different
 paths are a usage error. Without `--select` it checks every module on its own; with it,
 it also checks the named modules as one install (`<module>` or `<package>/<module>`),
@@ -43,6 +44,24 @@ and prints the install order. A harness module is required in a selection unless
 | 0 | accepted; one line per module with its version and the first twelve characters of the declaration and tree hashes, then warnings |
 | 1 | refused; one `refused:` line per problem on stderr, naming the package or module and the rule |
 | 2 | usage error |
+
+## The guarded store
+
+Every command first makes sure the guarded store, `~/.config/project-workbench/`, exists.
+It creates the directory and `packages/`, `cache/`, `projects/` and `bin/` with mode
+`0700` when they are missing, and does nothing when they are there. A store or one of
+those directories that is a symbolic link, is owned by another user, or has any mode
+other than `0700` (group or other access, setgid, sticky) is refused with exit code 1, and nothing is repaired. A usage error or
+`-h` does not create it.
+
+- The location is fixed. No workbench environment variable moves it; `HOME` decides it,
+  as for any program run by the same account.
+- The store is a mechanical barrier, not an operating-system one, and it shares the
+  owner's account. Until `claude-harness` renders a deny rule on writes to it, it is
+  protected by instruction only.
+- Tests never touch the real store. They pass a temporary root, or set `HOME` for a child
+  process, and `tests/support.py` fails a test that asks for the real location. After a
+  full test run, `~/.config/project-workbench` should not have been created by the suite.
 
 ## Verification workflow
 
