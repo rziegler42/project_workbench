@@ -1,0 +1,274 @@
+# Unfinished-write recovery
+
+Status: Approved
+Created: 2026-10-20
+Candidate: none (follow-up to `workbench-v1#ownership-and-upgrade`: it closes limits recorded in
+that plan's Result and is not a roadmap candidate)
+Specs: installer-interface
+
+## Goal
+
+Make a failed or interrupted `install`, `upgrade` or `add` recoverable by a command instead of
+by hand. Today the marker `.workbench/local/incomplete` is an empty file. After a failure the
+owner is told to put files back from version control and delete the marker themselves, and a
+rerun after that cannot tell which plan was half applied. The recorded consequence
+(`2026-10-20-ownership-and-upgrade`, Result, "Known limits") is that a rerun can write a new
+manifest while file conflicts from the failed run remain.
+
+When this plan is done the marker records the plan that was being written. Every command that
+meets a marker says which plan it was and, path by path, whether the project holds the state
+before it, the state after it, or something else. A new owner-run command, `wb recover`, removes
+the marker only in these states, and refuses every other with the list of paths to deal with:
+files `before` and store `none`; files `after` and store `all`; and, for `upgrade` and `add` only,
+files `after` and store `none`, where the project's old baselines still exist, so the project
+differs from them and `wb acknowledge` then lists exactly the written paths for the owner to
+accept. For `install` there are no old baselines, so files `after` with store `none` or `partial`
+is refused with the advice to put the files back (the before state) and install again; the
+workbench does not repair a store.
+
+## Scope
+
+- **Marker content.** The marker holds a strict JSON record of the plan: the command, the project
+  id (when known), the workbench version, for every file write the path, operation, the hash the
+  file had before (none for a create) and the hash it will have after, and for every guarded-store
+  write (`install`'s entries, `upgrade`'s and `add`'s baselines) the store path and the hash it will
+  have after, and every directory the plan creates (for `install`, `.workbench` and the module
+  and namespace directories) and, when the plan makes the `.git` skeleton, each of its files with
+  the hash it will have. The record is written when the marker is made, before any other write. A marker that
+  is empty (made by an earlier version) or unreadable is reported as "no record" and is never trusted.
+- **Examination.** A read-only function that reads the record and classifies each recorded project
+  path through no-follow descriptors as `before`, `after` or `other`, and each recorded store entry
+  by the guarded store's own read as `absent`, `after` or `other`. It summarises the files as
+  `before`, `after` or `mixed`, and the store as `none`, `all` or `partial`. The store is written
+  only after every file, so the combinations that occur are: files before and store none (nothing
+  happened, or the owner restored them); files after and store none, partial or all.
+- **Reporting.** The refusal `target.py` makes for a marker (all commands, including previews)
+  names the plan and prints the examination. `wb recover` is named as the way forward.
+- **`wb recover [<target> | --dir <path>]`.** Owner-run and terminal-only, as `acknowledge` is:
+  the terminal check comes first, then the examination and a typed digest bound to the record, the
+  examination and the target identity. After the answer the project is examined again and a
+  different digest is refused. On an accepted state (above) it removes the marker (and the `local`
+  directory only if it is empty and was made for it). In the files-`before` state it also removes
+  each recorded directory that exists and is empty, deepest first, with `rmdir` only, so a
+  failed `install` leaves the target as it was (empty, or a lone `.git`) and the install can be
+  rerun. A recorded directory that holds anything, or a partly written `.git` skeleton, is
+  `other`, so it is refused and listed. `recover` never writes a file, never removes a file other
+  than the marker, never removes a non-empty directory, and never removes the target directory.
+- **Scan limits from the E and F reviews** (separate increment): a path name the baseline scan
+  cannot accept is listed as a difference and cannot be acknowledged, instead of making the whole
+  scan refuse; the scan keeps a cumulative byte budget.
+
+## Non-goals
+
+- No automatic repair and no rollback. The workbench never deletes or restores project files; the
+  owner puts files back from version control or a copy, as the failure message already says. The
+  only removals are the marker and, from the before state, empty directories the plan itself
+  recorded as created.
+- No change to what a plan writes, its order, or its digest rules, other than the marker's bytes.
+- No resume of a half-applied plan. After `recover` from the before state the owner runs the
+  command again (the target is a new project again only for `install`; for `upgrade` and `add`
+  it is the old project). From an after state nothing is rerun: the project is complete, and
+  `install` is not repeated on it.
+- No change to the acknowledgement baselines or the guarded store format.
+- `attach`, `check` and the harness work stay in `claude-harness`.
+
+## Assumptions and constraints
+
+- Python standard library only; tests with `unittest`. Full suite:
+  `python3 -B -W error -m unittest discover -s tests` (1143 tests today).
+- The marker is untrusted text, like the manifest: anyone with write access to the project can
+  edit it. It carries no authority. A forged marker can do no more than a hand-removed one:
+  `recover` removes only the marker and recorded empty directories, and only after the owner types the digest of
+  what was shown. Recorded paths pass the same relative-path rules as manifest paths, may not be
+  under `.workbench/local`, and are read through no-follow descriptors only.
+- The marker is written before the digest-bound plan is carried out and lives in
+  `.workbench/local`, which acknowledgement ignores; its content must not change the plan's
+  digest, so the record is built from the plan after the digest is fixed.
+- A record is bounded (entry count and bytes) and refused beyond the bound, as the manifest is.
+- Decided by me and approved with the plan: `recover` is a new command, not a flag on
+  `upgrade`, because it must work for an unfinished `install` too and must not need a package.
+- Discovery: graphify — skipped, this project has no discovery tooling. The files involved
+  (`projectfs.py`, `target.py`, `install.py`, `upgrade.py`, `installplan.py`, `acknowledge.py`
+  as the model for a terminal-only command, `cli.py`) were read for this plan.
+
+## Completion criteria
+
+1. After a forced failure at each stage of `install`, `upgrade` and `add` (files, store, marker
+   removal) and after an interrupt, the marker holds a valid record and the failure report names
+   `wb recover`.
+2. A marker that is empty, truncated, oversized, has unknown keys, a path outside the project, a
+   path under `local`, a duplicate path or a bad hash is reported as "no record" and never
+   changes the examination into `before` or `after`.
+3. The refusal for a marked target shows the examination; it is identical for `preview`,
+   `upgrade`, `add`, `acknowledge` and `recover`.
+4. `wb recover` removes the marker (and, from the before state, the recorded empty directories)
+   in the accepted states of Scope, refuses any other without writing, refuses
+   without both streams being terminals before anything is read, refuses when the project changed
+   after the answer, and removes nothing but the marker and the recorded empty directories.
+5. After `recover` from the before state, rerunning the same command gives the same project and
+   store as an uninterrupted run (test: compare the tree and the store entries), for `install`,
+   `upgrade` and `add`. After `recover` from an after state the project and store equal an
+   uninterrupted run's without a rerun (`install` is not rerun; `upgrade` and `add` find nothing to
+   change). From files `after` with store `none`, `acknowledge` accepts exactly the written paths
+   and a following `upgrade` finds nothing to change.
+5b. A failed `install` stopped at each point (marker only, after the directories, during each
+   file of the `.git` skeleton, during the files) recovers from the before state to a target that
+   `install` accepts again, or is refused with the paths to deal with; a partial `.git` skeleton is
+   never accepted.
+5a. Every ordering of a store failure is tested for each command: no store entry written, some
+   written, all written with the marker not removed. Each gives the outcome Scope states, and
+   `install` with files after and an incomplete store is refused with the restore advice.
+6. The scan limits increment lists a hostile name as a difference and enforces the byte budget,
+   each with a failing-then-passing test.
+7. `docs/development.md` and `installer-interface.md` describe the marker record, the command and
+   its exit codes; the full suite passes with `-W error`.
+
+## Increments
+
+### Increment A — The marker record
+
+**Outcome:** the marker carries the plan; nothing reads it yet.
+**Dependencies:** none.
+**Affected areas:** new `workbench/unfinished.py` (`build(command, project, version, writes)`,
+`parse(data)` raising `UnfinishedError`), `install.py`, `upgrade.py`, `installplan.py` (marker
+bytes), `projectfs.py` (create the marker with its bytes), their tests.
+**Steps:**
+1. Failing tests for `build`/`parse`: a round trip; every case in criterion 2.
+2. Include directories and the `.git` skeleton files in the record (taken from the install plan's
+   `create-dir` and `git-init` actions; the skeleton's paths and hashes from `GIT_SKELETON`; its directories have no hash).
+   Implement the strict record (canonical JSON, format number, bounds, project path rules shared
+   with the manifest reader, store path rules shared with the guarded store, not copied).
+3. Install and upgrade/add build the record from their final plan and create the marker with it.
+   The marker action stays first in the order.
+4. Tests that a forced failure leaves a marker whose record equals the plan, and that the plan's
+   digest is unchanged by the record.
+**Verification:** new tests, then the full suite.
+**Evidence:** commit with trailer `Plan: 2026-10-20-unfinished-write-recovery#A`.
+
+### Increment B — Examine and report
+
+**Outcome:** a marked project is described instead of just refused.
+**Dependencies:** A.
+**Affected areas:** `unfinished.py` (`examine(writer)`, `render(...)`), `target.py` (the marker
+refusal carries the report), `confirm.report_failure` and the `RECOVERY` texts (name `wb recover`).
+**Steps:**
+1. Failing tests: `before`, `after`, `mixed` and `other` (a link, a directory, an unreadable file
+   at a recorded path); an unreadable or missing record; hostile strings rendered through
+   `display.ascii_text`.
+2. Implement `examine`; read each project path through no-follow descriptors, regular files only,
+   with the size limits the project reader uses, and each store entry through the guarded store.
+   Failing tests for every combination of files and store states in Scope.
+3. Wire the report into the refusal, with the list capped like `acknowledge` (500).
+4. Update the failure hints.
+**Verification:** new tests, then the full suite.
+**Evidence:** commit with trailer `Plan: 2026-10-20-unfinished-write-recovery#B`.
+
+### Increment C — `wb recover`
+
+**Outcome:** the owner clears a uniform unfinished write with a typed digest.
+**Dependencies:** B.
+**Affected areas:** new `workbench/recover.py` (modelled on `acknowledge.py`), `cli.py` (route
+and usage), `projectfs.py` (remove the marker and an empty `local`), tests including a pty case
+(`tests/support.drive_pty`).
+**Steps:**
+1. Failing tests: uniform before; uniform after; mixed; no record; not a terminal; a wrong or
+   short answer; project changed after the answer; typed-ahead input discarded; nothing but the
+   marker and the recorded empty directories removed (tree comparison); a marker that is a link or
+   directory; a recorded directory that holds a file or link; each stop point of criterion 5b.
+2. Implement `parse`, `examine`, `render`, `run` with the exit codes of `acknowledge`: 0 done or
+   nothing to recover, 1 refused or cancelled, 3 removal failed, 130 interrupted.
+3. Criterion 5 and 5a chain tests with `install`, `upgrade` and `add`, including the
+   `recover`, `acknowledge`, `upgrade` chain.
+**Verification:** new tests, a recorded pty hand run, the full suite.
+**Evidence:** commit with trailer `Plan: 2026-10-20-unfinished-write-recovery#C`.
+
+### Increment D — Scan limits
+
+**Outcome:** the E and F leftovers recorded in the earlier plan are closed.
+**Dependencies:** none technical; ordered last because it is independent of A to C.
+**Affected areas:** `acknowledgement.py` (`differences`, the walk), `acknowledge.py`
+(refuse listing of un-acknowledgeable names), their tests.
+**Steps:**
+1. Failing tests: a name the scan cannot accept (non-UTF-8, control character) yields a
+   difference with a reason and `acknowledge` shows it as not acknowledgeable instead of the
+   whole scan refusing; a tree past the cumulative byte budget refuses with a clear message.
+2. Implement both; keep the existing per-file and entry limits.
+**Verification:** new tests, then the full suite.
+**Evidence:** commit with trailer `Plan: 2026-10-20-unfinished-write-recovery#D`.
+
+### Increment E — Documentation
+
+**Outcome:** the specification and development guide match the build.
+**Dependencies:** A to D.
+**Affected areas:** `docs/specs/installer-interface.md`, `docs/development.md` (command table,
+exit codes, limits), the earlier plan's Known limits (note, in its Result, that they are closed;
+status and result edits only).
+**Steps:** edit the docs; add a decision record only if the owner asks (the marker format is
+recorded in the spec, not as a decision).
+**Verification:** `git diff --check`; every claim in the new text matched to a test or a run.
+**Evidence:** commit with trailer `Plan: 2026-10-20-unfinished-write-recovery#E`.
+
+## Verification for the plan as a whole
+
+- Full suite with `-W error`, run after every increment and recorded in the Result.
+- A hand run in a pseudo-terminal of a forced failure, `recover`, and a rerun (recorded in the
+  Result as the earlier plan did).
+- An independent adversarial review of A to C by `security-reviewer` (hostile marker content,
+  swapped target, links at recorded paths, an edited marker between the answer and the removal),
+  because this reads untrusted text and removes a file. Findings are fixed or recorded.
+
+## Risks and sensitive actions
+
+- **A forged or stale marker misleads the owner.** Mitigation: the report states plainly that the
+  record is unauthenticated text; `recover` only removes the marker; the owner reads the list and
+  types the digest.
+- **Partial store writes.** The store is written after the files and is not transactional.
+  Mitigation: the record covers store entries; `recover` accepts only the states in Scope and
+  never writes the store; the install case that cannot be repaired is refused with the restore
+  advice rather than guessed at.
+- **Recorded `before` hashes make `recover` look safer than it is.** A `before` state still
+  needs the owner to have restored files; `recover` does not restore anything and says so.
+- **The record could grow the marker beyond a sane size.** Bounded; refused beyond the bound.
+- **Changing install's marker bytes touches the install path.** Covered by the existing install
+  tests plus criterion 1; the marker stays first in the write order.
+- Sensitive actions: file removal inside the project (the marker only), reading attacker-chosen
+  paths. No network, no secrets, no new dependencies.
+
+## Review record
+
+Round 1 (`ask-codex review-plan`, model gpt-5.6-luna, medium effort), outcome `changes_needed`,
+two major findings, both accepted and applied:
+
+- R1-F1: criterion 5 asked for a rerun that is impossible after an after-state recovery (the
+  target is then an existing project). Rewritten to separate before-state reruns from after-state
+  completion.
+- R1-F2: the record covered project files only. It now covers guarded-store writes, the
+  examination classifies them, and `recover` states which file and store combinations it accepts
+  and what it does for `install` where no old baselines exist.
+
+Rounds used 1 of 3. R1-F1 and R1-F2 were recorded as `applied` by `ask-codex decide`.
+
+Round 2 (same model, medium effort), outcome `changes_needed`, two major findings, both accepted
+and applied:
+
+- R2-F1: a failed `install` can leave `.workbench` and other empty directories, so the target is
+  no longer empty and an install rerun is refused. The record now lists the directories the plan
+  creates, and `recover` removes the recorded ones that are empty (`rmdir` only) from the before
+  state. Non-goals and criteria 4 and 5b changed to match.
+- R2-F2: the `.git` skeleton was not in the record. Its files and hashes are now recorded; a
+  partly written skeleton is `other` and refused. Criterion 5b and the C tests cover each stop
+  point.
+
+Rounds used 2 of 3. R2-F1 and R2-F2 were recorded as `applied`. The owner chose not to run round 3 and approved the plan on 2026-10-20.
+
+## Deferred work
+
+- Resuming a half-applied plan from its record.
+- A cumulative byte budget for the project reader (`installed.read`) as well as the scan, if
+  the review of D shows it matters.
+- Directory fsync, ownership and ACL preservation, and the other items under D in the earlier
+  plan's Known limits.
+
+## Result
+
+Not started.
