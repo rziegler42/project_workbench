@@ -34,10 +34,15 @@ cycle.
 import collections
 import shutil
 
-from . import declarations, modulefiles
+from . import declarations, hashing, modulefiles, safefs
 
-Verified = collections.namedtuple("Verified", "package name version declaration_hash tree_hash")
-Result = collections.namedtuple("Result", "accepted problems warnings modules order")
+Verified = collections.namedtuple(
+    "Verified", "package name version declaration_hash tree_hash type")
+# The hashes of a whole package, taken for the approval gate, and whether it was given as
+# first-party.
+PackageInfo = collections.namedtuple("PackageInfo",
+                                     "name declaration_hash tree_hash first_party")
+Result = collections.namedtuple("Result", "accepted problems warnings modules order packages")
 
 
 def verify_package(path, select=None, harness_required=True, first_party=False,
@@ -63,6 +68,7 @@ def verify_packages(paths, select=None, harness_required=True, first_party=(),
     problems = []
     warnings = []
     verified = []
+    infos = []
     modules = {}
     declared = {}
     first = set(first_party)
@@ -79,6 +85,11 @@ def verify_packages(paths, select=None, harness_required=True, first_party=(),
                 % package.name))
             continue
         declared[package.name] = package.modules
+        try:
+            infos.append(PackageInfo(package.name, hashing.declaration_hash(package.declaration),
+                                     hashing.tree_hash(path, what="package"), path in first))
+        except (safefs.SafeFsError, OSError) as exc:
+            problems.append(declarations.DeclarationError("package", package.name, "hash", str(exc)))
         for module in loaded.modules:
             result = modulefiles.verify_module(path, package.name, module)
             problems.extend(result.problems)
@@ -87,7 +98,7 @@ def verify_packages(paths, select=None, harness_required=True, first_party=(),
             if not result.problems:
                 modules[(package.name, module.name)] = module
                 verified.append(Verified(package.name, module.name, module.declaration["version"],
-                                         result.declaration_hash, result.tree_hash))
+                                         result.declaration_hash, result.tree_hash, module.type))
 
     order = ()
     if select is not None:
@@ -98,8 +109,8 @@ def verify_packages(paths, select=None, harness_required=True, first_party=(),
             order = _check_set(selected, modules, harness_required, which, problems, warnings)
 
     if problems:
-        return Result(False, problems, warnings, (), ())
-    return Result(True, problems, warnings, tuple(verified), tuple(order))
+        return Result(False, problems, warnings, (), (), ())
+    return Result(True, problems, warnings, tuple(verified), tuple(order), tuple(infos))
 
 
 def _resolve(select, declared, problems):

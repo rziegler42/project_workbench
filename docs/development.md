@@ -76,6 +76,33 @@ the records are read from the installed workbench, never copied into the guarded
 - A first-party package changed since release has no shipped approval for its new hashes,
   so its modules are checked against the guarded store like any other package.
 
+## The approval gate
+
+`workbench/gate.py` answers whether a verified selection is fully approved on this machine.
+No command calls it yet; the installer that writes a project will call it first, and it
+only reads. It takes the result of `verify_packages` for a selection and reports each
+module in install order:
+
+- A module is approved by a `module` record for its `<package>/<module>`, declaration hash
+  and tree hash, or, for a plain module only, by a `package` record that matches the
+  package's current hashes and lists the module with exactly its two hashes. A `harness` or
+  `process` module always needs a record of its own.
+- A first-party package is looked up in the shipped approvals first, then the guarded
+  store; any other package only in the store. Each result says which supplied it.
+- Only a module of type exactly `module` may use a package record. Any other type needs a
+  record of its own.
+- It fails closed: a refused verification, an empty selection, a malformed result, or a
+  module the result does not describe is not approved, and a refused result looks nothing up.
+
+Limits: the gate approves what `verify` hashed, not what an installer reads later, so an
+installer must write from the exact bytes that were verified, or verify and gate again from
+the same snapshot just before writing. The gate also takes each package's `first_party` flag
+as given; the installer must set it from `firstparty.is_first_party`. A shipped record
+matches only the exact subject and hashes it was made for, so a wrong claim gains nothing.
+
+`verify`'s result now carries each module's type and, per package, the declaration hash and
+whole-package tree hash (`Result.packages`), which the gate needs.
+
 ## The guarded store
 
 Every command first makes sure the guarded store, `~/.config/project-workbench/`, exists.

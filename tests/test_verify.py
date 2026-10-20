@@ -2,8 +2,9 @@ import json
 import os
 import tempfile
 import unittest
+import unittest.mock
 
-from workbench import verify
+from workbench import hashing, safefs, verify
 
 HARNESS = {"type": "harness", "layout": {}}
 
@@ -48,6 +49,74 @@ class Base(unittest.TestCase):
     def accepted(self, result):
         self.assertTrue(result.accepted, [str(p) for p in result.problems])
         return result
+
+
+class PackageHashesTest(Base):
+    def test_the_result_carries_module_types_and_package_hashes(self):
+        path = self.package("p", {"h": HARNESS, "a": {}, "pr": {"type": "process"}})
+        result = self.accepted(verify.verify_package(path, first_party=True))
+        self.assertEqual({m.name: m.type for m in result.modules},
+                         {"h": "harness", "a": "module", "pr": "process"})
+        (info,) = result.packages
+        with open(os.path.join(path, "package.json")) as handle:
+            declared = json.load(handle)
+        self.assertEqual((info.name, info.first_party), ("p", True))
+        self.assertEqual(info.declaration_hash, hashing.declaration_hash(declared))
+        self.assertEqual(info.tree_hash, hashing.tree_hash(path, what="package"))
+
+    def test_the_first_party_flag_is_per_path(self):
+        first = self.package("one", {"a": {}})
+        second = self.package("two", {"b": {}})
+        result = self.accepted(verify.verify_packages([first, second], first_party=[first]))
+        self.assertEqual({i.name: i.first_party for i in result.packages},
+                         {"one": True, "two": False})
+
+    def test_a_package_hash_changes_when_any_file_in_it_changes(self):
+        path = self.package("p", {"a": {}})
+        before = self.accepted(verify.verify_package(path)).packages[0].tree_hash
+        with open(os.path.join(path, "a", "module.json")) as handle:
+            document = json.load(handle)
+        document["description"] = "changed"
+        self.write(path, "a/module.json", document)
+        after = self.accepted(verify.verify_package(path)).packages[0].tree_hash
+        self.assertNotEqual(before, after)
+
+    def test_a_refused_result_carries_no_hashes_or_packages(self):
+        path = self.package("p", {"a": {}})
+        with open(os.path.join(path, "a", "stray.txt"), "w") as handle:
+            handle.write("x")
+        result = verify.verify_package(path)
+        self.assertFalse(result.accepted)
+        self.assertEqual((result.modules, result.order, result.packages), ((), (), ()))
+
+    def test_a_failure_hashing_the_package_is_a_refusal_not_an_exception(self):
+        path = self.package("p", {"a": {}})
+        real = hashing.tree_hash
+
+        def failing(root, what="module"):
+            if what == "package":
+                raise safefs.SafeFsError("simulated read failure")
+            return real(root, what)
+
+        with unittest.mock.patch.object(hashing, "tree_hash", failing):
+            result = verify.verify_package(path)
+        self.assertFalse(result.accepted)
+        self.assertIn("hash", self.rules(result))
+        self.assertIn("simulated read failure", str(result.problems[0]))
+        self.assertEqual(result.packages, ())
+
+    def test_an_os_error_hashing_the_package_is_a_refusal_too(self):
+        path = self.package("p", {"a": {}})
+        real = hashing.tree_hash
+
+        def failing(root, what="module"):
+            if what == "package":
+                raise PermissionError(13, "Permission denied")
+            return real(root, what)
+
+        with unittest.mock.patch.object(hashing, "tree_hash", failing):
+            result = verify.verify_package(path)
+        self.assertFalse(result.accepted)
 
 
 class PerModuleTest(Base):
