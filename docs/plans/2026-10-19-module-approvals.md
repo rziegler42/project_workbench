@@ -578,8 +578,8 @@ E `ca239c6`, F `6ec0fc7`, G `d526957`, H `8b653b0`, I `c9bff41`, J `148b358`, K 
 decisions proposed in K were accepted by the owner on 2026-10-20
 (`2026-10-20-fixed-store-location` and `2026-10-20-first-party-by-location-and-shipped-record`),
 which completes the plan and with it the candidate `workbench-v1#module-approvals`. A third record,
-`2026-10-20-isolated-launcher-invocation`, was drafted at the owner's go-ahead and stays `Proposed`
-for the owner to accept; the plan does not depend on it. The first push to the remote was made after
+`2026-10-20-isolated-launcher-invocation`, was drafted at the owner's go-ahead and accepted by the
+owner the same day; the plan did not depend on it. The first push to the remote was made after
 K (`main` at `8680713`).
 
 **Verification.** The full suite, `python3 -B -W error -m unittest discover -s tests`, passes: 657

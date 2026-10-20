@@ -60,7 +60,7 @@ meet here and the order matters.
 - Seven specifications are approved by the owner (2026-10-19) and read `Current`:
   `terms`, `module-contract`, `repository-boundary`, `trust-and-approval`,
   `groundwork`, `code-work` and `harness-modules`.
-- Twelve decision records were accepted on 2026-10-19 and two more on 2026-10-20, listed under
+- Twelve decision records were accepted on 2026-10-19 and three more on 2026-10-20, listed under
   Related decisions.
 - `installer-core-verifier` is built and its language decision is accepted
   (`2026-10-19-implementation-language`, 2026-10-19): a Python 3
@@ -77,7 +77,7 @@ meet here and the order matters.
   accepted on 2026-10-20.
 - Found while building it, for later candidates: `python3 -m workbench` run from inside an
   untrusted project lets that project's code run first, so the harness must call the `wb` launcher
-  and not the `-m` form; a module has no field to declare an added hard stop; and nothing removes
+  and not the `-m` form (decision `2026-10-20-isolated-launcher-invocation`, accepted); a module has no field to declare an added hard stop; and nothing removes
   cache copies, shipped records of earlier releases or leftover `bin/run/` directories.
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.
@@ -326,7 +326,4 @@ Accepted 2026-10-20:
 
 - `2026-10-20-fixed-store-location`
 - `2026-10-20-first-party-by-location-and-shipped-record`
-
-Proposed 2026-10-20, not yet accepted:
-
 - `2026-10-20-isolated-launcher-invocation`

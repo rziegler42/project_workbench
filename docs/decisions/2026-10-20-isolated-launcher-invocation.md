@@ -1,6 +1,6 @@
 # The workbench is run through the isolated launcher from project directories
 
-Status: Proposed
+Status: Accepted
 Date: 2026-10-20
 
 ## Context
