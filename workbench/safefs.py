@@ -37,7 +37,7 @@ import unicodedata
 MAX_FILE_BYTES = 16 * 1024 * 1024
 MAX_PATH_CHARS = 512
 
-Entry = collections.namedtuple("Entry", "rel kind identity")
+Entry = collections.namedtuple("Entry", "rel kind identity executable")
 
 # Test seam: a callable ``hook(stage, **info)`` run at fixed points so a test can
 # swap files deterministically. It is None outside tests.
@@ -255,7 +255,7 @@ class Root:
             except OSError as exc:
                 raise _os_error("stat", "%s/%s" % (self.path, rel), exc)
             kind = classify(info.st_mode)
-            out.append(Entry(rel, kind, identity(info)))
+            out.append(Entry(rel, kind, identity(info), bool(info.st_mode & stat.S_IXUSR)))
             if kind != "dir":
                 continue
             child = _open_dir(name, dirfd, "%s/%s" % (self.path, rel))
