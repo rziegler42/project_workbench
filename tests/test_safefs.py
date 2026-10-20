@@ -300,6 +300,21 @@ class ReaderTest(TempTest):
 
 
 class WriteTest(TempTest):
+    def test_executable_files_get_the_owner_execute_bit_and_others_do_not(self):
+        root = self.root
+        safefs.write_tree(root, {"a/run.sh": b"#!/bin/sh\n", "a/plain.txt": b"x", "b": b"y"},
+                          executable={"a/run.sh"})
+        self.assertTrue(os.stat(os.path.join(root, "a", "run.sh")).st_mode & stat.S_IXUSR)
+        self.assertFalse(os.stat(os.path.join(root, "a", "plain.txt")).st_mode & stat.S_IXUSR)
+        self.assertFalse(os.stat(os.path.join(root, "b")).st_mode & stat.S_IXUSR)
+        self.assertEqual(stat.S_IMODE(os.stat(os.path.join(root, "a", "run.sh")).st_mode), 0o755)
+
+    def test_executable_naming_a_file_that_is_not_written_is_refused_and_writes_nothing(self):
+        root = self.root
+        with self.assertRaises(safefs.SafeFsError):
+            safefs.write_tree(root, {"a": b"x"}, executable={"a", "missing"})
+        self.assertEqual(os.listdir(root), [])
+
     def test_writes_files_and_creates_directories(self):
         written = safefs.write_tree(self.root, {"a/b/c.txt": b"one", "d": b"two"})
         self.assertEqual(written, ["a/b/c.txt", "d"])

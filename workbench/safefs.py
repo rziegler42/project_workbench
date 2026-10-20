@@ -422,8 +422,11 @@ def _open_or_make_dir(name, dirfd, shown):
     return _open_dir(name, dirfd, shown)
 
 
-def write_tree(root_path, tree):
+def write_tree(root_path, tree, executable=()):
     """Write ``{relative path: bytes}`` below an existing root and return the sorted paths.
+
+    `executable` names files of `tree` that are set to mode 0755, whether new or existing;
+    every other new file keeps the default mode and every other existing file keeps its own.
 
     The root and every parent directory are opened with no-follow flags and held.
     Each file is staged in an exclusively created sibling and replaced with a rename
@@ -434,6 +437,10 @@ def write_tree(root_path, tree):
     for rel in rels:
         if not isinstance(tree[rel], bytes):
             raise SafeFsError("content is not bytes: %s" % rel)
+    executable = set(executable)
+    if not executable <= set(rels):
+        raise SafeFsError("executable names a file that is not written: %s"
+                          % sorted(executable - set(rels))[0])
     check_write_paths(root_path, rels)
     _fire("after_check", root=root_path)
     dirs = {}
@@ -465,6 +472,8 @@ def write_tree(root_path, tree):
                         view = view[os.write(fd, view):]
                     if existing is not None:
                         os.fchmod(fd, stat.S_IMODE(existing.st_mode) & 0o777)
+                    if rel in executable:
+                        os.fchmod(fd, 0o755)
                     os.fsync(fd)
                 finally:
                     os.close(fd)

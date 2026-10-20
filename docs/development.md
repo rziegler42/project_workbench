@@ -49,6 +49,50 @@ and prints the install order. A harness module is required in a selection unless
 
 `release-approvals` uses the same codes: 0 done (or nothing to do), 1 refused, 2 usage.
 
+## Inert download
+
+`workbench/fetch.py` brings a package into the guarded store's cache as data only, so the
+owner can read its declaration before approving anything. No command calls it yet; the next
+increment wires it into `approve`. `fetch.fetch(store, source, ref)` returns the new
+directory `cache/<id>/package/` (and `cache/<id>/fetch.json` beside it, with the source, ref,
+resolved commit and counts) or raises `FetchError` and leaves nothing in the cache.
+
+- **Sources:** an `https://` URL without credentials, an `ssh://` URL, a `file://` URL, or a
+  local directory. Other transports (`ext::`, `git://`, plain `http://`), scp-style
+  `host:path`, and anything starting with `-` or holding whitespace are refused. A ref is a
+  branch, tag or commit name of letters, digits and `._/@+-`, not starting with `-`.
+- **Nothing runs and nothing is checked out.** The ref is fetched into a private bare
+  repository in a temporary directory outside the store, made with an empty template and with
+  `core.hooksPath` pointed at an empty directory. Every `GIT_*` variable is dropped, the
+  user's and system git configuration are ignored, prompts are off, only the `file`, `https`
+  and `ssh` transports are allowed, incoming objects are checked, and tags and submodules are
+  not fetched. Files are read with `git ls-tree` and `git cat-file`; there is no `checkout`,
+  `clone` or shell.
+- **The whole listing is checked before any content is read.** Every entry must be a regular
+  file (a symbolic link or a submodule refuses the download), every path must pass the path
+  validator, names that collide ignoring case are refused, and the limits are 2048 files,
+  16 MiB per file and 64 MiB in total. Only the owner execute bit is kept.
+- **Resource limits.** Every git command runs in its own process group, with its output read
+  in chunks and capped, a timeout (300 s for the fetch and for reading the files, 60 s for the
+  rest), and a limit on the size of any file it writes (four times the total limit, 256 MiB).
+  On a timeout or an excess, git and everything it started are killed. A tree can share
+  subtrees, so a tiny repository can list millions of files; the listing is read incrementally
+  and git is stopped once it passes what 2048 files allow. The fetch uses `--depth 1` and
+  needs git 2.32 or newer (for `GIT_CONFIG_GLOBAL`); fetching a commit id the server does not
+  advertise can fail on servers that refuse it. ssh runs with `BatchMode`, and agent and other
+  forwarding turned off.
+- **The cache holds data and no repository.** Files are written into a staging directory and
+  moved into place with one rename; the temporary repository is removed. A failure removes the
+  staging directory. A cache directory is never reused, so every fetch makes a new one. Files
+  get mode 0644, or 0755 when git recorded the execute bit.
+- **Limits:** this does not defend against a flaw in git's own handling of objects or in the
+  network transport, and it does not verify who runs the server. An `ssh` source uses your ssh
+  configuration and keys; an `https` source may use your credential helpers. A process killed
+  outright (`kill -9`) can leave a `workbench-fetch-*` directory in the temporary directory
+  or a `.incoming-*` directory in the cache. The code removes only the temporary and staging
+  directories it made, with the standard library's `shutil.rmtree`. Tests use local `file://`
+  repositories and never the network.
+
 ## Approving a package
 
 `python3 -m workbench approve <package> [--module <name>]` is how the owner records an
