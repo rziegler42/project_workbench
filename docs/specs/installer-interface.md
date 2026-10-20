@@ -120,13 +120,23 @@ already makes *(from the code)*.
 - **rule:** a project must have its own `.git` directory. A directory inside a larger
   repository, a `.git` file (a worktree or submodule) and a `.git` link are refused. This
   narrows the roadmap's "a lone `.git` is allowed" to a real directory *(my call)*.
-- **rule:** git is not run in a directory to classify it. An operation that must run git in a
-  project (for example attach, which adds to `.git/info/exclude`, and `check`) runs it with
-  the repository's configuration unable to execute anything: no filesystem monitor, hooks,
-  pager, external diff, text conversion or alias, and the global and system configuration
-  ignored. A hostile `.git/config` can otherwise run a program of its choice, which a review
-  of this document demonstrated. The exact options are a proposal, and the build of the first
-  command that runs git must test them against a hostile configuration.
+- **rule:** git is not run in a directory to classify it. Where possible no git is run at
+  all: the installer reads files itself and hashes them with no filters. Where an operation
+  must ask git something (for example whether a path is committed, or whether the working
+  tree is clean for the affected paths), git must never read the repository's own
+  configuration or run anything the repository names. Reviews of this document showed a
+  hostile `.git/config` running a program of its choice through a filesystem monitor, and
+  through filter drivers named in a committed `.gitattributes`; a fixed list of `-c` options
+  cannot name those drivers. The direction is a private git directory the workbench writes
+  (a fresh configuration, a copy of the index, the real objects by alternates) used with
+  `GIT_DIR` and `GIT_WORK_TREE`, the global and system configuration ignored, optional locks
+  off, and a scrubbed `GIT_*` environment. **rule:** a read-only command leaves `.git/index`
+  byte-identical. The exact mechanism is a proposal; the build of the first command that asks
+  git anything must test it against a hostile configuration, and `attach` needs no git at all
+  (see its section).
+- **rule:** `.workbench` and `.workbench/local` must be real directories, checked without
+  following links. A `.workbench` that is a link makes the target "any other directory", not
+  an existing project.
 - **rule:** which operation a command can perform is limited by the state. `install` needs a
   new project; `attach`, `check`, `upgrade` and adding a module need an existing one. A
   command used on the wrong state refuses and says which state it found *(my call)*.
@@ -135,13 +145,15 @@ already makes *(from the code)*.
 
 The roles are rules; the spellings are proposals. "Writes" names the most a command may
 write. Every command except a usage error first ensures the guarded store exists and is
-seeded (`trust-and-approval.md`), so "nothing" below means nothing in a project and nothing
-in the store beyond that ensure and seed.
+seeded and writes the `wb` launcher script (`trust-and-approval.md`), so "nothing" below
+means nothing in a project and nothing in the store beyond that. A command that downloads a
+package also writes a cache directory in the store and contacts the network; each section
+says so.
 
 | command | kind | takes | writes | terminal only | state |
 |---|---|---|---|---|---|
 | `install` | project | target, a module selection | committed content, manifest, the project's store directory, then per-clone harness files | decided with the approval flow | proposed |
-| `attach` | project | target | per-clone harness files, `.git/info/exclude`, the local manifest | no | proposed |
+| `attach` | project | target, `--harness` | per-clone harness files, `.git/info/exclude`, the local manifest | no, but owner-run (harness deny rule) | proposed |
 | `check` | project | target | nothing | no | proposed |
 | `upgrade` | project | target | after an approved preview, new content, left uncommitted | decided with the approval flow | proposed |
 | add a module | project | target, a module | the same as `upgrade`, new files and blocks only | decided with the approval flow | proposed |
@@ -164,6 +176,208 @@ in the store beyond that ensure and seed.
   the guarded store.
 - `launch` returns the helper's own exit code, so a helper that exits 1 looks like a refusal
   by code alone; the refusal text on standard error tells them apart.
+
+## Project commands
+
+All spellings in this section are **proposals**; every behavior stated is a **rule** unless
+marked. Each command takes the target as above, runs the checks of rule 10 first, and
+refuses with nothing written when any fails. **No command here commits, pushes or
+publishes, and none edits a living or historical document** (`repository-boundary.md`).
+
+### Rules common to the project commands
+
+- **Write set.** What a command may write is bounded by the approved declarations only: a
+  module's own namespace, its declared `writes` and its slot `fills`. Nothing in the
+  committed manifest or the lock widens that set. A manifest entry that names a path outside
+  it, or a living or historical path, or that claims an owner class the declaration does not
+  give, is reported as a conflict and is never written. The manifest is untrusted text.
+- **Exclusive creation.** Every file or block a command adds is created exclusively, without
+  following links. A path that already exists, tracked or not, is a conflict for the owner;
+  the local manifest or any scratch file does not change that. A command never overwrites a
+  file except a module-owned file or block that the preview shows as a replacement and whose
+  hash still equals the installed hash.
+- **The manifest is acknowledged first.** A changed committed manifest, or a changed file
+  under `.workbench/`, is first-tier content (`trust-and-approval.md`, Acknowledgement). A
+  command that acts on it refuses until the owner has acknowledged the change.
+- **Approvals come before a preview.** Every module a command would write must already be
+  approved on this machine before a preview is produced. A missing approval refuses and names
+  the modules; the owner runs `approve`. No preview is shown for something that cannot be
+  applied.
+- **A fetch is for what is approved.** `attach`, `upgrade` and `add` contact a source only for
+  a package whose declaration and tree hashes already have an approval on this machine, and
+  verify the fetched tree against those hashes. A source that only the committed manifest
+  names is not contacted until the owner has approved that package here, so an agent-run
+  command cannot be made to contact an address a hostile manifest chose. `install` contacts
+  the sources the caller gives. A fetch writes a cache directory in the guarded store
+  (`trust-and-approval.md`, Inert download).
+- **Approval binds the write.** The approval of a preview binds its digest, which covers
+  every path, owner class and byte to be written. After the approval and before the first
+  write the command verifies again from the bytes it will write, and for each replaced file
+  re-checks the hash on the held descriptor. Any difference refuses and writes nothing. The
+  details are in the preview section (Increment C).
+- **Baselines.** Approving an install or an upgrade preview updates the acknowledgement
+  baselines for exactly the files in that preview (`trust-and-approval.md`).
+
+### `install` (proposed)
+
+`wb install [<target> | --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...`
+
+- **Needs:** a new project (the states table). An existing project is refused, and the message
+  says to use `upgrade` or add a module.
+- **Selection.** The modules to install are named as `verify` names them, `<module>` or
+  `<package>/<module>`. Each package comes from a `--package` source: a local package
+  directory or a URL, with `--ref` naming the branch, tag or commit of the `--package` before
+  it *(proposal; how several packages and refs are written is settled by
+  `base-and-manifests`)*. The selection must contain exactly one module of type `harness`, so
+  install never offers `--no-harness-required` (`module-contract.md`: a harness is mandatory
+  at install).
+- **Reads and checks, in this order, before anything is written:** the common checks of rule
+  10 (the guarded store first, the target state last); each source, downloaded inertly into
+  the store's cache and never into the target; the selection as one install (`verify`,
+  including counts, conflicts, requirements and install order); and that every module of the
+  selection, the harness first, is approved on this machine (the gate,
+  `trust-and-approval.md`). Install never records an approval.
+- **Then:** the preview and its approval (see "The preview and approval", written by
+  Increment C). Nothing is written to the target before the owner has approved the preview.
+- **Writes**, after approval, in the order `module-contract.md` gives: the harness is verified
+  and approved first, and its per-clone files are written last; the base, the process module,
+  then the other modules; the project seed and ID; the committed manifest and
+  `.workbench/.gitignore`; the project's directory in the guarded store with the record of
+  where the project was first seen; the acknowledgement baselines for the files written; and
+  last, attach for the chosen harness, which writes the per-clone harness files, the
+  `.git/info/exclude` entries and the local manifest. Everything is left uncommitted.
+- **Refuses** any verification failure, any missing approval, a state other than new, and a
+  refused target. After a failure part-way, the report says what was written (Increment C).
+- **Contacts the network and writes a cache directory** for each source that is not a local
+  directory.
+- **Agent may run it:** the command may be run by an agent, but it writes nothing until the
+  owner approves the preview; who gives that approval is decided in Increment C.
+
+### `attach` (proposed)
+
+`wb attach [<target> | --dir <path>] --harness <package>/<module> [--package <source> [--ref <ref>]]`
+
+- **Needs:** an existing project.
+- **Reads:** the committed manifest and its lock, and the harness module. It requires approval
+  of each module it uses, the harness module included, on this machine. A package the
+  manifest names is fetched at the recorded commit into the inert cache, only if the owner has
+  already approved it here (the common rule above), and its tree hash is verified against the
+  lock.
+- **The harness is not committed.** The committed manifest never names a harness, so the
+  harness is given to attach, and its source, version and tree hash are pinned in the local
+  manifest, `.workbench/local/harness.json` (`repository-boundary.md`). A fresh clone gets its
+  harness from `--harness` and, where no committed package holds it, `--package`.
+- **Writes** only per-clone harness files, created exclusively; adds their paths to
+  `.git/info/exclude`; records the local manifest. It writes nothing that git tracks. It runs
+  no git. The exclude file is opened with no-follow descriptors as a regular file, entries
+  are anchored literal paths, a leading `!` or `#` and glob characters are refused, and an
+  entry already present is not added twice. `safefs` refuses `.git` paths today, so this needs
+  a primitive of its own *(from the code)*.
+- **Refuses** when a local manifest already records a harness (changing harness means a new
+  clone); when a harness path already exists (a conflict); a content-hash mismatch between a
+  package and the lock; a module not yet approved on this machine. A difference in workbench
+  version between the lock and the installed workbench warns and continues.
+- **Prints** post-install notes for steps it cannot perform, such as a harness's project trust,
+  and warns when a file it wrote changes the agent's permissions.
+- **Agent may run it:** no *(owner)*. Attach writes the files that set an agent's own
+  permissions, deny rules and instructions. Choosing and attaching a harness is the owner's
+  act in setting up a clone, before an agent runs in it; the harness's deny rule on `wb
+  attach` is the barrier, as it is for `approve`. It is not terminal-gated, because setting up
+  a clone is routinely scripted by the owner.
+
+### `check` (proposed)
+
+`wb check [<target> | --dir <path>]`
+
+- **Needs:** an existing project. It is read-only: it changes nothing in the project, leaves
+  `.git/index` byte-identical, and writes nothing to the guarded store beyond the common
+  writes.
+- **Reports** the things `repository-boundary.md` lists: harness files of a harness other than
+  the attached one; generated harness files whose hash has drifted; tracked files that look
+  like harness output or scratch; tracked files that link into untracked content; committed
+  files that differ from the manifest in a way their owner class does not allow. It also
+  reports whether the manifest is committed *(owner's answer: an uncommitted manifest is not an
+  error of the state, only a report)*, and "none attached" for a clone with no harness, which
+  is valid.
+- **The local manifest is not evidence.** The hashes in `.workbench/local/harness.json` are
+  scratch, which grants no authority, so "no drift" says the files match the scratch record
+  and not that they are safe.
+- **Options:** none in this version.
+- **Agent may run it:** yes. Any question it asks git is subject to the git rule in the states
+  section.
+- How it signals a problem is in the exit codes (Increment C).
+
+### `upgrade` and adding a module (proposed)
+
+`wb upgrade [<target> | --dir <path>] [--package <source> [--ref <ref>] ...]`
+`wb add [<target> | --dir <path>] --package <source> [--ref <ref>] --select <module> ...`
+
+- **Needs:** an existing project. Adding a module is an upgrade that brings in a new module
+  (`repository-boundary.md`), so the two share the preview and approval and differ only in
+  where the change comes from: a newer workbench or newer module versions (`upgrade`), or a
+  module the project does not have (`add`).
+- **Reads:** the committed manifest; the current files and their hashes; the new declarations
+  and trees, downloaded inertly; and the approval of every new or changed module, which must
+  exist before the preview is produced. A changed declaration or tree is a different subject
+  and needs a new `approve`. `add` verifies the new module together with the modules already
+  installed, so counts (one harness, at most one process module), conflicts, requirements,
+  slot owners and order are checked as for an install.
+- **Preview:** every change, classified as replace, skip, conflict or append, with the
+  declaration change shown. It writes nothing. A declined append is reported with the marker
+  to add and a suggested place. (Its exact shape and approval are in the preview section,
+  Increment C.)
+- **Writes**, only after the preview is approved: replacements of module-owned files and
+  blocks whose hash still equals the installed hash; new files and new blocks; appended blocks
+  where the owner approved the append; the updated `.workbench/manifest.json` (hashes, lock and
+  workbench version) and the module's files under `.workbench/<package>/<module>/`; and the
+  acknowledgement baselines for exactly the files in the preview. It never touches a seeded
+  file, a plan, a spec, a decision, a roadmap or a reference, and never an edited module-owned
+  file or block, which it reports as a conflict. `add` writes only new files and new blocks.
+- **Requires** a clean working tree for the affected paths, and leaves its changes
+  uncommitted so the owner can commit them as one revertable change. Cleanliness is decided
+  under the git rule in the states section, or by comparing file hashes with the manifest. A
+  fresh install is uncommitted by design, so an upgrade straight after it is refused until the
+  owner commits; that is intended. It refuses when the installed workbench is older than the
+  version recorded in the manifest.
+- **Removing a module is not a command** in this version.
+- **Contacts the network and writes a cache directory** for each source it fetches.
+- **Agent may run it:** the preview, yes; applying it is decided in Increment C.
+
+## The existing commands
+
+Described as `workbench/cli.py` has them *(from the code)*. They are built. Differences from
+the rules above are named so a later plan can change them; this plan changes none.
+
+- **`verify [<package> | --dir <path>] [--select <module> ...] [--no-harness-required]`**
+  Checks a package, and optionally a selection (`--select` takes one or more names) as one
+  install. Prints one line per module with its version and the first 12 characters of its
+  declaration and tree hashes, then, only when a selection was given, the install order; or
+  `refused:` lines on standard error. Warnings go to standard output when the check is
+  accepted and to standard error when it is refused. Writes nothing. Exits 0 accepted, 1
+  refused, 2 usage error. The package directory is a positional argument or `--dir`, and
+  defaults to `.`; if both are given and name the same directory that is accepted, and
+  different directories are a usage error. Agent may run it. Never commits or publishes.
+- **`approve (<package> | --source <url> [--ref <ref>]) [--module <name>]`**
+  Owner-run, terminal on standard input and output. Shows the approval request, verifies again
+  before writing, and records the module records before the package record. Without
+  `--module` it approves every module and records the package too; with `--source` it
+  downloads over the network into the cache first. Agent may not run it (harness deny rule).
+  Differences: it has no `--dir`; the decision above gives it one.
+- **`pin <project-id> <name> <helper> --root <dir>`** Owner-run, terminal only. Pins a helper
+  file inside the project root by its content hash. `--root` names the project directory and
+  stays *(owner)*.
+- **`launch <project-id> <name> --root <dir> -- <args>`** Runs a pinned helper if its bytes
+  still match the pin, from a private copy that is removed afterwards. The arguments follow the
+  first `--` and are never parsed as options; `--` itself is optional and the argument list
+  may be empty. Returns the helper's own exit code, or 1 with a `refused:` line if nothing was
+  run. Agent may run it.
+- **`release-approvals`** Writes the shipped first-party approval records into the workbench
+  distribution. Needs no terminal. A maintainer's command at release time. Agent may not run
+  it *(my call)*: its records count as approval because the distribution is the trust root
+  (`trust-and-approval.md`), so running it in a modified checkout would approve modified
+  first-party packages. The harness's deny rule on it is the barrier.
+- **Usage text and name.** The usage text and the program name say `python3 -m workbench`;
+  the rule above is `wb`. A later plan changes the text.
 
 ## Decisions on the package and helper commands
 
