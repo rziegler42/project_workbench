@@ -1,6 +1,6 @@
 # Base, manifests and installing into a new target
 
-Status: Approved
+Status: Completed
 Created: 2026-10-20
 Candidate: workbench-v1#base-and-manifests
 Specs: installer-interface, repository-boundary, module-contract, trust-and-approval
@@ -817,14 +817,17 @@ harness: not attached (attach is not built yet)
 preview only: nothing was written
 ```
 
+**Completion.** The owner accepted the three decisions (`base-ships-in-distribution`,
+`install-creates-git` as revised, `harness-module-writes-nothing-committed`) and had this plan
+marked `Completed` on 2026-10-20. The criteria above were checked against the tests; the
+security review's unresolved items are the low and informational ones listed above, which the
+owner accepted by completing the plan.
+
 **Unresolved, for the owner.**
 
-- Accept, reject or revise the three `Proposed` decisions: `base-ships-in-distribution`,
-  `install-creates-git` (revised as above) and `harness-module-writes-nothing-committed`.
 - Optionally record R1-F1 and R1-F2 with `ask-codex decide`, and archive the review with
   `ask-codex archive --plan docs/plans/2026-10-20-base-and-manifests.md`.
-- Mark this plan `Completed` once satisfied; it was left `Approved`.
-- Push: eleven commits (`47dc677` to this one) are local only.
+- Push: the commits from `47dc677` onward are local only.
 - The skeleton `config` omits `ignorecase` and `precomposeunicode`, which git sets from the
   filesystem; the plan already refuses paths that differ only by case.
 - Deferred work is listed above and unchanged; attach is the next step for `install`.
