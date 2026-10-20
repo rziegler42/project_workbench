@@ -21,7 +21,7 @@ ambiguous blank.
 | Setup | not applicable (standard library only; nothing to install) |
 | Run locally | `python3 -m workbench verify [<package> \| --dir <path>] [--select <module> ...] [--no-harness-required]` |
 | Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
-| One focused test | `python3 -m unittest tests.test_package` |
+| One focused test file | `python3 -m unittest discover -s tests -p 'test_approvals.py'` (a test module that imports `support` only loads under `discover -s tests`) |
 | Full tests | `python3 -m unittest discover -s tests` |
 | Format | not applicable (no code yet) |
 | Lint or static analysis | not applicable (no code yet) |
