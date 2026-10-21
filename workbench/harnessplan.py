@@ -121,6 +121,22 @@ def translate(items, harness_layout, overrides, excludes, provides=declarations.
     return Result(tuple(files), tuple(reports))
 
 
+def render_root(harness_layout):
+    """The root file of the layout as a ``Planned``, or None when it has none.
+
+    It holds the one import line of the layout and nothing else: guidance generated into a root
+    file waits for a module that supplies it (``code-work-module``).
+    """
+    found = layout.problems(harness_layout)
+    if found:
+        raise PlanError("the layout is refused: " + "; ".join(found))
+    root = harness_layout.get("root", "none")
+    if root == "none":
+        return None
+    data = ("@%s\n" % root["import"]).encode("utf-8")
+    return Planned(root["file"], data, FILE_MODE, hashlib.sha256(data).hexdigest(), "root")
+
+
 def _unavailable(item, kinds, provides):
     if CAPABILITY[item.kind] not in provides:
         return "this harness does not provide %s" % CAPABILITY[item.kind]

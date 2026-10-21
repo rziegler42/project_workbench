@@ -25,7 +25,7 @@ SPELLINGS = ("wb", "python3 -m workbench", "python3 -B -m workbench", "python -m
              "python -B -m workbench")
 
 # Not yet routed by cli.py; the drift test allows exactly these until their increment lands.
-NOT_YET_ROUTED = ("attach",)
+NOT_YET_ROUTED = ()
 
 FLOOR_RULES = {
     "force-or-rewrite-history": (

@@ -212,7 +212,7 @@ def prepare(guarded, held, given, distribution, version, which=shutil.which, mod
     named = {name for m in result.modules if m.type == "harness"
              for name in (m.name, "%s/%s" % (m.package, m.name))}
     if mode == "add" and named & set(add):
-        raise preview.Refused(["a harness is attached, not added; attach is not built yet"])
+        raise preview.Refused(["a harness is attached, not added; use `wb attach`"])
     if mode == "add" and not [key for key in result.order if key not in recorded]:
         raise preview.Refused(["none of the selected modules is new to the project"])
     decision = gate.check_selection(guarded, result, distribution)

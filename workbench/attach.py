@@ -1,0 +1,517 @@
+"""``wb attach``: write this clone's harness files, its exclude lines and its local manifest.
+
+Attach is for an existing project. It reads the committed manifest and the packages the manifest
+records, takes the harness module from ``--harness <package>/<module>``, and writes only per-clone
+files, none of which git tracks (``repository-boundary.md``). The order, all of it before the
+first write unless noted:
+
+* the target is an existing project, and this clone records no harness yet (a changed harness
+  means a new clone);
+* the project is as last acknowledged on this machine, as for ``upgrade``;
+* the packages the manifest records come from the cache or ``--package``, and the harness package
+  from there too. Nothing is fetched: a source the owner has not approved is never contacted;
+* every package and module the manifest records equals the lock (tree and declaration hashes), the
+  selection is verified as one install, and every module of it, the harness included, is approved
+  on this machine. The bytes used are those of a snapshot proved equal to the approved tree;
+* the neutral items, the overrides and the exclusions of every module are translated by the
+  harness layout (``harnessplan``); the root file and the permission rules are rendered;
+* each path to be written is looked at without following a link: absent is created, holding
+  exactly the planned bytes is left as it is and reported, anything else is a conflict, and the
+  conflicts are reported together with nothing written. The exclude file is checked the same way.
+
+Writing then adds the exclude lines (before any file, so a failure never leaves a file git would
+pick up), creates the files and writes the local manifest last, so a
+clone that stopped part-way has none and can run attach again; the files already written are then
+left as they are. Attach is not terminal-gated and has no digest prompt: it does not change
+the project's committed content, and the barrier against an agent running it is the deny rule a
+harness renders for it. It runs no git and contacts no network.
+"""
+
+import collections
+import hashlib
+import os
+import shutil
+
+from . import (__version__, acknowledgement, declarations, display, firstparty, gate, harnessplan,
+               installed, installplan, localmanifest, manifest, neutral, preview, projectfs, safefs,
+               snapshot, sources, target, upgrade, verify)
+
+LISTED = 40
+# Bytes of harness files one attach writes: the neutral tree, and the overrides, are each bounded
+# by `neutral.MAX_TOTAL_BYTES`.
+MAX_WRITE_BYTES = 2 * neutral.MAX_TOTAL_BYTES
+_RESERVED = (".git", ".workbench")
+
+Command = collections.namedtuple("Command", "target harness packages")
+# `create` and `kept` are lists of ``harnessplan.Planned``; `exclude` the layout's entries;
+# `document` the local manifest to write; `reports` the translation's; `warnings` and `notes` text.
+Prepared = collections.namedtuple(
+    "Prepared", "path harness version create kept exclude document reports warnings notes "
+                "settings")
+
+
+class Refused(preview.Refused):
+    """Attach stops with these lines, each printed as ``refused: ...``; `after` is printed below
+    them as it is, indented."""
+
+    def __init__(self, lines, after=()):
+        preview.Refused.__init__(self, lines)
+        self.after = list(after)
+
+
+def parse(tokens):
+    """A ``Command`` from ``[<target> | --dir <path>] --harness <package>/<module> [--package
+    <source> [--ref <ref>]] ...``; a ``sources.UsageError`` otherwise."""
+    positional = dir_option = harness = None
+    packages = []
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token == "":
+            raise sources.UsageError("an argument may not be empty")
+        if token == "--harness":
+            if harness is not None:
+                raise sources.UsageError("--harness was given twice")
+            harness = sources._value(tokens, index, token)
+            index += 2
+        elif token == "--package":
+            packages.append([sources._value(tokens, index, token), None])
+            index += 2
+        elif token == "--ref":
+            if not packages:
+                raise sources.UsageError("--ref needs a --package before it")
+            if packages[-1][1] is not None:
+                raise sources.UsageError("--ref was given twice for one --package")
+            packages[-1][1] = sources._value(tokens, index, token)
+            index += 2
+        elif token == "--dir":
+            if dir_option is not None:
+                raise sources.UsageError("--dir was given twice")
+            dir_option = sources._value(tokens, index, token)
+            index += 2
+        elif token.startswith("-"):
+            raise sources.UsageError("unknown option %s" % token)
+        else:
+            if positional is not None:
+                raise sources.UsageError("more than one target was given")
+            positional = token
+            index += 1
+    if harness is None:
+        raise sources.UsageError("--harness <package>/<module> is required")
+    package, slash, module = harness.partition("/")
+    if not slash or not all(declarations.NAME_RE.match(part)
+                            and len(part) <= declarations.MAX_NAME_CHARS
+                            for part in (package, module)):
+        raise sources.UsageError("--harness takes <package>/<module>, two names joined by one /")
+    try:
+        spelling = target.choose(positional, dir_option)
+    except target.TargetUsage as exc:
+        raise sources.UsageError(str(exc))
+    return Command(spelling, (package, module), [tuple(item) for item in packages])
+
+
+def default_home():
+    """The home directory the rendered rules name: the account database's, not ``$HOME``."""
+    return target._account_home()
+
+
+# --- the neutral input of every module ---------------------------------------------------------
+
+
+def _name_ok(name):
+    return neutral._name_ok(name)
+
+
+def _override(rest, data, who, overrides, owners):
+    """Take the file at `rest` (below ``harness/<harness>/``) into `overrides`."""
+    where = "%s: harness/<harness>/%s" % (who, "/".join(rest))
+    kind = neutral.KINDS.get(rest[0])
+    if kind is None:
+        raise Refused(["%s: not under skills/, agents/ or commands/" % where])
+    if kind == "skill":
+        if len(rest) < 3 or not _name_ok(rest[1]):
+            raise Refused(["%s: an override of a skill is skills/<name>/<file>" % where])
+        name, inner = rest[1], "/".join(rest[2:])
+    else:
+        if len(rest) != 2 or not rest[1].endswith(".md") or not _name_ok(rest[1][:-3]):
+            raise Refused(["%s: an override is %s/<name>.md" % (where, rest[0])])
+        name, inner = rest[1][:-3], rest[1]
+    key = (kind, name)
+    if owners.setdefault(key, who) != who:
+        raise Refused(["%s and %s both override %s/%s" % (owners[key], who, kind, name)])
+    overrides.setdefault(key, {})[inner] = data
+
+
+def _exclusions(data, who, excludes):
+    where = "%s: harness/<harness>/manifest.json" % who
+    try:
+        document = declarations.parse_json(data)
+    except ValueError as exc:
+        raise Refused(["%s: %s" % (where, exc)])
+    entries = document.get("exclude", []) if isinstance(document, dict) else None
+    if not isinstance(entries, list):
+        raise Refused(["%s: 'exclude' must be a list" % where])
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("item"), str) \
+                or not isinstance(entry.get("reason"), str):
+            raise Refused(["%s: each exclusion needs an 'item' and a 'reason'" % where])
+        folder, _, name = entry["item"].partition("/")
+        kind = neutral.KINDS.get(folder)
+        if kind is None or not _name_ok(name):
+            raise Refused(["%s: %s is not an item" % (where, display.ascii_text(entry["item"])[:80])])
+        excludes.setdefault((kind, name), entry["reason"])
+
+
+def inputs(modules, snaps, harness):
+    """``(tree, overrides, excludes)`` from the snapshots of `modules`, in install order.
+
+    The neutral tree is the union of every module's ``harness/neutral/``; one path in two modules
+    is refused. An override is the module's files in ``harness/<harness>/`` for one item, and a
+    second module overriding the same item is refused. Anything under ``harness/`` for another
+    harness is left alone."""
+    tree, overrides, excludes, owners, supplied = {}, {}, {}, {}, {}
+    for module in modules:
+        key = (module.package, module.name)
+        who = "%s/%s" % key
+        for rel, data in sorted(snaps[key].files.items()):
+            parts = rel.split("/")
+            if parts[0] != "harness" or len(parts) < 3:
+                continue
+            if parts[1] == "neutral":
+                sub = "/".join(parts[2:])
+                if sub in tree:
+                    raise Refused(["%s and %s both supply harness/neutral/%s"
+                                   % (supplied[sub], who, display.ascii_text(sub)[:120])])
+                tree[sub] = data
+                supplied[sub] = who
+            elif parts[1] == harness:
+                if parts[2:] == ["manifest.json"]:
+                    _exclusions(data, who, excludes)
+                else:
+                    _override(parts[2:], data, who, overrides, owners)
+    return tree, overrides, excludes
+
+
+# --- the plan ----------------------------------------------------------------------------------
+
+
+def _check_lock(document, result):
+    """Every package and module the manifest records equals what was verified."""
+    infos = {info.name: info for info in result.packages}
+    verified = {(m.package, m.name): m for m in result.modules}
+    lines = []
+    for package in document["packages"]:
+        info = infos.get(package["name"])
+        if info is None or info.tree_hash != package["tree"]:
+            lines.append("the package %s is not the one the lock records (its content hash "
+                         "differs from .workbench/manifest.json)" % display.ascii_text(package["name"])[:80])
+            continue
+        for module in package["modules"]:
+            got = verified.get((package["name"], module["name"]))
+            if got is None or (got.declaration_hash, got.tree_hash) != (module["declaration"],
+                                                                        module["tree"]):
+                lines.append("the module %s/%s is not the one the lock records"
+                             % (display.ascii_text(package["name"])[:80],
+                                display.ascii_text(module["name"])[:80]))
+    if lines:
+        lines.append("give the recorded version with --package, or bring the project to the new "
+                     "one with `wb upgrade` first")
+        raise Refused(lines)
+
+
+def _check_paths(files):
+    """No planned path is `.git` or `.workbench`, or under one, whatever its case; no two collide."""
+    seen = set()
+    for planned in files:
+        top = planned.path.split("/")[0].casefold()
+        if top in _RESERVED:
+            raise Refused(["the harness would write %s, inside %s, which only git and the "
+                           "workbench use" % (display.ascii_text(planned.path)[:120], top)])
+        if planned.path in seen:
+            raise Refused(["two harness files map to %s" % display.ascii_text(planned.path)[:120]])
+        seen.add(planned.path)
+    try:
+        safefs.check_tree_paths(sorted(seen))
+    except safefs.SafeFsError as exc:
+        raise Refused([str(exc)])
+    if sum(len(planned.data) for planned in files) > MAX_WRITE_BYTES:
+        raise Refused(["the harness files are too large (over %d bytes)" % MAX_WRITE_BYTES])
+
+
+def _settings_entries(settings):
+    return ["the entries attach would have written to it:"] + [
+        "  " + line for line in settings.data.decode("utf-8").splitlines()] + [
+        "attach never edits a settings file it did not write; move yours aside, run `wb attach`,"
+        " and put your own entries back"]
+
+
+def preflight(writer, files, exclude, settings_path):
+    """``(create, kept)`` for `files`, or a ``Refused`` naming every conflict. Nothing is written."""
+    create, kept, conflicts, hand = [], [], [], []
+    for planned in files:
+        try:
+            state = writer.read_file(planned.path)
+        except safefs.SafeFsError as exc:
+            conflicts.append("%s: %s" % (display.ascii_text(planned.path)[:120], exc))
+            continue
+        if state is None:
+            create.append(planned)
+        elif state.hash == planned.sha256:
+            kept.append(planned)
+        else:
+            conflicts.append("%s: it exists with other content, and attach does not overwrite a "
+                             "file it did not write" % display.ascii_text(planned.path)[:120])
+            if planned.path == settings_path:
+                hand = planned
+    try:
+        writer.check_exclude(exclude)
+    except safefs.SafeFsError as exc:
+        conflicts.append(".git/info/exclude: %s" % exc)
+    if conflicts:
+        shown = conflicts[:LISTED]
+        if len(conflicts) > LISTED:
+            shown.append("and %d more" % (len(conflicts) - LISTED))
+        raise Refused(shown, _settings_entries(hand) if hand else ())
+    return create, kept
+
+
+def prepare(guarded, held, command, distribution=None, version=None, which=shutil.which,
+            home=None):
+    """Read, check, verify, gate, translate and look at the paths. Returns a ``Prepared``;
+    raises ``Refused``. Nothing is written."""
+    if held.state != "existing":
+        raise Refused(["the target is not an existing project; use install"])
+    distribution = distribution or firstparty.default_distribution()
+    version = version or __version__
+    writer = projectfs.Writer(held)
+    try:
+        recorded = localmanifest.read(writer)
+    except localmanifest.LocalManifestError as exc:
+        raise Refused(["the local manifest cannot be used: %s" % exc])
+    if recorded is not None:
+        raise Refused(["this clone already records the harness %s; a clone has one harness, so "
+                       "use a new clone to change it" % display.ascii_text(recorded["harness"])[:80]])
+    warnings = []
+    try:
+        existing = installed.read(writer, version)
+        project = manifest.project_id(existing.document["seed"])
+        baselines = acknowledgement.read_baselines(guarded, project)
+        acknowledgement.check_known(baselines, acknowledgement.read_seen(guarded, project),
+                                    held.path)
+        found = acknowledgement.differences(writer, baselines)
+        if installed.version_key(existing.document["workbench"]) != installed.version_key(version):
+            warnings.append("the project was written by workbench %s and this is %s"
+                            % (display.ascii_text(existing.document["workbench"])[:40],
+                               display.ascii_text(version)[:40]))
+    except (installed.InstalledError, acknowledgement.AcknowledgementError,
+            manifest.ManifestError) as exc:
+        raise Refused([str(exc)])
+    if found:
+        upgrade._refuse_differences(found)
+
+    package_name, module_name = command.harness
+    token = "%s/%s" % command.harness
+    resolved = upgrade._resolve(guarded, existing.document, command.packages, adding=True)
+    names = [name for name, _ in resolved]
+    if package_name not in names:
+        raise Refused(["the harness package %s is not one this project records; give it with "
+                       "--package <source>" % display.ascii_text(package_name)[:80]])
+    declared = {name: upgrade._package_json(item.path)[1] for name, item in resolved}
+    if module_name not in declared[package_name]:
+        raise Refused(["the package %s declares no module %s"
+                       % (display.ascii_text(package_name)[:80], display.ascii_text(module_name)[:80])])
+    select = ["%s/%s" % (p["name"], m["name"]) for p in existing.document["packages"]
+              for m in p["modules"] if m["name"] in declared[p["name"]]]
+    if token in select:
+        raise Refused(["%s is recorded as an installed module, not as a harness" % token])
+    paths = [item.path for _, item in resolved]
+    result = verify.verify_packages(
+        paths, select + [token], harness_required=True,
+        first_party=[p for p in paths if firstparty.is_first_party(p, distribution)], which=which)
+    if not result.accepted:
+        raise Refused([str(problem) for problem in result.problems])
+    if [info.name for info in result.packages] != names:
+        raise Refused(["the packages changed while they were read; nothing was done"])
+    by_key = {(m.package, m.name): m for m in result.modules}
+    if [key for key in result.order if by_key[key].type == "harness"] != [
+            (package_name, module_name)]:
+        raise Refused(["%s is not a harness module" % token])
+    _check_lock(existing.document, result)
+    decision = gate.check_selection(guarded, result, distribution)
+    if not decision.approved:
+        raise Refused(["%s/%s is not approved on this machine: %s" % (
+            item.package, item.name, item.reason)
+            for item in decision.modules if not item.approved] or [decision.reason])
+    roots = dict(zip((info.name for info in result.packages), paths))
+    modules = tuple(by_key[key] for key in result.order)
+    try:
+        snaps = {(m.package, m.name): snapshot.take(os.path.join(roots[m.package], m.name), m)
+                 for m in modules}
+    except safefs.SafeFsError as exc:
+        raise Refused([str(exc)])
+
+    harness = by_key[command.harness]
+    layout = harness.module.layout
+    tree, overrides, excludes = inputs(modules, snaps, module_name)
+    if sum(len(data) for files in overrides.values() for data in files.values()) \
+            > neutral.MAX_TOTAL_BYTES:
+        raise Refused(["the overrides are too large (over %d bytes)" % neutral.MAX_TOTAL_BYTES])
+    try:
+        done = harnessplan.translate(neutral.read_items(tree), layout, overrides, excludes,
+                                     provides=harness.module.provides)
+        files = [harnessplan.render_root(layout)] + list(done.files)
+        files = [item for item in files if item is not None]
+        settings = None
+        if "permissions" in harness.module.provides:
+            local = layout.get("local_settings", "none")
+            if local == "none":
+                raise harnessplan.PlanError("the module provides permissions but its layout has "
+                                            "no local settings to render them into")
+            where = home if home is not None else default_home()
+            if not where:
+                raise harnessplan.PlanError("the home directory is not known, so the rules that "
+                                            "name it cannot be written")
+            data = harnessplan.render_permissions(
+                [], layout, os.path.realpath(guarded.root), os.path.realpath(where))
+            settings = harnessplan.Planned(local["path"], data, harnessplan.FILE_MODE,
+                                           hashlib.sha256(data).hexdigest(), "permissions")
+            files.append(settings)
+        else:
+            warnings.append("this harness provides no permissions, so the hard stops and the "
+                            "guarded store are enforced only by instruction")
+    except (neutral.NeutralError, harnessplan.PlanError) as exc:
+        raise Refused([str(exc)])
+    files.sort(key=lambda planned: planned.path.encode("utf-8"))
+    _check_paths(files)
+
+    exclude = list(layout.get("exclude", ()))
+    create, kept = preflight(writer, files, exclude, settings.path if settings else None)
+    origin = dict(resolved)[package_name]
+    try:
+        document = {
+            "files": [{"hash": item.sha256, "path": item.path} for item in files],
+            "format": localmanifest.FORMAT, "harness": module_name,
+            "module_version": harness.version,
+            "source": installplan.public_source(preview._recorded_source(origin, package_name)),
+            "tree": harness.tree_hash, "workbench": version}
+        localmanifest.serialize(document)
+    except (localmanifest.LocalManifestError, manifest.ManifestError) as exc:
+        raise Refused(["the local manifest cannot be written: %s" % exc])
+    return Prepared(held.path, token, harness.version, create, kept, exclude, document,
+                    done.reports, warnings, list(layout.get("notes", ())),
+                    settings.path if settings else None)
+
+
+# --- the write ---------------------------------------------------------------------------------
+
+
+def apply(writer, prepared):
+    """Write what `prepared` plans through `writer`; return the exclude lines added. Files that
+    already hold the planned bytes are not touched. Raises on the first failure and leaves what
+    was written, which `writer.written` lists."""
+    writer.target.recheck()
+    # The ignore lines come first: a failure after them leaves no file that git would pick up.
+    added = writer.add_exclude(prepared.exclude)
+    for planned in prepared.create:
+        writer.create_file(planned.path, planned.data)
+    localmanifest.write(writer, prepared.document)
+    return added
+
+
+# --- the report --------------------------------------------------------------------------------
+
+
+def _listed(out, title, items):
+    if not items:
+        return
+    out.write("%s:\n" % title)
+    for item in items[:LISTED]:
+        out.write("  %s\n" % display.ascii_text(item))
+    if len(items) > LISTED:
+        out.write("  and %d more\n" % (len(items) - LISTED))
+
+
+def _finish(prepared, writer, added, out, err):
+    try:
+        out.write("attached %s %s in %s\n" % (display.ascii_text(prepared.harness)[:140],
+                                              display.ascii_text(prepared.version)[:40],
+                                              display.ascii_text(prepared.path)))
+        _listed(out, "wrote %d files" % len(prepared.create), [p.path for p in prepared.create])
+        _listed(out, "left %d files as they were (they hold the planned bytes)"
+                % len(prepared.kept), [p.path for p in prepared.kept])
+        if added:
+            out.write("added %d lines to .git/info/exclude: %s\n"
+                      % (len(added), ", ".join(display.ascii_text(a) for a in added)))
+        out.write("recorded %s\nnothing was committed\n" % localmanifest.PATH)
+        for report in prepared.reports:
+            text = "%s: %s" % (display.ascii_text(report.item), display.clean(report.message))
+            if report.level in ("warning", "skipped"):
+                err.write("warning: %s: %s\n" % (report.level, text))
+            else:
+                out.write("%s: %s\n" % (report.level, text))
+        if prepared.settings:
+            err.write("warning: %s changes what the agent may do here: it denies the owner-run "
+                      "commands and writes to the guarded store, and asks before the hard stops\n"
+                      % display.ascii_text(prepared.settings))
+        for note in prepared.notes:
+            out.write("note: %s\n" % display.clean(note))
+        out.flush()
+    except BrokenPipeError:
+        pass
+
+
+def _failed(cause, prepared, writer, err):
+    written = list(writer.written) if writer is not None else []
+    have = set(written)
+    planned = [p.path for p in prepared.create] + [localmanifest.PATH]
+    err.write("failed: %s\n" % display.ascii_text(cause))
+    _listed(err, "written", written)
+    _listed(err, "not written", [path for path in planned if path not in have])
+    err.write("the project itself is complete; only this clone's harness files are part-written\n"
+              "if the failure came while a file was being written, that file may be incomplete: "
+              "remove it yourself first, since attach does not overwrite a file with other bytes\n"
+              "run `wb attach` again with the same arguments: a file that holds the planned bytes "
+              "is left as it is, and the local manifest is written last\n")
+
+
+def _refusal(exc, err):
+    for line in exc.lines:
+        err.write("refused: %s\n" % display.clean(line))
+    for line in getattr(exc, "after", ()):
+        err.write("  %s\n" % display.clean(line))
+    return 1
+
+
+def run(guarded, command, out, err, distribution=None, version=None, which=shutil.which,
+        home=None):
+    """Attach and print the result. Returns the exit code: 0 done, 1 refused, 3 stopped after
+    writing, 130 interrupted before writing."""
+    writer = None
+    prepared = None
+    try:
+        with target.open_target(command.target, guarded.root) as held:
+            prepared = prepare(guarded, held, command, distribution, version, which, home)
+            for warning in prepared.warnings:
+                err.write("warning: %s\n" % display.clean(warning))
+            try:
+                writer = projectfs.Writer(held)
+                added = apply(writer, prepared)
+            except (Exception, KeyboardInterrupt) as exc:
+                cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
+                _failed(cause, prepared, writer, err)
+                return 3
+            try:
+                _finish(prepared, writer, added, out, err)
+            except KeyboardInterrupt:
+                pass
+            return 0
+    except target.TargetError as exc:
+        return target.write_refusal(err, exc)
+    except preview.Refused as exc:
+        return _refusal(exc, err)
+    except safefs.SafeFsError as exc:
+        err.write("refused: %s\n" % display.clean(str(exc)))
+        return 1
+    except KeyboardInterrupt:
+        out.write("\ncancelled: nothing was written\n")
+        return 130

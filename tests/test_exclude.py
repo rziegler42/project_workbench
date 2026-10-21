@@ -1,4 +1,5 @@
 import os
+import shutil
 import stat
 import unittest
 
@@ -7,8 +8,8 @@ from workbench.projectfs import WriteConflict
 from tests.test_projectfs import Fixture
 
 
-class Exclude(Fixture):
-    """``Writer.add_exclude``: anchored literal lines appended to ``.git/info/exclude``."""
+class Base(Fixture):
+    """A project with room for a ``.git`` directory, and ways to look at it."""
 
     def setUp(self):
         super().setUp()
@@ -38,6 +39,10 @@ class Exclude(Fixture):
             for name in sorted(dirs + files):
                 found.append(os.path.relpath(os.path.join(base, name), self.git))
         return sorted(found)
+
+
+class Exclude(Base):
+    """``Writer.add_exclude``: anchored literal lines appended to ``.git/info/exclude``."""
 
     def test_lines_are_anchored_and_added_in_order(self):
         self.make_git(content=b"# owner\n*.pyc\n")
@@ -258,6 +263,112 @@ class Exclude(Fixture):
         import inspect
         self.assertEqual(["self", "entries"],
                          list(inspect.signature(projectfs.Writer.add_exclude).parameters))
+
+
+class Check(Base):
+    """``Writer.check_exclude`` finds, before any file is written, what ``add_exclude`` would refuse,
+    and itself creates and writes nothing."""
+
+    def refuses(self, setup, error=WriteConflict, entries=("a",)):
+        setup()
+        before = self.snapshot() if os.path.isdir(self.git) else None
+        writer = self.writer()
+        with self.assertRaises(error):
+            writer.check_exclude(list(entries))
+        with self.assertRaises(error):
+            self.writer().add_exclude(list(entries))
+        if before is not None:
+            # Whatever add_exclude made on its way to the refusal is not what check made.
+            self.assertEqual([], writer.written)
+
+    def test_a_good_git_directory_is_accepted_and_nothing_is_made(self):
+        for info, content in ((False, None), (True, None), (True, b"/a\n")):
+            with self.subTest(info=info, content=content):
+                os.mkdir(self.git)
+                if info:
+                    os.mkdir(self.info)
+                    if content is not None:
+                        with open(self.exclude, "wb") as handle:
+                            handle.write(content)
+                before = self.snapshot()
+                writer = self.writer()
+                writer.check_exclude(["a", "b/"])
+                self.assertEqual(before, self.snapshot())
+                self.assertEqual([], writer.written)
+                shutil.rmtree(self.git)
+
+    def test_the_entries_are_checked_as_add_exclude_checks_them(self):
+        self.make_git()
+        for bad in ("a b", "!a", "#a", "a*", "../a", ".git/x", "", "a\\b"):
+            with self.subTest(entry=bad), self.assertRaises(safefs.SafeFsError):
+                self.writer().check_exclude([bad])
+        with self.assertRaises(safefs.SafeFsError):
+            self.writer().check_exclude("CLAUDE.md")
+        with self.assertRaises(safefs.SafeFsError):
+            self.writer().check_exclude(["e%d" % n for n in range(projectfs.MAX_EXCLUDE_ENTRIES + 1)])
+
+    def test_no_git_directory(self):
+        self.refuses(lambda: None)
+
+    def test_a_git_file(self):
+        def setup():
+            with open(self.git, "w") as handle:
+                handle.write("gitdir: ../elsewhere\n")
+        self.refuses(setup)
+
+    def test_a_git_link(self):
+        self.refuses(lambda: os.symlink(self.outside, self.git))
+
+    def test_an_info_link(self):
+        def setup():
+            os.mkdir(self.git)
+            os.symlink(self.outside, self.info)
+        self.refuses(setup)
+
+    def test_an_info_file(self):
+        def setup():
+            os.mkdir(self.git)
+            open(self.info, "w").close()
+        self.refuses(setup)
+
+    def test_an_exclude_link_even_a_dangling_one(self):
+        def setup():
+            self.make_git()
+            os.symlink(os.path.join(self.outside, "new"), self.exclude)
+        self.refuses(setup)
+        self.assertEqual([], os.listdir(self.outside))
+
+    def test_an_exclude_directory(self):
+        def setup():
+            self.make_git()
+            os.mkdir(self.exclude)
+        self.refuses(setup)
+
+    def test_an_exclude_fifo_is_refused_without_blocking(self):
+        def setup():
+            self.make_git()
+            os.mkfifo(self.exclude)
+        self.refuses(setup)
+
+    def test_an_exclude_with_another_hard_link(self):
+        def setup():
+            self.make_git(content=b"x\n")
+            os.link(self.exclude, os.path.join(self.outside, "other"))
+        self.refuses(setup)
+
+    def test_an_oversized_exclude(self):
+        def setup():
+            self.make_git(content=b"")
+            with open(self.exclude, "ab") as handle:
+                handle.truncate(safefs.MAX_FILE_BYTES + 1)
+        self.refuses(setup, error=safefs.SafeFsError)
+
+    def test_a_closed_target(self):
+        self.make_git()
+        writer = self.writer()
+        writer.target.close()
+        with self.assertRaises(safefs.SafeFsError):
+            writer.check_exclude(["a"])
 
 
 if __name__ == "__main__":

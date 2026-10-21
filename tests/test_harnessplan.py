@@ -368,5 +368,28 @@ class Bounds(unittest.TestCase):
             run(overrides={("skill", "sample"): many})
 
 
+class Root(unittest.TestCase):
+    def test_the_root_file_is_the_import_line_and_nothing_else(self):
+        planned = harnessplan.render_root(CLAUDE)
+        self.assertEqual((planned.path, planned.data), ("CLAUDE.md", b"@AGENTS.md\n"))
+        self.assertEqual((planned.mode, planned.source), (0o644, "root"))
+        self.assertEqual(planned.sha256, hashlib.sha256(b"@AGENTS.md\n").hexdigest())
+
+    def test_a_layout_without_a_root_file_has_none(self):
+        layout = edit(("root",), "none")
+        layout["exclude"] = [".claude/"]
+        self.assertIsNone(harnessplan.render_root(layout))
+
+    def test_the_import_and_the_file_come_from_the_layout(self):
+        layout = edit(("root",), {"file": "ROOT.md", "import": "POLICY.md"})
+        layout["exclude"] = ["ROOT.md", ".claude/"]
+        planned = harnessplan.render_root(layout)
+        self.assertEqual((planned.path, planned.data), ("ROOT.md", b"@POLICY.md\n"))
+
+    def test_a_layout_that_is_refused_renders_nothing(self):
+        with self.assertRaises(harnessplan.PlanError):
+            harnessplan.render_root(edit(("root",), {"file": "../x", "import": "AGENTS.md"}))
+
+
 if __name__ == "__main__":
     unittest.main()

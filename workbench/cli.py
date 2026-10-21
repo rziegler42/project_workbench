@@ -8,7 +8,7 @@ import argparse
 import os
 import sys
 
-from . import (acknowledge, approve, display, firstparty, install, launch, pins, preview, recover,
+from . import (acknowledge, approve, attach, display, firstparty, install, launch, pins, preview, recover,
                safefs, settings, sources, store, target, upgrade, verify)
 
 PROG = "python3 -m workbench"
@@ -30,6 +30,8 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench add <same arguments as preview add>   (owner-run, terminal only)\n"
          "       python3 -m workbench acknowledge [<target> | --dir <path>]   (owner-run, terminal only)\n"
          "       python3 -m workbench recover [<target> | --dir <path>]   (owner-run, terminal only)\n"
+         "       python3 -m workbench attach [<target> | --dir <path>] --harness <package>/<module>\n"
+         "                                   [--package <source> [--ref <ref>]] ...   (owner-run)\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
 
@@ -210,8 +212,24 @@ def _recover(tokens, err, out, store_root, stdin):
     return recover.run(opened[0], spelling, stdin, out, err)
 
 
-def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=None):
-    """Run a command. `store_root`, `distribution` and `stdin` are for tests; the command
+def _attach(tokens, out, err, store_root, distribution, home):
+    try:
+        command = attach.parse(tokens)
+    except sources.UsageError as exc:
+        err.write("%s\n%s" % (_clean(str(exc)), USAGE))
+        return 2
+    opened = _open_store(store_root, err)
+    if opened is None:
+        return 1
+    guarded, notes = opened
+    notes += launch.install_wrapper(guarded, distribution or firstparty.default_distribution())
+    for note in notes:
+        err.write("warning: %s\n" % _clean(note))
+    return attach.run(guarded, command, out, err, distribution, home=home)
+
+
+def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=None, home=None):
+    """Run a command. `store_root`, `distribution`, `stdin` and `home` are for tests; the command
     line cannot set them."""
     if out is None and err is None:
         for stream in (sys.stdout, sys.stderr):
@@ -231,6 +249,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         return _acknowledge(argv[1:], err, out, store_root, stdin)
     if argv and argv[0] == "recover":
         return _recover(argv[1:], err, out, store_root, stdin)
+    if argv and argv[0] == "attach":
+        return _attach(argv[1:], out, err, store_root, distribution, home)
     if argv and argv[0] in ("upgrade", "add"):
         return _upgrade(argv[1:], out, err, store_root, distribution, stdin, argv[0])
     if argv and argv[0] == "install":

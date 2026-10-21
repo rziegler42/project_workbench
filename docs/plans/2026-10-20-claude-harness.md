@@ -535,7 +535,7 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   limits, not fixed: an entry already present is skipped even if a later owner `!` line re-includes
   the path (the owner's own negation wins); a write that fails part-way (ENOSPC) can leave an
   unterminated fragment, which a rerun separates with a newline.
-- **G** (not yet committed): `packages/workbench/package.json` and `packages/workbench/claude/
+- **G** (`38deb76`): `packages/workbench/package.json` and `packages/workbench/claude/
   module.json` (type `harness`; the layout of `tests/test_layout.CLAUDE` plus one note), the two
   shipped records written by `release-approvals` under `workbench/shipped_approvals/packages/`
   (package and module; approver `workbench-release`, fixed time), and `tests/test_claude_module.py`
@@ -565,3 +565,56 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   six capabilities", and `development.md` says "none yet"; both must say five, with `hooks`
   joining when `code-work-module` renders hooks. The owner-run protections come from `rules.py`,
   not from `module.json`, and E's tests cover that list.
+- **H** (not yet committed): `workbench/attach.py` (new) and the `attach` route in `cli.py`;
+  `Writer.check_exclude(entries)` in `projectfs.py` (a read-only look at `.git`, `.git/info` and
+  `.git/info/exclude` with no-follow descriptors, so a fault there is found before any file is
+  written); `harnessplan.render_root(layout)` (the `@AGENTS.md` pointer only, Decision 3);
+  `rules.NOT_YET_ROUTED` is now empty. Built like `upgrade.py`: `parse`, a read-only `prepare`,
+  then `apply`. `prepare` refuses, in this order: not an existing project; a clone that already
+  records a harness (any), or a local manifest that is not canonical; a project not as last
+  acknowledged on this machine (as `upgrade`); a harness package that is neither recorded nor
+  given; a harness module the package does not declare, or one the manifest records as an
+  ordinary module; a verification failure; a recorded package or module that is not the lock's
+  (tree and declaration hashes; the message names `wb upgrade`); a module not approved on this
+  machine, the harness included; neutral trees, overrides or exclusions that two modules both
+  supply; a translation or layout failure; a path in `.git` or `.workbench`, a collision, or more
+  than 16 MiB; a home or store path a rule cannot name; a local manifest that cannot be written
+  (checked before the first write); and every conflict, all listed together: a path that exists
+  with other bytes, a link or a non-regular file anywhere on the way, and an exclude file that is a
+  link, a directory, a fifo or has two links. A path that already holds exactly the planned bytes
+  is left and reported, which is what makes a rerun work (Decision 2). A settings file with other
+  bytes is Decision 1: refused, with the entries attach would have written printed below the
+  refusal and the instruction to move the file aside. `apply` rechecks the held target, adds the exclude lines, creates the
+  files, and writes the local manifest last (see the review below for why the lines come first). A failure part-way exits 3,
+  lists what was and was not written, and says the project is complete and `wb attach` finishes it.
+  Home for the rendered rules is the account database's, not `$HOME` (`attach.default_home`); only
+  tests can override it. **No fetch at all:** the recorded packages come from the cache or
+  `--package`, as for `upgrade`, and the harness package from `--package`; a source the owner has
+  not approved is never contacted, which is stricter than the spec's "fetched at the recorded
+  commit if approved". The harness name for `harness/<name>/` overrides is the harness module's
+  name. A module's own rule list has no file location yet (the contract reads only skills, agents
+  and commands under `harness/neutral/`), so the module rules passed to `render_permissions` are
+  empty: the floor, the guarded store and the owner-run commands are always rendered. The first-party
+  `claude` module is attached in the tests with the recorded package given by `--package <dir>`.
+  Tests: `tests/test_attach.py` (76), `Check` in `tests/test_exclude.py` (13), `Root` in
+  `tests/test_harnessplan.py` (4); suite 1588 passing, 1 skipped. Mutation check: 30 mutants of the
+  new guards, all killed after six tests were added for the survivors (a manifest that records a
+  harness, packages that changed while read, a package changed outside every recorded module, a
+  forged module hash, an item that needs `hooks`, a harness without `permissions`). A test with a
+  real `git init` under an isolated `HOME` and `GIT_CONFIG_GLOBAL=/dev/null` shows every written
+  path ignored by `.git/info/exclude` and none tracked. `docs/development.md` and the specs are L's.
+  `workflow-reviewer` of H (from reading and one test run): no Critical or High. Medium, fixed:
+  the plan's step order (files, then exclude lines) left a window in which a failure after the
+  files and before the exclude lines exits 3 with files git does not ignore, and a `git add -A`
+  before the rerun would commit them; the lines now come first (a departure from the step's
+  wording, for the owner to note), with a test that a failing `add_exclude` leaves no harness file.
+  Low, fixed: the failure text now says a file being written when the failure came may be
+  incomplete and must be removed by hand, since attach does not overwrite a file with other bytes;
+  an interrupt while printing the success report no longer prints "cancelled". Low, recorded:
+  a path holding exactly the planned bytes counts as kept even if git tracks it, and a path tracked
+  but missing from the tree is created and shows as modified (attach runs no git; `check`, J and K,
+  reports a recorded file that git tracks); a kept file is not re-read at apply, so the local
+  manifest can name a hash that changed in between (scratch, no authority); an interrupt between
+  `prepare` and the writer is reported as exit 3. Test gaps noted, not filled: the local manifest
+  under a real `git` (it relies on the committed `.workbench/.gitignore`), a hard-linked harness
+  path, hostile control characters in a module's report text, and a partial file on rerun.

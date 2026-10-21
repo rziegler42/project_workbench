@@ -477,10 +477,10 @@ class Writer:
             for each in fds:
                 os.close(each)
 
-    def _open_git_info(self, fds):
-        """Open ``.git/info`` below the target, making ``info`` when it is missing. ``.git`` must
-        be a real directory: a gitfile (a worktree or a submodule), a link or anything else is a
-        conflict."""
+    def _open_git_info(self, fds, make=True):
+        """Open ``.git/info`` below the target, making ``info`` when it is missing (and returning
+        None instead when `make` is false). ``.git`` must be a real directory: a gitfile (a
+        worktree or a submodule), a link or anything else is a conflict."""
         top = self._live_fd()
         shown = self._shown(".git")
         try:
@@ -504,6 +504,11 @@ class Writer:
         fds.append(git)
         shown = self._shown(".git/info")
         try:
+            if not make:
+                try:
+                    return os.open("info", flags, dir_fd=git)
+                except FileNotFoundError:
+                    return None
             return self._open_dir_or_make(git, "info", shown, flags, ".git/info/")
         except OSError as exc:
             if exc.errno in (errno.ELOOP, errno.ENOTDIR):
@@ -617,6 +622,43 @@ class Writer:
                 return [entry for entry, _ in added]
             finally:
                 os.close(fd)
+        finally:
+            for each in fds:
+                os.close(each)
+
+    def check_exclude(self, entries):
+        """Raise unless ``add_exclude(entries)`` could run now. Nothing is created or written.
+
+        The entries are checked as ``add_exclude`` checks them. ``.git`` must be a real directory;
+        ``info`` and ``exclude`` may be missing (``add_exclude`` makes them), and when they are there
+        they must be a real directory and a regular file with one link and a bounded size, looked at
+        without following a link. A fault found here is found before any file is written.
+        """
+        if isinstance(entries, (str, bytes)):
+            raise safefs.SafeFsError("exclude entries are not a list")
+        lines = {exclude_line(entry) for entry in entries}
+        if len(lines) > MAX_EXCLUDE_ENTRIES:
+            raise safefs.SafeFsError("too many exclude entries (limit %d)" % MAX_EXCLUDE_ENTRIES)
+        shown = self._shown(EXCLUDE)
+        fds = []
+        try:
+            info = self._open_git_info(fds, make=False)
+            if info is None:
+                return
+            fds.append(info)
+            try:
+                found = os.stat("exclude", dir_fd=info, follow_symlinks=False)
+            except FileNotFoundError:
+                return
+            except OSError as exc:
+                raise _os_error("read", shown, exc)
+            if not stat.S_ISREG(found.st_mode):
+                raise WriteConflict("the exclude file is not a regular file: %s" % shown)
+            if found.st_nlink > 1:
+                raise WriteConflict("the exclude file has more than one hard link: %s" % shown)
+            if found.st_size > safefs.MAX_FILE_BYTES:
+                raise safefs.SafeFsError("file too large (%d bytes, limit %d): %s"
+                                         % (found.st_size, safefs.MAX_FILE_BYTES, shown))
         finally:
             for each in fds:
                 os.close(each)
