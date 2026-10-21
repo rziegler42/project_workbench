@@ -1,6 +1,6 @@
 # The installer runs the document checks, for a project that has the module
 
-Status: Accepted
+Status: Superseded by 2026-10-21-module-code-lives-in-modules
 Date: 2026-10-21
 
 ## Context

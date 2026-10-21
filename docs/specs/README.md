@@ -28,6 +28,7 @@ or an evidence note.
 |---|---|
 | [`terms.md`](terms.md) | Vocabulary used by every other spec |
 | [`module-contract.md`](module-contract.md) | Package and module declarations, types, capabilities, conflicts |
+| [`module-boundary.md`](module-boundary.md) | What is installer mechanism and what is module content; the kit, module commands and checks |
 | [`repository-boundary.md`](repository-boundary.md) | Places, manifests, ownership classes, install, attach, check, upgrade |
 | [`trust-and-approval.md`](trust-and-approval.md) | Authority, approvals, hard stops, untrusted content |
 | [`installer-interface.md`](installer-interface.md) | The installer's commands: the target, options, preview and approval, output and exit codes |
