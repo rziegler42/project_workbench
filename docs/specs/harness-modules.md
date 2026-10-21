@@ -213,10 +213,15 @@ review or in the security pass:
   counts as committed. It scans Markdown only, within 4 MiB, 5,000 documents and 5,000 existing-
   path lookups; passing any of these bounds is itself a problem, so `check` exits 1. The stray
   scan stops at 5,000 entries and depth 8 and reports a problem past that, and it warns about an
-  unknown entry directly under `.claude`.
+  unknown entry directly under a harness directory (not a `tolerated` path, nor a directory that
+  holds one).
 - **Not detected by `check`:** a link whose case differs from the file on a case-insensitive
   filesystem; a link to a missing ordinary path; a tracked symbolic link's target (a warning
-  only). Only Claude, opencode and Codex roots are scanned for strays.
+  only). `wb check` knows a harness only from the `layout` of a harness module of a first-party
+  package in the running workbench's distribution (`workbench/harnesses.py`); the roots, the
+  generated directories and the tolerated paths are derived from that layout. A harness recorded in
+  the local manifest that is not known gets one warning and no scan, and a name that two first-party
+  packages declare is treated the same way. A harness with no module (opencode, Codex) is not known.
 - **Not done by the installer:** it does not inspect skill and command overrides, and attach
   never fetches.
 - **Not verified:** case-insensitive filesystem behavior (the development machine cannot create

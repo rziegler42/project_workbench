@@ -141,16 +141,6 @@ class Check(Clone):
         self.assertIn(".claude/agents/reviewer.md: cannot be read", err)
         self.assertIn("problem: .claude/agents: unreadable", err)
 
-    def test_files_of_another_harness_are_a_problem(self):
-        self.attached()
-        self.write("opencode.json", b"{}\n")
-        os.mkdir(os.path.join(self.place, ".codex"))
-        code, out, err = self.check()
-        self.assertEqual(1, code)
-        self.assertEqual(["problem: .codex belongs to the harness codex, not to the attached claude",
-                          "problem: opencode.json belongs to the harness opencode, not to the "
-                          "attached claude"], sorted(self.problems(err)))
-
     def test_the_local_manifest_is_not_evidence(self):
         """A file edited together with the scratch record is not reported: no drift means the
         file matches the record, and the output says that is all it means."""
@@ -313,15 +303,12 @@ class Tracked(Clone):
         self.attached()
         self.write(".debug/2026-10-21-x/README", b"x\n")
         self.force_add("CLAUDE.md", SETTINGS, ".debug/2026-10-21-x/README", LOCAL)
-        self.write("opencode.json", b"{}\n")
-        self.force_add("opencode.json")
         code, out, err = self.check()
         self.assertEqual(1, code)
         found = sorted(self.problems(err))
         for path, what in (("CLAUDE.md", "output of the harness claude"),
                            (SETTINGS, "output of the harness claude"),
-                           (LOCAL, "scratch"), (".debug/2026-10-21-x/README", "scratch"),
-                           ("opencode.json", "output of the harness opencode")):
+                           (LOCAL, "scratch"), (".debug/2026-10-21-x/README", "scratch")):
             self.assertIn("problem: %s: tracked by git, but it looks like %s" % (path, what), found)
 
     def test_paths_are_matched_without_case(self):

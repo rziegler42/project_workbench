@@ -20,20 +20,10 @@ safe, and the report says so. Git is never run: what it tracks is read from ``.g
 
 import collections
 
-from . import (__version__, checks, gitindex, installed, localmanifest, pointers, projectfs, sources,
-               target)
+from . import (__version__, checks, gitindex, harnesses, installed, localmanifest, pointers, projectfs,
+               sources, target)
 from .wbkit import display, safefs
 
-# Paths each harness is known to use, for the files of one harness found beside another and for the
-# strays. `roots` are top-level names, `generated` the directories attach fills. A harness not
-# listed here has no stray scan, and its files are not recognised in another clone.
-HARNESSES = {
-    "claude": {"roots": ("CLAUDE.md", ".claude"),
-               "generated": (".claude/skills", ".claude/agents", ".claude/commands"),
-               "shallow": ((".claude", ("settings.json",)),)},
-    "opencode": {"roots": ("opencode.json", ".opencode"), "generated": ()},
-    "codex": {"roots": (".codex",), "generated": ()},
-}
 # Top-level paths that are scratch, not content: nothing tracked may live there.
 SCRATCH = (".workbench/local", ".debug")
 DOCUMENTS = (".md", ".markdown")
@@ -118,16 +108,20 @@ def _drift(writer, recorded):
     return problems
 
 
-def _strays(writer, harness, recorded):
+def _strays(writer, facts, recorded):
+    """Problems for files below the directories attach generates into that it did not write. A path
+    the layout tolerates, or anything below one, is not one, even below such a directory."""
     known = {item["path"] for item in recorded["files"]}
+    tolerated = facts["tolerated"]
     found, budget = [], [MAX_ENTRIES]
-    for rel in HARNESSES.get(harness, {}).get("generated", ()):
+    for rel in facts["generated"]:
         _files_of(writer, rel, found, budget)
     problems = []
     for path, why in found:
         if why is not None:
             problems.append("%s: %s" % (_shown(path), why))
-        elif path not in known:
+        elif path not in known and not any(path == each or path.startswith(each + "/")
+                                           for each in tolerated):
             problems.append("%s: not a file attach wrote" % _shown(path))
     if budget[0] < 0:
         problems.append("more than %d entries under the harness directories; not all were looked at"
@@ -135,30 +129,36 @@ def _strays(writer, harness, recorded):
     return problems
 
 
-def _shallow(writer, harness, recorded):
+def _shallow(writer, facts, recorded):
     """Warnings for entries directly under a harness directory that attach did not write. They
     are warnings because the harness itself, or the owner, may keep files there; a hook is code,
-    so the warning names it."""
+    so the warning names it. A directory attach generates into is not scanned here (``_strays``
+    does), and a tolerated path, or a directory that holds one, is not reported."""
     known = {item["path"] for item in recorded["files"]}
-    skip = set(HARNESSES.get(harness, {}).get("generated", ()))
+    skip = set(facts["generated"])
+    tolerated = set(facts["tolerated"])
     warnings = []
-    for rel, allowed in HARNESSES.get(harness, {}).get("shallow", ()):
+    for rel in facts["directories"]:
+        if rel in skip:
+            continue
         try:
             entries = writer.list_dir(rel, lenient=True)
         except safefs.SafeFsError:
             continue  # the recorded files under it are reported as unreadable
         for name, _ in entries or ():
             path = rel + "/" + name
-            if path not in known and path not in skip and name not in allowed:
+            if (path not in known and path not in skip and path not in tolerated
+                    and not any(each.startswith(path + "/") for each in tolerated)):
                 warnings.append("%s: not written by attach; the harness may run or read it"
                                 % _shown(path))
     return warnings
 
 
-def _generated(tracked):
+def _generated(tracked, found=None):
     """Problems for tracked paths that look like harness output or scratch."""
+    found = harnesses.known() if found is None else found
     roots = [(root, "output of the harness %s" % harness)
-             for harness, table in sorted(HARNESSES.items()) for root in table["roots"]]
+             for harness, facts in sorted(found.items()) for root in facts["roots"]]
     roots.extend((root, "scratch") for root in SCRATCH)
     problems = []
     for path in sorted(tracked.files):
@@ -180,16 +180,16 @@ def _exists(writer, rel, cache):
     return name in cache[parent]
 
 
-def _scratch_path(rel):
+def _scratch_path(rel, found):
     folded = rel.casefold()
     roots = list(SCRATCH)
-    for table in HARNESSES.values():
-        roots.extend(table["roots"])
+    for facts in found.values():
+        roots.extend(facts["roots"])
     return any(folded == root.casefold() or folded.startswith(root.casefold() + "/")
                for root in roots)
 
 
-def _pointers(writer, tracked):
+def _pointers(writer, tracked, found):
     """Problems for tracked Markdown documents that link or import into untracked content."""
     documents = sorted(path for path in tracked.files if path.lower().endswith(DOCUMENTS))
     problems, cache, spent, lookups, unread = [], {}, 0, 0, 0
@@ -222,7 +222,7 @@ def _pointers(writer, tracked):
             if lookups > MAX_LOOKUPS:
                 complete = False
                 break
-            if _scratch_path(where) or _exists(writer, where, cache):
+            if _scratch_path(where, found) or _exists(writer, where, cache):
                 problems.append("%s: points to %s, which git does not track"
                                 % (_shown(path), _shown(where)))
         if not complete:
@@ -276,45 +276,55 @@ def _recorded(writer, tracked):
     return sentence, problems, warnings
 
 
-def _tracked_report(writer):
+def _tracked_report(writer, found):
     """(manifest sentence, problems, warnings) from what git tracks; nothing runs git."""
     try:
         tracked = gitindex.read(writer)
     except gitindex.GitIndexError as exc:
         return None, [".git/index: %s" % display.ascii_text(str(exc))[:200]], []
-    problems = _generated(tracked)
+    problems = _generated(tracked, found)
     warnings = ["%s: a link that git tracks; where it points is not checked" % _shown(path)
                 for path in sorted(tracked.links)]
-    problems.extend(_pointers(writer, tracked))
+    problems.extend(_pointers(writer, tracked, found))
     sentence, more_problems, more_warnings = _recorded(writer, tracked)
     return sentence, problems + more_problems, warnings + more_warnings
 
 
-def _others(writer, attached):
+def _others(writer, attached, found):
     """Top-level names that belong to a harness other than `attached` (None for no harness)."""
     try:
         names = {name for name, _ in writer.list_dir("", lenient=True) or ()}
     except safefs.SafeFsError as exc:
         return [], ["the project directory cannot be listed: %s" % display.ascii_text(str(exc))[:200]]
-    found = []
-    for harness, table in sorted(HARNESSES.items()):
+    owned = []
+    for harness, facts in sorted(found.items()):
         if harness == attached:
             continue
-        found.extend((harness, name) for name in table["roots"] if name in names)
-    return found, []
+        owned.extend((harness, name) for name in facts["roots"] if name in names)
+    return owned, []
 
 
-def examine(writer):
-    """The ``Report`` for the project `writer` holds. Reads only."""
+def _unknown(harness, loaded):
+    shown = display.ascii_text(harness)[:40]
+    if harness in loaded.refused:
+        return "%s is declared by more than one first-party package, so its files were not scanned" % shown
+    return "%s is not a harness this workbench knows, so its files were not scanned" % shown
+
+
+def examine(writer, distribution=None):
+    """The ``Report`` for the project `writer` holds. Reads only. The harnesses are the first-party ones
+    of `distribution` (default: the running workbench's)."""
     problems, warnings = [], []
+    loaded = harnesses.load(distribution)
+    found = loaded.found
     try:
         recorded = localmanifest.read(writer)
     except localmanifest.LocalManifestError as exc:
         problems.append("%s: %s" % (localmanifest.PATH, display.ascii_text(str(exc))[:200]))
-        sentence, more_problems, more_warnings = _tracked_report(writer)
+        sentence, more_problems, more_warnings = _tracked_report(writer, found)
         return Report(None, problems + more_problems, warnings + more_warnings, sentence)
     attached = recorded["harness"] if recorded else None
-    others, trouble = _others(writer, attached)
+    others, trouble = _others(writer, attached, found)
     problems.extend(trouble)
     for harness, name in others:
         text = "%s belongs to the harness %s" % (_shown(name), harness)
@@ -324,9 +334,12 @@ def examine(writer):
             problems.append(text + ", not to the attached %s" % display.ascii_text(attached)[:40])
     if recorded:
         problems.extend(_drift(writer, recorded))
-        problems.extend(_strays(writer, attached, recorded))
-        warnings.extend(_shallow(writer, attached, recorded))
-    sentence, tracked_problems, tracked_warnings = _tracked_report(writer)
+        if attached in found:
+            problems.extend(_strays(writer, found[attached], recorded))
+            warnings.extend(_shallow(writer, found[attached], recorded))
+        else:
+            warnings.append(_unknown(attached, loaded))
+    sentence, tracked_problems, tracked_warnings = _tracked_report(writer, found)
     problems.extend(tracked_problems)
     warnings.extend(tracked_warnings)
     return Report(attached, problems, warnings, sentence)
@@ -339,14 +352,14 @@ def _listed(err, prefix, items):
         err.write("%s: and %d more\n" % (prefix, len(items) - LISTED))
 
 
-def run(guarded, command, out, err):
+def run(guarded, command, out, err, distribution=None):
     """Report and return the exit code: 0 for no problem, 1 for a problem or a refusal."""
     try:
         with target.open_target(command.target, guarded.root) as held:
             if held.state != "existing":
                 err.write("refused: the target is not an existing project\n")
                 return 1
-            report = examine(projectfs.Writer(held))
+            report = examine(projectfs.Writer(held), distribution)
             path = held.path
         report = report._replace(modules=checks.run_all(guarded, path))
     except target.TargetError as exc:
