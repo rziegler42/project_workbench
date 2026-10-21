@@ -344,4 +344,31 @@ constraints as written, after round 1 and without a second round.
 
 ## Result
 
-Not started.
+**Increment A** (2026-10-21): `tests/test_groundwork_fixture.py`, 15 tests, runs a fixture module
+shaped like `groundwork` through verify, install, attach and upgrade. Full suite: 1688 tests, 1
+skipped, passing with `-W error`. No decision is blocked: Decisions 1 to 3 hold. What the run found:
+
+- **READMEs are `seeded`, not module-owned.** `writes` files are written once and recorded as
+  `seeded`. An upgrade skips them ("a newer version exists; the project's file is not touched"),
+  edited or not, and reports no conflict. This is stronger than Review focus 7 expects and meets
+  Completion criterion 4. Increments B and H should test "left alone", not "conflict", for
+  READMEs. Slot blocks behave as the plan says: replaced while unedited, a conflict naming the
+  block when edited.
+- **Both fills land** in `docs/README.md` and `AGENTS.md` from one module, with sources under
+  `files/blocks/`.
+- **The install copies the whole module** under `.workbench/<package>/groundwork/` as
+  module-owned, including the skill and its bundled template. Attach reads the neutral items from
+  there, so Decision 2 holds: the template travels with the skill, no `templates/` is needed.
+- **The bundled file reaches** `.claude/skills/<name>/` and is recorded in the local manifest.
+  Claude rewrites the skill front matter with quoted values.
+- **What `check` can know** is the package name, module name and version, and each file's class,
+  hash and block. The manifest records no module type and no capability, so Decision 1's check is
+  keyed on `<package>/groundwork`, and should say which package it accepts.
+- **A third-party harness cannot receive skills.** Unprefixed `skills` is reserved for a
+  first-party package, which the shipped approvals decide by path and hash. A fixture harness
+  therefore needs a fixture distribution (`distribution` is a parameter of `attach`). Increments
+  D and H need this for "same committed tree on a second harness".
+- **Gap, not blocking:** a stray file under `files/` that `writes` does not name is accepted and
+  never written. Increment B's test for "no other file under the four areas" covers it.
+- **First-party status is lost on any change** to a first-party package until `release-approvals`,
+  as the plan's Risks say.
