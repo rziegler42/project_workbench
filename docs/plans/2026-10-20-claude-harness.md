@@ -425,3 +425,22 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   must then never install one. E and F must write each exclude entry anchored (`/<entry>`), since
   git matches a slash-free entry at any depth. Three `test_request.py` tests that put arbitrary layouts through
   full verification now render the loaded declaration instead, since verification refuses them.
+- **D** (not yet committed): `workbench/harnessplan.py` and `tests/test_harnessplan.py` (36 tests;
+  suite 1380, 1 skipped, `-W error`). `translate(items, layout, overrides, excludes, provides)`
+  is pure and returns `Result(files, reports)`: `Planned(path, data, mode, sha256, source)` with
+  mode 0644, and `Report(level, item, message)` with level `warning`, `skipped`, `excluded` or
+  `overridden`. It re-runs `layout.problems` and raises `PlanError`. Every front-matter value is
+  written as a JSON-quoted string (`quote`). An agent is skipped, never written, when the layout
+  has no `tools` field or table, or grants none of its tools; a tool the layout cannot grant is
+  dropped with a warning (the allowlist only narrows); a `tools` line is always written.
+  Unmapped optional fields (`args`, `model`) are dropped with a warning. An item is skipped when
+  its kind or capability is not provided or its `needs` are unmet, even if overridden. An override
+  is `{relative path: bytes}` (a skill needs `SKILL.md`; an agent or command is the one
+  `<name>.md`) and is bounded like a neutral tree. Only an agent override is inspected: the layout
+  must be able to restrict and its front matter must carry a non-empty tools line, else it is
+  skipped (`workflow-reviewer` found this gap, Medium; fixed with tests, along with `items` as
+  any iterable and a text-only exclusion reason; suite then 1385). Other overrides are reported only. An override or exclusion naming no neutral item, or an item both overridden and
+  excluded, is an error. Mutation checks: removing the quoting, the `tools` guard, the empty-grant
+  guard or the `needs` guard each fails tests. Not yet proved: that Claude's parser reads a
+  quoted `tools` or `argument-hint` value as the unquoted one; G's end-to-end check must show it.
+  How `harness/<name>/` files are read into the override mapping is H's job.
