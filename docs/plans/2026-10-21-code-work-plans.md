@@ -469,3 +469,52 @@ package's modules (`test_claude_module`, `test_groundwork_module`) now expect `c
 - **Not exercised.** The Claude clone's skill was checked through `harnessplan.translate` and an
   install into a scratch directory, not in a live Claude session. The first-party status of the new
   module needs the real release (G).
+
+### Increment E — `wb code-work` (2026-10-21)
+
+`workbench/dispatch.py` (new) and a route in `workbench/cli.py` add `wb code-work <subcommand>
+[arguments]`. `tests/test_dispatch.py` has 25 tests. `rules.AGENT_SAFE` now lists `code-work`, which
+`test_permissions` requires of any routed command. Full suite: 2038 tests, 108 skipped, passing with
+`-W error`; the skips are the stale shipped approvals.
+
+- **Flow.** Only `check`, `plans` and `report` are accepted; anything else, or nothing, prints the
+  usage line and exits 2 before the store is opened or any project is looked for. The project is the nearest directory at or
+  above the working directory (at most 64 levels) with a `.git` directory, a real `.workbench`
+  directory and a regular `.workbench/manifest.json`, found with `lstat` only and no git. Its ID is
+  derived from the manifest's seed by the existing parser. The pin named `code-work` is looked up, and
+  the launcher runs it. Everything after the subcommand is passed through unchanged; the command line
+  is not parsed as options, so `--`, `-n`, `--help` and an empty argument reach the helper. The shipped helper takes no
+  arguments and refuses any, so for the real helper this is the helper's refusal; the usage text
+  therefore shows none.
+- **Results.** The helper's exit code is returned. Not inside a project, a manifest that does not parse,
+  no pin, an edited helper, or a launcher refusal exit 1 with a `refused:` line and run nothing. With
+  no pin the message says the `code-work` helper is not pinned, that the owner pins it with `pin` (or
+  `acknowledge` after a change), and that nothing was run. Text taken from the filesystem is cleaned
+  before it is printed.
+- **Refused as a project:** a forged manifest with no `.git`; a `.git` file, as in a linked worktree
+  (the helper refuses it too, so a worktree is not supported yet); a link at `.workbench` or at the
+  manifest; a start directory deeper than the search limit.
+- **Permissions.** `code-work` is classified agent-safe, so the Claude module's rendered deny and ask
+  lists are unchanged; a test checks that no rule mentions it.
+- **Not exercised.** A successful run through the real command line (`cli.main` tests cover routing and
+  refusals only, because a successful helper writes to the process's standard output); the real helper
+  through this dispatch is for the end-to-end tests in G. The project ID is read from a manifest that a
+  hostile repository could forge, but a pin applies only to the exact bytes the owner pinned for that
+  ID, so a forged ID can at most run a helper the owner already pinned.
+- **Found while testing:** a test helper that logged to its working directory wrote a stray `ran.log`
+  into the repository root, because the launcher does not change directory. The log now goes to a
+  temporary directory and the stray file was removed with the owner's approval.
+- **Review (workflow-reviewer, read-only, 2026-10-21):** no Critical or High finding. Applied: (Medium) a
+  working directory that cannot be read (`os.getcwd` raising) is a `refused:` line and not a traceback;
+  (Medium) the usage text no longer advertises arguments the shipped helper rejects, and the Result
+  says so; (Low) the usage check happens before the store is opened, as claimed; (Low) the missing-pin
+  test is a membership check on the loaded pins and no longer matches message text; (Low) tests
+  strengthened: the usage test proves no search is made, the escape test proves the refusal came from
+  the start-path branch, and the depth limit is pinned at 64 levels searched and 65 refused. Wording:
+  the dispatch writes nothing of its own, but the launcher keeps a transient copy of the helper in the
+  guarded store while it runs, and `bin/wb` is written when missing. Agreed with the reviewer: the
+  dispatch and the helper find the same root by the same rules and the same working directory (a
+  rename of an ancestor between the two is the only way they could differ, and the pin bounds what
+  runs). Left for G: a fake helper through the real `cli.main` with hostile arguments, a deleted or
+  renamed working directory under a running process, a damaged or oversized pins file through the
+  command line, bind mounts and case-insensitive layouts, and the real helper through the dispatch.
