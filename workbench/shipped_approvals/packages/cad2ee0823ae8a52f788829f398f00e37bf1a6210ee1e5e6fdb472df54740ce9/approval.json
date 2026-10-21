@@ -6,9 +6,9 @@
   "kind": "package",
   "modules": [
     {
-      "declaration_hash": "2d29e7a7ac8edc697fbf198ad978f88ee9847eabd8441d79e40e0413505f0b82",
+      "declaration_hash": "4a861f15d8bbea05d84fa3ab266e1b82f05094510d4816ed858ceb365148163d",
       "name": "claude",
-      "tree_hash": "8d5aca823d83860e236afe18f716a23c54e3b95f6524a9751e0c5ac0ffe702c7"
+      "tree_hash": "4b5e1f261bba1619a23c1723fc5f2a197e79798383cef028595db05391f19d26"
     },
     {
       "declaration_hash": "6524bace85fc3f56de5c84396e3dde7cc8aeec795e68fae7ca8c4ae2cf094266",
@@ -23,6 +23,6 @@
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "8868ff4d950669d135f2c0c402d13275b77f442c85fd48d85534ca1ef2059cd9",
+  "tree_hash": "d8d093b1a53cfd6f6cda4020fb9d49fb989971737abcad830b9c6c2e8003800a",
   "workbench_version": "0.1.0"
 }

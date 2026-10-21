@@ -111,8 +111,10 @@ class Declaration(unittest.TestCase):
         expected.pop("notes")
         shipped = dict(shipped)
         notes = shipped.pop("notes")
+        tolerated = shipped.pop("tolerated")
         self.assertEqual(shipped, expected)
         self.assertEqual(len(notes), 1)
+        self.assertEqual(tolerated, [".claude/settings.json"])
 
     def test_the_rule_templates_are_the_names_claude_reads(self):
         """Claude reads `Bash`, `Read` and `Edit`; `Write(path)` is accepted and never consulted."""

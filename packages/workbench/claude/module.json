@@ -26,6 +26,7 @@
     },
     "hooks": "none",
     "exclude": ["CLAUDE.md", ".claude/"],
+    "tolerated": [".claude/settings.json"],
     "notes": ["Restart the Claude session to load the new settings."]
   }
 }
