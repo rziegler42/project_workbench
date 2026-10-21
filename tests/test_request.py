@@ -165,6 +165,33 @@ class ModuleRequestTest(Base):
         text = self.render("sample-notes")
         self.assertLess(text.index("tree hash:"), text.index("commands it offers"))
 
+    def test_a_module_without_checks_says_none(self):
+        self.assertIn("checks it offers (run by wb check): none", self.render("sample-notes"))
+
+    def test_each_check_is_shown_with_its_helper_kit_and_pin_name(self):
+        checks = (declarations.Check("helper/doccheck", 1), declarations.Check("scripts/deep/lint", 2))
+        text = request.render_module("p", module_with(checks=checks), Hashes)
+        self.assertIn("checks it offers (run by wb check): helper/doccheck runs through kit API 1; the "
+                      "owner pins it as doccheck, scripts/deep/lint runs through kit API 2; the owner "
+                      "pins it as lint", text)
+
+    def test_a_hostile_check_is_shown_cleaned(self):
+        checks = (declarations.Check(HOSTILE, 1),)
+        text = request.render_module("p", module_with(checks=checks), Hashes)
+        self.assertTrue(only_plain_ascii(text))
+        self.assertNotIn("\x1b", text)
+
+    def test_many_checks_are_listed_one_to_a_line(self):
+        checks = tuple(declarations.Check("h/c%d" % n, 1) for n in range(16))
+        text = request.render_module("p", module_with(checks=checks), Hashes)
+        self.assertIn("(16):", text)
+        self.assertIn("    h/c15 runs through kit API 1; the owner pins it as c15", text)
+
+    def test_the_checks_come_after_the_hashes_and_the_commands(self):
+        text = self.render("sample-notes")
+        self.assertLess(text.index("tree hash:"), text.index("checks it offers"))
+        self.assertLess(text.index("commands it offers"), text.index("checks it offers"))
+
     def test_the_hashes_and_risk_come_before_any_detail(self):
         text = self.render("sample-harness")
         order = [text.index(part) for part in

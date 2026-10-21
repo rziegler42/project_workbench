@@ -108,7 +108,8 @@ while the current hashes of its subject match.
 - The approval request shows the declaration in plain terms: type, what it provides,
   requires and blocks, the paths it writes, every hook or executable it ships, and
   the helpers it expects, and each command it offers with its helper, how it starts and the
-  first arguments it allows. A module that blocks a core capability is flagged high
+  first arguments it allows, and each check it offers with its helper, the kit API it runs through and
+  the name its owner pins it under. A module that blocks a core capability is flagged high
   risk.
 - First-party modules are approved by the same command, run at release time, and the
   records ship with the workbench. They are verified by the same verifier. Shipping

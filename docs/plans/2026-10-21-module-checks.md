@@ -461,3 +461,16 @@ Owner steps, not run by me:
    This repository has no manifest, so there is nothing to pin here.
 Not reviewed independently; H covers it (hostile index, links at every path component, huge files, entries that
 claim the index or README, a git index naming programs).
+
+### Increment G
+
+`request.render_module` has a section "checks it offers (run by wb check)", after "commands it offers" and
+the hashes: one line per check, `<helper> runs through kit API <n>; the owner pins it as <name>`, every string
+through `_shown`, listed one to a line like the other sections and `none` for no check. 5 new tests in
+`test_request.py`: none, shown in full, a hostile helper cleaned to ASCII, 16 checks one to a line, and the
+section after the hashes and the commands. `trust-and-approval.md` says the request lists checks;
+`module-contract.md` now marks the `checks` field built, including the request and `wb check`.
+Evidence: the real `groundwork` renders `checks it offers (run by wb check)` with `helper/doccheck` and
+`helper/refcheck`, each through kit API 1 and pinned under its own name.
+Verification: `python3 -B -W error tests/run_all.py`, 2265 tests in 4 roots, OK (2260 before). This change does not touch any module's tree
+hash, so no `release-approvals` step is needed. Not reviewed independently; H covers it.

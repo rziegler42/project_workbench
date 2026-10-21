@@ -91,6 +91,12 @@ def _command(command):
     return "%s runs %s as %s; %s" % (_shown(command.name), _shown(command.helper), how, allowed)
 
 
+def _check(check):
+    """One declared check: its helper, the kit API it runs through and the pin name it needs."""
+    return "%s runs through kit API %d; the owner pins it as %s" % (
+        _shown(check.helper), check.kit, _shown(check.pin_name))
+
+
 def _leaves(value, prefix, out, depth=0):
     if depth > MAX_NESTING:
         out.append("%s = <nested too deeply to show>" % prefix)
@@ -162,6 +168,7 @@ def render_module(package, module, hashes, source=None, executable=()):
         ships.append("[%s] %s" % (kind, _shown(item)))
     lines.extend(_section("ships code or executables", ships))
     lines.extend(_section("commands it offers", [_command(c) for c in module.commands]))
+    lines.extend(_section("checks it offers (run by wb check)", [_check(c) for c in module.checks]))
     lines.extend(_section("other executable files in the module (installed via files/ or "
                           "harness/)", [_shown(rel) for rel in other]))
     lines.extend(_section("helpers it expects on PATH", [_shown(h) for h in module.helpers]))
