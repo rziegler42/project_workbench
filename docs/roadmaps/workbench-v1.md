@@ -44,11 +44,11 @@ meet here and the order matters.
   writes nothing into a project; it verifies declarations. `module-approvals` comes
   before `base-and-manifests`, so the first time the installer writes a project, the
   approval check is already in place. Plan approval and the delegation helper are
-  built with `code-work-module`, because the plan format names the sections they
-  depend on.
+  built with `code-work-plans` and `code-work-approval`, because the plan format names the
+  sections they depend on.
 - **The installer is not run on its own repository** until `self-hosting` has shown,
   by a test, that its output agrees with the hand-maintained files.
-- **The commit helper does not exist while it is being built.** Until `code-work-module`
+- **The commit helper does not exist while it is being built.** Until `code-work-commit`
   ships it, commits are made with the owner's own tooling.
 
 ## Current state
@@ -109,7 +109,7 @@ meet here and the order matters.
   the manifest), which reads `.git/index` itself and runs no git. An adversarial security pass found
   nothing above Low unresolved. The hand run in a live `claude` session was not done. The plan's Result
   and `harness-modules.md` ("As built, and its limits") list the limits. Compact Instructions waits
-  for `code-work-module`.
+  for `code-work-approval`.
 - `groundwork-module` is implemented (plan `2026-10-21-groundwork-module`, increments A to I; its
   completion is derived from that plan): the first-party module `groundwork` in
   `packages/workbench/` with the four READMEs, the `docs-index` and policy blocks and three skills
@@ -128,8 +128,8 @@ meet here and the order matters.
 `approve-specs`, `adopt-conventions`, `installer-core-verifier`, `module-approvals`,
 `installer-interface`, `base-and-manifests`,
 `ownership-and-upgrade`, `claude-harness`, `verify-opencode`, `opencode-harness`,
-`groundwork-module`, `researcher-fetch-tool`, `code-work-module`,
-`remote-runner-module`, `peer-review-provider`, `knowledge-base-package`,
+`groundwork-module`, `researcher-fetch-tool`, `code-work-plans`, `code-work-commit`,
+`code-work-approval`, `remote-runner-module`, `peer-review-provider`, `knowledge-base-package`,
 `global-config-migration`, `self-hosting`, `remaining-modules-rename`.
 
 ## Candidates
@@ -281,33 +281,64 @@ tool to one agent (`claude-harness` for Claude, `verify-opencode` for opencode).
 channels.
 **Promotion trigger:** `groundwork-module` complete and tool exposure verified.
 
-### code-work-module — The `code-work` module
+The `code-work` module (`docs/specs/code-work.md`) is too large for one plan, so it is
+three candidates built in this order, each leaving a working module. The first plan
+creates the module; the next two add to it and release the package again.
 
-**Outcome:** the programming way of working: the plan format and its checks, plan
-approval and the delegation helper, the increment loop, review, checkpoints and loop
-caps, the commit helper behind `wb` (including the first commit in a repository with no
-commits, which the current helper cannot make), the shared-branch configuration, and
-the policy block.
+### code-work-plans — The `code-work` module: plans and its read-only helper
+
+**Outcome:** the process module `code-work` exists in `packages/workbench/`: the plan
+format, the `docs/plans/` README, a `docs-index` entry, a policy block, a skill for
+drafting a plan, and one shipped, self-contained helper whose read-only subcommands
+`check`, `plans` and `report` are run as `wb code-work <subcommand>` through the pinned
+launcher. It proves the path every later helper subcommand uses: shipping, pinning,
+launching and reading untrusted plans.
 **Dependencies:** `module-approvals`, `claude-harness`, `groundwork-module`.
-**Boundary:** programming only. Remote jobs and the peer-review provider are separate.
+**Boundary:** reading only. No commit or remove, no approval record, no review loop,
+caps, checkpoint or push rule. Until `code-work-approval`, approval is the owner's
+explicit statement in session and the policy block says so.
 **Promotion trigger:** `groundwork-module` complete.
+
+### code-work-commit — The commit helper
+
+**Outcome:** the helper gains `commit` and `remove`, so a commit is local, lists exact
+paths, carries no tool attribution unless a project says otherwise, and can be the first
+commit in a repository with no commits; a deliberate change made through it updates the
+acknowledgement baselines of the files it changed.
+**Dependencies:** `code-work-plans`.
+**Boundary:** local commits and approved deletions only. It never pushes. The helper
+reads a repository the project controls, so a security pass is part of it.
+**Promotion trigger:** `code-work-plans` complete.
+
+### code-work-approval — Plan approval, review, caps and push
+
+**Outcome:** a plan approval bound to the plan's hashed region, recorded per project and
+made by the owner, and the delegation helper; the gate that stops an agent from starting
+an increment without a valid approval; the checkpoint settings; the increment-loop and
+review skills and the reviewer agent; the review record, loop caps and the shared-branch
+push checkpoint; the compaction guidance and the Claude "Compact Instructions" section;
+and the policy block updated to say approval is a record.
+**Dependencies:** `code-work-commit`.
+**Boundary:** programming only. Remote jobs and the peer-review provider are separate.
+It may itself need two plans; decide when it is promoted.
+**Promotion trigger:** `code-work-commit` complete.
 
 ### remote-runner-module — `remote-runner` as a generic module
 
 **Outcome:** the remote-runner configuration moves under `.workbench/`, and fetching
 remote job output follows the checkpoint and hard-stop rules.
-**Dependencies:** `claude-harness`, `code-work-module`.
+**Dependencies:** `claude-harness`, `code-work-approval`.
 **Boundary:** the module and its configuration. The `remote-runner` tool itself must
 learn the new path, which is a change outside this repository.
-**Promotion trigger:** `code-work-module` complete.
+**Promotion trigger:** `code-work-approval` complete.
 
 ### peer-review-provider — The peer-review provider module
 
 **Outcome:** the reviewer module, which takes a harness and a model setting and
 supplies the `peer-review` capability, replacing the old Codex tool module.
-**Dependencies:** `module-approvals`, `code-work-module`.
+**Dependencies:** `module-approvals`, `code-work-approval`.
 **Boundary:** one provider. Others can be added as separate modules.
-**Promotion trigger:** `code-work-module` complete.
+**Promotion trigger:** `code-work-approval` complete.
 
 ### knowledge-base-package — The knowledge base as a package
 
@@ -325,7 +356,7 @@ the policy text, the commit helper, the peer-review wiring and the compaction gu
 What stays global, and why, is a written list: the owner's own `allow` rules (the
 workbench never writes `allow`), machine-level settings such as authentication, model
 choice and remote hosts, and anything the owner wants in a project that has no workbench.
-**Dependencies:** `code-work-module`, `remote-runner-module`, `peer-review-provider`, and
+**Dependencies:** `code-work-approval`, `remote-runner-module`, `peer-review-provider`, and
 `groundwork-module`; hooks rendering for Claude, which the Claude module does not yet
 provide (`hooks: none`).
 **Boundary:** one global item at a time, each moved only after a test or a recorded run
@@ -335,7 +366,7 @@ approver is ever absent in between. The `claude_global_config` mirror is kept in
 whether the settings file's own path is denied for edits (`harness-modules.md`, "As built,
 and its limits"). It does not move the owner's `allow` rules and does not change what
 the installer writes.
-**Promotion trigger:** `code-work-module`, `remote-runner-module` and `peer-review-provider`
+**Promotion trigger:** `code-work-approval`, `remote-runner-module` and `peer-review-provider`
 complete, and the owner chooses to begin removing items from `~/.claude`. Each of those
 earlier plans lists the global items it replaces, so this candidate starts from that list.
 
@@ -346,11 +377,11 @@ generate, and the old template is retired. The document conventions were already
 adopted by `adopt-conventions`, so this candidate is only the proof of agreement and the
 retirement.
 **Dependencies:** `ownership-and-upgrade`, `claude-harness`, `groundwork-module`,
-`code-work-module`.
+`code-work-approval`.
 **Boundary:** agreement between hand-maintained files and generated output, and the
 retirement of the old template. The installer does not rewrite its own repository until
 that agreement is tested.
-**Promotion trigger:** `code-work-module` complete.
+**Promotion trigger:** `code-work-approval` complete.
 
 ### remaining-modules-rename — Remaining modules and the rename pass
 
