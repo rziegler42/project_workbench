@@ -10,6 +10,7 @@ import sys
 
 from . import (acknowledge, approve, attach, check, dispatch, firstparty, install, launch, pins, preview,
                recover, settings, sources, store, target, upgrade, verify)
+from . import commands as module_commands
 from .wbkit import display, safefs
 
 PROG = "python3 -m workbench"
@@ -20,6 +21,7 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench pin <project-id> <name> <helper> --root <dir> [--kit N]   (owner-run, terminal only)\n"
          "       python3 -m workbench launch <project-id> <name> --root <dir> -- <args>\n"
          "       python3 -m workbench code-work check|plans|report   (read-only)\n"
+         "       python3 -m workbench run <command> [<argument> ...]\n"
          "       python3 -m workbench release-approvals\n"
          "       python3 -m workbench preview install [<target> | --dir <path>] --package <source> [--ref <ref>] ...\n"
          "                                            [--package ...] --select <module> ...   (read-only)\n"
@@ -262,6 +264,19 @@ def _code_work(tokens, out, err, store_root, distribution):
     return dispatch.run(opened[0], tokens, err)
 
 
+def _run(tokens, out, err, store_root, distribution):
+    """``run``: the arguments are the helper's and are never parsed as options here."""
+    if not tokens or not tokens[0] or tokens[0].startswith("-"):
+        err.write(module_commands.USAGE)
+        return 2
+    opened = _open_store(store_root, err)
+    if opened is None:
+        return 1
+    # Only the wrapper is checked; nothing else is printed, so the helper's streams stay clean.
+    launch.install_wrapper(opened[0], distribution or firstparty.default_distribution())
+    return module_commands.run(opened[0], tokens, err)
+
+
 def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=None, home=None):
     """Run a command. `store_root`, `distribution`, `stdin` and `home` are for tests; the command
     line cannot set them."""
@@ -277,6 +292,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
     if argv and argv[0] == "launch" and "--" in argv:
         split = argv.index("--")
         argv, passthrough = argv[:split], argv[split + 1:]
+    if argv and argv[0] == "run":
+        return _run(argv[1:], out, err, store_root, distribution)
     if argv and argv[0] == "code-work":
         return _code_work(argv[1:], out, err, store_root, distribution)
     if argv and argv[0] == "preview":

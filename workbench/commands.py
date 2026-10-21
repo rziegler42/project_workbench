@@ -7,13 +7,15 @@ holds. It then requires the owner's pin under the command's name to record exact
 declaration names, ``.workbench/<package>/<module>/<helper>``; the launcher still checks the bytes. A
 declared first argument is required when the command lists any, and refused when it lists none.
 
-It reads and decides; it starts no program and writes nothing. Every refusal is a ``CommandError``
-whose message says why, and nothing has run when one is raised.
+``resolve`` reads and decides; it starts no program and writes nothing. Every refusal is a
+``CommandError`` whose message says why, and nothing has run when one is raised. ``run`` is the
+``wb run`` command: it resolves, then hands the request to the launcher.
 """
 
 import collections
+import os
 
-from . import declarations, hashing, manifest, pins
+from . import declarations, hashing, launch, manifest, pins
 from .wbkit import display, project, safefs
 
 Request = collections.namedtuple("Request", "root project_id name arguments kit")
@@ -118,3 +120,25 @@ def resolve(guarded, start, name, args):
                 "runs through kit API %d" % kit if kit is not None else "runs directly",
                 " --kit %d" % kit if kit is not None else ""))
     return Request(root, ident, name, args, kit)
+
+
+USAGE = "usage: wb run <command> [<argument> ...]\n"
+
+
+def run(guarded, tokens, err, *, cwd=None, stdout=None):
+    """``wb run <command> [<argument> ...]``: returns the helper's exit code, 2 for a usage error, or
+    1 with one ``refused:`` line when nothing was run. It prints nothing of its own on success."""
+    if not tokens or not tokens[0] or tokens[0].startswith("-"):
+        err.write(USAGE)
+        return 2
+    try:
+        try:
+            start = cwd if cwd is not None else os.getcwd()
+        except OSError as exc:
+            raise CommandError("the working directory cannot be read: %s" % (exc.strerror or "unknown error"))
+        request = resolve(guarded, start, tokens[0], tokens[1:])
+        return launch.launch(guarded, request.project_id, request.name, request.root,
+                             request.arguments, stdout=stdout, kit=request.kit)
+    except (CommandError, launch.LaunchError) as exc:
+        err.write("refused: %s\n" % display.clean(str(exc)))
+        return 1

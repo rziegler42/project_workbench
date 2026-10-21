@@ -36,6 +36,12 @@ class OwnerRun(unittest.TestCase):
             for word in ("preview", "verify", "launch"):
                 self.assertNotIn(word, text)
 
+    def test_run_is_not_denied_or_asked_in_any_spelling(self):
+        deny, ask = lists()
+        for spelling in rules.SPELLINGS:
+            for text in deny + ask:
+                self.assertFalse(text.startswith("Bash(%s run" % spelling), text)
+
     def test_the_constant_is_the_documented_list(self):
         self.assertEqual(set(rules.OWNER_RUN), {
             "install", "upgrade", "add", "attach", "acknowledge", "recover", "approve", "pin",

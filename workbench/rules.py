@@ -17,7 +17,7 @@ A rule is ``(action, tool, pattern)`` in the neutral vocabulary of ``neutral.py`
 OWNER_RUN = ("install", "upgrade", "add", "attach", "acknowledge", "recover", "approve", "pin",
              "release-approvals")
 # Commands an agent may run: they only read, or run a helper that checks its own pin.
-AGENT_SAFE = ("verify", "preview", "launch", "check", "code-work")
+AGENT_SAFE = ("verify", "preview", "launch", "check", "code-work", "run")
 # `python3 -B -m workbench` is how this repository's own checks are run; the flags a rule can name
 # are limited to this one. Other interpreter spellings, a path-qualified `wb`, `env` and `bash -c`
 # are not matched (a Bash deny is not a security boundary).

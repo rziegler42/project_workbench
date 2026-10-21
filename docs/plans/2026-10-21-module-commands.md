@@ -356,3 +356,16 @@ that expects another way (`None` accepts the pin's); tests in `test_runner.py` (
 runs nothing, `launch.run` builds the runner command). Four existing runner tests now pin with a kit.
 Low, fixed: a declared `kit` above 999999 could never be pinned; the declaration is now bounded by the same
 `MAX_KIT`. The fix to `launch` has not been re-reviewed; G's pass covers it.
+
+### Increment D
+
+`wb run <command> [<argument> ...]` is routed in `cli.py` and implemented as `commands.run(guarded, tokens,
+err, *, cwd, stdout)`, which resolves and then calls `launch.launch(..., kit=request.kit)`. It catches
+`CommandError` and `LaunchError` and prints one `refused:` line (exit 1); a missing or option-like command
+name is a usage error (exit 2); it prints nothing of its own on success. `run` is in `AGENT_SAFE`. `wb
+code-work` is unchanged. `tests/test_run.py` has 19 tests (exit code, arguments passed unchanged, a
+subdirectory, a python command started with the kit number, a changed helper refused with a recording helper
+proving it did not run, unpinned, unknown command, bad argument, outside a project, usage errors, the
+command line), and `test_permissions.py` shows no spelling of `run` is denied or asked.
+Verification: `python3 -B -W error tests/run_all.py`: 2212 tests in 2 roots, OK (2192 before). No first-party
+module changed, so no approval changed. Not reviewed independently; the security pass is G.
