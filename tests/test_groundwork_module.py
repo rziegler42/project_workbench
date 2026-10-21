@@ -9,6 +9,7 @@ import io
 import json
 import os
 import shutil
+import subprocess
 import unittest
 
 from tests import test_install
@@ -382,6 +383,57 @@ class Install(test_install.InstallBase):
         self.assertEqual((0, ""), (code, err.getvalue()), out.getvalue())
         self.assertIn("conflict AGENTS.md block workbench/groundwork slot:policy", out.getvalue())
         self.assertEqual(mine, self.read(path))
+
+    def git(self, place, *args):
+        env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+        env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+        done = subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.test",
+                               "-c", "commit.gpgsign=false"] + list(args), cwd=place, env=env,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.assertEqual(0, done.returncode, done.stderr)
+
+    def check(self, place):
+        out, err = io.StringIO(), io.StringIO()
+        code = cli.main(["check", place], out, err, store_root=self.store_root,
+                        distribution=self.dist, home=self.home)
+        return code, out.getvalue(), err.getvalue()
+
+    def commit(self, place):
+        self.git(place, "add", "-A")
+        self.git(place, "commit", "-q", "-m", "x")
+
+    def test_a_fresh_install_with_the_harness_attached_passes_check_once_committed(self):
+        place = self.place()
+        self.assertEqual(0, self.install(place)[0])
+        self.commit(place)
+        code, out, err = self.check(place)
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertTrue(out.endswith("check found no problems\n"), out)
+
+    def test_documents_written_by_hand_are_checked_and_an_upgrade_changes_none_of_them(self):
+        place = self.place()
+        self.assertEqual(0, self.install(place)[0])
+        hand = {"docs/specs/power.md": "# Power\n\nStatus: Current\n",
+                "docs/roadmaps/v1.md": "# V1\n\nStatus: Active\n\n## Candidates\n\n### one: First\n",
+                "docs/decisions/2026-10-21-rail.md": "# Rail\n\nStatus: Accepted\n",
+                "docs/references/note.txt": "kept\n"}
+        for rel, text in hand.items():
+            with open(os.path.join(place, rel), "w", encoding="utf-8") as handle:
+                handle.write(text)
+        self.commit(place)
+        code, out, err = self.check(place)
+        self.assertEqual(1, code)  # a tracked reference and no index
+        self.assertIn("there is no index, but git tracks 1 reference file", err)
+        self.assertNotIn("power.md", err)
+        before = self.snapshot(place)
+        self.newer_policy()
+        code, out, err = self.upgrade(place)
+        self.assertEqual((0, ""), (code, err), out)
+        after = self.snapshot(place)
+        changed = sorted(rel for rel in set(before) | set(after) if before.get(rel) != after.get(rel))
+        self.assertEqual(["AGENTS.md"], [rel for rel in changed if not rel.startswith(".workbench")])
+        for rel, text in hand.items():
+            self.assertEqual(text.encode(), self.read(place, rel), rel)
 
 
 if __name__ == "__main__":

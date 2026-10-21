@@ -33,7 +33,7 @@ class Shipped(unittest.TestCase):
         result = verify.verify_package(PACKAGE, select=["claude"],
                                        first_party=firstparty.is_first_party(PACKAGE))
         self.assertTrue(result.accepted, [str(p) for p in result.problems])
-        self.assertEqual([m.name for m in result.modules], ["claude"])
+        self.assertEqual([m.name for m in result.modules], ["claude", "groundwork"])
 
     def test_the_shipped_records_match_the_current_hashes(self):
         result = verify.verify_package(PACKAGE, first_party=True)

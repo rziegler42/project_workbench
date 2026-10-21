@@ -534,3 +534,25 @@ against the code and fixed with a regression test that fails on the earlier code
   directory (past 1,500 files), the 128 MiB read bound, a race during a read, and Linux and Windows
   filesystem behaviour were not exercised; whether `INDEX.json` aliases `index.json` on APFS was
   not tested (it would be a different file in git).
+
+### Increment H — result
+
+- The owner ran `release-approvals`: three approvals written for one first-party package. The
+  package is first-party again, and 105 of the 106 tests skipped by `support.require_release` now
+  run. The one skip left in the suite is a macOS filesystem refusing a non-UTF-8 file name
+  (`test_acknowledgement`), unrelated to the release.
+- `test_claude_module` expected `["claude"]` from `verify_package`, which lists every module of the
+  package; it was skipped until now, so it was stale. It expects `["claude", "groundwork"]`.
+- Tests added to `tests/test_groundwork_module.py` (`Install`, 2): a fresh install with Claude
+  attached, once committed, passes `wb check` with no problems; hand-written documents in the four
+  areas are read by `check`, and an upgrade over them changes only the `AGENTS.md` block and the
+  `.workbench` records. The earlier tests of the same class already cover the empty-directory
+  install, the fixture-harness install producing the same committed tree, and the upgrade
+  conflict rules.
+- Not done: a fixture first-party distribution to render the skills in a second layout. The
+  neutral-skill rendering is covered by `test_harnessplan` and `test_attach`; recorded as a limit
+  for increment I.
+- The release warned that shipped record `59a95cc4bb2d` was not part of this release. With the
+  owner's approval it was removed (`claude-workflow remove`), and the release now reports no
+  stale record. The two new records are added in this commit.
+- Suite: 1878 tests, 1 skipped, passing with `-W error`; `git diff --check` clean.
