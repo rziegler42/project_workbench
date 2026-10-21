@@ -462,3 +462,35 @@ object, it now removes the attribute; (Low) the focused module command no longer
 it does not need. Left as is: the moved claude test's records-match check now skips while approvals are stale
 (disclosed above; increment G ends the skips); the import rule is static by design. The reviewer could not run
 `run_all.py` itself; I did, with `-W error`.
+
+### Increment G
+
+Two independent `security-reviewer` passes (adversarial, with experiments in a scratch directory), then the
+owner's `release-approvals`.
+Pass 1 (the runner and the kit load): one Medium and three Low or informational findings; everything else
+held (a planted `wbkit` in every searched place, the `PYTHON*` start-up variables under `-I`, kit-number and
+`API` edge values, argument edge cases, helper names that shadow the standard library). Fixed, each with a
+test that failed first:
+(Medium) `zipfile.is_zipfile` looks only in the last 65557 bytes while `zipimport` looks further, so a pinned
+helper with an appended archive ran its hidden `__main__.py`; (Low) a directory or FIFO as the helper passed
+the check and ran or blocked; (informational) the helper was read twice, by the check and by `runpy`. The
+runner now reads the helper once from a regular file (`O_NONBLOCK` open, `fstat`), refuses the bytecode magic
+number or a NUL byte, and compiles those bytes in a fresh `__main__` module; `runpy.run_path` is gone.
+Pass 2 (the fix): no bypass and no regression for legitimate helpers (special files, BOM, CRLF, `argv`,
+pickle and `multiprocessing` spawn, tracebacks). It found, older than the fix, that a coding cookie
+(`# coding: utf-7`) made the executed text differ from the bytes a reviewer reads; the runner now decodes
+strictly as UTF-8 and compiles text, which ignores a cookie, with a test. That last fix was not reviewed again.
+Also changed: `load_kit` uses `realpath` of the runner. `module-boundary.md` describes the new rule.
+Accepted and not fixed: a planted `__pycache__` in `wbkit/`, or a symlinked `wbkit` directory, needs write
+access to the workbench installation, and the specification says the kit is not pinned; `__spec__` and
+`__loader__` are now `None` (no shipped helper reads them); `multiprocessing` spawn children re-run the copy
+with `runpy`, outside this check, guarded only by the copy being private and read-only; a `/dev/tty*` open
+without `O_NOCTTY` was not tested; Linux and Windows were not tested.
+Release: the owner ran `release-approvals` (4 approvals written; the claude module's new hash has its record).
+It named two shipped records that no longer belong to the release; the owner approved their removal and they
+were removed with `claude-workflow remove`.
+Verification: `python3 -B -W error tests/run_all.py`: 2145 tests in 2 roots, OK; 3 skipped, all filesystem
+limits of this machine (a non-UTF-8 name, a case-insensitive volume), no stale-approval skip left.
+Left for `module-commands`: the `commands` field and `wb run`, the pin-path check, removing `dispatch.py` and
+the `code-work` entries in `cli.py` and `rules.py`, and moving the `code-work` tests into the module;
+for the later plans: `checks`, the harness paths, and moving the `groundwork` tests.

@@ -223,6 +223,50 @@ class Refuses(Scratch):
         py_compile.compile(source, cfile=compiled)
         self.refused(self.run_runner(str(API), compiled), "not a script")
 
+    def test_an_archive_that_the_archive_check_misses_is_still_never_run(self):
+        """`zipfile.is_zipfile` looks only near the end of the file; `zipimport` looks further."""
+        import zipfile
+        where = self.directory("deep")
+        archive = os.path.join(where, "a.zip")
+        with zipfile.ZipFile(archive, "w") as handle:
+            handle.writestr("__main__.py", "import os\nopen(os.environ['WB_MARK'], 'w').close()\n")
+        with open(archive, "rb") as source:
+            data = source.read()
+        for name, tail in (("comment", None), ("trailing", b"\0" * 65536)):
+            path = os.path.join(where, name + ".py")
+            with open(path, "wb") as handle:
+                handle.write(b"print('benign visible script')\n#")
+                if tail is None:
+                    handle.write(data[:-2] + (65535).to_bytes(2, "little") + b"x" * 65535 + b"\n")
+                else:
+                    handle.write(data + tail)
+            done = self.run_runner(str(API), path)
+            self.assertFalse(os.path.exists(self.mark), "the archive's __main__ ran: " + name)
+            self.assertNotEqual("benign visible script\n", done.stdout)
+
+    def test_a_coding_cookie_cannot_make_the_text_that_runs_differ_from_the_bytes(self):
+        helper = self.helper(name="u7.py")
+        with open(helper, "wb") as handle:
+            handle.write(b"# -*- coding: utf-7 -*-\n+AHAAcgBpAG4AdAAoACcAUABXAE4ARQBEACcAKQ-\n")
+        done = self.run_runner(str(API), helper)
+        self.assertNotIn("PWNED", done.stdout)
+        legacy = self.helper(name="l1.py")
+        with open(legacy, "wb") as handle:
+            handle.write(b"# coding: latin-1\nprint('caf\xe9')\n")
+        self.refused(self.run_runner(str(API), legacy), "UTF-8")
+
+    def test_a_helper_that_is_not_a_regular_file_is_refused(self):
+        where = self.directory("odd2")
+        with open(os.path.join(where, "__main__.py"), "w") as handle:
+            handle.write("import os\nopen(os.environ['WB_MARK'], 'w').close()\n")
+        self.refused(self.run_runner(str(API), where), "not a regular file")
+        fifo = os.path.join(self.base, "fifo.py")
+        os.mkfifo(fifo)
+        done = subprocess.run([sys.executable, "-I", RUNNER, str(API), fifo], cwd=self.base,
+                              capture_output=True, text=True, timeout=20)
+        self.assertEqual(1, done.returncode)
+        self.assertIn("not a regular file", done.stderr)
+
     def test_a_helper_that_does_not_exist_is_a_failure_and_not_a_silent_success(self):
         done = self.run_runner(str(API), os.path.join(self.base, "missing.py"))
         self.assertNotEqual(0, done.returncode)

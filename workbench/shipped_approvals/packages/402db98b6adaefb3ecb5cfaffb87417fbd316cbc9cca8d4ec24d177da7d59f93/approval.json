@@ -1,14 +1,19 @@
 {
   "approver": "workbench-release",
   "commit": null,
-  "declaration_hash": "a02bf969c8df6729799776f36e8a1ba01abdb42c6a2601963fcdc9d72dc8d0ff",
+  "declaration_hash": "4a8c2eb65c7c9c736f7ecf20c96a4b35b96fe469f5fa8915854b3733d113b201",
   "format": 1,
   "kind": "package",
   "modules": [
     {
       "declaration_hash": "2d29e7a7ac8edc697fbf198ad978f88ee9847eabd8441d79e40e0413505f0b82",
       "name": "claude",
-      "tree_hash": "cb8ceecf81005f62c915450075530f7ad0113c3b136799d8682b8d3b90f5da17"
+      "tree_hash": "8d5aca823d83860e236afe18f716a23c54e3b95f6524a9751e0c5ac0ffe702c7"
+    },
+    {
+      "declaration_hash": "54e72f596b209353b9dc482c6a8a06bd9aac49b67ec0d3398a17f924cc27561c",
+      "name": "code-work",
+      "tree_hash": "6a9c247a754799a43d351702fe88d8c4a24724be65f4a05f1a91b7d4d46af707"
     },
     {
       "declaration_hash": "99241c9f7386dede3ade46d8b3f186349adec893e3add393704b295a6507f35f",
@@ -18,6 +23,6 @@
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "7f69938f5acf6107463f9ce6f322050ab4dd57e506d0df80eea1277b7de57a89",
+  "tree_hash": "842cac08f300fd018097447ebe8b063cd3d727ae8ab7a280171479ea6f33d164",
   "workbench_version": "0.1.0"
 }

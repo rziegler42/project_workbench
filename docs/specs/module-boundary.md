@@ -85,11 +85,13 @@ location: it executes `wbkit/__init__.py`, found beside the runner, as the modul
 directory as the package's location, and registers it in `sys.modules`. No directory is added to the search
 path, so the rest of the workbench cannot be imported by name and a `wbkit.py` anywhere else is never read.
 After the version check below, the runner executes the private copy of the pinned helper as `__main__`,
-with `runpy.run_path(<copy>, run_name="__main__")`, and `sys.argv` set to the copy's path followed by the
+by reading it once and compiling those bytes as UTF-8 text in a fresh `__main__` module, and `sys.argv` set to the copy's path followed by the
 arguments, as for any script. The runner does not catch `SystemExit` or any other exception from the
 helper: the helper's exit code, and a traceback if it fails, reach the caller as they would from the helper
-run alone. A helper that is a zip archive or compiled bytecode is refused, since `runpy` would run it as
-something other than a script. The helper does `import wbkit` (and `import wbkit.safefs`). A helper of any other kind is run as
+run alone. A helper that is not a regular file, is not UTF-8 text, contains a NUL byte, or begins with
+the bytecode magic number is refused, so an archive, compiled code or a coding cookie cannot make what runs
+differ from the bytes that were read (`runpy.run_path` is not used, because it would run a zip archive's
+`__main__.py`). The helper does `import wbkit` (and `import wbkit.safefs`). A helper of any other kind is run as
 it is today and gets nothing.
 
 **The kit comes only from the workbench.** The kit is the `wbkit` directory inside the workbench

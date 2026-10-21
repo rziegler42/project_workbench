@@ -6,7 +6,7 @@ the search path. This file reaches the kit only from its own location, by loadin
 ``wbkit/__init__.py`` as the module ``wbkit`` with the kit's directory as its package location. No
 directory is added to the search path, so the rest of the workbench cannot be imported by name and a
 ``wbkit.py`` anywhere else is never read. Then the kit number is compared with ``wbkit.API``, exactly,
-and only on a match is the helper run, as ``__main__``, with ``sys.argv`` set to the copy's path and
+and only on a match is the helper read once from a regular file, compiled as text and run, as ``__main__``, with ``sys.argv`` set to the copy's path and
 the arguments. Nothing the helper does is caught: its exit code, and a traceback if it fails, reach the
 caller as they would from the helper run alone.
 
@@ -16,9 +16,9 @@ the launcher's own refusal form. The helper's code has not been imported when th
 
 import importlib.util
 import os
-import runpy
+import stat
 import sys
-import zipfile
+import types
 
 
 def refuse(text):
@@ -28,7 +28,7 @@ def refuse(text):
 
 def load_kit():
     """The kit that sits beside this file, registered as the module `wbkit`."""
-    here = os.path.dirname(os.path.abspath(__file__))
+    here = os.path.dirname(os.path.realpath(__file__))
     directory = os.path.join(here, "wbkit")
     init = os.path.join(directory, "__init__.py")
     if not os.path.isfile(init):
@@ -51,17 +51,28 @@ def wanted_number(text):
     return None
 
 
-def check_script(path):
-    """Refuse a helper that `runpy.run_path` would run as something other than a script: a zip archive
-    (it would run its `__main__.py` and put the file on the search path) or compiled bytecode."""
+def read_script(path):
+    """The helper's bytes, read once from a regular file, or a refusal. The same bytes are compiled and run,
+    so nothing can change between the check and the run, and `runpy.run_path` (which would run a zip
+    archive's `__main__.py`, or a directory's) is never used on the path."""
     try:
-        with open(path, "rb") as handle:
-            head = handle.read(4)
-        archive = zipfile.is_zipfile(path)
-    except OSError:
-        return
-    if archive or head == importlib.util.MAGIC_NUMBER:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+    except OSError as exc:
+        refuse("the helper cannot be opened (%s); nothing was run" % type(exc).__name__)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            refuse("the helper is not a regular file; nothing was run")
+        with os.fdopen(descriptor, "rb", closefd=False) as handle:
+            data = handle.read()
+    finally:
+        os.close(descriptor)
+    if data[:4] == importlib.util.MAGIC_NUMBER or b"\0" in data:
         refuse("the helper is an archive or compiled code, not a script; nothing was run")
+    try:
+        # Source given to `compile` as text ignores a coding cookie, so what runs is what the bytes spell.
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        refuse("the helper is not UTF-8 text; nothing was run")
 
 
 def main(argv):
@@ -76,9 +87,12 @@ def main(argv):
         refuse("this workbench's kit has no integer API version; nothing was run")
     if have != wanted:
         refuse("this helper needs kit API %d; this workbench has %d" % (wanted, have))
-    check_script(argv[2])
+    source = read_script(argv[2])
     sys.argv = [argv[2]] + list(argv[3:])
-    runpy.run_path(argv[2], run_name="__main__")
+    main_module = types.ModuleType("__main__")
+    main_module.__file__ = argv[2]
+    sys.modules["__main__"] = main_module
+    exec(compile(source, argv[2], "exec"), main_module.__dict__)
 
 
 if __name__ == "__main__":
