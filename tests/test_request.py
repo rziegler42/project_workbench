@@ -176,17 +176,17 @@ class ModuleRequestTest(Base):
         self.assertEqual(found, {"templates/pre.sh"})
 
     def test_a_shipped_directory_is_executable_if_a_file_below_it_is(self):
-        directory = os.path.join(self.path, "sample-notes", "tools")
+        directory = os.path.join(self.path, "sample-notes", "bin")
         os.makedirs(directory)
         tool = os.path.join(directory, "run")
         with open(tool, "w") as handle:
             handle.write("#!/bin/sh\n")
         os.chmod(tool, 0o755)
-        self.edit("sample-notes", ships=["scripts/check.sh", "tools"])
+        self.edit("sample-notes", ships=["scripts/check.sh", "bin"])
         found = self.executable_of("sample-notes")
-        self.assertEqual(found, {"tools/run"})
+        self.assertEqual(found, {"bin/run"})
         text = self.render("sample-notes", executable=found)
-        self.assertIn("[executable] tools", text)
+        self.assertIn("[executable] bin", text)
         self.assertIn("[code-bearing] scripts/check.sh", text)
         self.assertIn("other executables 0", text)
 

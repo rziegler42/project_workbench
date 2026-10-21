@@ -6,9 +6,11 @@ same pass and must still equal the declaration that was parsed, so the hashes
 returned always describe the declaration that was checked.
 
 A file is accounted for when it is ``module.json``, lies under ``harness/``,
-``templates/`` or ``files/`` (exact case), is a ``fills`` source, or is an item in
-``ships`` (a file, or any file below a directory). Every other file refuses the
-module. Empty directories hold no files and are ignored.
+``templates/``, ``files/``, ``tests/`` or ``tools/`` (exact case), is a ``fills`` source,
+or is an item in ``ships`` (a file, or any file below a directory). Every other file
+refuses the module. Empty directories hold no files and are ignored. ``tests/`` and
+``tools/`` are the maintainer directories: hashed and approved with the module, never
+installed, so ``ships`` and ``fills`` may not name them (``is_maintainer``).
 
 Harness layout. A module with a ``harness/`` directory supplies harness items and
 must hold ``harness/neutral/`` or at least one ``harness/<name>/`` directory.
@@ -29,12 +31,18 @@ import collections
 from . import declarations, hashing, layout
 from .wbkit import safefs
 
-RESERVED_DIRS = ("harness", "templates", "files")
+MAINTAINER_DIRS = ("tests", "tools")
+RESERVED_DIRS = ("harness", "templates", "files") + MAINTAINER_DIRS
 MANIFEST = "manifest.json"
 MAX_REASON_CHARS = 200
 
 ModuleResult = collections.namedtuple(
     "ModuleResult", "problems warnings declaration_hash tree_hash executable")
+
+
+def is_maintainer(rel):
+    """True for a maintainer directory itself, or a path at or below one, at the module root."""
+    return rel.split("/")[0] in MAINTAINER_DIRS
 
 
 def _keep(rel):
@@ -83,7 +91,8 @@ def verify_module(package_path, package_name, module):
     if problems:
         return ModuleResult(problems, warnings, None, None, ())
     return ModuleResult(problems, warnings, hashing.declaration_hash(module.declaration),
-                        info.hash, tuple(info.executable))
+                        info.hash,
+                        tuple(rel for rel in info.executable if not is_maintainer(rel)))
 
 
 def _accounted(module, files, bad):
@@ -96,15 +105,21 @@ def _accounted(module, files, bad):
             continue
         if any("/".join(parts[:n]) in ships for n in range(1, len(parts) + 1)):
             continue
-        bad("unaccounted-file", "%s is not module.json, under harness/, templates/ or files/, "
-                                "or named by fills or ships" % rel)
+        bad("unaccounted-file", "%s is not module.json, under harness/, templates/, files/, "
+                                "tests/ or tools/, or named by fills or ships" % rel)
 
 
 def _declared_paths(module, files, dirs, bad):
     for slot, source in module.fills:
         if source not in files:
             bad("fills", "source %s for %s does not exist as a file" % (source, slot))
+        elif is_maintainer(source):
+            bad("fills", "source %s for %s is in a maintainer directory, which is never installed"
+                % (source, slot))
     for item in module.ships:
+        if is_maintainer(item):
+            bad("ships", "%s is in a maintainer directory, which is never installed" % item)
+            continue
         if item in files:
             continue
         if item not in dirs:

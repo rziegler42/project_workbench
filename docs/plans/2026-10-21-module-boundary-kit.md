@@ -405,3 +405,30 @@ bytecode magic number. (Low) leading zeros in the kit number are refused. The fi
 repeats the runner's review.
 Known limit: the runner's and the helper's `__pycache__` are not controlled: the kit's bytecode is written
 under `workbench/wbkit/` like any installer module's; nothing is written under `packages/`.
+
+### Increment E
+
+`tests/` and `tools/` are reserved directories (`modulefiles.MAINTAINER_DIRS`, added to `RESERVED_DIRS`;
+`is_maintainer(rel)` for a path at or below one at the module root). The verifier accounts for them and the
+tree hash and approval cover them, including content and mode. `snapshot.take` still hashes the whole tree,
+so a changed or added file there fails it, but keeps neither their bytes nor their executable flags, so
+`installplan.assemble`, attach, preview and upgrade (all of which read through `snapshot.take`) cannot write
+them. A `ships` item or `fills` source at or below either is refused (rules `ships`, `fills`); the plan did
+not list this refusal, it follows from "never installed". The verifier's `executable` list leaves out
+executables there, so the approval text does not call them installed. `module-contract.md` no longer marks
+the maintainer directories "not built yet" and says so in the introduction, the verification step, "Module
+layout", "Module files" and the acceptance criterion; the `commands`, `checks` and pin-name marks remain.
+New `tests/test_maintainer_dirs.py` (18 tests): accounting, nesting, case, a file or a link in place of
+either, a link inside, an unlisted `docs/` still refused, empty directories ignored, hash changes on content
+and mode, the `ships` and `fills` refusals, the snapshot filter, and an end-to-end install whose written
+files equal those of the same module without the directories. Removing the snapshot filter fails two of
+them. `tests/test_request.py` used `tools` as a shipped directory name; it now uses `bin`.
+Verification: `python3 -B -W error -m unittest discover -s tests`: 2125 tests, OK, skipped=108.
+Review: an adversarial pass by the `security-reviewer` agent (partial: it hit its turn limit and reported
+on request) found no Critical, High or Medium issue. Fixed after it: (Low) executables under the maintainer
+directories were listed in the approval text as installed; the verifier now omits them, with a test.
+(Low) a module that already shipped such a path is now refused; the contract says so. Verified by test:
+`ships`/`fills` variants (`tests`, `tests/x.py`, `./tests`, `tests//x.py`, `Tests/x.py`, a root file named
+`tests`), look-alike and case-variant names unaccounted, mode and content swaps fail the snapshot. Not run
+by the reviewer: an upgrade across a module that gains or loses `tests/` (by reading, no old manifest holds
+these paths, since the old verifier refused them), and case-insensitive filesystems beyond `Tests/x.py`.

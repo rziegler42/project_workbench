@@ -6,10 +6,10 @@ the field names, formats and limits it accepts. The rules are the substance of t
 specification; where the table descriptions and "Concrete schema" differ in precision,
 "Concrete schema" is the one the code enforces.
 
-Terms are defined in `terms.md`. The fields `commands` and `checks`, the maintainer directories `tests/`
-and `tools/`, and the pin-name rule are specified by `module-boundary.md` and added here on 2026-10-21;
-each is marked "not built yet" until the plan that builds it lands, and the verifier accepts none of them
-until then.
+Terms are defined in `terms.md`. The fields `commands` and `checks` and the pin-name rule are specified by
+`module-boundary.md` and added here on 2026-10-21; each is marked "not built yet" until the plan that builds
+it lands, and the verifier accepts none of them until then. The maintainer directories `tests/` and
+`tools/`, specified there too, are built.
 
 ## Purpose and scope
 
@@ -195,7 +195,7 @@ The installer verifies a module before it writes any of the module's files:
    `ships` exists, every `writes` entry has its source under `files/`, and no file
    exists in the module that its declaration does not account for. A file is
    accounted for when it is `module.json`, is under a reserved directory (`harness/`,
-   `templates/`, `files/` or, once built, the maintainer directories `tests/` and `tools/`), or is
+   `templates/`, `files/` or the maintainer directories `tests/` and `tools/`), or is
    named by `fills` or `ships`. A module that
    contains a symbolic link is refused, because the content hash cannot cover what a
    link points to. A mismatch stops the install.
@@ -213,7 +213,7 @@ A module directory contains `module.json` and any directories its declaration
 names. The reserved directories are `harness/` (harness items), `templates/`
 (documents created on demand, never installed as placeholders) and `files/` (the
 sources copied to the paths in `writes`, at the same relative path). Two more are
-**maintainer directories** *(specified by `module-boundary.md`; not built yet)*: `tests/` (the module's own tests) and `tools/` (scripts for
+**maintainer directories**: `tests/` (the module's own tests) and `tools/` (scripts for
 its maintainers). Both are covered by the tree hash and the approval, neither is installed, and the
 installer never runs either (`module-boundary.md`, "Module directories"). Where a module
 supplies harness items it uses:
@@ -291,8 +291,8 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   a Python helper declares the kit API number it needs in `kit`, and an unknown field is refused as
   everywhere else.
 
-**Module files.** Every file is `module.json`, a file below `harness/`, `templates/` or
-`files/` (or, once built, `tests/` or `tools/`; exact case; a file of that name at the module root does not count), a
+**Module files.** Every file is `module.json`, a file below `harness/`, `templates/`,
+`files/`, `tests/` or `tools/` (exact case; a file of that name at the module root does not count), a
 `fills` source, or an item of `ships` or a file below one. Empty directories are
 ignored. A symbolic link, device, socket or FIFO anywhere in the module is refused. A
 module with a `harness/` directory holds `harness/neutral/` or a `harness/<name>/`
@@ -360,8 +360,12 @@ result is a refusal and carries no hashes and no order.
 - The declaration hash is identical for two declarations that differ only in field
   order or whitespace, and different for any change in meaning.
 - When any module fails verification, no module's files are written.
-- *(Not built yet.)* A module with a `tests/` or `tools/` directory verifies, the directory is counted in
-  the tree hash, and a copy of the module in a project does not contain it.
+- A module with a `tests/` or `tools/` directory verifies, the directory is counted in
+  the tree hash, and a copy of the module in a project does not contain it. A `ships` item or a `fills`
+  source at or below either is refused. A module that
+  already shipped such a path is refused on its next verification, because those paths were never
+  installed as maintainer files. An executable file there changes the tree hash but is not listed among
+  the approval's executables, since nothing in it is installed.
 - *(Not built yet.)* A `commands` or `checks` entry with an unknown field, a helper that is not in
   `ships`, a missing or misplaced `kit`, or a pin name already used by another entry is refused, naming the
   module and the field.
