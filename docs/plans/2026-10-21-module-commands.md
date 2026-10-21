@@ -428,3 +428,18 @@ Verification: `python3 -B -W error tests/run_all.py`: 2189 tests in 3 roots (203
 as before the move (the 136 `code-work` tests were 136 in `tests/`); no `__pycache__` under `packages/`. The owner
 then ran `release-approvals` (two new records) and approved removing the two stale ones (`1c51e4df0acd`,
 `ec112778f781`); with them gone only the three macOS filesystem skips remain. Not reviewed independently; H does.
+
+### Increment G
+
+`request.render_module` lists a "commands it offers" section after "ships code or executables": one entry per
+command with its helper, how it starts (`exec`, or `python, kit N`) and either "first argument one of ..." or
+"takes no argument". Every string goes through `_shown`; more than six commands get a counted header and one
+line each. A module with none prints `commands it offers: none`. The `size:` line is unchanged. Hashes and
+approval records are unchanged (records hold hashes, not the request text), so no `release-approvals` run was
+needed. `docs/specs/trust-and-approval.md` says the request shows the commands. Five tests in
+`tests/test_request.py`: none, shown in full, hostile name/helper/argument cleaned to ASCII, a long list, and
+the section after the hashes.
+The real module renders as: `commands it offers: code-work runs helper/code-work as exec; first argument one of
+check, plans, report`.
+Verification: `python3 -B -W error tests/run_all.py`: 2194 tests in 3 roots, OK (2189 before); no `__pycache__`
+under `packages/`. Not reviewed independently; H covers it.

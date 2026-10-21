@@ -138,6 +138,33 @@ class ModuleRequestTest(Base):
                          "helpers it expects on PATH: git"):
             self.assertIn(expected, text)
 
+    def test_a_module_without_commands_says_none(self):
+        self.assertIn("commands it offers: none", self.render("sample-notes"))
+
+    def test_each_command_is_shown_with_its_helper_runtime_and_arguments(self):
+        commands = (declarations.Command("tool", "helper/tool", "exec", None, ("check", "report")),
+                    declarations.Command("kitted", "helper/kit", "python", 3, ()))
+        text = request.render_module("p", module_with(commands=commands), Hashes)
+        self.assertIn("commands it offers: tool runs helper/tool as exec; first argument one of "
+                      "check, report, kitted runs helper/kit as python, kit 3; takes no argument", text)
+
+    def test_a_hostile_command_is_shown_cleaned(self):
+        commands = (declarations.Command(HOSTILE, HOSTILE, "exec", None, (HOSTILE,)),)
+        text = request.render_module("p", module_with(commands=commands), Hashes)
+        self.assertTrue(only_plain_ascii(text))
+        self.assertNotIn("\x1b", text)
+
+    def test_many_commands_are_listed_one_to_a_line(self):
+        commands = tuple(declarations.Command("c%d" % n, "h/%d" % n, "exec", None, ())
+                         for n in range(8))
+        text = request.render_module("p", module_with(commands=commands), Hashes)
+        self.assertIn("  commands it offers (8):", text)
+        self.assertIn("    c7 runs h/7 as exec; takes no argument", text)
+
+    def test_the_commands_come_after_the_hashes(self):
+        text = self.render("sample-notes")
+        self.assertLess(text.index("tree hash:"), text.index("commands it offers"))
+
     def test_the_hashes_and_risk_come_before_any_detail(self):
         text = self.render("sample-harness")
         order = [text.index(part) for part in

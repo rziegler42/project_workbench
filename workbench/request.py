@@ -18,6 +18,8 @@ Rules this text follows, because the owner decides from it and a package wrote i
 * A module of type ``harness`` or ``process``, or one that blocks a core capability (an
   unprefixed name), is flagged high risk at the top of its entry. A harness or process
   module also always needs an explicit approval of its own, and a package request marks it.
+* A command the module offers is listed with its helper, how it starts and the first arguments it
+  allows. The pin, not this text, decides what runs.
 * The text is built from a declaration that has already been verified and the hashes the
   verifier computed, and the files with the owner execute bit come from the same tree walk
   that was hashed (``Verified.executable``). Nothing here reads a file.
@@ -79,6 +81,14 @@ def _section(label, values):
     if len(values) <= INLINE_LIMIT:
         return ["  %s: %s" % (label, ", ".join(values))]
     return ["  %s (%d):" % (label, len(values))] + ["    " + value for value in values]
+
+
+def _command(command):
+    """One declared command: its name, helper, how it starts and which first arguments it allows."""
+    how = "python, kit %d" % command.kit if command.runtime == "python" else _shown(command.runtime)
+    allowed = ("first argument one of %s" % ", ".join(_shown(a) for a in command.arguments)
+               if command.arguments else "takes no argument")
+    return "%s runs %s as %s; %s" % (_shown(command.name), _shown(command.helper), how, allowed)
 
 
 def _leaves(value, prefix, out, depth=0):
@@ -151,6 +161,7 @@ def render_module(package, module, hashes, source=None, executable=()):
         kind = "executable" if any(_under(rel, item) for rel in in_ships) else "code-bearing"
         ships.append("[%s] %s" % (kind, _shown(item)))
     lines.extend(_section("ships code or executables", ships))
+    lines.extend(_section("commands it offers", [_command(c) for c in module.commands]))
     lines.extend(_section("other executable files in the module (installed via files/ or "
                           "harness/)", [_shown(rel) for rel in other]))
     lines.extend(_section("helpers it expects on PATH", [_shown(h) for h in module.helpers]))

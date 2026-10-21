@@ -107,7 +107,8 @@ while the current hashes of its subject match.
 - A module of type `harness` or `process` always needs an explicit approval.
 - The approval request shows the declaration in plain terms: type, what it provides,
   requires and blocks, the paths it writes, every hook or executable it ships, and
-  the helpers it expects. A module that blocks a core capability is flagged high
+  the helpers it expects, and each command it offers with its helper, how it starts and the
+  first arguments it allows. A module that blocks a core capability is flagged high
   risk.
 - First-party modules are approved by the same command, run at release time, and the
   records ship with the workbench. They are verified by the same verifier. Shipping
