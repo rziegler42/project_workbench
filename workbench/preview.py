@@ -10,26 +10,23 @@ and the write cannot differ.
 import os
 import shutil
 
-from . import (__version__, base, declarations, display, firstparty, gate, installplan, manifest,
-               safefs, snapshot, sources, target, verify)
+from . import (__version__, base, declarations, display, firstparty, gate, harnessstage,
+               installplan, manifest, projectfs, refusal, safefs, snapshot, sources, target, verify)
 
 ENDING = "preview only: nothing was written"
 
 
-class Refused(Exception):
-    """The install would be refused. ``lines`` are the reasons, already cleaned."""
-
-    def __init__(self, lines):
-        Exception.__init__(self, "; ".join(lines))
-        self.lines = [lines] if isinstance(lines, str) else list(lines)
+Refused = refusal.Refused
 
 
 def _recorded_source(resolved, name):
     return ("local:%s" % name) if resolved.local else resolved.source
 
 
-def prepare(guarded, held, resolved, select, distribution, seed, version, which=shutil.which):
-    """Verify, gate, snapshot and plan. Returns ``(plan, warnings)``; raises ``Refused``."""
+def prepare(guarded, held, resolved, select, distribution, seed, version, which=shutil.which,
+            home=None):
+    """Verify, gate, snapshot and plan, the harness files included. Returns ``(plan, warnings)``;
+    raises ``Refused``. `home` is the directory the rendered permission rules name."""
     distribution = distribution or firstparty.default_distribution()
     paths = [item.path for item in resolved]
     result = verify.verify_packages(
@@ -59,9 +56,22 @@ def prepare(guarded, held, resolved, select, distribution, seed, version, which=
         info.name, _recorded_source(origins[info.name], info.name), origins[info.name].ref,
         origins[info.name].commit, info.tree_hash) for info in result.packages
         if info.name in used)
+    # `verify` required exactly one harness module in the selection.
+    harness = next(m for m in modules if m.type == "harness")
+    staged = harnessstage.stage(
+        guarded.root, harness, modules, snaps,
+        _recorded_source(origins[harness.package], harness.package), version,
+        home if home is not None else harnessstage.default_home())
+    if held.state == "new-git":
+        # An existing .git may hold an exclude file attach cannot use: say so before the digest
+        # is typed, not after the install is written.
+        try:
+            projectfs.Writer(held).check_exclude(staged.exclude)
+        except safefs.SafeFsError as exc:
+            raise Refused([".git/info/exclude: %s" % exc])
     try:
         plan = installplan.build(held, installplan.Selection(modules, packages), snaps,
-                                 loaded_base, seed, version)
+                                 loaded_base, seed, version, staged)
     except (installplan.PlanError, manifest.ManifestError) as exc:
         raise Refused([str(exc)])
     return plan, list(result.warnings)
@@ -75,13 +85,14 @@ def resolve_all(guarded, packages):
 
 
 def run(guarded, parsed, out, err, distribution=None, seed=None, version=None,
-        which=shutil.which):
+        which=shutil.which, home=None):
     """Print the preview and return 0, or print ``refused:`` lines and return 1."""
     try:
         with target.open_target(parsed.target, guarded.root) as held:
             resolved = resolve_all(guarded, parsed.packages)
             plan, warnings = prepare(guarded, held, resolved, parsed.select, distribution,
-                                     seed or manifest.new_seed(), version or __version__, which)
+                                     seed or manifest.new_seed(), version or __version__, which,
+                                     home)
             text = installplan.render(plan, held.path)
     except target.TargetError as exc:
         return target.write_refusal(err, exc)

@@ -195,8 +195,14 @@ the `--package` before it. Options are not abbreviated.
   the directories and files (the manifest last), the two store entries and last removes the
   marker. Git is not run: the empty `.git` is made with `mkdir` and a fixed skeleton written
   through held descriptors. Nothing is overwritten, and files get 0644 (0755 when
-  executable), directories 0755, narrowed by the umask. It ends with the count of paths,
-  `nothing was committed` and `harness not attached: attach is not built yet`.
+  executable), directories 0755, narrowed by the umask. It then prints the count of paths and
+  `nothing was committed`.
+- **The attach** is the last step, after the marker is gone: the plan lists the harness files, the
+  `.git/info/exclude` lines and `.workbench/local/harness.json`, and the digest covers them. They
+  are written as `wb attach` writes them (exclude lines, files, local manifest last) and the
+  unfinished-write record does not list them. If the attach fails, `install` prints `failed:`,
+  says the install is complete, names `wb attach --harness <package>/<module>` and exits 3;
+  `wb attach` finishes it.
 - **A failure after the first write** prints `failed:` with the cause, the paths written and not
   written, and that the marker is left, and names `wb recover`; the directory is then refused as
   an existing project until the marker is cleared. Nothing is cleaned up.

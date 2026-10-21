@@ -123,7 +123,8 @@ class InstallTest(InstallBase):
                 self.assertFalse(os.path.exists(os.path.join(place, MARKER)))
                 self.assertTrue(os.path.isdir(os.path.join(place, ".git")))
                 self.assertIn("nothing was committed", out)
-                self.assertIn("harness not attached: attach is not built yet", out)
+                self.assertNotIn("harness not attached", out)
+                self.assertIn("attached p/h 1.0.0", out)
         self.assertIn("no remote is recorded", err)
 
     def test_install_writes_expected_tree_modes_classes_and_manifest(self):
@@ -147,7 +148,8 @@ class InstallTest(InstallBase):
         for base, dirs, files in os.walk(place):
             dirs[:] = [d for d in dirs if d != ".git"]
             on_disk.update(os.path.relpath(os.path.join(base, f), place) for f in files)
-        listed = {item["path"] for item in document["files"]} | {".workbench/manifest.json"}
+        listed = ({item["path"] for item in document["files"]}
+                  | {".workbench/manifest.json", ".workbench/local/harness.json"})
         self.assertEqual(listed, on_disk)
 
     def test_install_creates_an_empty_git_only_when_no_git_and_runs_no_program(self):

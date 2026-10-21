@@ -27,7 +27,7 @@ import json
 import re
 
 from . import base as base_module
-from . import display, manifest, safefs
+from . import display, localmanifest, manifest, safefs
 
 Action = collections.namedtuple("Action", "kind path owner_class mode size hash detail data")
 PackageSource = collections.namedtuple("PackageSource", "name source ref commit tree")
@@ -35,7 +35,7 @@ PackageSource = collections.namedtuple("PackageSource", "name source ref commit 
 Selection = collections.namedtuple("Selection", "modules packages")
 Plan = collections.namedtuple(
     "Plan", "target_identity state actions modules manifest seed project_id store_writes "
-            "git_init digest")
+            "git_init digest harness", defaults=(None,))
 
 MARKER_PATH = ".workbench/local/incomplete"
 GIT_DETAIL = "an empty repository on branch main, written by the workbench; git is not run"
@@ -253,8 +253,12 @@ def json_store(document):
     return (json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n").encode("ascii")
 
 
-def build(target, selection, snapshots, base, seed, workbench_version):
-    """Build the whole plan. Raises PlanError; nothing is read or written."""
+def build(target, selection, snapshots, base, seed, workbench_version, harness=None):
+    """Build the whole plan. Raises PlanError; nothing is read or written.
+
+    `harness` is the ``harnessstage.Staged`` attached after the install, or None. It is not an
+    action: the files are per-clone and written once the install itself is complete, but the
+    digest covers every path, hash, exclude line and the local manifest."""
     if target.state == "existing":
         raise PlanError("the target is an existing project; use upgrade or add a module")
     try:
@@ -270,6 +274,8 @@ def build(target, selection, snapshots, base, seed, workbench_version):
     files.add(".workbench/manifest.json", manifest_bytes, "module-owned", False, BASE_ORIGIN)
 
     paths = [MARKER_PATH] + files.order
+    if harness is not None:
+        paths += [item.path for item in harness.files] + [localmanifest.PATH]
     try:
         safefs.check_tree_paths(paths)
     except safefs.SafeFsError as exc:
@@ -317,8 +323,26 @@ def build(target, selection, snapshots, base, seed, workbench_version):
                      "size": a.size, "hash": a.hash, "detail": a.detail} for a in actions],
         "store_writes": [{"path": p, "hash": _sha(d)} for p, d in store_writes],
     }
+    if harness is not None:
+        fields["harness"] = _harness_fields(harness)
     return Plan(target.identity, target.state, tuple(actions), modules, document, seed,
-                project, store_writes, git_init, digest_of(fields))
+                project, store_writes, git_init, digest_of(fields), harness)
+
+
+def _local_manifest(harness):
+    try:
+        return localmanifest.serialize(harness.document)
+    except localmanifest.LocalManifestError as exc:
+        raise PlanError("the local manifest cannot be written: %s" % exc)
+
+
+def _harness_fields(harness):
+    return {"module": harness.token, "version": harness.version,
+            "files": [{"path": f.path, "mode": f.mode, "size": len(f.data), "hash": f.sha256}
+                      for f in harness.files],
+            "exclude": list(harness.exclude),
+            "local_manifest": {"path": localmanifest.PATH,
+                               "hash": _sha(_local_manifest(harness))}}
 
 
 def _skeleton_size():
@@ -340,6 +364,32 @@ def _file_action(path, data, owner_class, executable, detail):
 
 def _show(text):
     return display.ascii_text(str(text).replace("\\", "\\\\"))
+
+
+def _render_harness(harness):
+    if harness is None:
+        return ["harness: none planned"]
+    lines = ["harness: %s is attached after the install: per-clone files that git does not "
+             "track, none committed" % _show(harness.token)]
+    for f in harness.files:
+        lines.append("  create %s [per-clone] %d bytes sha256 %s%s" % (
+            _show(f.path), len(f.data), f.sha256,
+            (" (%s)" % _show(f.source)) if f.source else ""))
+    if harness.exclude:
+        lines.append("  add to .git/info/exclude: %s" % ", ".join(
+            _show("/" + e) for e in harness.exclude))
+    lines.append("  create %s [per-clone] sha256 %s" % (
+        localmanifest.PATH, _sha(_local_manifest(harness))))
+    if harness.settings:
+        lines.append("  %s changes what the agent may do here: it denies the owner-run commands "
+                     "and writes to the guarded store, and asks before the hard stops"
+                     % _show(harness.settings))
+    for warning in harness.warnings:
+        lines.append("  warning: %s" % _show(warning))
+    for report in harness.reports:
+        if report.level in ("warning", "skipped"):
+            lines.append("  %s: %s: %s" % (report.level, _show(report.item), _show(report.message)))
+    return lines
 
 
 def render(plan, target_path, show_digest=False):
@@ -377,7 +427,7 @@ def render(plan, target_path, show_digest=False):
         lines.append("git: creates %s" % GIT_DETAIL)
     else:
         lines.append("git: an existing .git is used as it is; no remote is recorded")
-    lines.append("harness: not attached (attach is not built yet)")
+    lines.extend(_render_harness(plan.harness))
     if show_digest:
         lines.append("digest: %s" % plan.digest)
     return "\n".join(lines) + "\n"

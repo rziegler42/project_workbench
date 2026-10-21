@@ -565,7 +565,7 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   six capabilities", and `development.md` says "none yet"; both must say five, with `hooks`
   joining when `code-work-module` renders hooks. The owner-run protections come from `rules.py`,
   not from `module.json`, and E's tests cover that list.
-- **H** (not yet committed): `workbench/attach.py` (new) and the `attach` route in `cli.py`;
+- **H** (`837037a`): `workbench/attach.py` (new) and the `attach` route in `cli.py`;
   `Writer.check_exclude(entries)` in `projectfs.py` (a read-only look at `.git`, `.git/info` and
   `.git/info/exclude` with no-follow descriptors, so a fault there is found before any file is
   written); `harnessplan.render_root(layout)` (the `@AGENTS.md` pointer only, Decision 3);
@@ -618,3 +618,42 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   `prepare` and the writer is reported as exit 3. Test gaps noted, not filled: the local manifest
   under a real `git` (it relies on the committed `.workbench/.gitignore`), a hard-linked harness
   path, hostile control characters in a module's report text, and a partial file on rerun.
+- **I** (not yet committed): `wb install` attaches as its last step. The code `attach` used to
+  build the harness files is now `workbench/harnessstage.py` (`stage` returns the files, the
+  exclude lines and the local manifest; `inputs`, `check_paths` and the override and exclusion
+  readers moved with it), and `workbench/refusal.py` holds the one `Refused` class (with the
+  `after` lines), so `preview`, `attach` and `harnessstage` need no import cycle. `preview.prepare`
+  stages the harness with the selection's only harness module and passes it to `installplan.build`;
+  the plan's `harness` field is not an action (the marker's record and the write loop are
+  untouched) but its files, modes, sizes, hashes, exclude lines and the local manifest's hash are
+  in the digest. The preview replaces the "not attached" line with the harness section: each
+  file, the exclude lines, the local manifest, the settings warning, the permission-less warning
+  and the translation's warnings. The path list checked by `safefs.check_tree_paths` includes the
+  harness paths, so a module that writes `CLAUDE.md` is refused at the preview. After the write
+  loop has removed the marker, `install._attach` calls `attach.apply` on the same writer and
+  prints attach's report; a failure (an error or an interrupt) prints `failed:`, the paths this
+  attach wrote and did not write, "the install is complete", and `wb attach --harness
+  <package>/<module>` with the `--package` hint, and exits 3. The unfinished-write record is not
+  extended. `home` (the directory the rules name) is a test-only parameter through `cli.main`,
+  `install.run`, `preview.run` and `preview.prepare`. Existing tests changed: two assertions of
+  the removed text (`test_install`, `test_installplan`), the expected tree in
+  `test_install_writes_expected_tree_modes_classes_and_manifest` (it now includes the local
+  manifest), and the reference trees of `test_marker_record` and `test_recover`, which skip
+  `.workbench/local/harness.json` because the marker does not list it and the recovered install
+  has not been attached. The permission-less warning is shown in the plan text, not on standard
+  error, so the existing install, preview and upgrade tests see no new stderr. New:
+  `tests/test_install_attach.py` (16). Mutation check: 16 mutants of the new guards; 15 killed,
+  one survivor removed (a guard for more than one harness module that `verify` already refuses).
+  Suite 1605 passing, 1 skipped. `docs/development.md` describes the attach step; the specs are
+  L's. The recorded hand run of an install into an empty directory and a `claude` start was not
+  done (it needs the owner's allowance for a Claude session).
+  `workflow-reviewer` of I (from reading and 125 tests): no Critical or High. Medium, fixed: an
+  install into a lone `.git` whose `.git/info/exclude` attach cannot use (a link, two links,
+  oversized) was found only after the install was written; `preview.prepare` now looks at it with
+  `Writer.check_exclude` for a `new-git` target, so the preview and the install refuse before the
+  digest is typed (test with a symlinked exclude file). Low, fixed: an interrupt while the install's
+  own report is printed no longer ends in "cancelled: nothing was written"; the attach still runs.
+  Test added for a case-variant collision (`claude.md` against `CLAUDE.md`). Low, recorded: the
+  end-of-run output does not repeat the staged warnings (the owner saw them in the plan); the digest
+  test does not change a file's mode or the settings path on their own; the `--package` hint in the
+  failure text is generic.

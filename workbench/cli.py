@@ -144,7 +144,7 @@ def _project_command(tokens, out, err, store_root, distribution, upgrading=False
     return command, guarded
 
 
-def _preview(argv, out, err, store_root, distribution):
+def _preview(argv, out, err, store_root, distribution, home=None):
     if len(argv) < 2 or argv[1] not in ("install", "upgrade", "add"):
         err.write("preview takes install, upgrade or add\n%s" % USAGE)
         return 2
@@ -154,7 +154,7 @@ def _preview(argv, out, err, store_root, distribution):
         return opened
     if argv[1] in ("upgrade", "add"):
         return upgrade.run_preview(opened[1], opened[0], out, err, distribution, mode=argv[1])
-    return preview.run(opened[1], opened[0], out, err, distribution)
+    return preview.run(opened[1], opened[0], out, err, distribution, home=home)
 
 
 def _upgrade(tokens, out, err, store_root, distribution, stdin, mode="upgrade"):
@@ -168,12 +168,12 @@ def _upgrade(tokens, out, err, store_root, distribution, stdin, mode="upgrade"):
     return upgrade.run(opened[1], opened[0], stdin, out, err, distribution, mode=mode)
 
 
-def _install(tokens, out, err, store_root, distribution, stdin):
+def _install(tokens, out, err, store_root, distribution, stdin, home=None):
     opened = _project_command(tokens, out, err, store_root, distribution)
     if isinstance(opened, int):
         return opened
     return install.run(opened[1], opened[0], stdin if stdin is not None else sys.stdin, out, err,
-                       distribution)
+                       distribution, home=home)
 
 
 def _acknowledge(tokens, err, out, store_root, stdin):
@@ -244,7 +244,7 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         split = argv.index("--")
         argv, passthrough = argv[:split], argv[split + 1:]
     if argv and argv[0] == "preview":
-        return _preview(argv, out, err, store_root, distribution)
+        return _preview(argv, out, err, store_root, distribution, home)
     if argv and argv[0] == "acknowledge":
         return _acknowledge(argv[1:], err, out, store_root, stdin)
     if argv and argv[0] == "recover":
@@ -254,7 +254,7 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
     if argv and argv[0] in ("upgrade", "add"):
         return _upgrade(argv[1:], out, err, store_root, distribution, stdin, argv[0])
     if argv and argv[0] == "install":
-        return _install(argv[1:], out, err, store_root, distribution, stdin)
+        return _install(argv[1:], out, err, store_root, distribution, stdin, home)
     try:
         args = _parser().parse_args(argv)
         if args.command == "launch":

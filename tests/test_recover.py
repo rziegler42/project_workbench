@@ -30,6 +30,8 @@ def shape(top):
         for name in dirs + files:
             full = os.path.join(base, name)
             rel = os.path.relpath(full, top)
+            if rel == os.path.join(".workbench", "local", "harness.json"):
+                continue  # written by attach after the install, which the marker does not list
             mode = os.lstat(full).st_mode
             if stat.S_ISLNK(mode):
                 found[rel] = ("link", os.readlink(full))

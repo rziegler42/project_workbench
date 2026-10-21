@@ -25,8 +25,8 @@ import os
 import shutil
 import stat
 
-from . import (__version__, approve, confirm, display, fetch, installplan, manifest, preview,
-               projectfs, safefs, sources, target, unfinished)
+from . import (__version__, approve, attach, confirm, display, fetch, installplan, manifest,
+               preview, projectfs, safefs, sources, target, unfinished)
 
 CONFIRM_CHARS = confirm.CONFIRM_CHARS
 MAX_ANSWER = confirm.MAX_ANSWER
@@ -132,10 +132,39 @@ def _finish(held, progress, out):
     try:
         out.write("wrote %d paths in %s\nnothing was committed\n"
                   % (len(done), display.ascii_text(held.path)))
-        out.write("harness not attached: attach is not built yet\n")
         out.flush()
     except BrokenPipeError:
         pass
+
+
+AGAIN = ("run `wb attach --harness %s` in the project to finish it (give the harness package "
+         "with --package <source>): a file that holds the planned bytes is left as it is, and "
+         "the local manifest is written last\n")
+
+
+def _attach(held, progress, plan, out, err):
+    """Attach the harness the plan named, now that the install itself is complete (its marker is
+    gone). The files, exclude lines and local manifest are those the digest covered. A failure
+    leaves a finished install and says how to finish the attach; it returns 3."""
+    staged = plan.harness
+    prepared = attach.Prepared(held.path, staged.token, staged.version, list(staged.files), [],
+                               staged.exclude, staged.document, staged.reports, [], staged.notes,
+                               staged.settings)
+    writer = progress.writer
+    before = len(writer.written)
+    try:
+        added = attach.apply(writer, prepared)
+    except (Exception, KeyboardInterrupt) as exc:
+        cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
+        attach._failed(cause, prepared, writer.written[before:], err,
+                       again=AGAIN % display.ascii_text(staged.token)[:140],
+                       complete="the install is complete")
+        return 3
+    try:
+        attach._finish(prepared, writer, added, out, err)
+    except KeyboardInterrupt:
+        pass
+    return 0
 
 
 # --- the command ---------------------------------------------------------------------------
@@ -146,7 +175,7 @@ def _refuse(err, text):
     return 1
 
 
-def _run(guarded, command, stdin, out, err, distribution, seed, version, which, progress):
+def _run(guarded, command, stdin, out, err, distribution, seed, version, which, progress, home):
     try:
         with target.open_target(command.target, guarded.root) as held:
             fetched = []
@@ -155,7 +184,7 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
                 seed = seed or manifest.new_seed()
                 version = version or __version__
                 plan, warnings = preview.prepare(guarded, held, resolved, command.select,
-                                                 distribution, seed, version, which)
+                                                 distribution, seed, version, which, home)
             except sources.SourceError as exc:
                 raise preview.Refused([str(exc)])
             except preview.Refused as exc:
@@ -178,7 +207,7 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
             try:
                 _still_the_same(held)
                 again, _ = preview.prepare(guarded, held, resolved, command.select, distribution,
-                                           seed, version, which)
+                                           seed, version, which, home)
             except preview.Refused as exc:
                 raise preview.Refused(["the packages changed while the plan was shown: %s; "
                                        "nothing was written" % "; ".join(exc.lines)])
@@ -195,8 +224,11 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
                 cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
                 confirm.report_failure(progress, cause, err)
                 return 3
-            _finish(held, progress, out)
-            return 0
+            try:
+                _finish(held, progress, out)
+            except KeyboardInterrupt:
+                pass  # the install is complete; the attach below still runs
+            return _attach(held, progress, plan, out, err)
     except target.TargetError as exc:
         return target.write_refusal(err, exc)
     except preview.Refused as exc:
@@ -208,7 +240,7 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
 
 
 def run(guarded, command, stdin, out, err, distribution=None, seed=None, version=None,
-        which=shutil.which):
+        which=shutil.which, home=None):
     """Install into a new target after the owner types the digest. Returns the exit code:
     0 done, 1 refused or cancelled, 3 stopped after writing, 130 interrupted before writing."""
     if not (approve.is_terminal(stdin) and approve.is_terminal(out)):
@@ -218,7 +250,7 @@ def run(guarded, command, stdin, out, err, distribution=None, seed=None, version
     progress = confirm.Progress()
     try:
         return _run(guarded, command, stdin, out, err, distribution, seed, version, which,
-                    progress)
+                    progress, home)
     except KeyboardInterrupt:
         try:
             out.write("\ncancelled: nothing was written\n")

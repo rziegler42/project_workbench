@@ -32,7 +32,8 @@ def tree_files(top):
         for name in names:
             full = os.path.join(base, name)
             rel = os.path.relpath(full, top).replace(os.sep, "/")
-            if rel != projectfs.MARKER:
+            # The local manifest is written after the install, by attach; the marker does not list it.
+            if rel not in (projectfs.MARKER, ".workbench/local/harness.json"):
                 with open(full, "rb") as handle:
                     found[rel] = sha(handle.read())
     return found

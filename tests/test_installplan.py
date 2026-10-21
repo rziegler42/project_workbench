@@ -313,7 +313,7 @@ class PlanTest(unittest.TestCase):
         self.assertIn("digest: " + plan.digest, installplan.render(plan, "x", show_digest=True))
         for a in plan.actions:
             self.assertIn(a.path, text)
-        self.assertIn("harness: not attached (attach is not built yet)", text)
+        self.assertIn("harness: none planned", text)
         self.assertIn(self.action(plan, "AGENTS.md").hash, text)
 
     def test_render_escapes_lookalike_and_control_characters(self):
