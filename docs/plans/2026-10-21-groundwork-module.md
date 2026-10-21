@@ -392,3 +392,13 @@ skipped, passing with `-W error`.
   a change to `check` is not run against them until H. F and G should add tests that do not attach.
 - `test_the_package_is_only_the_claude_module` became `test_the_package_is_the_claude_and_groundwork_modules`.
 - The manifest records only `groundwork`; the harness module is never committed.
+
+**Increment C** (2026-10-21): the module fills `docs-index` and `policy` from
+`files/blocks/docs-index.md` and `files/blocks/policy.md`. The policy block is eleven lines, names
+no tool, and states the five rules of Completion criterion 3. The index entry links the four
+areas. `tests/test_groundwork_module.py` gains 8 tests (17 in all): the block text between its
+markers in `AGENTS.md` and `docs/README.md`; an unedited policy block replaced on upgrade; an
+edited one a conflict naming the block, the file kept. The upgrade tests run against a released
+copy of the package in a temporary distribution, as in B. Full suite: 1705 tests, 106 skipped,
+passing with `-W error`. The `fills` sources sit under `files/`, which `modulefiles` accepts
+without a `writes` entry, as A found.
