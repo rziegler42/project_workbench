@@ -6,7 +6,10 @@ the field names, formats and limits it accepts. The rules are the substance of t
 specification; where the table descriptions and "Concrete schema" differ in precision,
 "Concrete schema" is the one the code enforces.
 
-Terms are defined in `terms.md`.
+Terms are defined in `terms.md`. The fields `commands` and `checks`, the maintainer directories `tests/`
+and `tools/`, and the pin-name rule are specified by `module-boundary.md` and added here on 2026-10-21;
+each is marked "not built yet" until the plan that builds it lands, and the verifier accepts none of them
+until then.
 
 ## Purpose and scope
 
@@ -27,10 +30,12 @@ Non-goals:
 ## Assumptions and constraints
 
 - The installer only copies files. It never executes anything a package or module
-  ships, and it never evaluates its declaration as code. Declarations are data. The
+  ships at install, and it never evaluates its declaration as code. Declarations are data. The
   launcher and the delegation helper are components of the workbench itself, not
   module items; the installer installs them, and they run a module's helper only when
-  invoked at use time, never at install.
+  invoked at use time, never at install. At use time a pinned helper runs through the launcher:
+  by `wb launch`, and, for a declared command or check, by `wb run` and `wb check`
+  (`module-boundary.md`).
 - The installer treats every package the same way. A first-party package differs
   only in where it comes from and in carrying pre-generated approvals.
 - All writes stay inside the project, and a module's own writes stay inside its
@@ -69,6 +74,8 @@ Each module has one declaration file, `module.json`, at the root of its director
 | `fills` | Blocks the module contributes: the slot, and the source file. |
 | `writes` | The project paths the module writes, beyond its own namespace. |
 | `ships` | Executable or code-bearing items it ships, such as hooks or helper scripts. |
+| `commands` | Commands it offers, each a pinned helper it ships and the first arguments it accepts, run with `wb run`. *(specified by `module-boundary.md`; not built yet)* |
+| `checks` | Pinned Python helpers it contributes to `wb check`. *(specified by `module-boundary.md`; not built yet)* |
 | `layout` | Harness modules only: the layout description (see `harness-modules.md`). It is part of the declaration and its hash. |
 
 `provides`, `requires` and `blocks` are lists of capability names. A module that
@@ -188,7 +195,8 @@ The installer verifies a module before it writes any of the module's files:
    `ships` exists, every `writes` entry has its source under `files/`, and no file
    exists in the module that its declaration does not account for. A file is
    accounted for when it is `module.json`, is under a reserved directory (`harness/`,
-   `templates/` or `files/`), or is named by `fills` or `ships`. A module that
+   `templates/`, `files/` or, once built, the maintainer directories `tests/` and `tools/`), or is
+   named by `fills` or `ships`. A module that
    contains a symbolic link is refused, because the content hash cannot cover what a
    link points to. A mismatch stops the install.
 3. The declaration hash and the module's content tree hash are computed. A
@@ -204,7 +212,10 @@ If any step fails for any module, nothing is written for any module.
 A module directory contains `module.json` and any directories its declaration
 names. The reserved directories are `harness/` (harness items), `templates/`
 (documents created on demand, never installed as placeholders) and `files/` (the
-sources copied to the paths in `writes`, at the same relative path). Where a module
+sources copied to the paths in `writes`, at the same relative path). Two more are
+**maintainer directories** *(specified by `module-boundary.md`; not built yet)*: `tests/` (the module's own tests) and `tools/` (scripts for
+its maintainers). Both are covered by the tree hash and the approval, neither is installed, and the
+installer never runs either (`module-boundary.md`, "Module directories"). Where a module
 supplies harness items it uses:
 
 ```text
@@ -256,7 +267,7 @@ is listed twice, and no directory holding a `module.json` is left unlisted.
 
 **Module fields.** `name`, `version` and `description` are required. Optional:
 `type` (default `module`), `provides`, `requires`, `blocks`, `helpers`, `slots`,
-`fills`, `writes`, `ships` (default empty) and `layout`. The list entry in `package.json`,
+`fills`, `writes`, `ships` (default empty), `commands`, `checks` and `layout`. The list entry in `package.json`,
 the directory name and `name` in `module.json` must be equal. No list holds a duplicate.
 
 - `requires` entries are a capability, or `{"capability": "<capability>", "soft": true}`.
@@ -275,9 +286,13 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   file and directory.
 - `ships`: each item is a file, or a directory that holds at least one file. An empty
   directory is refused because the content hash does not cover it.
+- `commands` and `checks` *(specified by `module-boundary.md`; not built yet)*: the exact shapes, limits and refusals are in `module-boundary.md`,
+  "Declaration schema". In short, each names a helper that is an item of `ships` (or a file below one),
+  a Python helper declares the kit API number it needs in `kit`, and an unknown field is refused as
+  everywhere else.
 
 **Module files.** Every file is `module.json`, a file below `harness/`, `templates/` or
-`files/` (exact case; a file of that name at the module root does not count), a
+`files/` (or, once built, `tests/` or `tools/`; exact case; a file of that name at the module root does not count), a
 `fills` source, or an item of `ships` or a file below one. Empty directories are
 ignored. A symbolic link, device, socket or FIFO anywhere in the module is refused. A
 module with a `harness/` directory holds `harness/neutral/` or a `harness/<name>/`
@@ -301,7 +316,9 @@ empty one. Known-answer tests in `tests/` fix both.
 
 **Set checks.** They run on a selection of modules, not on every module of a package.
 A selected module is named `<module>`, or `<package>/<module>` where two packages
-share a name. A module is never its own provider. A `requires` entry for a `slot:` capability is hard
+share a name. Pin names are one namespace *(specified by `module-boundary.md`; not built yet)*: a command is pinned under its name and a check under
+the last segment of its helper path, and a name given twice among the selected modules is refused, naming
+both. A module is never its own provider. A `requires` entry for a `slot:` capability is hard
 unless marked `soft`, like any other; only a slot fill is always soft. A slot has one
 owner among the selected modules. A hard requirement with no provider
 among the selected modules names the capability and the unselected modules that could
@@ -343,3 +360,8 @@ result is a refusal and carries no hashes and no order.
 - The declaration hash is identical for two declarations that differ only in field
   order or whitespace, and different for any change in meaning.
 - When any module fails verification, no module's files are written.
+- *(Not built yet.)* A module with a `tests/` or `tools/` directory verifies, the directory is counted in
+  the tree hash, and a copy of the module in a project does not contain it.
+- *(Not built yet.)* A `commands` or `checks` entry with an unknown field, a helper that is not in
+  `ships`, a missing or misplaced `kit`, or a pin name already used by another entry is refused, naming the
+  module and the field.

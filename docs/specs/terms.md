@@ -91,6 +91,31 @@ path or field.
   from capabilities. The installer only checks that a helper exists and never runs
   it.
 
+**shipped helper**
+: A file a module lists in `ships` that runs at use time, through the launcher, after the owner has pinned
+  it. It is not the same as a **helper**, a tool expected on `PATH`.
+
+**kit**
+: The small standard-library library, imported as `wbkit`, that the installer and Python helpers share
+  for safe, bounded reading of project content and for reporting. It belongs to the workbench, not to any
+  module, carries an integer API version, and is never pinned per project (`module-boundary.md`).
+
+**runner**
+: The fixed workbench file the launcher uses to start a Python helper: it adds the kit, checks the kit
+  version the module declared and runs the helper as `__main__`.
+
+**module command**
+: A pinned shipped helper that a module declares in `commands`, together with the first arguments it
+  accepts. It is run with `wb run <command>`; the installer knows no command by name.
+
+**module check**
+: A pinned Python helper that a module declares in `checks`. `wb check` runs it and prints the `problem:`
+  and `warning:` lines it reports.
+
+**maintainer directory**
+: The `tests/` or `tools/` directory of a module. It is hashed and approved with the module, never
+  installed into a project and never run by the installer.
+
 **slot**
 : A named, empty extension point in a file. A module that owns a slot provides the
   capability `slot:<name>`. A module fills a slot with a block. In prose a slot is
@@ -227,7 +252,7 @@ path or field.
 
 **launcher**
 : The small workbench component, run as `wb`, that the installer places in the guarded
-  store. It checks a helper's hash against a pin and only then runs it. It is not
+  store. It checks a shipped helper's hash against a pin and only then runs it. It is not
   shipped by any module.
 
 **delegation helper**
