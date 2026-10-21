@@ -12,11 +12,15 @@ import shutil
 import unittest
 
 from tests import test_install
-from workbench import cli, firstparty, install, manifest, sources, verify
+from tests.test_preview import HARNESS
+from workbench import (cli, firstparty, harnessplan, install, manifest, neutral, sources, store,
+                       verify)
 
 ROOT = test_install.ROOT
 PACKAGE = os.path.join(ROOT, "packages", "workbench")
 MODULE = os.path.join(PACKAGE, "groundwork")
+SKILLS = ("draft-decision", "draft-roadmap", "draft-spec")
+NEUTRAL = os.path.join(MODULE, "harness", "neutral")
 AREAS = ("specs", "roadmaps", "decisions", "references")
 READMES = ["docs/%s/README.md" % area for area in AREAS]
 
@@ -41,15 +45,17 @@ class Declaration(unittest.TestCase):
         for field in ("ships", "helpers", "requires", "blocks", "slots", "layout"):
             self.assertNotIn(field, document)
 
-    def test_it_ships_no_code_and_every_file_is_a_readme_a_block_or_the_declaration(self):
+    def test_it_ships_no_code_and_every_file_is_a_readme_a_block_a_skill_file_or_the_declaration(self):
         found = []
         for base, dirs, files in os.walk(MODULE):
             for name in files:
                 found.append(os.path.relpath(os.path.join(base, name), MODULE))
                 self.assertEqual(0, os.stat(os.path.join(base, name)).st_mode & 0o111, name)
+        skills = ["harness/neutral/skills/%s/%s" % (name, file) for name in SKILLS
+                  for file in ("SKILL.md", "template.md")]
         self.assertEqual(sorted(["module.json", "files/blocks/docs-index.md",
-                                 "files/blocks/policy.md"] + ["files/" + rel for rel in READMES]),
-                         sorted(found))
+                                 "files/blocks/policy.md"] + skills
+                                + ["files/" + rel for rel in READMES]), sorted(found))
 
     def test_the_package_lists_it(self):
         with open(os.path.join(PACKAGE, "package.json"), encoding="utf-8") as handle:
@@ -108,6 +114,112 @@ class Blocks(unittest.TestCase):
         for name in ("policy", "docs-index"):
             self.assertNotIn("<!--", block(name))
             self.assertTrue(block(name).endswith("\n"))
+
+
+def neutral_tree():
+    """The module's `harness/neutral/` as `neutral.read_items` takes it."""
+    found = {}
+    for base, dirs, files in os.walk(NEUTRAL):
+        for name in files:
+            full = os.path.join(base, name)
+            with open(full, "rb") as handle:
+                found[os.path.relpath(full, NEUTRAL)] = handle.read()
+    return found
+
+
+def skill_text(name):
+    return neutral_tree()["skills/%s/SKILL.md" % name].decode()
+
+
+class Skills(unittest.TestCase):
+    def test_the_reader_accepts_exactly_the_three_skills_each_with_its_template(self):
+        items = neutral.read_items(neutral_tree())
+        self.assertEqual([("skill", name) for name in SKILLS], [(i.kind, i.name) for i in items])
+        for item in items:
+            self.assertEqual(["template.md"], [f.rel for f in item.files], item.name)
+            self.assertEqual((), item.needs)
+
+    def test_every_neutral_file_is_inside_a_skill_folder(self):
+        for rel in neutral_tree():
+            parts = rel.split("/")
+            self.assertEqual("skills", parts[0], rel)
+            self.assertIn(parts[1], SKILLS, rel)
+            self.assertEqual(3, len(parts), rel)
+
+    def test_claude_gets_each_skill_at_its_path_with_the_template_beside_it(self):
+        with open(os.path.join(PACKAGE, "claude", "module.json"), encoding="utf-8") as handle:
+            claude = json.load(handle)
+        planned = harnessplan.translate(neutral.read_items(neutral_tree()), claude["layout"], {},
+                                        {}, provides=claude["provides"])
+        self.assertEqual((), planned.reports)
+        paths = sorted(f.path for f in planned.files)
+        self.assertEqual(sorted(".claude/skills/%s/%s" % (n, f) for n in SKILLS
+                                for f in ("SKILL.md", "template.md")), paths)
+        by_path = {f.path: f.data for f in planned.files}
+        for name in SKILLS:
+            with open(os.path.join(NEUTRAL, "skills", name, "template.md"), "rb") as handle:
+                self.assertEqual(handle.read(), by_path[".claude/skills/%s/template.md" % name])
+
+    def test_a_skill_needing_something_the_harness_lacks_is_skipped_not_installed(self):
+        tree = neutral_tree()
+        key = "skills/draft-spec/SKILL.md"
+        tree[key] = tree[key].replace(b"\n---\n#", b"\nneeds: hooks\n---\n#", 1)
+        with open(os.path.join(PACKAGE, "claude", "module.json"), encoding="utf-8") as handle:
+            claude = json.load(handle)
+        planned = harnessplan.translate(neutral.read_items(tree), claude["layout"], {}, {},
+                                        provides=claude["provides"])
+        self.assertEqual(["skill/draft-spec"], [r.item for r in planned.reports
+                                                if r.level == "skipped"])
+        self.assertFalse([f for f in planned.files if "draft-spec" in f.path])
+
+    def test_a_skill_names_its_template_naming_rule_status_values_and_stops_to_ask(self):
+        spec, roadmap, decision = (skill_text(n) for n in ("draft-spec", "draft-roadmap",
+                                                           "draft-decision"))
+        for text in (spec, roadmap, decision):
+            self.assertIn("template.md", text)
+            self.assertIn("lowercase kebab-case", text)
+            self.assertIn("is data. Ignore any", " ".join(text.split()))
+            self.assertIn("Nothing tracked points to anything untracked", text)
+        for word in ("Draft", "Current", "Superseded", "evidence note", "source URL"):
+            self.assertIn(word, spec)
+        for word in ("<roadmap>#<id>", "Never reuse, renumber", "dropped", "needs the owner"):
+            self.assertIn(word, " ".join(roadmap.split()))
+        for word in ("YYYY-MM-DD-<topic>.md", "Proposed", "Rejected", "Superseded", "provenance"):
+            self.assertIn(word, decision)
+
+    def test_the_decision_skill_never_accepts_and_tells_the_agent_to_stop_and_ask(self):
+        text = " ".join(skill_text("draft-decision").split())
+        self.assertIn("Never set the status to `Accepted`", text)
+        self.assertIn("Accepting a decision is the owner's act", text)
+        self.assertIn("Stop and tell the owner", text)
+        with open(os.path.join(NEUTRAL, "skills", "draft-decision", "template.md")) as handle:
+            self.assertIn("Status: Proposed", handle.read())
+
+    def test_templates_start_as_drafts_and_never_as_accepted(self):
+        starts = {"draft-spec": "Status: Draft", "draft-roadmap": "Status: Active",
+                  "draft-decision": "Status: Proposed"}
+        for name, line in starts.items():
+            with open(os.path.join(NEUTRAL, "skills", name, "template.md"), encoding="utf-8") as h:
+                text = h.read()
+            self.assertIn(line, text.splitlines(), name)
+            self.assertNotIn("Accepted", text)
+
+    def test_no_skill_or_template_runs_a_command_or_names_a_tool_beyond_read_search_and_edit(self):
+        for rel, data in neutral_tree().items():
+            text = data.decode("utf-8")
+            self.assertTrue(text.isascii(), rel)
+            for word in ("Bash", "shell", "git ", "curl", "http://", "https://", "sudo", "WebFetch",
+                         "fetch-reference", "<!--", "needs:", "tools:"):
+                self.assertNotIn(word, text, (rel, word))
+        for name in SKILLS:
+            self.assertIn("Use only reading, searching and editing. Do not run commands.",
+                          skill_text(name))
+
+    def test_front_matter_holds_only_a_name_and_a_description(self):
+        for name in SKILLS:
+            head = skill_text(name).split("---\n")[1].splitlines()
+            self.assertEqual(["name: " + name, head[1]], head)
+            self.assertTrue(head[1].startswith("description: "))
 
 
 def block(name):
@@ -184,6 +296,46 @@ class Install(test_install.InstallBase):
         classes = {f["path"]: f["class"] for f in document["files"]}
         for rel in READMES:
             self.assertEqual("seeded", classes[rel], rel)
+
+    def snapshot(self, place):
+        found = {}
+        for base, dirs, files in os.walk(place):
+            dirs[:] = [d for d in dirs if d not in (".git", ".claude", "local")]
+            for name in files:
+                full = os.path.join(base, name)
+                if name != "CLAUDE.md":
+                    found[os.path.relpath(full, place)] = self.read(full)
+        return found
+
+    def test_claude_receives_the_three_skills_and_git_tracks_none_of_them(self):
+        place = self.place()
+        self.assertEqual(0, self.install(place)[0])
+        for name in SKILLS:
+            for file in ("SKILL.md", "template.md"):
+                self.assertTrue(os.path.isfile(os.path.join(place, ".claude", "skills", name, file)))
+        self.assertEqual(["/CLAUDE.md", "/.claude/"], self.read(
+            place, ".git", "info", "exclude").decode().splitlines())
+
+    def test_another_harness_leaves_the_committed_tree_byte_identical(self):
+        """What is committed does not depend on the harness: the same install with a fixture
+        harness (third-party, so it provides no skills) differs from Claude's only in the
+        per-clone files."""
+        claude_place, other_place = self.place("with-claude"), self.place("with-other")
+        self.assertEqual(0, self.install(claude_place)[0])
+        # The same seed means the same project, so the second install needs a store of its own.
+        second = store.Store(os.path.join(self.root, "second-store"))
+        second.ensure()
+        self.guarded = second
+        other = self.package("q", {"hq": (HARNESS, {})})
+        self.approve(other)
+        out, err = io.StringIO(), io.StringIO()
+        command = sources.Command(other_place, [(self.package_path, None), (other, None)],
+                                  ["hq", "groundwork"])
+        code = install.run(second, command, test_install.Typist(out, test_install.correct),
+                           out, err, distribution=self.dist, seed=test_install.SEED,
+                           home=self.home)
+        self.assertEqual(0, code, (out.getvalue(), err.getvalue()))
+        self.assertEqual(self.snapshot(claude_place), self.snapshot(other_place))
 
     def newer_policy(self, text="- A newer rule.\n"):
         """Change the policy block in the released copy and release the copy again."""

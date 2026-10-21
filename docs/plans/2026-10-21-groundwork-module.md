@@ -402,3 +402,23 @@ edited one a conflict naming the block, the file kept. The upgrade tests run aga
 copy of the package in a temporary distribution, as in B. Full suite: 1705 tests, 106 skipped,
 passing with `-W error`. The `fills` sources sit under `files/`, which `modulefiles` accepts
 without a `writes` entry, as A found.
+
+**Increment D** (2026-10-21): three neutral skills, `draft-spec`, `draft-roadmap` and
+`draft-decision`, each in `harness/neutral/skills/<name>/` with `SKILL.md` and a bundled
+`template.md`. Front matter is a name and a description only. Each skill states its naming rule,
+status values and the data, untracked and no-command rules; the decision skill never sets
+`Accepted`, tells the agent to stop and tell the owner, and its template starts `Proposed`. The
+templates start `Draft`, `Active` and `Proposed`. `tests/test_groundwork_module.py` gains 11 tests
+(28 in all): the reader accepts exactly the three skills with their template; every neutral file is
+inside a skill folder; Claude's layout gives `.claude/skills/<name>/SKILL.md` and `template.md`
+byte for byte; a skill that needs something the harness lacks is skipped (fixture edit of a copy);
+the rules each skill must state; no tool, command, URL or comment marker in any skill file; an
+install with Claude writes the skills and git tracks none of them (`.git/info/exclude`); and an
+install with a fixture harness leaves every committed file byte-identical to the Claude install.
+Full suite: 1716 tests, 106 skipped, passing with `-W error`.
+
+- **A second harness is tested for the committed tree, not for receiving skills.** As A found, a
+  third-party harness cannot provide `skills`, so the fixture harness gets none. Whether a second
+  layout renders the template at its own path is not tested here; it needs a fixture first-party
+  distribution and stays open for H.
+- The skills were not tried with a live Claude session. That is the owner's hand run.
