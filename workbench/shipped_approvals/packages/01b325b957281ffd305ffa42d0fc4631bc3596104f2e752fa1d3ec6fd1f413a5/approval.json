@@ -1,10 +1,10 @@
 {
   "approver": "workbench-release",
-  "declaration_hash": "e103a3dec76024336befb94a42eba800b7da37dc4c679919f870632752dc0871",
+  "declaration_hash": "eb8f2f640ad950914c8de822f9c50fe8bc387c4938e656f339f11d092329bf3f",
   "format": 1,
   "kind": "module",
   "subject": "workbench/groundwork",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "9956bb10aeccd205bc663453e361740c842dfadd1afd1061b4bd28085491c8ad",
+  "tree_hash": "69b7e7ad829c372560e13891468b5e333f0ca1c4578ea1358cf896db41f1c6a8",
   "workbench_version": "0.1.0"
 }

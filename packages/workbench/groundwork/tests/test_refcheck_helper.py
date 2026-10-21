@@ -1,12 +1,19 @@
+"""The groundwork reference helper: the reference index against the files git tracks.
+
+The helper is loaded by its path and run in process on a synthetic project with a tracked set made by hand.
+The reference index reader it carries has its own tests in ``test_refindex_reader.py``; how the installer
+starts the helper, with a real git repository, is tested in ``test_groundwork_module.py``."""
+
 import hashlib
-import io
 import os
-import subprocess
 import unittest
 import unittest.mock
 
-from tests.support_docs import Base, installed_document
-from workbench import cli, gitindex, manifest, refcheck, refindex
+from tests import support_doccheck
+from tests.support_docs import Base
+from workbench.wbkit import gitindex, safefs
+
+refcheck = refindex = support_doccheck.load("refcheck")
 
 PDF = b"%PDF-1.4 datasheet\n"
 PNG = b"\x89PNG image bytes\n"
@@ -35,10 +42,6 @@ def tracked_of(*paths, links=()):
 class Setup(Base):
     """A project with the module, some reference files on disk, and a tracked set made by hand."""
 
-    def setUp(self):
-        super().setUp()
-        self.install()
-
     def reference(self, name, data):
         self.put("docs/references/" + name, data)
 
@@ -47,8 +50,11 @@ class Setup(Base):
 
     def run_check(self, *paths, links=()):
         tracked = tracked_of(refindex.PATH, *("docs/references/" + p for p in paths), links=links)
-        problems, warnings = refcheck.examine(self.writer(), tracked)
-        return problems, warnings
+        return self.examine(tracked)
+
+    def examine(self, tracked):
+        with safefs.Root(self.root, "project root") as held:
+            return refcheck.examine(held, tracked)
 
     def good(self):
         self.reference("a.pdf", PDF)
@@ -57,19 +63,13 @@ class Setup(Base):
 
 
 class Presence(Setup):
-    def test_a_project_without_the_module_gets_no_report(self):
-        self.put(".workbench/manifest.json",
-                 manifest.serialize(installed_document(module="other")))
-        self.put(refindex.PATH, b"not json")
-        self.assertEqual(([], []), refcheck.examine(self.writer(), tracked_of(refindex.PATH)))
-
-    def test_the_module_with_no_references_gives_no_problem(self):
-        self.assertEqual(([], []), refcheck.examine(self.writer(), tracked_of()))
+    def test_a_project_with_no_references_gives_no_problem(self):
+        self.assertEqual(([], []), self.examine(tracked_of()))
 
     def test_the_readme_alone_is_not_a_reference(self):
         self.put("docs/references/README.md", "# References\n")
         tracked = tracked_of("docs/references/README.md")
-        self.assertEqual(([], []), refcheck.examine(self.writer(), tracked))
+        self.assertEqual(([], []), self.examine(tracked))
 
     def test_an_empty_index_with_no_references_is_clean(self):
         self.index()
@@ -92,7 +92,7 @@ class Presence(Setup):
         self.good()
         tracked = tracked_of("DOCS/References/Index.JSON", refindex.PATH, "docs/references/a.pdf",
                              "docs/references/b.png")
-        self.assertEqual(([], []), refcheck.examine(self.writer(), tracked))
+        self.assertEqual(([], []), self.examine(tracked))
         for name in ("README.MD", "readme.md", "INDEX.JSON", "index.JSON", "index.j\u017fon"):
             with self.subTest(name=name):
                 problems, _ = self.run_check("a.pdf", "b.png", name)
@@ -135,8 +135,8 @@ class Lies(Setup):
         os.unlink(os.path.join(self.root, "docs", "references", "a.pdf"))
         os.symlink(secret, os.path.join(self.root, "docs", "references", "a.pdf"))
         problems, _ = self.run_check("a.pdf", "b.png")
-        self.assertEqual(["docs/references/a.pdf: is a link or not a regular file, so it was "
-                          "not read"], problems)
+        self.assertEqual(1, len(problems), problems)
+        self.assertTrue(problems[0].startswith("docs/references/a.pdf: cannot be read"), problems)
 
     def test_a_link_that_git_tracks_in_place_of_a_file_is_a_problem(self):
         self.good()
@@ -176,7 +176,7 @@ class Lies(Setup):
     def test_an_index_git_does_not_track_is_a_problem(self):
         self.good()
         tracked = tracked_of("docs/references/a.pdf", "docs/references/b.png")
-        problems, _ = refcheck.examine(self.writer(), tracked)
+        problems, _ = self.examine(tracked)
         self.assertEqual(2, len(problems), problems)
         self.assertIn("git does not track it", problems[0])
         self.assertIn("2 tracked reference files were not compared", problems[1])
@@ -339,7 +339,7 @@ class Limits(Setup):
         big = b"x" * 5000
         self.reference("a.pdf", big)
         self.index(entry("a.pdf", big))
-        with unittest.mock.patch("workbench.projectfs.safefs.MAX_FILE_BYTES", 3000):
+        with unittest.mock.patch("workbench.wbkit.safefs.MAX_FILE_BYTES", 3000):
             problems, _ = self.run_check("a.pdf")
         self.assertEqual(1, len(problems), problems)
         self.assertIn("a.pdf: cannot be read", problems[0])
@@ -356,94 +356,6 @@ class Limits(Setup):
             with open(os.path.join(self.root, "docs", "references", name), "rb") as handle:
                 self.assertEqual(data, handle.read())
         self.assertEqual(stamp, os.stat(os.path.join(self.root, refindex.PATH)).st_mtime_ns)
-
-
-class Command(Setup):
-    """`wb check` end to end in a real git repository, with no harness attached."""
-
-    def setUp(self):
-        super().setUp()
-        os.chmod(self.store, 0o700)
-        self.git("init", "-q", "--template=")
-
-    def git(self, *args):
-        env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
-        env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
-        done = subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.test",
-                               "-c", "commit.gpgsign=false"] + list(args), cwd=self.root, env=env,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        self.assertEqual(0, done.returncode, done.stderr)
-
-    def commit(self):
-        self.git("add", "-A")
-        self.git("commit", "-q", "-m", "x")
-
-    def check(self):
-        out, err = io.StringIO(), io.StringIO()
-        code = cli.main(["check", self.root], out, err, store_root=self.store,
-                        home=os.path.join(self.base, "nohome"))
-        return code, out.getvalue(), err.getvalue()
-
-    def test_a_clean_project_has_no_problems_and_the_git_index_is_untouched(self):
-        self.good()
-        self.commit()
-        path = os.path.join(self.root, ".git", "index")
-        with open(path, "rb") as handle:
-            before = handle.read()
-        code, out, err = self.check()
-        self.assertEqual((0, ""), (code, err), err)
-        self.assertTrue(out.endswith("check found no problems\n"), out)
-        with open(path, "rb") as handle:
-            self.assertEqual(before, handle.read())
-
-    def test_a_changed_file_an_untracked_entry_and_a_missing_entry_are_problems(self):
-        self.good()
-        self.reference("c.txt", b"x")
-        self.commit()
-        self.reference("a.pdf", PDF + b"x")
-        self.git("rm", "-q", "--cached", "docs/references/b.png")
-        code, out, err = self.check()
-        self.assertEqual(1, code)
-        lines = [line for line in err.splitlines() if line.startswith("problem: ")]
-        self.assertEqual(3, len(lines), err)
-        self.assertTrue(any("a.pdf: its content differs" in line for line in lines))
-        self.assertTrue(any("b.png: the index has an entry for it, but git does not" in line
-                            for line in lines))
-        self.assertTrue(any("c.txt: git tracks it, but the index has no entry" in line
-                            for line in lines))
-
-    def test_a_tracked_document_with_a_path_into_the_untracked_area_is_a_problem(self):
-        self.good()
-        self.put("docs/specs/power.md",
-                 "# P\n\nStatus: Current\n\nSee [the sheet](../../.workbench/local/refs/x.pdf).\n")
-        self.commit()
-        code, out, err = self.check()
-        self.assertEqual(1, code)
-        self.assertIn("problem: docs/specs/power.md: points to .workbench/local/refs/x.pdf, "
-                      "which git does not track", err)
-
-    def test_a_project_without_the_module_is_not_reported(self):
-        self.put(".workbench/manifest.json",
-                 manifest.serialize(installed_document(module="other")))
-        self.reference("a.pdf", PDF)
-        self.put(refindex.PATH, b"not json")
-        self.commit()
-        code, out, err = self.check()
-        self.assertEqual((0, ""), (code, err), err)
-
-    def test_no_program_the_repository_names_is_run(self):
-        self.good()
-        self.commit()
-        marker = os.path.join(self.outside, "ran")
-        program = os.path.join(self.outside, "hook.sh")
-        with open(program, "w") as handle:
-            handle.write("#!/bin/sh\necho ran >> %s\n" % marker)
-        os.chmod(program, 0o755)
-        with open(os.path.join(self.root, ".git", "config"), "a") as handle:
-            handle.write("[core]\n\tfsmonitor = %s\n\thooksPath = %s\n" % (program, self.outside))
-        code, out, err = self.check()
-        self.assertEqual(0, code, err)
-        self.assertFalse(os.path.exists(marker))
 
 
 if __name__ == "__main__":

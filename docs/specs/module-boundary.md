@@ -302,12 +302,12 @@ This is the inventory the move plans start from.
 | now | goes to |
 |---|---|
 | `workbench/doccheck.py` | *(done)* `groundwork`'s `helper/doccheck`, a check helper over the kit |
-| `workbench/refcheck.py`, `refindex.py` | `groundwork` as check helpers over the kit |
+| `workbench/refcheck.py`, `refindex.py` | *(done)* `groundwork`'s `helper/refcheck`, one check helper over the kit |
 | `workbench/dispatch.py`, the `code-work` branch in `cli.py`, `"code-work"` in the agent-safe list | *(done)* the generic `wb run`, driven by `code-work`'s `commands` |
 | `HARNESSES` in `check.py`, `SETTINGS_PATHS` in `layout.py` | read from the `claude` module's `layout` |
 | `tests/test_codework_*.py`, `test_dispatch.py` | *(done)* `packages/workbench/code-work/tests/` (installer-side routing tests are rewritten on synthetic modules) |
 | `tests/test_groundwork_module.py`, `test_doccheck.py` | *(done)* `packages/workbench/groundwork/tests/` (`test_groundwork_fixture.py` stays: `support_install` imports it) |
-| `tests/test_refcheck.py`, `test_refindex.py` | `packages/workbench/groundwork/tests/` |
+| `tests/test_refcheck.py`, `test_refindex.py` | *(done)* `packages/workbench/groundwork/tests/` |
 | `tests/test_claude_module.py` | `packages/workbench/claude/tests/` |
 
 `safefs`, `display`, project finding and manifest reading move into the kit and are imported by the

@@ -424,3 +424,40 @@ Owner steps, not run by me:
    compared against this repository; the fixture comparison above stands in for it.
 Not reviewed independently; H covers it (the security pass should run the helper against hostile documents:
 links, fifos, huge files, deep folders, and a name that is not valid UTF-8).
+
+### Increment F
+
+`groundwork` now also ships `helper/refcheck` and declares it in `checks` (`kit` 1). It is one file over the
+kit holding the index reader and serializer from `workbench/refindex.py` (the strict shape, `parse`
+comparing the bytes with `serialize`, the formatting helpers `_sorted_by`, `_path_key` and `_line` inlined) and
+the comparison from `workbench/refcheck.py`; the tracked set comes from the kit's `gitindex.read`. It
+prints `problem:` and `warning:` lines, at most 200 (problems first, then a "more findings are not listed"
+line), and prints one problem if `.git/index` cannot be read. It no longer tests for the module: the runner is
+the gate, and a project with no references prints nothing.
+Differences from the installer's output, both from the kit's reader: a reference that is a link, not a regular file,
+or hard-linked is reported as "cannot be read: <reason>" where the installer said "is a link or not a regular
+file, so it was not read". The installer no longer reports the missing-index problem itself; the helper does,
+under the module's name. `workbench/refcheck.py`, `workbench/refindex.py`, `tests/test_refcheck.py` and
+`tests/test_refindex.py` are removed (with `claude-workflow remove`, the plan naming them) and `check.py` no
+longer calls them. Tests: `groundwork/tests/test_refindex_reader.py` (the old reader tests, on the helper) and
+`test_refcheck_helper.py` (the old rules, in process, with a hand-made tracked set; the no-module test and
+the end-to-end class are gone), and three end-to-end tests in `test_groundwork_module.py` through
+`wb check` with real git: a good index passes and a changed file is reported, a tracked reference with no
+index is reported only once `refcheck` is pinned, and a repository that names a program (`fsmonitor`,
+`hooksPath`) runs none. `tests/support_docs.py` is now a plain directory fixture and the documents the
+helper tests write; `tests/support_doccheck.py` loads either helper.
+Evidence: the old modules (from `HEAD`, loaded in process with the gate bypassed) and the helper produce the same
+`serialize` bytes, the same five problems and one warning on a fixture index covering a changed hash, a missing
+file, an entry git does not track, a tracked file with no entry, a note naming `.workbench/local` and a
+missing license, the same two lines for a non-canonical index, and the same empty result on this repository.
+Verification: `python3 -B -W error tests/run_all.py`: 2260 tests in 4 roots, OK. 104 tests skip with "the shipped
+approvals are stale", because this change alters `groundwork`'s tree hash; the full suite must be run again
+after the owner's step.
+
+Owner steps, not run by me:
+1. `python3 -m workbench release-approvals`, then approve removing the stale records.
+2. In a project that installs `groundwork`, pin the second helper:
+   `python3 -m workbench pin <project-id> refcheck .workbench/workbench/groundwork/helper/refcheck --root <dir> --kit 1`.
+   This repository has no manifest, so there is nothing to pin here.
+Not reviewed independently; H covers it (hostile index, links at every path component, huge files, entries that
+claim the index or README, a git index naming programs).

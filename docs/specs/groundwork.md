@@ -154,7 +154,7 @@ Placement:
 - The reader is strict and bounded: at most 1 MiB and 5,000 entries (the byte bound is reached
   first for all but the smallest entries), duplicate keys, NaN and non-printable characters
   refused, and anything that is not the serializer's own output refused. A refusal names the
-  entry and the field and never repeats the value. The reader is `workbench/refindex.py`; the
+  entry and the field and never repeats the value. The reader is part of the module's `helper/refcheck`; the
   decision is `docs/decisions/2026-10-21-reference-index-format.md`.
 - Nothing tracked points to anything untracked. A tracked document that relies on an
   untracked reference cites it by source URL, retrieval date and content hash, and
@@ -239,8 +239,9 @@ and declares it in `checks` with kit API 1 (`docs/decisions/2026-10-21-module-co
 so `wb check` starts it, from the project root, only for a project whose committed manifest records the
 module and whose owner has pinned it under the name `doccheck`. It checks names, status, successor and
 candidate IDs, reads through the kit's no-follow reader, runs no program and writes nothing. The reference
-index check (`workbench/refcheck.py`) is still the installer's; it moves in a later increment, and both
-read through the no-follow reader and write nothing. An adversarial security pass over them found nothing above
+index check is the module's `helper/refcheck`, declared and pinned the same way under the name `refcheck`: it
+carries the index reader and compares the index with the files git tracks (read from `.git/index` by the
+kit), and it also writes nothing. An adversarial security pass over them found nothing above
 Medium unresolved; the Mediums were fixed and the plan's Result lists them.
 
 What is checked:

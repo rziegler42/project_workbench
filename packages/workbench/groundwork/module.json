@@ -16,11 +16,16 @@
     "docs/specs/README.md"
   ],
   "ships": [
-    "helper/doccheck"
+    "helper/doccheck",
+    "helper/refcheck"
   ],
   "checks": [
     {
       "helper": "helper/doccheck",
+      "kit": 1
+    },
+    {
+      "helper": "helper/refcheck",
       "kit": 1
     }
   ],

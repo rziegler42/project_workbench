@@ -5,6 +5,7 @@ The shipped approvals are stale between increment B and increment H of the groun
 so the installs here run against a copy of the package in a temporary distribution whose approvals
 `release_approvals` records in that copy. The owner's real release is increment H."""
 
+import hashlib
 import io
 import json
 import os
@@ -12,12 +13,14 @@ import shutil
 import subprocess
 import unittest
 
-from tests import support_install
+from tests import support_doccheck, support_install
 from workbench import (cli, firstparty, harnessplan, install, manifest, neutral, pins, sources,
                        store, verify)
 
 ROOT = support_install.ROOT
 HARNESS = support_install.HARNESS
+HELPERS = ("doccheck", "refcheck")
+PDF = b"%PDF-1.4 datasheet\n"
 PACKAGE = os.path.join(ROOT, "packages", "workbench")
 MODULE = os.path.join(PACKAGE, "groundwork")
 SKILLS = ("draft-decision", "draft-roadmap", "draft-spec")
@@ -43,12 +46,12 @@ class Declaration(unittest.TestCase):
         self.assertEqual("module", document["type"])
         self.assertEqual(list(AREAS), document["provides"])
         self.assertEqual(sorted(READMES), document["writes"])
-        self.assertEqual(["helper/doccheck"], document["ships"])
-        self.assertEqual([{"helper": "helper/doccheck", "kit": 1}], document["checks"])
+        self.assertEqual(["helper/%s" % name for name in HELPERS], document["ships"])
+        self.assertEqual([{"helper": "helper/%s" % name, "kit": 1} for name in HELPERS], document["checks"])
         for field in ("commands", "helpers", "requires", "blocks", "slots", "layout"):
             self.assertNotIn(field, document)
 
-    def test_it_ships_one_check_helper_and_every_other_file_is_a_readme_a_block_a_skill_file_or_the_declaration(self):
+    def test_it_ships_two_check_helpers_and_every_other_file_is_a_readme_a_block_a_skill_file_or_the_declaration(self):
         found = []
         for base, dirs, files in os.walk(MODULE):
             if base == MODULE:
@@ -58,7 +61,7 @@ class Declaration(unittest.TestCase):
                 self.assertEqual(0, os.stat(os.path.join(base, name)).st_mode & 0o111, name)
         skills = ["harness/neutral/skills/%s/%s" % (name, file) for name in SKILLS
                   for file in ("SKILL.md", "template.md")]
-        self.assertEqual(sorted(["module.json", "helper/doccheck", "files/blocks/docs-index.md",
+        self.assertEqual(sorted(["module.json", "helper/doccheck", "helper/refcheck", "files/blocks/docs-index.md",
                                  "files/blocks/policy.md"] + skills
                                 + ["files/" + rel for rel in READMES]), sorted(found))
 
@@ -396,11 +399,33 @@ class Install(support_install.InstallBase):
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.assertEqual(0, done.returncode, done.stderr)
 
-    def pin_doccheck(self, place):
-        """What the owner does with `pin`: record the installed helper under the name `doccheck`."""
-        rel = ".workbench/workbench/groundwork/helper/doccheck"
-        pins.set_pin(self.guarded, manifest.project_id(support_install.SEED), "doccheck", rel,
+    def pin_helper(self, place, name):
+        """What the owner does with `pin`: record the installed helper under its name."""
+        rel = ".workbench/workbench/groundwork/helper/" + name
+        pins.set_pin(self.guarded, manifest.project_id(support_install.SEED), name, rel,
                      pins.hash_bytes(self.read(place, rel)), "owner", kit=1)
+
+    def pin_doccheck(self, place):
+        self.pin_helper(place, "doccheck")
+
+    def pin_both(self, place):
+        for name in HELPERS:
+            self.pin_helper(place, name)
+
+    def write(self, place, rel, data):
+        full = os.path.join(place, *rel.split("/"))
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "wb") as handle:
+            handle.write(data)
+
+    def references(self, place, data=PDF):
+        """One reference file and an index for it, as the module's reader writes them."""
+        refs = support_doccheck.load("refcheck")
+        entry = {"file": "docs/references/a.pdf", "license": "CC-BY-4.0", "notes": "n",
+                 "retrieved": "2026-10-21", "sha256": hashlib.sha256(data).hexdigest(),
+                 "title": "Datasheet", "url": "https://example.com/a.pdf", "version": "1"}
+        self.write(place, "docs/references/a.pdf", data)
+        self.write(place, refs.PATH, refs.serialize({"entries": [entry], "format": 1}))
 
     def check(self, place):
         out, err = io.StringIO(), io.StringIO()
@@ -418,16 +443,64 @@ class Install(support_install.InstallBase):
         self.commit(place)
         code, out, err = self.check(place)
         self.assertEqual(1, code)
-        self.assertIn("problem: workbench/groundwork: the check doccheck is not pinned", err)
-        self.pin_doccheck(place)
+        for name in HELPERS:
+            self.assertIn("problem: workbench/groundwork: the check %s is not pinned" % name, err)
+        self.pin_both(place)
         code, out, err = self.check(place)
         self.assertEqual((0, ""), (code, err), out)
         self.assertTrue(out.endswith("check found no problems\n"), out)
 
-    def test_a_pinned_helper_reports_a_badly_named_spec_through_wb_check(self):
+    def test_the_reference_helper_passes_a_good_index_and_reports_a_changed_file_through_wb_check(self):
+        place = self.place()
+        self.assertEqual(0, self.install(place)[0])
+        self.pin_both(place)
+        self.references(place)
+        self.commit(place)
+        code, out, err = self.check(place)
+        self.assertEqual((0, ""), (code, err), out)
+        self.write(place, "docs/references/a.pdf", PDF + b"changed")
+        code, out, err = self.check(place)
+        self.assertEqual(1, code)
+        self.assertIn("problem: workbench/groundwork: docs/references/a.pdf: its content differs "
+                      "from the hash in the index", err)
+
+    def test_a_tracked_reference_with_no_index_is_reported_and_an_unpinned_helper_is_not_run(self):
         place = self.place()
         self.assertEqual(0, self.install(place)[0])
         self.pin_doccheck(place)
+        self.write(place, "docs/references/a.pdf", PDF)
+        self.commit(place)
+        code, out, err = self.check(place)
+        self.assertEqual(1, code)
+        self.assertIn("problem: workbench/groundwork: the check refcheck is not pinned", err)
+        self.assertNotIn("there is no index", err)  # the installer no longer reads the index
+        self.pin_helper(place, "refcheck")
+        code, out, err = self.check(place)
+        self.assertEqual(1, code)
+        self.assertIn("problem: workbench/groundwork: docs/references/index.json: there is no index, "
+                      "but git tracks 1 reference file", err)
+
+    def test_no_program_the_repository_names_is_run_by_the_reference_helper(self):
+        place = self.place()
+        self.assertEqual(0, self.install(place)[0])
+        self.pin_both(place)
+        self.references(place)
+        self.commit(place)
+        marker = os.path.join(self.root, "ran")
+        program = os.path.join(self.root, "hook.sh")
+        with open(program, "w") as handle:
+            handle.write("#!/bin/sh\necho ran >> %s\n" % marker)
+        os.chmod(program, 0o755)
+        with open(os.path.join(place, ".git", "config"), "a") as handle:
+            handle.write("[core]\n\tfsmonitor = %s\n\thooksPath = %s\n" % (program, self.root))
+        code, out, err = self.check(place)
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertFalse(os.path.exists(marker))
+
+    def test_a_pinned_helper_reports_a_badly_named_spec_through_wb_check(self):
+        place = self.place()
+        self.assertEqual(0, self.install(place)[0])
+        self.pin_both(place)
         with open(os.path.join(place, "docs", "specs", "Power.md"), "w", encoding="utf-8") as handle:
             handle.write("# Power\n\nStatus: Current\n")
         self.commit(place)
@@ -435,6 +508,7 @@ class Install(support_install.InstallBase):
         self.assertEqual(1, code)
         self.assertIn("problem: workbench/groundwork: docs/specs/Power.md: a spec is named", err)
         self.assertIn("check found 1 problem\n", out)
+        self.assertNotIn("reference", err)
 
     def test_documents_written_by_hand_are_checked_and_an_upgrade_changes_none_of_them(self):
         place = self.place()
@@ -447,6 +521,7 @@ class Install(support_install.InstallBase):
             with open(os.path.join(place, rel), "w", encoding="utf-8") as handle:
                 handle.write(text)
         self.commit(place)
+        self.pin_both(place)
         code, out, err = self.check(place)
         self.assertEqual(1, code)  # a tracked reference and no index
         self.assertIn("there is no index, but git tracks 1 reference file", err)

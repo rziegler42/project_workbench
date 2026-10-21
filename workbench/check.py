@@ -6,13 +6,11 @@ The report, from ``repository-boundary.md`` and ``installer-interface.md``:
 * files of a harness other than the attached one;
 * generated files whose hash differs from the local manifest, or that are missing;
 * extra files under the directories the attached harness generates into (strays);
-* for a project that has the ``groundwork`` module, its reference index against the files git
-  tracks (``refcheck``);
 * what git tracks: tracked files that look like harness output or scratch, tracked documents that
   link or import into untracked content, tracked files that differ from the committed manifest in a
   way their owner class does not allow, and whether the manifest is committed;
 * after those, what the installed modules' own checks report (``checks``), such as the form of the
-  specs, roadmaps and decisions from the ``groundwork`` module.
+  specs, roadmaps and decisions and the reference index from the ``groundwork`` module.
 
 Everything is read through the no-follow reader and nothing is written. The local manifest is
 scratch (``repository-boundary.md``): its hashes say a file is the one attach wrote, not that it is
@@ -22,8 +20,8 @@ safe, and the report says so. Git is never run: what it tracks is read from ``.g
 
 import collections
 
-from . import (__version__, checks, gitindex, installed, localmanifest, pointers, projectfs, refcheck,
-               sources, target)
+from . import (__version__, checks, gitindex, installed, localmanifest, pointers, projectfs, sources,
+               target)
 from .wbkit import display, safefs
 
 # Paths each harness is known to use, for the files of one harness found beside another and for the
@@ -288,9 +286,6 @@ def _tracked_report(writer):
     warnings = ["%s: a link that git tracks; where it points is not checked" % _shown(path)
                 for path in sorted(tracked.links)]
     problems.extend(_pointers(writer, tracked))
-    reference_problems, reference_warnings = refcheck.examine(writer, tracked)
-    problems.extend(reference_problems)
-    warnings.extend(reference_warnings)
     sentence, more_problems, more_warnings = _recorded(writer, tracked)
     return sentence, problems + more_problems, warnings + more_warnings
 

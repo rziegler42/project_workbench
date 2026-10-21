@@ -6,41 +6,18 @@ runner does it. How the installer starts it, and that a project without the modu
 tested in ``tests/test_checks.py`` and below."""
 
 import os
-import shutil
-import tempfile
 import unittest
 import unittest.mock
 
 from tests import support_doccheck
+from tests import support_docs
 from tests.support_docs import DECISION, ROADMAP, SPEC
 from workbench.wbkit import safefs
 
 doccheck = support_doccheck.load()
 
 
-class Base(unittest.TestCase):
-    """A project directory and a directory outside it."""
-
-    def setUp(self):
-        holder = tempfile.TemporaryDirectory()
-        self.addCleanup(holder.cleanup)
-        self.base = os.path.realpath(holder.name)
-        self.root = os.path.join(self.base, "proj")
-        os.mkdir(self.root)
-        self.outside = os.path.join(self.base, "outside")
-        os.mkdir(self.outside)
-
-    def put(self, rel, data):
-        full = os.path.join(self.root, *rel.split("/"))
-        os.makedirs(os.path.dirname(full), exist_ok=True)
-        with open(full, "wb") as handle:
-            handle.write(data.encode("utf-8") if isinstance(data, str) else data)
-
-    def fresh(self, rel, data):
-        """Only this document under docs/, so one subtest never sees another's file."""
-        shutil.rmtree(os.path.join(self.root, "docs"), ignore_errors=True)
-        self.put(rel, data)
-
+class Base(support_docs.Base):
     def problems(self):
         with safefs.Root(self.root, "project root") as held:
             return doccheck.examine(held)
