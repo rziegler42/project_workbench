@@ -125,21 +125,56 @@ does not receive them.
 
 ## The Claude harness module
 
-Provides all six capabilities. Proposed layout, to be verified against the installed
-version:
+Provides all six capabilities. Layout, verified against Claude Code 2.1.305 (see
+"Evidence" below):
 
 | kind or file | path |
 |---|---|
-| root file | `CLAUDE.md`: an `@AGENTS.md` pointer followed by a generated "Compact Instructions" section built from the neutral preservation guidance |
-| skill | `.claude/skills/<name>/SKILL.md` |
-| agent | `.claude/agents/<name>.md` (tool restriction through its `tools` field) |
-| command | `.claude/commands/<name>.md` |
-| local permissions and hooks | a per-clone settings file under `.claude/`, uncommitted (to verify: the local, gitignored variant) |
+| root file | `CLAUDE.md`: an `@AGENTS.md` pointer, followed by a generated "Compact Instructions" section once a module supplies the neutral preservation guidance |
+| skill | `.claude/skills/<name>/SKILL.md`; bundled files beside it |
+| agent | `.claude/agents/<name>.md` (`name`, `description`, `tools` as an allowlist, optional `model`) |
+| command | `.claude/commands/<name>.md` (`description`, `argument-hint`; `$ARGUMENTS`) |
+| local permissions and hooks | `.claude/settings.local.json`, which Claude merges over the committed settings and which holds `permissions` and `hooks` |
 
 - A hook that re-injects text after a compaction ships only as a `harness/claude/`
   override.
 - Excluded from git by `.git/info/exclude`: the root file and everything under
-  `.claude/`.
+  `.claude/`. Claude does not ignore a settings file that was created by hand; it adds
+  its own ignore entry to the user's global git excludes only the first time it writes
+  the file itself. The workbench therefore always writes the exclude line.
+
+### Verified rendering rules
+
+- **Path rules use `Edit(...)`, never `Write(...)`.** A `Write(path)` rule is accepted
+  and never consulted. An `Edit(path)` deny covers every built-in file-editing tool.
+- **An absolute path is written `//absolute/path`, or `~/path` for the home directory.**
+  A single leading `/` is relative to the project, so `Edit(/abs/path/**)` matches
+  nothing and does not warn. This was checked: a write through the single-slash form
+  succeeded, and the `//` form was refused.
+- **Bash deny rules** match the command text the agent submits. `Bash(wb install:*)`
+  (equivalent to `Bash(wb install *)`) blocked, in a test with a recording stand-in
+  for `wb`: the plain command, extra spaces, trailing arguments, a leading `cd x &&`,
+  a following `; echo`, a preceding `echo &&`, a leading `VAR=1` assignment, and
+  `env wb install`. It did not block, by its own text, `wb` written with a path or
+  wrapped in `bash -c`; the session's separate auto-mode classifier refused those two
+  in the test, which is not a property of the rule. The documentation states the rule
+  is "not a security boundary" and names `/bin/rm`, `bash -c` and `git -C` as forms it
+  misses. The workbench renders both the `wb` and the `python3 -m workbench` spellings
+  and claims no more than that.
+- A `deny` and an `ask` rule are checked before an `allow`, so the owner's `allow`
+  rules can never lift a deny.
+- Hooks live in the same file under `hooks`. Local settings take effect live.
+
+### Evidence
+
+Claude Code 2.1.305, checked on 2026-10-20. Sources: the official documentation at
+`code.claude.com/docs/en/` (settings, permissions, skills, sub-agents, slash-commands,
+memory, hooks), fetched that day; and a scratch project with a recording stand-in for
+`wb`, driven by `claude -p` with a small model. Not verified, and so not relied on: the
+`env` wrapper as a command prefix beyond the single test above, whitespace
+normalisation beyond doubled spaces, and loading of an untracked skill, agent or
+command (a scratch test showed an untracked skill, agent and command all listed by the
+session; the documentation is silent).
 
 ## The opencode harness module
 
@@ -196,9 +231,10 @@ area, therefore does not get a shell. It is given a **dedicated tool**.
 1. **opencode per-clone configuration.** The documentation names no uncommitted
    local-override file. Rendering permissions without editing a tracked file needs an
    answer.
-2. **Verifying formats and tool exposure.** The field mappings above, and whether each
-   harness can hand a specific tool to a specific agent, come from documentation read
-   on one day, and must be checked against the versions actually installed.
+2. **Verifying formats and tool exposure.** The Claude formats were verified on
+   2026-10-20 against 2.1.305 (see "Evidence"). Still open: the opencode formats
+   (`verify-opencode`), and whether either harness can hand a specific tool to a
+   specific agent (`code-work-module`, `researcher-fetch-tool`).
 
 ## Deferred
 
@@ -207,9 +243,9 @@ area, therefore does not get a shell. It is given a **dedicated tool**.
   guarded store are then enforced only by instruction. The installer never falls back
   to editing a tracked configuration file. The owner decides at `verify-opencode`
   whether that weaker mode is acceptable.
-- **Approving this specification does not verify the formats.** The Claude and
-  opencode paths and fields stay "to verify" against the installed versions;
-  `claude-harness` and `verify-opencode` check them.
+- **Approving this specification did not verify the formats.** The Claude formats
+  are now verified; the opencode paths and fields stay "to verify" against the
+  installed version (`verify-opencode`).
 - Field names and formats remain proposals.
 
 ## Acceptance criteria

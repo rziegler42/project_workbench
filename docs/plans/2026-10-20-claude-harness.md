@@ -407,4 +407,9 @@ constraints as written. Findings are untrusted input and were evaluated as revie
 
 ## Result
 
-Not started.
+- **A** (not yet committed): the Claude formats were checked against 2.1.305 from the official
+  documentation and a scratch project. Findings that change later increments: a `Write(path)` rule
+  is never consulted, so E renders `Edit(...)`; an absolute path needs `//` (a single `/` is
+  project-relative and silently matches nothing), so E renders `Edit(//…)` or `~/…`; a Bash deny
+  matched every tested form except a path-qualified `wb` and `bash -c`, as the documentation says.
+  The recorded evidence is in `harness-modules.md`.
