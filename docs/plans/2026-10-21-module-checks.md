@@ -323,3 +323,24 @@ and `test_verify.py`; `test_request.py` gains `checks=()` in two fixtures. No fi
 `checks` yet, so no approval changed.
 Verification: `python3 -B -W error tests/run_all.py`: 2207 tests in 3 roots, OK (2194 before); no `__pycache__`
 under `packages/`. Not reviewed independently; H covers it.
+
+### Increment B
+
+Re-reading the three modules showed what they take from the installer: `writer.read_file` (absent is None,
+a hard-linked file is refused), `writer.list_dir(..., lenient=True)`, `writer.git_bytes`, `gitindex`,
+`declarations.parse_json` (for the index) and `manifest.parse` (for the module gate). The kit now has:
+`Root.read_if_present`, `Root.list_dir` with `BAD_NAME`, `Root.git_bytes`, `wbkit/gitindex.py` (the parser, moved;
+`workbench/gitindex.py` keeps `read(writer)` and calls it) and `wbkit/jsonstrict.py` (moved from
+`declarations`, which calls it with its own byte limit). Existing kit functions are unchanged and `API` stays 1.
+Not added: a reader of the manifest's modules, because the gate is structural (the runner starts a helper only
+for a recorded module, `commands.resolve`-style, in installer code in C). Correction to the assumptions:
+`refindex.parse` compares the bytes with `refindex.serialize`, so F inlines `serialize` too, together with the
+few formatting helpers it takes from `manifest` (`_sorted_by`, `_path_key`, `_line`); they stay in the
+installer's `manifest` and are copied into the helper, not added to the kit. 24 new tests in
+`tests/test_kit_readers.py` (links at every component, a file where a directory belongs, hard links, size and
+path limits, a closed root, bad names, the index through a held root, strict JSON refusals);
+`tests/test_gitindex.py` patches the kit's limits; `test_kit.py` lists `struct`. `module-boundary.md` lists the
+new readers.
+Verification: `python3 -B -W error tests/run_all.py`: 2231 tests in 3 roots, OK (2207 before); one earlier run of
+the same command printed `FAILED: tests` and two reruns passed, so a flaky test is possible and is not
+identified; no `__pycache__` under `packages/`. Not reviewed independently; H covers it.

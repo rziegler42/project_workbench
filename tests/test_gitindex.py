@@ -10,6 +10,7 @@ import unittest
 import unittest.mock
 
 from workbench import gitindex
+from workbench.wbkit import gitindex as wbkit_gitindex  # the parser, whose limits a test patches
 
 
 def run_git(place, *args):
@@ -205,7 +206,7 @@ class Index(unittest.TestCase):
             body += entry + struct.pack(">H", 1) + b"\0" + b"a" + b"\0"
         with self.assertRaises(gitindex.GitIndexError):
             gitindex.parse(self.signed(body, version=4, count=5000))
-        with unittest.mock.patch.object(gitindex, "MAX_PATH_BYTES", 100):
+        with unittest.mock.patch.object(wbkit_gitindex, "MAX_PATH_BYTES", 100):
             with self.assertRaises(gitindex.GitIndexError):
                 gitindex.parse(self.signed(self.entry(b"abcdef") * 40, count=40))
         self.assertLess(time.monotonic() - start, 5)
@@ -213,7 +214,7 @@ class Index(unittest.TestCase):
     def test_the_number_of_entries_is_bounded(self):
         data = self.repo()
         self.assertEqual(7, len(gitindex.parse(data).files))
-        with unittest.mock.patch.object(gitindex, "MAX_ENTRIES", 6):
+        with unittest.mock.patch.object(wbkit_gitindex, "MAX_ENTRIES", 6):
             with self.assertRaises(gitindex.GitIndexError) as caught:
                 gitindex.parse(data)
         self.assertIn("more than the 6", str(caught.exception))

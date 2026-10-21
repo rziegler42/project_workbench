@@ -58,6 +58,10 @@ needs in order to read untrusted repository content safely and to report:
 - finding a project from a directory: a `.git` directory, a real `.workbench` directory and a regular
   manifest, with `lstat` only and a depth limit;
 - reading the committed manifest and the project's ID;
+- reading what a check needs of a hostile project, all without following a link: a file that may be
+  absent (`Root.read_if_present`, which also refuses a file with more than one hard link), a directory
+  listing with the kind of each entry (`Root.list_dir`), a file below `.git` (`Root.git_bytes`), the
+  paths git tracks read from `.git/index` (`wbkit/gitindex.py`) and strict JSON (`wbkit/jsonstrict.py`);
 - cleaning text for a terminal (`display.clean`) and decoding bytes with `replace`;
 - the report form of a module check (below) and the exit-code convention.
 

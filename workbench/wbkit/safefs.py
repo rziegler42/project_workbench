@@ -39,6 +39,9 @@ MAX_PATH_CHARS = 512
 
 Entry = collections.namedtuple("Entry", "rel kind identity executable")
 
+# The kind `Root.list_dir` gives, with `lenient`, to a name the path validator refuses.
+BAD_NAME = "badname"
+
 # Test seam: a callable ``hook(stage, **info)`` run at fixed points so a test can
 # swap files deterministically. It is None outside tests.
 _hook = None
@@ -324,6 +327,142 @@ class Root:
             for fd in fds:
                 os.close(fd)
         return b"".join(chunks)
+
+    def _descend_present(self, parts, fds):
+        """Like `_descend`, but None when a directory on the way is not there."""
+        current = self._live_fd()
+        shown = self.path
+        for part in parts:
+            shown = shown + "/" + part
+            try:
+                current = os.open(part, _flags_dir(), dir_fd=current)
+            except FileNotFoundError:
+                return None
+            except OSError as exc:
+                if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+                    raise SafeFsError("refusing to go through %s (symbolic link or not a directory)"
+                                      % shown)
+                raise _os_error("open", shown, exc)
+            fds.append(current)
+        return current
+
+    def _read_present(self, parts, dirfd, shown, limit):
+        """The bytes of the plain regular file `parts[-1]` in `dirfd`, or None when it is not there.
+        A link, another kind of file, a file with more than one hard link (its other name may lie
+        outside the project) and a file over `limit` are refused."""
+        try:
+            info = os.stat(parts[-1], dir_fd=dirfd, follow_symlinks=False)
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            raise _os_error("read", shown, exc)
+        kind = classify(info.st_mode)
+        if kind != "file":
+            raise SafeFsError("not a regular file (%s): %s" % (kind, shown))
+        if info.st_nlink > 1:
+            raise SafeFsError("the file has more than one hard link: %s" % shown)
+        if info.st_size > limit:
+            raise SafeFsError("file too large (%d bytes, limit %d): %s" % (info.st_size, limit, shown))
+        listed = identity(info)
+        try:
+            fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dirfd)
+        except FileNotFoundError:
+            return None
+        except OSError as exc:
+            if exc.errno in (errno.ELOOP, errno.ENXIO):
+                raise SafeFsError("not a regular file: %s" % shown)
+            raise _os_error("read", shown, exc)
+        try:
+            opened = os.fstat(fd)
+            if not stat.S_ISREG(opened.st_mode) or identity(opened) != listed:
+                raise SafeFsError("file changed before it was read: %s" % shown)
+            chunks, total = [], 0
+            try:
+                while total <= limit:
+                    chunk = os.read(fd, min(65536, limit + 1 - total))
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    total += len(chunk)
+            except OSError as exc:
+                raise _os_error("read", shown, exc)
+            if total > limit:
+                raise SafeFsError("file too large (over %d bytes): %s" % (limit, shown))
+            final = os.fstat(fd)
+            if identity(final) != listed or total != final.st_size:
+                raise SafeFsError("file changed while it was read: %s" % shown)
+        finally:
+            os.close(fd)
+        return b"".join(chunks)
+
+    def read_if_present(self, rel, limit=MAX_FILE_BYTES):
+        """The bytes of the regular file `rel`, or None when it, or a directory above it, is not
+        there. Nothing is followed: a link at any component, a file where a directory belongs, a
+        file that is not regular, one with more than one hard link and one over `limit` are
+        refused with `SafeFsError`."""
+        parts = validate_relpath(rel)
+        shown = "%s/%s" % (self.path, rel)
+        fds = []
+        try:
+            dirfd = self._descend_present(parts[:-1], fds)
+            if dirfd is None:
+                return None
+            return self._read_present(parts, dirfd, shown, limit)
+        finally:
+            for fd in fds:
+                os.close(fd)
+
+    def list_dir(self, rel, lenient=False):
+        """The entries of directory `rel` as sorted ``(name, kind)`` pairs, `kind` being what
+        `classify` says of the entry itself (a link is ``symlink`` and is never followed), or None
+        when the directory is not there. A link or a file in the way of the directory is refused.
+        A name that fails the path validator is refused, or with `lenient` is listed with the kind
+        `BAD_NAME` and is not examined further. The empty string is the root itself."""
+        parts = validate_relpath(rel) if rel else []
+        shown = "%s/%s" % (self.path, rel) if rel else self.path
+        fds = []
+        try:
+            dirfd = self._descend_present(parts, fds)
+            if dirfd is None:
+                return None
+            found = []
+            try:
+                for name in sorted(os.listdir(dirfd)):
+                    try:
+                        validate_relpath(name)
+                    except SafeFsError:
+                        if not lenient:
+                            raise
+                        found.append((name, BAD_NAME))
+                        continue
+                    try:
+                        info = os.stat(name, dir_fd=dirfd, follow_symlinks=False)
+                    except FileNotFoundError:
+                        continue
+                    found.append((name, classify(info.st_mode)))
+            except OSError as exc:
+                raise _os_error("list", shown, exc)
+            return found
+        finally:
+            for fd in fds:
+                os.close(fd)
+
+    def git_bytes(self, rel, limit):
+        """The bytes of the regular file `rel` below ``.git`` (at most `limit`, one link), or None
+        when it, or ``.git``, is not there. Nothing is followed; a link, a directory, another kind
+        of file or a larger file is refused. Read-only."""
+        parts = [".git"] + rel.split("/")
+        for part in parts[1:]:
+            validate_relpath("git/" + part)
+        fds = []
+        try:
+            dirfd = self._descend_present(parts[:-1], fds)
+            if dirfd is None:
+                return None
+            return self._read_present(parts, dirfd, "%s/.git/%s" % (self.path, rel), limit)
+        finally:
+            for fd in fds:
+                os.close(fd)
 
 
 # --- writer -------------------------------------------------------------------
