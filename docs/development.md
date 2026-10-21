@@ -313,7 +313,7 @@ manifest is tracked. It never runs git: a repository can name programs git would
 filesystem monitor, a filter, an included file), so the paths come from `.git/index` itself, version
 2, 3 or 4 with SHA-1 or SHA-256 names, in at most 16 MiB and 1,000,000 entries, paths of at most 4,096 bytes and 64 MiB in all. "Tracked" means in
 the index, so a staged file counts. A split or sparse index is reported as a problem. At most 5,000
-documents, 64 MiB of them and 5,000 existing-path lookups are examined, and a larger project is
+documents, 4 MiB of them and 5,000 existing-path lookups are examined, and a larger project is
 reported as not fully looked at.
 
 ## Recovering from an unfinished write

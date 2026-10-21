@@ -683,7 +683,7 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   (`list_dir` has no limit), so a clone with a huge `.claude/commands` makes `check` slow; a
   hostile local manifest can force up to 2048 bounded reads; the scanned directories are a table,
   not derived from the module's layout; empty stray directories are not reported.
-- **K** (not yet committed): `wb check` also reports what git tracks, in `check.py` with two new
+- **K** (`762e660`): `wb check` also reports what git tracks, in `check.py` with two new
   modules. **Git is never run.** Planned alternative considered and not taken: a private git
   directory; reading the index directly needs no program, no configuration and no copy, so the
   hostile-configuration risk does not arise (the plan allowed this: "read the index format directly
@@ -724,4 +724,29 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   working tree. Low, recorded: `@/...` and `@~/...` in prose are reported as outside the project;
   a link whose case differs from the file is not flagged on a case-insensitive filesystem; a
   version 4 index out of sorted order and unknown modes are accepted; an intent-to-add entry counts
-  as tracked. Suite to be re-run before the commit.
+  as tracked. Suite 1673 passing, 1 skipped, re-run before the commit.
+- **Security pass before L** (adversarial `security-reviewer`, 2026-10-21, 40 tool calls, scratch
+  copy only; its experiments are in the session scratchpad and not retained): no Critical or High.
+  It found no way to widen agent permissions, write outside the project, follow a symlink or run
+  code. Verified by experiment: a `.claude` symlink swapped in after preflight and before the first
+  write, and a `.git/info` symlink swapped in, both stop with exit 3 and write nothing through the
+  link; line injection into the exclude primitive (newline, CR, NUL, U+2028, U+202E, U+0085, `..`,
+  `.git` in any case, `GIT~1`) is refused; no input produced an `allow` entry or altered the
+  settings JSON; every owner-run command is denied in all five spellings and `wb preview` is not;
+  hostile index inputs (bad checksum, an extension length of 0xffffffff, a required extension) are
+  refused. Medium, fixed: the `](<` and `[id]: <` forms were linear but slow, about 4 µs per byte,
+  so a 16 MiB Markdown file would take about a minute. The angle-bracket target is now bounded to
+  256 characters and the total Markdown budget is 4 MiB (was 64 MiB); the worst case of 4 MiB of
+  `](<` now takes about 2.6 s, and the budget message is the existing "not all were looked at".
+  Low, recorded and not changed: a committed `.gitignore` can re-include a path with `!`, since
+  `.git/info/exclude` has the lowest precedence, and `check` flags such a file once tracked; the
+  rendered rules do not deny edits to `.claude/settings.local.json` or `.git/info/exclude`
+  themselves (a Bash deny is documented as best effort, and an edit is prompted by Claude); an
+  exclude file that already holds a later `!` line defeats an exclude line that is present; files
+  are written in path order, so agents and commands can exist for a moment before the deny rules
+  until a failed attach is rerun; `exclude_line` accepts `-x` and `K` (the Kelvin sign), both
+  harmless. Not run, for the owner to decide before release: a fake-`git` recorder against a
+  hostile `.git/config` through the CLI (K's own test patches process starts instead), a version 4
+  varint fuzz, a symlinked `.workbench/local` and `.git/index` through the CLI, case variants on
+  APFS, and the install exit-3 path. `test_a_split_index_is_refused` failed once and passed on
+  every rerun; it asserts "split index" in a message that sometimes says "split or sparse index".

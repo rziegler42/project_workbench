@@ -28,8 +28,8 @@ OUTSIDE = "outside"
 _FENCE = re.compile(r"^[ ]{0,3}(`{3,}(?!`)|~{3,}(?!~))[^\n]*\n.*?(?:^[ ]{0,3}\1[`~]*[ \t]*$|\Z)",
                     re.S | re.M)
 _CODE = re.compile(r"`[^`\n]*`")
-_INLINE = re.compile(r"\]\(\s*(?:<([^>\n]{0,2048})>|([^\s()]*))")
-_DEFINITION = re.compile(r"^[ ]{0,3}\[[^\]\n]{1,2048}\]:[ \t]*(?:<([^>\n]{0,2048})>|(\S+))", re.M)
+_INLINE = re.compile(r"\]\(\s*(?:<([^>\n]{0,256})>|([^\s()]*))")
+_DEFINITION = re.compile(r"^[ ]{0,3}\[[^\]\n]{1,2048}\]:[ \t]*(?:<([^>\n]{0,256})>|(\S+))", re.M)
 _ATTRIBUTE = re.compile(r"""\b(?:href|src)\s*=\s*(?:"([^"\n]{0,2048})"|'([^'\n]{0,2048})')""", re.I)
 _IMPORT = re.compile(r"(?<![\w@/.:-])@([A-Za-z_~./][\w./~+-]*)")
 _SCHEME = re.compile(r"\A[A-Za-z][A-Za-z0-9+.-]*:")

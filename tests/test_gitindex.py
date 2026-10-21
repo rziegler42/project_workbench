@@ -93,7 +93,8 @@ class Index(unittest.TestCase):
         self.assertIn(b"link", data)
         with self.assertRaises(gitindex.GitIndexError) as caught:
             gitindex.parse(data)
-        self.assertIn("split index", str(caught.exception))
+        # Either refusal path may fire, depending on how git laid out the index.
+        self.assertIn("split", str(caught.exception))
 
     def test_a_submodule_entry_is_a_tracked_directory(self):
         self.repo()
