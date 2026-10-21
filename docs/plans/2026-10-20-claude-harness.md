@@ -404,7 +404,7 @@ constraints as written. Findings are untrusted input and were evaluated as revie
 - Supporting a `.git` that is a file (worktree, submodule). Attach refuses it in this plan:
   increment F's exclude primitive refuses it and increment H tests the refusal and its message.
 - opencode and Codex; harness swap; Windows.
-- **C** (not yet committed): `workbench/layout.py` (`problems(layout)` returns every reason a
+- **C** (`68c9f36`): `workbench/layout.py` (`problems(layout)` returns every reason a
   layout is refused), called from `modulefiles.verify_module` for a harness module as rule
   `layout`, and `tests/test_layout.py` (29 tests; suite 1344, 1 skipped, `-W error`). The shape, which D, E and G build on:
   `root` (`none` or `{file, import}`), `kinds.<kind>` (`path` as `<dir>/{name}.md` or, for a skill,
@@ -425,7 +425,7 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   must then never install one. E and F must write each exclude entry anchored (`/<entry>`), since
   git matches a slash-free entry at any depth. Three `test_request.py` tests that put arbitrary layouts through
   full verification now render the loaded declaration instead, since verification refuses them.
-- **D** (not yet committed): `workbench/harnessplan.py` and `tests/test_harnessplan.py` (36 tests;
+- **D** (`6f1fda6`): `workbench/harnessplan.py` and `tests/test_harnessplan.py` (36 tests;
   suite 1380, 1 skipped, `-W error`). `translate(items, layout, overrides, excludes, provides)`
   is pure and returns `Result(files, reports)`: `Planned(path, data, mode, sha256, source)` with
   mode 0644, and `Report(level, item, message)` with level `warning`, `skipped`, `excluded` or
@@ -444,7 +444,7 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   guard or the `needs` guard each fails tests. Not yet proved: that Claude's parser reads a
   quoted `tools` or `argument-hint` value as the unquoted one; G's end-to-end check must show it.
   How `harness/<name>/` files are read into the override mapping is H's job.
-- **E** (not yet committed): `workbench/rules.py` (new: `OWNER_RUN`, `AGENT_SAFE`, `SPELLINGS`,
+- **E** (`e6e8cab`): `workbench/rules.py` (new: `OWNER_RUN`, `AGENT_SAFE`, `SPELLINGS`,
   `NOT_YET_ROUTED`, `FLOOR_RULES`, `owner_run_patterns()`), `render_permissions(rules, layout,
   store_root, home)` in `workbench/harnessplan.py`, and `tests/test_permissions.py` (21 tests;
   suite 1406, 1 skipped, `-W error`). The output is sorted JSON with only the layout's `deny` and
@@ -509,3 +509,29 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   fails. The reviewer's verdict: a regex approximation of YAML is not acceptable as the only gate;
   the robust change is to render an override's agent front matter from structured fields. Not
   done; recorded for the owner. Reachability against Claude's own parser was not tested.
+- **F** (not yet committed): `Writer.add_exclude(entries)` and `exclude_line(entry)` in
+  `workbench/projectfs.py`, `workbench/localmanifest.py` (new), `tests/test_exclude.py` (29 tests)
+  and `tests/test_localmanifest.py` (20); suite 1477, 1 skipped, `-W error`. `add_exclude` writes
+  each entry as the anchored literal line `/<entry>` (a trailing `/` marks a directory), refuses an
+  entry with a glob character, space, `#`, `!`, backslash, colon, a `.`/`..`/empty segment or any
+  `.git` component (so it can only name a path inside the project), and takes no path: it opens
+  `.git` (a gitfile, link or missing `.git` is a conflict, with a clear message for the gitfile),
+  `info` (made when missing) and `exclude` with no-follow descriptors, requires a regular file
+  with one link, reads it bounded, and appends only the lines not already there byte for byte. The
+  owner's lines are kept byte for byte and the inode is the same; a missing final newline is
+  added; an empty list touches nothing. `localmanifest` is canonical JSON (`files`, `format`,
+  `harness`, `module_version`, `source`, `tree`, `workbench`; files sorted by path, 2048 at most,
+  1 MiB), read back only if byte-identical to the serializer's output; `write` creates
+  `.workbench/local/harness.json` exclusively and `read` refuses a link or a non-canonical file. It
+  refuses any key a committed manifest holds that this one does not (no seed) and a file path under
+  `.workbench/local`. Sixteen mutation checks (each guard removed in a scratch copy) all fail a
+  test. Limits: the append is not atomic against a concurrent writer of the same file; a case
+  variant of an entry is a different line (git's `core.ignorecase` is not read); the module
+  version and source are shape-checked only.
+  `workflow-reviewer`: no Critical or High; its experiments were blocked, so findings are from
+  reading. Fixed, with tests (suite 1478): a local-manifest file path equal to `.workbench/local`
+  or under it is refused with case folded (a case-insensitive filesystem aliases it); a CRLF
+  owner file's lines are compared without the trailing `\r`, so a rerun adds nothing. Recorded as
+  limits, not fixed: an entry already present is skipped even if a later owner `!` line re-includes
+  the path (the owner's own negation wins); a write that fails part-way (ENOSPC) can leave an
+  unterminated fragment, which a rerun separates with a newline.

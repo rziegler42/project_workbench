@@ -7,7 +7,8 @@ after a check cannot move the write elsewhere. A file is created exclusively and
 following links; an existing path of any kind, or a link at any component, is a conflict.
 Nothing is overwritten except through ``replace_file``, which renames a freshly made sibling
 over a regular file whose hash is the one expected. Nothing is unlinked except the install
-marker and the writer's own sibling when a replace fails.
+marker and the writer's own sibling when a replace fails. The one write under ``.git`` besides
+``create_git`` is ``add_exclude``, which appends literal lines to ``.git/info/exclude``.
 
 Limits, recorded on purpose:
 
@@ -38,6 +39,9 @@ import stat
 from . import safefs
 
 MARKER = ".workbench/local/incomplete"
+EXCLUDE = ".git/info/exclude"
+MAX_EXCLUDE_ENTRIES = 256
+_EXCLUDE_BAD = set("*?[]!# \\")
 
 
 class WriteConflict(safefs.SafeFsError):
@@ -46,6 +50,24 @@ class WriteConflict(safefs.SafeFsError):
 
 class MarkerMissing(safefs.SafeFsError):
     """The install marker is not there (as opposed to being unreadable or in the way)."""
+
+
+def exclude_line(entry):
+    """The line `add_exclude` writes for `entry`: the literal path, anchored with a leading ``/``.
+
+    An entry is a relative path with an optional trailing ``/`` (a directory). A glob character,
+    a space, a leading ``!`` or ``#`` (anywhere, in fact), a backslash, a ``.``/``..``/empty
+    segment and anything under ``.git`` are refused, so the line can only name that one path.
+    """
+    if not isinstance(entry, str):
+        raise safefs.SafeFsError("an exclude entry is not text: %r" % (entry,))
+    body = entry[:-1] if entry.endswith("/") else entry
+    safefs.validate_relpath(body)
+    if _EXCLUDE_BAD & set(entry):
+        raise safefs.SafeFsError(
+            "an exclude entry must be a literal path with no glob, space, '#', '!' or backslash: %s"
+            % entry)
+    return "/" + entry
 
 
 # What `read_file` returns: the bytes, their SHA-256 (hex) and the permission bits.
@@ -452,6 +474,150 @@ class Writer:
                     os.unlink(sibling, dir_fd=dirfd)
                 except OSError:
                     pass
+            for each in fds:
+                os.close(each)
+
+    def _open_git_info(self, fds):
+        """Open ``.git/info`` below the target, making ``info`` when it is missing. ``.git`` must
+        be a real directory: a gitfile (a worktree or a submodule), a link or anything else is a
+        conflict."""
+        top = self._live_fd()
+        shown = self._shown(".git")
+        try:
+            info = os.stat(".git", dir_fd=top, follow_symlinks=False)
+        except FileNotFoundError:
+            raise WriteConflict("there is no .git directory: %s" % shown)
+        except OSError as exc:
+            raise _os_error("read", shown, exc)
+        if stat.S_ISREG(info.st_mode):
+            raise WriteConflict(".git is a file (a worktree or a submodule), not a directory; "
+                                "its exclude file is not edited: %s" % shown)
+        if not stat.S_ISDIR(info.st_mode):
+            raise WriteConflict(".git is not a real directory: %s" % shown)
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        try:
+            git = os.open(".git", flags, dir_fd=top)
+        except OSError as exc:
+            if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+                raise WriteConflict("a link or a file is in the way: %s" % shown)
+            raise _os_error("open", shown, exc)
+        fds.append(git)
+        shown = self._shown(".git/info")
+        try:
+            return self._open_dir_or_make(git, "info", shown, flags, ".git/info/")
+        except OSError as exc:
+            if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+                raise WriteConflict("a link or a file is in the way: %s" % shown)
+            raise _os_error("open", shown, exc)
+
+    def _open_dir_or_make(self, dirfd, name, shown, flags, record):
+        try:
+            return os.open(name, flags, dir_fd=dirfd)
+        except FileNotFoundError:
+            pass
+        try:
+            os.mkdir(name, 0o755, dir_fd=dirfd)
+            self.written.append(record)
+        except FileExistsError:
+            pass
+        except OSError as exc:
+            raise _os_error("create", shown, exc)
+        return os.open(name, flags, dir_fd=dirfd)
+
+    def add_exclude(self, entries):
+        """Add the anchored literal lines for `entries` (see ``exclude_line``) to
+        ``.git/info/exclude`` and return the entries that were added, in order.
+
+        An entry whose line is already there, byte for byte, is not added again, so a rerun adds
+        nothing. Existing lines are kept as they are: the file is opened no-follow, must be a
+        regular file with one link, and is appended to, never rewritten. A missing ``info`` or
+        ``exclude`` is created. The target is the only place this reads or writes under ``.git``,
+        and the path is not a parameter, so no other ``.git`` file can be named.
+        """
+        if isinstance(entries, (str, bytes)):
+            raise safefs.SafeFsError("exclude entries are not a list")
+        wanted = []
+        for entry in entries:
+            line = exclude_line(entry)
+            if all(line != other for _, other in wanted):
+                wanted.append((entry, line))
+        if len(wanted) > MAX_EXCLUDE_ENTRIES:
+            raise safefs.SafeFsError("too many exclude entries (limit %d)" % MAX_EXCLUDE_ENTRIES)
+        if not wanted:
+            return []
+        shown = self._shown(EXCLUDE)
+        safefs._fire("projectfs_validated", root=self.target.path, rel=EXCLUDE)
+        fds = []
+        try:
+            info = self._open_git_info(fds)
+            fds.append(info)
+            safefs._fire("projectfs_walked", root=self.target.path, rel=EXCLUDE)
+            flags = os.O_RDWR | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK
+            created = False
+            try:
+                fd = os.open("exclude", flags, dir_fd=info)
+            except FileNotFoundError:
+                try:
+                    fd = os.open("exclude", os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_EXCL
+                                 | os.O_NOFOLLOW, 0o644, dir_fd=info)
+                except FileExistsError:
+                    raise WriteConflict("the exclude file appeared: %s" % shown)
+                except OSError as exc:
+                    raise _os_error("create", shown, exc)
+                created = True
+                self.written.append(EXCLUDE)
+            except OSError as exc:
+                if exc.errno in (errno.ELOOP, errno.ENXIO, errno.EISDIR, errno.ENOTDIR):
+                    raise WriteConflict("the exclude file is not a regular file: %s" % shown)
+                raise _os_error("open", shown, exc)
+            try:
+                opened = os.fstat(fd)
+                if not stat.S_ISREG(opened.st_mode):
+                    raise WriteConflict("the exclude file is not a regular file: %s" % shown)
+                if opened.st_nlink > 1:
+                    raise WriteConflict("the exclude file has more than one hard link: %s" % shown)
+                if opened.st_size > safefs.MAX_FILE_BYTES:
+                    raise safefs.SafeFsError("file too large (%d bytes, limit %d): %s"
+                                             % (opened.st_size, safefs.MAX_FILE_BYTES, shown))
+                existing = b""
+                if not created:
+                    try:
+                        chunks, total = [], 0
+                        while total <= safefs.MAX_FILE_BYTES:
+                            chunk = os.pread(fd, 65536, total)
+                            if not chunk:
+                                break
+                            chunks.append(chunk)
+                            total += len(chunk)
+                    except OSError as exc:
+                        raise _os_error("read", shown, exc)
+                    if total > safefs.MAX_FILE_BYTES:
+                        raise safefs.SafeFsError("file too large (over %d bytes): %s"
+                                                 % (safefs.MAX_FILE_BYTES, shown))
+                    existing = b"".join(chunks)
+                # A CRLF file's lines end in "\r"; it is not part of the line git reads.
+                present = {line[:-1] if line.endswith(b"\r") else line
+                           for line in existing.split(b"\n")}
+                added = [(entry, line.encode("utf-8")) for entry, line in wanted
+                         if line.encode("utf-8") not in present]
+                if not added:
+                    return []
+                text = b"".join(line + b"\n" for _, line in added)
+                if existing and not existing.endswith(b"\n"):
+                    text = b"\n" + text
+                if len(existing) + len(text) > safefs.MAX_FILE_BYTES:
+                    raise safefs.SafeFsError("file too large: %s" % shown)
+                try:
+                    view = memoryview(text)
+                    while view:
+                        view = view[os.write(fd, view):]
+                    os.fsync(fd)
+                except OSError as exc:
+                    raise _os_error("write", shown, exc)
+                return [entry for entry, _ in added]
+            finally:
+                os.close(fd)
+        finally:
             for each in fds:
                 os.close(each)
 
