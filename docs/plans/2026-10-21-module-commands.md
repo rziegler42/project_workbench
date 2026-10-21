@@ -1,6 +1,6 @@
 # Module commands and `wb run`
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-21
 
 Candidate: workbench-v1#module-commands
@@ -263,4 +263,21 @@ Approved by the owner on 2026-10-21, after the one Codex round; no further round
 
 ## Result
 
-Not started.
+### Increment A
+
+`declarations.py` reads `commands` into `Module.commands`, a tuple of `Command(name, helper, runtime, kit,
+arguments)`, with every shape and refusal of "Declaration schema" (at most 16 commands and 16 arguments; a
+`kit` required with `python` and refused otherwise; a helper that is an item of `ships` or below one; no two
+commands naming one helper). `modulefiles.py` also requires each command's helper to be a regular file of the
+module, a check the parser cannot make. `module-contract.md` marks the field verified and `wb run` not built.
+Two existing tests that build `Module` by hand gained the new field.
+Not done, and not in the plan: `request.render_module` does not list a module's commands in the approval
+request. The declaration hash covers them and the helper is shown under "ships", but the owner does not see
+the command names or arguments there. This is raised with the owner for a decision before D.
+Review: one read-only `workflow-reviewer` pass, no Critical, High or Medium finding. Two Low findings were
+fixed: two commands naming helpers that differ only in letter case (or Unicode form) are now refused, and the
+tests gained the kit, argument, key and helper cases the reviewer listed (a float `kit` or `helper` is refused
+earlier, by the strict JSON loader, so those two are not `commands` cases). The third Low finding is the
+approval-request gap above. The reviewer ran no adversarial probes; this increment runs nothing.
+Verification: `python3 -B -W error tests/run_all.py`: 2155 tests in 2 roots, OK (2145 before). No
+first-party module changed, so no approval changed.

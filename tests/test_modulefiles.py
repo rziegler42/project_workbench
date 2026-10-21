@@ -128,6 +128,25 @@ class AccountingTest(Base):
         self.edit_module(ships=["scripts/check.sh", "scripts/gone.sh"])
         self.refused("ships")
 
+    def test_a_command_helper_that_is_shipped_is_accepted(self):
+        self.edit_module(commands={"run-it": {"helper": "scripts/check.sh", "arguments": ["go"]}})
+        self.assertEqual(self.check().problems, [])
+
+    def test_a_command_helper_below_a_shipped_directory_is_accepted(self):
+        self.edit_module(ships=["scripts"], commands={"run-it": {"helper": "scripts/more/run.sh"}})
+        self.put("sample-notes/scripts/more/run.sh")
+        self.assertEqual(self.check().problems, [])
+
+    def test_a_command_helper_that_does_not_exist_is_refused(self):
+        self.edit_module(ships=["scripts"], commands={"run-it": {"helper": "scripts/gone.sh"}})
+        result = self.refused("commands")
+        self.assertIn("run-it", str(result.problems[0]))
+
+    def test_a_command_helper_that_is_a_directory_is_refused(self):
+        self.edit_module(ships=["scripts"], commands={"run-it": {"helper": "scripts/more"}})
+        self.put("sample-notes/scripts/more/run.sh")
+        self.refused("commands")
+
     def test_missing_writes_source(self):
         self.edit_module(writes=["docs/notes.md", "docs/other.md"])
         result = self.refused("writes")

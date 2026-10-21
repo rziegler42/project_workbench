@@ -320,6 +320,86 @@ class ModuleTest(unittest.TestCase):
         for bad in ("/abs", "a/../b", "a\\b", "C:x", ".git/hooks/x", "a//b"):
             self.refused("ships", ships=[bad])
 
+    def command(self, **fields):
+        entry = {"helper": "scripts/check.sh"}
+        entry.update(fields)
+        return {"run-it": entry}
+
+    def test_a_module_without_commands_has_none(self):
+        self.assertEqual((), self.parse(module()).commands)
+
+    def test_a_command_takes_its_defaults(self):
+        got = self.parse(module(commands=self.command())).commands
+        self.assertEqual(1, len(got))
+        self.assertEqual(("run-it", "scripts/check.sh", "exec", None, ()),
+                         (got[0].name, got[0].helper, got[0].runtime, got[0].kit, got[0].arguments))
+
+    def test_a_full_command_is_read(self):
+        got = self.parse(module(ships=["scripts"], commands={
+            "a": {"helper": "scripts/run", "runtime": "python", "kit": 2, "arguments": ["check", "x-1"]},
+            "b": {"helper": "scripts/other", "runtime": "exec"}})).commands
+        self.assertEqual(["a", "b"], [c.name for c in got])
+        self.assertEqual(("python", 2, ("check", "x-1")), (got[0].runtime, got[0].kit, got[0].arguments))
+        self.assertEqual(("exec", None, ()), (got[1].runtime, got[1].kit, got[1].arguments))
+
+    def test_a_command_helper_may_be_a_file_below_a_shipped_directory(self):
+        self.parse(module(ships=["scripts"], commands={"a": {"helper": "scripts/deep/run"}}))
+
+    def test_commands_refusals(self):
+        many = {"c%d" % n: {"helper": "scripts/check.sh"} for n in range(17)}
+        cases = {
+            "not an object": [],
+            "too many": many,
+            "key starts with a dot": {".a": {"helper": "scripts/check.sh"}},
+            "key has a space": {"a b": {"helper": "scripts/check.sh"}},
+            "key too long": {"a" * 65: {"helper": "scripts/check.sh"}},
+            "empty key": {"": {"helper": "scripts/check.sh"}},
+            "value not an object": {"a": "scripts/check.sh"},
+            "no helper": {"a": {}},
+            "unknown field": {"a": {"helper": "scripts/check.sh", "extra": 1}},
+            "helper not shipped": {"a": {"helper": "elsewhere/run"}},
+            "helper not a string": {"a": {"helper": 3}},
+            "helper path refused": {"a": {"helper": "../scripts/check.sh"}},
+            "helper is the shipped directory's sibling": {"a": {"helper": "scripts2/run"}},
+            "runtime unknown": {"a": {"helper": "scripts/check.sh", "runtime": "perl"}},
+            "runtime not a string": {"a": {"helper": "scripts/check.sh", "runtime": 1}},
+            "python without a kit": {"a": {"helper": "scripts/check.sh", "runtime": "python"}},
+            "kit with exec": {"a": {"helper": "scripts/check.sh", "kit": 1}},
+            "kit zero": {"a": {"helper": "scripts/check.sh", "runtime": "python", "kit": 0}},
+            "kit a string": {"a": {"helper": "scripts/check.sh", "runtime": "python", "kit": "1"}},
+            "kit true": {"a": {"helper": "scripts/check.sh", "runtime": "python", "kit": True}},
+            "arguments not a list": {"a": {"helper": "scripts/check.sh", "arguments": "check"}},
+            "argument not a string": {"a": {"helper": "scripts/check.sh", "arguments": [1]}},
+            "argument has an uppercase letter": {"a": {"helper": "scripts/check.sh", "arguments": ["Check"]}},
+            "argument starts with a dash": {"a": {"helper": "scripts/check.sh", "arguments": ["-x"]}},
+            "argument empty": {"a": {"helper": "scripts/check.sh", "arguments": [""]}},
+            "argument too long": {"a": {"helper": "scripts/check.sh", "arguments": ["a" * 33]}},
+            "argument repeated": {"a": {"helper": "scripts/check.sh", "arguments": ["x", "x"]}},
+            "too many arguments": {"a": {"helper": "scripts/check.sh",
+                                         "arguments": ["a%d" % n for n in range(17)]}},
+            "kit true with exec": {"a": {"helper": "scripts/check.sh", "kit": True}},
+            "kit null with exec": {"a": {"helper": "scripts/check.sh", "kit": None}},
+            "kit zero with exec": {"a": {"helper": "scripts/check.sh", "kit": 0}},
+            "argument with a newline": {"a": {"helper": "scripts/check.sh", "arguments": ["a\n"]}},
+            "argument with a NUL": {"a": {"helper": "scripts/check.sh", "arguments": ["a\x00"]}},
+            "argument with a lookalike letter": {"a": {"helper": "scripts/check.sh",
+                                                       "arguments": ["\u0430bc"]}},
+            "key with a lookalike letter": {"\u0430bc": {"helper": "scripts/check.sh"}},
+            "key with a newline": {"a\n": {"helper": "scripts/check.sh"}},
+            "helper an integer": {"a": {"helper": 7}},
+            "helper a bool": {"a": {"helper": True}},
+            "helper in another case than ships": {"a": {"helper": "scripts/CHECK.sh"}},
+            "one helper twice": {"a": {"helper": "scripts/check.sh"}, "b": {"helper": "scripts/check.sh"}},
+        }
+        for label, commands in cases.items():
+            with self.subTest(label):
+                self.refused("commands", ships=["scripts"] if label == "helper is the shipped directory's sibling"
+                             else ["scripts/check.sh"], commands=commands)
+
+    def test_two_commands_may_not_name_helpers_that_differ_only_in_case(self):
+        self.refused("commands", ships=["scripts/Run", "scripts/run"],
+                     commands={"a": {"helper": "scripts/Run"}, "b": {"helper": "scripts/run"}})
+
     def test_writes_path_rules(self):
         bad = ["/etc/passwd", "../x", "a/../../x", "a\\b", "C:/x", ".git/config", ".GIT/config",
                ".git./config", "GIT~1/config", "a/.git/x", "link/../x", ".config/project-workbench/s",

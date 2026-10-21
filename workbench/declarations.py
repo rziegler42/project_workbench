@@ -25,12 +25,16 @@ slots       the names of the slots the module owns; the module provides
 helpers     tool names to look up on ``PATH``: letters, digits and ``._+-``.
 writes,
 ships       lists of relative paths, checked by ``safefs.validate_relpath``.
+commands    an object of at most ``MAX_COMMANDS`` entries, each a command name in the
+            helper-name form mapped to ``{"helper", "runtime", "kit", "arguments"}``
+            (``module-boundary.md``, "Declaration schema"). The helper is an item of
+            ``ships`` or a file below one.
 layout      present exactly for a harness module: an object whose keys come from
             ``LAYOUT_KEYS``. Its values are not checked beyond being JSON data;
             that belongs to the harness specification.
 
 Optional fields (``type``, ``provides``, ``requires``, ``blocks``, ``helpers``,
-``slots``, ``fills``, ``writes``, ``ships``) default to ``module`` and empty. The
+``slots``, ``fills``, ``writes``, ``ships``, ``commands``) default to ``module`` and empty. The
 declaration hash covers the declaration as written, never the defaults.
 
 A ``writes`` path may not name the guarded store and may not enter ``.workbench/``
@@ -58,17 +62,24 @@ LAYOUT_KEYS = ("root", "kinds", "local_settings", "hooks", "exclude", "notes")
 
 PACKAGE_FIELDS = ("name", "version", "contract", "modules")
 MODULE_FIELDS = ("name", "version", "type", "description", "provides", "requires", "blocks",
-                 "helpers", "slots", "fills", "writes", "ships", "layout")
+                 "helpers", "slots", "fills", "writes", "ships", "commands", "layout")
 
 _NAME = re.compile(r"^[a-z][a-z0-9-]*\Z")
 _VERSION = re.compile(r"^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){0,3}\Z")
 NAME_RE = _NAME
 _HELPER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*\Z")
+_ARGUMENT = re.compile(r"^[a-z][a-z0-9-]*\Z")
+
+MAX_COMMANDS = 16
+MAX_ARGUMENTS = 16
+MAX_ARGUMENT_CHARS = 32
+RUNTIMES = ("python", "exec")
 
 Package = collections.namedtuple("Package", "name version contract modules declaration")
 Module = collections.namedtuple(
     "Module", "name version type description provides requires blocks helpers slots fills "
-              "writes ships layout declaration")
+              "writes ships commands layout declaration")
+Command = collections.namedtuple("Command", "name helper runtime kit arguments")
 Loaded = collections.namedtuple("Loaded", "package modules problems")
 
 
@@ -278,6 +289,56 @@ def parse_package(data, shown="package"):
 # --- module ------------------------------------------------------------------------------
 
 
+def _commands(check, value, ships):
+    """The ``commands`` field as a tuple of ``Command``, or a refusal naming the field."""
+    if not isinstance(value, dict):
+        check.fail("commands", "must be an object")
+    if len(value) > MAX_COMMANDS:
+        check.fail("commands", "at most %d commands, not %d" % (MAX_COMMANDS, len(value)))
+    commands = []
+    helpers = set()
+    for name, entry in value.items():
+        if not isinstance(name, str) or len(name) > MAX_NAME_CHARS or not _HELPER.match(name):
+            check.fail("commands", "command name %s must be letters, digits and ._+-, starting "
+                                   "with a letter or digit, at most %d characters"
+                       % (_shown(name), MAX_NAME_CHARS))
+        check.exact_keys(entry, "commands", ("helper",), ("runtime", "kit", "arguments"))
+        helper = check.path(entry["helper"], "commands")
+        helper = "/".join(helper)
+        if not any("/".join(helper.split("/")[:n]) in ships
+                   for n in range(1, len(helper.split("/")) + 1)):
+            check.fail("commands", "command %s: helper %s is not an item of 'ships' or below one"
+                       % (name, _shown(helper)))
+        folded = "/".join(_fold(part) for part in helper.split("/"))
+        if folded in helpers:
+            check.fail("commands", "two commands name the helper %s (or one that differs only in "
+                                   "letter case)" % _shown(helper))
+        helpers.add(folded)
+        runtime = entry.get("runtime", "exec")
+        if runtime not in RUNTIMES:
+            check.fail("commands", "command %s: runtime %s is not one of %s"
+                       % (name, _shown(runtime), ", ".join(RUNTIMES)))
+        kit = entry.get("kit")
+        if runtime == "python":
+            if type(kit) is not int or kit < 1:
+                check.fail("commands", "command %s: a python command needs 'kit', an integer "
+                                       "from 1" % name)
+        elif "kit" in entry:
+            check.fail("commands", "command %s: 'kit' goes only with runtime 'python'" % name)
+        arguments = entry.get("arguments", [])
+        if not isinstance(arguments, list) or len(arguments) > MAX_ARGUMENTS:
+            check.fail("commands", "command %s: 'arguments' must be a list of at most %d"
+                       % (name, MAX_ARGUMENTS))
+        check.unique(arguments, "commands")
+        for argument in arguments:
+            if len(argument) > MAX_ARGUMENT_CHARS or not _ARGUMENT.match(argument):
+                check.fail("commands", "command %s: argument %s must be lowercase letters, digits "
+                                       "and dashes, starting with a letter, at most %d characters"
+                           % (name, _shown(argument), MAX_ARGUMENT_CHARS))
+        commands.append(Command(name, helper, runtime, kit, tuple(arguments)))
+    return tuple(commands)
+
+
 def parse_module(data, package_name, expected_name, first_party=False):
     """Validate the bytes of one ``module.json``; return a ``Module``."""
     check = _Checker("module", expected_name, package_name)
@@ -388,6 +449,8 @@ def parse_module(data, package_name, expected_name, first_party=False):
     except safefs.SafeFsError as exc:
         check.fail("writes", str(exc))
 
+    commands = _commands(check, declaration.get("commands", {}), ships)
+
     layout = declaration.get("layout")
     if mtype == "harness":
         if "layout" not in declaration:
@@ -403,7 +466,7 @@ def parse_module(data, package_name, expected_name, first_party=False):
 
     return Module(name, version, mtype, description, tuple(provides), tuple(requires),
                   tuple(blocks), tuple(helpers), tuple(slots), tuple(fills), tuple(writes),
-                  tuple(ships), layout, declaration)
+                  tuple(ships), commands, layout, declaration)
 
 
 # --- from a directory ------------------------------------------------------------------------

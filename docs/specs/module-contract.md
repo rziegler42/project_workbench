@@ -74,7 +74,7 @@ Each module has one declaration file, `module.json`, at the root of its director
 | `fills` | Blocks the module contributes: the slot, and the source file. |
 | `writes` | The project paths the module writes, beyond its own namespace. |
 | `ships` | Executable or code-bearing items it ships, such as hooks or helper scripts. |
-| `commands` | Commands it offers, each a pinned helper it ships and the first arguments it accepts, run with `wb run`. *(specified by `module-boundary.md`; not built yet)* |
+| `commands` | Commands it offers, each a pinned helper it ships and the first arguments it accepts, run with `wb run`. *(the field is verified; `wb run` is not built yet)* |
 | `checks` | Pinned Python helpers it contributes to `wb check`. *(specified by `module-boundary.md`; not built yet)* |
 | `layout` | Harness modules only: the layout description (see `harness-modules.md`). It is part of the declaration and its hash. |
 
@@ -286,8 +286,9 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   file and directory.
 - `ships`: each item is a file, or a directory that holds at least one file. An empty
   directory is refused because the content hash does not cover it.
-- `commands` and `checks` *(specified by `module-boundary.md`; not built yet)*: the exact shapes, limits and refusals are in `module-boundary.md`,
-  "Declaration schema". In short, each names a helper that is an item of `ships` (or a file below one),
+- `commands` *(verified; `wb run` is not built yet)* and `checks` *(specified by `module-boundary.md`; not built yet)*: the exact shapes,
+  limits and refusals are in `module-boundary.md`, "Declaration schema". The verifier also requires a
+  command's helper to be a regular file of the module. In short, each names a helper that is an item of `ships` (or a file below one),
   a Python helper declares the kit API number it needs in `kit`, and an unknown field is refused as
   everywhere else.
 
@@ -366,6 +367,6 @@ result is a refusal and carries no hashes and no order.
   already shipped such a path is refused on its next verification, because those paths were never
   installed as maintainer files. An executable file there changes the tree hash but is not listed among
   the approval's executables, since nothing in it is installed.
-- *(Not built yet.)* A `commands` or `checks` entry with an unknown field, a helper that is not in
-  `ships`, a missing or misplaced `kit`, or a pin name already used by another entry is refused, naming the
-  module and the field.
+- A `commands` entry with an unknown field, a helper that is not in
+  `ships`, or a missing or misplaced `kit` is refused, naming the module and the field. *(Not built yet: the
+  same for a `checks` entry, and a pin name already used by another entry.)*

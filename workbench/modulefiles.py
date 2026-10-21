@@ -127,6 +127,10 @@ def _declared_paths(module, files, dirs, bad):
         elif not any(rel.startswith(item + "/") for rel in files):
             # An empty directory is not in the tree hash, so an approval would not cover it.
             bad("ships", "%s is an empty directory" % item)
+    for command in module.commands:
+        if command.helper not in files:
+            bad("commands", "command %s: helper %s is not a file of the module"
+                % (command.name, command.helper))
     for rel in module.writes:
         if "files/" + rel not in files:
             bad("writes", "%s has no source file at files/%s" % (rel, rel))
