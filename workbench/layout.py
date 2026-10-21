@@ -27,6 +27,11 @@ Keys, all optional (an absent key means ``none`` or empty):
 ``exclude``
     The literal paths written to ``.git/info/exclude`` (a trailing ``/`` marks a directory). No
     glob, no space, nothing under ``.workbench`` and not the guarded store.
+``tolerated``
+    A short list of literal paths, each inside a top-level directory the layout writes into, that the
+    harness itself or the owner may keep there; ``wb check`` does not warn about them. The directory is
+    spelled as the layout spells it. A path the layout writes, one that contains such a path and one inside
+    a file the layout writes are refused; one below a kind directory is allowed.
 ``notes``
     A short list of printable post-install notes.
 
@@ -56,6 +61,7 @@ RULE_TOOLS = ("shell", "read", "write", "web")
 ABSOLUTE_PREFIXES = ("//", "~/")
 
 MAX_EXCLUDE = 64
+MAX_TOLERATED = 16
 MAX_NOTES = 10
 MAX_NOTE_CHARS = 300
 
@@ -167,6 +173,7 @@ def problems(layout):
     excluded = _exclude(layout.get("exclude", []), out)
     _notes(layout.get("notes", []), out)
     _overlaps(written, out)
+    _tolerated(layout.get("tolerated", []), written, out)
     for where, _, raw, is_dir in written:
         if not any(_covers(entry, entry_dir, raw, is_dir) for entry, entry_dir in excluded):
             out.add(where, "is written but no exclude entry covers it, so it could be committed")
@@ -351,6 +358,70 @@ def _notes(notes, out):
                 or not note.isprintable()):
             out.add(where, "each note must be printable text of at most %d characters"
                     % MAX_NOTE_CHARS)
+
+
+def _tolerated(entries, written, out):
+    where = "layout.tolerated"
+    # A top-level name is spelled once: two spellings alias on a case-insensitive filesystem.
+    spelled = {}
+    for _, folded, raw, is_dir in written:
+        if is_dir or len(raw) > 1:
+            if spelled.setdefault(folded[0], raw[0]) != raw[0]:
+                out.add("layout", "%r and %r name one directory, spelled two ways" %
+                        (spelled[folded[0]], raw[0]))
+    if not isinstance(entries, list) or len(entries) > MAX_TOLERATED:
+        out.add(where, "must be a list of at most %d paths" % MAX_TOLERATED)
+        return
+    seen = set()
+    for entry in entries:
+        folded = out.path(entry, where)
+        if folded is None:
+            continue
+        if folded in seen:
+            out.add(where, "%r is listed twice" % entry)
+        seen.add(folded)
+        if any(folded == other for _, other, _, _ in written):
+            out.add(where, "%r is written by this layout, so it is not tolerated" % entry)
+        elif any(len(folded) < len(other) and _prefix(folded, other) for _, other, _, _ in written):
+            out.add(where, "%r contains a path this layout writes" % entry)
+        elif any(not is_dir and _prefix(other, folded) for _, other, _, is_dir in written):
+            out.add(where, "%r is inside a file this layout writes" % entry)
+        elif len(folded) < 2 or folded[0] not in spelled:
+            out.add(where, "%r is not inside a directory this layout writes into" % entry)
+        elif entry.split("/")[0] != spelled[folded[0]]:
+            out.add(where, "%r is not spelled as the layout spells its directory, %r" %
+                    (entry, spelled[folded[0]]))
+
+
+def facts(layout):
+    """What `wb check` needs from a layout that `problems` accepted, as a dict of tuples.
+
+    ``roots``: the top-level names the harness occupies (the root file, the first segment of each kind
+    directory and of the settings file). ``directories``: those that are directories. ``generated``: each
+    kind's directory, which holds files the installer generates. ``tolerated``: the declared paths.
+    """
+    roots, directories, generated = [], [], []
+    root = layout.get("root", "none")
+    if isinstance(root, dict):
+        roots.append(root["file"])
+    paths = []
+    for kind in KINDS:
+        entry = layout.get("kinds", {}).get(kind)
+        if entry:
+            tail = "/{name}/SKILL.md" if kind == "skill" else "/{name}.md"
+            generated.append(entry["path"][:-len(tail)])
+            paths.append(generated[-1])
+    settings = layout.get("local_settings", "none")
+    if isinstance(settings, dict):
+        paths.append(settings["path"])
+    for path in paths:
+        first, _, rest = path.partition("/")
+        roots.append(first)
+        if rest or path in generated:
+            directories.append(first)
+    unique = lambda items: tuple(dict.fromkeys(items))
+    return {"roots": unique(roots), "directories": unique(directories),
+            "generated": unique(generated), "tolerated": tuple(layout.get("tolerated", []))}
 
 
 def _overlaps(written, out):

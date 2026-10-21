@@ -275,8 +275,8 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   `slot:<name>`, so `provides` may not list a `slot:` capability.
 - `fills` entries are `{"slot": "slot:<name>", "source": "<path>"}`, one per slot.
 - `layout` is required for a `harness` module and forbidden otherwise. It is an object
-  whose keys come from `root`, `kinds`, `local_settings`, `hooks`, `exclude` and
-  `notes`; the values are checked by the harness specification, not here.
+  whose keys come from `root`, `kinds`, `local_settings`, `hooks`, `exclude`,
+  `tolerated` and `notes`; the values are checked by the harness specification, not here.
 - `provides`: a harness capability only from a `harness` module; an unprefixed name only
   from the first-party package; a prefixed name's prefix equals the package name.
 - `writes`: a path may enter `.workbench/` only under the module's own namespace

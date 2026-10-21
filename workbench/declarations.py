@@ -60,7 +60,7 @@ MAX_DEPTH = jsonstrict.MAX_DEPTH
 
 TYPES = ("harness", "process", "module")
 HARNESS_CAPABILITIES = ("instructions", "skills", "agents", "commands", "hooks", "permissions")
-LAYOUT_KEYS = ("root", "kinds", "local_settings", "hooks", "exclude", "notes")
+LAYOUT_KEYS = ("root", "kinds", "local_settings", "hooks", "exclude", "tolerated", "notes")
 
 PACKAGE_FIELDS = ("name", "version", "contract", "modules")
 MODULE_FIELDS = ("name", "version", "type", "description", "provides", "requires", "blocks",

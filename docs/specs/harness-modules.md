@@ -44,6 +44,7 @@ module needs no extra file for it. Field names are proposals.
 | `local_settings` | The per-clone file that receives rendered permission rules and hooks, or `none`. |
 | `hooks` | Where hooks are declared, or `none`. |
 | `exclude` | The paths to add to `.git/info/exclude` at attach. |
+| `tolerated` | Literal paths, each inside a directory the layout writes into, that the harness or the owner may keep there; `wb check` does not warn about them. Optional, at most 16. |
 | `notes` | Post-install notes for steps the installer cannot perform. |
 
 The installer applies the layout. A harness module contains no code that runs at

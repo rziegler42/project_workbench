@@ -37,6 +37,147 @@ class Accepted(unittest.TestCase):
                 set(neutral.FIELDS[kind][1]) - {"needs"}))
 
 
+# A made-up harness, so these tests name no real one.
+FIXTURE = {
+    "root": {"file": "FIXTURE.md", "import": "AGENTS.md"},
+    "kinds": {
+        "skill": {"path": ".fixture/skills/{name}/SKILL.md",
+                  "fields": {"name": "name", "description": "description"}},
+        "command": {"path": ".fixture/prompts/{name}.md",
+                    "fields": {"name": "name", "description": "description"}},
+    },
+    "exclude": ["FIXTURE.md", ".fixture/"],
+    "tolerated": [".fixture/shared.json"],
+}
+
+
+class Facts(unittest.TestCase):
+    def test_the_fixture_layout_is_accepted(self):
+        self.assertEqual(layout.problems(FIXTURE), [])
+
+    def test_facts_of_a_layout(self):
+        self.assertEqual(layout.facts(FIXTURE), {
+            "roots": ("FIXTURE.md", ".fixture"), "directories": (".fixture",),
+            "generated": (".fixture/skills", ".fixture/prompts"),
+            "tolerated": (".fixture/shared.json",)})
+
+    def test_facts_of_the_claude_layout_include_its_settings_directory(self):
+        found = layout.facts(CLAUDE)
+        self.assertEqual(found["roots"], ("CLAUDE.md", ".claude"))
+        self.assertEqual(found["directories"], (".claude",))
+        self.assertEqual(found["generated"],
+                         (".claude/skills", ".claude/agents", ".claude/commands"))
+
+    def test_a_layout_with_nothing_gives_empty_facts(self):
+        empty = {"roots": (), "directories": (), "generated": (), "tolerated": ()}
+        self.assertEqual(layout.facts({}), empty)
+        self.assertEqual(layout.facts({"root": "none", "local_settings": "none", "kinds": {}}), empty)
+
+    def test_a_settings_file_alone_adds_its_directory(self):
+        found = layout.facts({"local_settings": {"path": ".other/s.json"}})
+        self.assertEqual((found["roots"], found["directories"], found["generated"]),
+                         ((".other",), (".other",), ()))
+
+    def test_a_top_level_settings_file_is_a_root_and_not_a_directory(self):
+        found = layout.facts({"local_settings": {"path": "s.json"}})
+        self.assertEqual((found["roots"], found["directories"]), (("s.json",), ()))
+
+    def test_two_kinds_in_one_top_level_directory_give_it_once(self):
+        found = layout.facts(FIXTURE)
+        self.assertEqual(found["roots"].count(".fixture"), 1)
+
+
+class Tolerated(unittest.TestCase):
+    def bad(self, tolerated, text="layout.tolerated"):
+        value = copy.deepcopy(FIXTURE)
+        value["tolerated"] = tolerated
+        found = layout.problems(value)
+        self.assertTrue(found, "accepted: %r" % (tolerated,))
+        self.assertTrue(any(text in message for message in found), found)
+
+    def test_a_layout_need_not_tolerate_anything(self):
+        value = copy.deepcopy(FIXTURE)
+        del value["tolerated"]
+        self.assertEqual(layout.problems(value), [])
+        value["tolerated"] = []
+        self.assertEqual(layout.problems(value), [])
+
+    def test_a_path_in_a_kind_directory_is_accepted(self):
+        value = copy.deepcopy(FIXTURE)
+        value["tolerated"] = [".fixture/skills/extra.json", ".fixture/a/b/c.json"]
+        self.assertEqual(layout.problems(value), [])
+
+    def test_not_a_list_or_too_long(self):
+        for value in ("x", {}, None, 3, [".fixture/%d.json" % n for n in range(17)]):
+            self.bad(value)
+
+    def test_the_limit_is_sixteen(self):
+        value = copy.deepcopy(FIXTURE)
+        value["tolerated"] = [".fixture/%d.json" % n for n in range(16)]
+        self.assertEqual(layout.problems(value), [])
+
+    def test_unsafe_or_reserved_paths(self):
+        for path in (3, None, ["x"], "", "/abs/x", "../x", ".fixture/../x", ".fixture\\x", ".fixture/x\0",
+                     ".git/config", ".workbench/x", ".Workbench/x", ".config/project-workbench/x"):
+            self.bad([path])
+
+    def test_a_path_outside_every_written_directory(self):
+        for path in ("elsewhere/x.json", "x.json", ".other/x.json"):
+            self.bad([path], "not inside a directory")
+
+    def test_the_directory_must_be_spelled_as_the_layout_spells_it(self):
+        self.bad([".FIXTURE/x.json"], "spelled")
+
+    def test_a_single_segment_kind_directory_is_a_directory(self):
+        value = {"kinds": {"skill": {"path": "skills/{name}/SKILL.md",
+                                     "fields": {"name": "name", "description": "description"}}},
+                 "exclude": ["skills/"], "tolerated": ["skills/x.json"]}
+        self.assertEqual(layout.problems(value), [])
+        self.assertEqual(layout.facts(value)["directories"], ("skills",))
+
+    def test_a_path_that_contains_a_written_path_is_refused(self):
+        value = {"kinds": {"skill": {"path": ".a/b/skills/{name}/SKILL.md",
+                                     "fields": {"name": "name", "description": "description"}},
+                           "command": {"path": ".a/c/{name}.md",
+                                       "fields": {"name": "name", "description": "description"}}},
+                 "exclude": [".a/"], "tolerated": [".a/b/x.json"]}
+        self.assertEqual(layout.problems(value), [])
+        for path in (".a/b", ".A/B"):
+            value["tolerated"] = [path]
+            self.assertTrue(any("layout.tolerated" in m for m in layout.problems(value)), path)
+
+    def test_a_path_inside_a_file_the_layout_writes_is_refused(self):
+        value = copy.deepcopy(CLAUDE)
+        value["tolerated"] = [CLAUDE["local_settings"]["path"] + "/x"]
+        self.assertTrue(any("inside a file" in m for m in layout.problems(value)))
+
+    def test_unicode_spellings_of_one_path_are_a_duplicate(self):
+        self.bad([".fixture/\u00e9.json", ".fixture/e\u0301.json"], "listed twice")
+
+    def test_top_level_names_that_differ_only_in_case_are_refused(self):
+        value = copy.deepcopy(FIXTURE)
+        value["kinds"]["command"]["path"] = ".FIXTURE/prompts/{name}.md"
+        value["exclude"] = ["FIXTURE.md", ".fixture/", ".FIXTURE/"]
+        self.assertTrue(any("spelled" in m for m in layout.problems(value)))
+
+    def test_a_listed_twice_path_even_in_another_case(self):
+        self.bad([".fixture/x.json", ".fixture/x.json"], "listed twice")
+        self.bad([".fixture/x.json", ".FIXTURE/X.json"], "listed twice")
+
+    def test_a_path_the_layout_writes_is_not_tolerated(self):
+        self.bad(["FIXTURE.md"], "written by this layout")
+        self.bad(["FIXTURE.md/x.json"], "inside a file")
+        self.bad([".fixture/skills"], "written by this layout")
+        self.bad([".FIXTURE/Skills"], "written by this layout")
+
+    def test_the_settings_file_is_not_tolerated(self):
+        value = copy.deepcopy(CLAUDE)
+        value["tolerated"] = [CLAUDE["local_settings"]["path"]]
+        self.assertTrue(any("written by this layout" in m for m in layout.problems(value)))
+        value["tolerated"] = [".claude/settings.json"]
+        self.assertEqual(layout.problems(value), [])
+
+
 class Refused(unittest.TestCase):
     def bad(self, value, text=""):
         found = layout.problems(value)
