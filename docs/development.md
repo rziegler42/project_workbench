@@ -34,6 +34,8 @@ ambiguous blank.
 | Owner-run: install a new project (terminal only) | `python3 -m workbench install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Owner-run: accept changes made to a project (terminal only) | `python3 -m workbench acknowledge [<target> \| --dir <path>]` |
 | Owner-run: clear the marker of an unfinished write (terminal only) | `python3 -m workbench recover [<target> \| --dir <path>]` |
+| Owner-run: attach the harness to a clone (terminal only) | `python3 -m workbench attach [<target> \| --dir <path>] --harness <package>/<module>` |
+| Check a clone (read-only) | `python3 -m workbench check [<target> \| --dir <path>]` |
 | Preview an upgrade (read-only) | `python3 -m workbench preview upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
 | Owner-run: upgrade a project (terminal only) | `python3 -m workbench upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
 | Preview adding a module (read-only) | `python3 -m workbench preview add [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
@@ -42,12 +44,12 @@ ambiguous blank.
 | Release time: write the approvals shipped with first-party packages | `python3 -m workbench release-approvals` |
 | Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
 | One focused test file | `python3 -m unittest discover -s tests -p 'test_approvals.py'` (a test module that imports `support` only loads under `discover -s tests`) |
-| Full tests | `python3 -m unittest discover -s tests` |
-| Format | not applicable (no code yet) |
-| Lint or static analysis | not applicable (no code yet) |
-| Type check | not applicable (no code yet) |
-| Build | not applicable (no code yet) |
-| All required checks | `python3 -m unittest discover -s tests`; document checks are run by the owner in session, as `docs/README.md` states |
+| Full tests | `python3 -B -W error -m unittest discover -s tests` |
+| Format | not applicable (none configured) |
+| Lint or static analysis | not applicable (none configured) |
+| Type check | not applicable (none configured) |
+| Build | not applicable (none configured) |
+| All required checks | `python3 -B -W error -m unittest discover -s tests`; document checks are run by the owner in session, as `docs/README.md` states |
 
 ## The verify command
 
