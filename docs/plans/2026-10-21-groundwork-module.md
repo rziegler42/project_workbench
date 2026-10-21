@@ -474,3 +474,27 @@ Full suite: 1806 tests, 106 skipped, passing with `-W error`.
   is not checked; the existing `check` tests that attach remain skipped until H.
 - **Spot check of the guards:** with the fence and quotation rule, the case and Unicode folding, or
   the link rule removed, tests fail (5, 1 and 1 respectively).
+
+**Increment G** (2026-10-21): `workbench/refcheck.py`, called from `check._tracked_report` after the
+pointer check, and `tests/test_refcheck.py` (37 tests: unit tests with a hand-made tracked set,
+and command tests in a real git repository with no harness attached). No decision record: the
+format and the place of the checks are Proposed in E and F. Full suite: 1843 tests, 106 skipped, passing with `-W error`.
+
+- **Problems:** an entry whose file git does not track, that is missing, that is a link or not a
+  regular file (git-tracked link or a link on disk; the target is never read), or whose content
+  hashes differently; a tracked file under `docs/references/` with no entry; an index that is
+  missing while files are tracked, untracked, unreadable or not canonical (then the tracked files
+  are said not to have been compared); a title or note that names `.workbench/local`.
+- **Warnings:** a reference over 2 MiB, the indexed references over 50 MiB in all, an entry with no
+  license. They are in binary units (the plan said MB) and are not enforced.
+- **Metadata:** `index.json` and `README.md` directly in the area are not references, matched
+  without case; a nested `index.json` is a reference. An entry naming either is refused by the
+  reader. Bounds: 128 MiB read across the references, then a problem says the rest were not looked
+  at; 50 files without an entry are listed, then a count.
+- **Criterion 6 is met by the existing pointer check:** a tracked spec that links to
+  `.workbench/local/refs/...` is reported, and a test pins it for this module's documents.
+- **Not done:** the untracked index `.workbench/local/refs/index.json` is not read (it is scratch);
+  the size of an unindexed tracked file is not counted; a tracked file whose entry differs only in
+  letter case is reported as both an untracked entry and a file with no entry.
+- **Spot check of the guards:** with the hash compare, the tracked-link rule, the metadata rule, the
+  untracked-entry rule or the untracked-index rule removed, tests fail (2, 1, 43, 2 and 1).

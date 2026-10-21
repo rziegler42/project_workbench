@@ -7,7 +7,8 @@ The report, from ``repository-boundary.md`` and ``installer-interface.md``:
 * generated files whose hash differs from the local manifest, or that are missing;
 * extra files under the directories the attached harness generates into (strays);
 * for a project that has the ``groundwork`` module, the form of its specs, roadmaps and decisions
-  (``doccheck``): names, statuses, and candidate IDs;
+  (``doccheck``): names, statuses, and candidate IDs; and its reference index against the files
+  git tracks (``refcheck``);
 * what git tracks: tracked files that look like harness output or scratch, tracked documents that
   link or import into untracked content, tracked files that differ from the committed manifest in a
   way their owner class does not allow, and whether the manifest is committed.
@@ -20,8 +21,8 @@ safe, and the report says so. Git is never run: what it tracks is read from ``.g
 
 import collections
 
-from . import (__version__, display, doccheck, gitindex, installed, localmanifest, pointers, projectfs,
-               safefs, sources, target)
+from . import (__version__, display, doccheck, gitindex, installed, localmanifest, pointers,
+               projectfs, refcheck, safefs, sources, target)
 
 # Paths each harness is known to use, for the files of one harness found beside another and for the
 # strays. `roots` are top-level names, `generated` the directories attach fills. A harness not
@@ -284,6 +285,9 @@ def _tracked_report(writer):
     warnings = ["%s: a link that git tracks; where it points is not checked" % _shown(path)
                 for path in sorted(tracked.links)]
     problems.extend(_pointers(writer, tracked))
+    reference_problems, reference_warnings = refcheck.examine(writer, tracked)
+    problems.extend(reference_problems)
+    warnings.extend(reference_warnings)
     sentence, more_problems, more_warnings = _recorded(writer, tracked)
     return sentence, problems + more_problems, warnings + more_warnings
 

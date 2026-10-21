@@ -130,8 +130,9 @@ def _status_problems(kind, statuses, name, lines):
     if count > 1:
         problems.append("%s has %d status lines near the top; there is one" % (name, count))
     if status not in statuses:
-        problems.append("%s has the status %s; a %s is %s" % (
-            name, _shown(status) or "(none)", kind, ", ".join(statuses[:-1]) + " or " + statuses[-1]))
+        listed = ", ".join(statuses[:-1]) + " or " + statuses[-1]
+        problems.append("%s has the status %s; a %s is %s"
+                        % (name, _shown(status) or "(none)", kind, listed))
     elif status == "Superseded" and not successor:
         problems.append("%s is Superseded and names no successor (write `Superseded by <name>`)"
                         % name)
