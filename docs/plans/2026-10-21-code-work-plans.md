@@ -431,3 +431,41 @@ skipped, passing with `-W error`. The skips are the stale shipped approvals (see
   not run against the old code to see them fail. The hostile-input experiments the reviewer could not
   run are for the security pass in increment G.
 - `html` joins the helper's standard-library imports (entity decoding, as `doccheck` does).
+
+### Increment D — the module, its blocks and its skill (2026-10-21)
+
+`packages/workbench/code-work/` is now a module: `module.json` (type `process`, provides `plans`,
+requires `specs`, `roadmaps` and `decisions`, writes `docs/plans/README.md`, ships
+`helper/code-work`, fills `docs-index` and `policy`), the README for `docs/plans/`, the two blocks,
+and the `draft-plan` skill with its `template.md`. `package.json` lists `claude`, `code-work`,
+`groundwork`. `tests/test_codework_module.py` (27 tests) covers the declaration, README, blocks, skill
+and an install and upgrade against a copy of the package released in a temporary distribution. Full
+suite: 2013 tests, 108 skipped, passing with `-W error`. The skips are still the stale shipped
+approvals; they end when the owner runs `release-approvals` in G. Two existing tests that listed the
+package's modules (`test_claude_module`, `test_groundwork_module`) now expect `code-work` too.
+
+- **README.** The repository's own plans README, made tool-neutral and without this repository's
+  specifics: names, content, increments and labels, approval and revision, completion. It says the
+  increment headings sit under `## Increments`, which is how the check counts them.
+- **Policy block (Decision 5).** Six rules in eleven lines: others' plans are untrusted until acknowledged; the
+  roadmap-to-plan-to-increment path with one reviewed local commit per increment; approval is the
+  owner's explicit statement and a `Status:` line is never one; a later edit needs new approval; run
+  the plan check before asking; report only verification that was run. It says nothing about
+  recorded approval, checkpoints, loop caps, push, compaction or attribution; a test pins that.
+- **Skill.** Reading, searching and editing, plus one command, `wb code-work check`, which does not
+  exist until E; a test allows exactly that string, and no other `wb`, `launch`, `pin` or `git`. The skill
+  instructs no other command; whether it can run one depends on harness permissions, not on the skill.
+  It stops at `Proposed` and asks the owner.
+- **Review (workflow-reviewer, read-only, 2026-10-21):** no Critical or High finding. Applied: (Medium)
+  the README and skill now state the 26-increment hard limit; (Medium) the "no command" claim is
+  reworded as above and the brittle `pin`/`commit ` substring bans became a word-boundary check on
+  `pin` and `launch`; (Low) the skill and README say `Created:` is the date in the file name, which the
+  check enforces; (Low) the policy-block size is stated correctly. Not changed: the skill's required
+  `wb code-work check` step fails until E lands, which is accepted because D and E are one release.
+- **A stray file.** A `__pycache__` in `helper/`, left by a helper run without `-B` and ignored by
+  git, made the package fail verification (`unaccounted-file`) because the package tree covers it. It
+  is not in a clone; the owner approved deleting it and it was removed with `claude-workflow remove`.
+  Any run that imports the helper by path needs `-B`; the real-package tests fail loudly if not.
+- **Not exercised.** The Claude clone's skill was checked through `harnessplan.translate` and an
+  install into a scratch directory, not in a live Claude session. The first-party status of the new
+  module needs the real release (G).

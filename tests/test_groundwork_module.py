@@ -60,7 +60,7 @@ class Declaration(unittest.TestCase):
 
     def test_the_package_lists_it(self):
         with open(os.path.join(PACKAGE, "package.json"), encoding="utf-8") as handle:
-            self.assertEqual(["claude", "groundwork"], json.load(handle)["modules"])
+            self.assertEqual(["claude", "code-work", "groundwork"], json.load(handle)["modules"])
 
     def test_each_readme_says_what_the_area_is_for_how_it_is_named_and_its_status_values(self):
         words = {"specs": ("kebab-case", "Draft", "Current", "Superseded"),

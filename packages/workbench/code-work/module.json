@@ -1,0 +1,30 @@
+{
+  "name": "code-work",
+  "version": "0.1.0",
+  "type": "process",
+  "description": "Plans made of increments, and a read-only helper that checks and lists them.",
+  "provides": [
+    "plans"
+  ],
+  "requires": [
+    "specs",
+    "roadmaps",
+    "decisions"
+  ],
+  "writes": [
+    "docs/plans/README.md"
+  ],
+  "ships": [
+    "helper/code-work"
+  ],
+  "fills": [
+    {
+      "slot": "slot:docs-index",
+      "source": "files/blocks/docs-index.md"
+    },
+    {
+      "slot": "slot:policy",
+      "source": "files/blocks/policy.md"
+    }
+  ]
+}

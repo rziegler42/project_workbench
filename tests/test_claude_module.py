@@ -33,7 +33,7 @@ class Shipped(unittest.TestCase):
         result = verify.verify_package(PACKAGE, select=["claude"],
                                        first_party=firstparty.is_first_party(PACKAGE))
         self.assertTrue(result.accepted, [str(p) for p in result.problems])
-        self.assertEqual([m.name for m in result.modules], ["claude", "groundwork"])
+        self.assertEqual([m.name for m in result.modules], ["claude", "code-work", "groundwork"])
 
     def test_the_shipped_records_match_the_current_hashes(self):
         result = verify.verify_package(PACKAGE, first_party=True)
@@ -45,8 +45,7 @@ class Shipped(unittest.TestCase):
         self.assertTrue(got.approved, got.reason)
         self.assertEqual(got.record.approver, firstparty.RELEASE_APPROVER)
 
-    def test_the_package_is_the_claude_and_groundwork_modules(self):
-        # `code-work` holds only its helper until increment D of its plan lists it in the package.
+    def test_the_package_is_the_claude_code_work_and_groundwork_modules(self):
         self.assertEqual(sorted(os.listdir(PACKAGE)),
                          ["claude", "code-work", "groundwork", "package.json"])
         self.assertEqual(sorted(os.listdir(os.path.join(PACKAGE, "claude"))), ["module.json"])
