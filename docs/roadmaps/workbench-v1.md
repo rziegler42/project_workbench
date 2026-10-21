@@ -1,7 +1,7 @@
 # Roadmap: workbench-v1
 
 Status: Active
-Updated: 2026-10-20
+Updated: 2026-10-21
 
 This roadmap is direction only. It does not authorize implementation and does not
 change any plan. A candidate is referred to as `workbench-v1#<id>`. Candidates are
@@ -120,7 +120,7 @@ meet here and the order matters.
 `ownership-and-upgrade`, `claude-harness`, `verify-opencode`, `opencode-harness`,
 `groundwork-module`, `researcher-fetch-tool`, `code-work-module`,
 `remote-runner-module`, `peer-review-provider`, `knowledge-base-package`,
-`self-hosting`, `remaining-modules-rename`.
+`global-config-migration`, `self-hosting`, `remaining-modules-rename`.
 
 ## Candidates
 
@@ -306,6 +306,28 @@ generic name, provides its own capability, and is read through a read-only skill
 **Dependencies:** `claude-harness`, `groundwork-module`.
 **Boundary:** the knowledge base's own repository changes. Its name is still open.
 **Promotion trigger:** `groundwork-module` complete and the name chosen.
+
+### global-config-migration — Move the owner's global Claude configuration into modules
+
+**Outcome:** the owner's `~/.claude` returns to a mostly default state because what it
+carried for project work is now supplied by installed modules: agents, skills, commands,
+the policy text, the commit helper, the peer-review wiring and the compaction guidance.
+What stays global, and why, is a written list: the owner's own `allow` rules (the
+workbench never writes `allow`), machine-level settings such as authentication, model
+choice and remote hosts, and anything the owner wants in a project that has no workbench.
+**Dependencies:** `code-work-module`, `remote-runner-module`, `peer-review-provider`, and
+`groundwork-module`; hooks rendering for Claude, which the Claude module does not yet
+provide (`hooks: none`).
+**Boundary:** one global item at a time, each moved only after a test or a recorded run
+shows a project behaves the same without the global copy, so no hard stop, deny rule or
+approver is ever absent in between. The `claude_global_config` mirror is kept in step
+(`~/.claude` and the mirror are updated together). It also settles the open question
+whether the settings file's own path is denied for edits (`harness-modules.md`, "As built,
+and its limits"). It does not move the owner's `allow` rules and does not change what
+the installer writes.
+**Promotion trigger:** `code-work-module`, `remote-runner-module` and `peer-review-provider`
+complete, and the owner chooses to begin removing items from `~/.claude`. Each of those
+earlier plans lists the global items it replaces, so this candidate starts from that list.
 
 ### self-hosting — Self-hosting
 
