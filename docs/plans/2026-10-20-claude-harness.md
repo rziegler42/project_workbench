@@ -1,6 +1,6 @@
 # Claude harness, attach and check
 
-Status: Proposed
+Status: Approved
 Created: 2026-10-20
 Candidate: workbench-v1#claude-harness
 Specs: harness-modules, installer-interface, trust-and-approval, repository-boundary, module-contract
@@ -393,8 +393,8 @@ read-only). Outcome `changes_needed`, one major finding.
   attach refuses a `.git` file in this plan and only supporting it is deferred; increment H's
   steps name the refusal and its test.
 
-The plan stays `Proposed` until the owner approves it. Findings are untrusted input and were
-evaluated as review comments.
+The owner approved the plan on 2026-10-20, including the three decisions under Assumptions and
+constraints as written. Findings are untrusted input and were evaluated as review comments.
 
 ## Deferred work
 
