@@ -5,16 +5,21 @@ The report, from ``repository-boundary.md`` and ``installer-interface.md``:
 * a clone with no harness attached is valid and is reported as "none attached";
 * files of a harness other than the attached one;
 * generated files whose hash differs from the local manifest, or that are missing;
-* extra files under the directories the attached harness generates into (strays).
+* extra files under the directories the attached harness generates into (strays);
+* what git tracks: tracked files that look like harness output or scratch, tracked documents that
+  link or import into untracked content, tracked files that differ from the committed manifest in a
+  way their owner class does not allow, and whether the manifest is committed.
 
 Everything is read through the no-follow reader and nothing is written. The local manifest is
 scratch (``repository-boundary.md``): its hashes say a file is the one attach wrote, not that it is
-safe, and the report says so. The checks that ask git what is tracked are separate.
+safe, and the report says so. Git is never run: what it tracks is read from ``.git/index`` itself
+(``gitindex``), because a repository can name programs git would run.
 """
 
 import collections
 
-from . import display, localmanifest, projectfs, safefs, sources, target
+from . import (__version__, display, gitindex, installed, localmanifest, pointers, projectfs,
+               safefs, sources, target)
 
 # Paths each harness is known to use, for the files of one harness found beside another and for the
 # strays. `roots` are top-level names, `generated` the directories attach fills. A harness not
@@ -26,12 +31,20 @@ HARNESSES = {
     "opencode": {"roots": ("opencode.json", ".opencode"), "generated": ()},
     "codex": {"roots": (".codex",), "generated": ()},
 }
+# Top-level paths that are scratch, not content: nothing tracked may live there.
+SCRATCH = (".workbench/local", ".debug")
+DOCUMENTS = (".md", ".markdown")
 MAX_ENTRIES = 5000
 MAX_DEPTH = 8
+MAX_DOCUMENTS = 5000
+MAX_DOCUMENT_BYTES = 64 * 1024 * 1024
+MAX_LOOKUPS = 5000
 LISTED = 40
 
 Command = collections.namedtuple("Command", "target")
-Report = collections.namedtuple("Report", "harness problems warnings")
+# `manifest` is a sentence about the committed manifest, or None when git could not be asked.
+Report = collections.namedtuple("Report", "harness problems warnings manifest",
+                                defaults=(None,))
 
 
 def parse(tokens):
@@ -138,6 +151,141 @@ def _shallow(writer, harness, recorded):
     return warnings
 
 
+def _generated(tracked):
+    """Problems for tracked paths that look like harness output or scratch."""
+    roots = [(root, "output of the harness %s" % harness)
+             for harness, table in sorted(HARNESSES.items()) for root in table["roots"]]
+    roots.extend((root, "scratch") for root in SCRATCH)
+    problems = []
+    for path in sorted(tracked.files):
+        folded = path.casefold()
+        for root, what in roots:
+            if folded == root.casefold() or folded.startswith(root.casefold() + "/"):
+                problems.append("%s: tracked by git, but it looks like %s" % (_shown(path), what))
+                break
+    return problems
+
+
+def _exists(writer, rel, cache):
+    parent, _, name = rel.rpartition("/")
+    if parent not in cache:
+        try:
+            cache[parent] = {each for each, _ in writer.list_dir(parent, lenient=True) or ()}
+        except safefs.SafeFsError:
+            cache[parent] = set()
+    return name in cache[parent]
+
+
+def _scratch_path(rel):
+    folded = rel.casefold()
+    roots = list(SCRATCH)
+    for table in HARNESSES.values():
+        roots.extend(table["roots"])
+    return any(folded == root.casefold() or folded.startswith(root.casefold() + "/")
+               for root in roots)
+
+
+def _pointers(writer, tracked):
+    """Problems for tracked Markdown documents that link or import into untracked content."""
+    documents = sorted(path for path in tracked.files if path.lower().endswith(DOCUMENTS))
+    problems, cache, spent, lookups, unread = [], {}, 0, 0, 0
+    complete = len(documents) <= MAX_DOCUMENTS
+    for path in documents[:MAX_DOCUMENTS]:
+        try:
+            state = writer.read_file(path)
+        except safefs.SafeFsError:
+            unread += path not in tracked.links
+            continue
+        if state is None:
+            continue
+        spent += len(state.data)
+        if spent > MAX_DOCUMENT_BYTES:
+            complete = False
+            break
+        seen = set()
+        for raw, is_import in pointers.references(state.data.decode("utf-8", "replace")):
+            where = pointers.target_of(path, raw, is_import)
+            key = raw if where == pointers.OUTSIDE else where
+            if where is None or key in seen:
+                continue
+            seen.add(key)
+            if where == pointers.OUTSIDE:
+                problems.append("%s: points outside the project: %s" % (_shown(path), _shown(raw)))
+                continue
+            if where in tracked.files or where in tracked.dirs:
+                continue
+            lookups += 1
+            if lookups > MAX_LOOKUPS:
+                complete = False
+                break
+            if _scratch_path(where) or _exists(writer, where, cache):
+                problems.append("%s: points to %s, which git does not track"
+                                % (_shown(path), _shown(where)))
+        if not complete:
+            break
+    if unread:
+        problems.append("%d tracked document%s could not be read, so %s not looked at"
+                        % (unread, "" if unread == 1 else "s", "it was" if unread == 1 else "they were"))
+    if not complete:
+        problems.append("more documents or references than are looked at; not all were looked at")
+    return problems
+
+
+def _recorded(writer, tracked):
+    """(sentence about the manifest, problems, warnings) for the committed manifest and the files
+    it records."""
+    try:
+        present = writer.read_file(installed.MANIFEST) is not None
+    except safefs.SafeFsError as exc:
+        return ("manifest: cannot be read",
+                ["%s: cannot be read: %s" % (installed.MANIFEST,
+                                             display.ascii_text(str(exc))[:200])], [])
+    if not present:
+        return "manifest: none", [], []
+    committed = installed.MANIFEST in tracked.files
+    sentence = ("manifest: tracked by git" if committed else
+                "manifest: not tracked by git, so it is not committed and other clones do not "
+                "share it")
+    try:
+        held = installed.read(writer, __version__)
+    except installed.InstalledError as exc:
+        return sentence, ["%s: %s" % (installed.MANIFEST, display.ascii_text(str(exc))[:200])], []
+    problems, loose = [], 0
+    for entry in held.entries:
+        if entry.path not in tracked.files:
+            loose += 1
+            continue
+        where = _shown(entry.path)
+        if entry.state == installed.UNREADABLE:
+            problems.append("%s: cannot be read as a plain file: %s"
+                            % (where, display.ascii_text(entry.detail)[:120]))
+        elif entry.owner_class == "module-owned" and entry.state in (installed.EDITED,
+                                                                      installed.MISSING):
+            problems.append("%s: a module-owned file that %s the manifest" % (
+                where, "differs from" if entry.state == installed.EDITED else "is missing from"))
+        elif entry.owner_class == "slot block" and entry.state == installed.EDITED:
+            problems.append("%s: the block %s differs from the manifest" % (where, _shown(entry.block)))
+    warnings = []
+    if loose:
+        warnings.append("%d file%s the manifest records %s not tracked by git yet" % (
+            loose, "" if loose == 1 else "s", "is" if loose == 1 else "are"))
+    return sentence, problems, warnings
+
+
+def _tracked_report(writer):
+    """(manifest sentence, problems, warnings) from what git tracks; nothing runs git."""
+    try:
+        tracked = gitindex.read(writer)
+    except gitindex.GitIndexError as exc:
+        return None, [".git/index: %s" % display.ascii_text(str(exc))[:200]], []
+    problems = _generated(tracked)
+    warnings = ["%s: a link that git tracks; where it points is not checked" % _shown(path)
+                for path in sorted(tracked.links)]
+    problems.extend(_pointers(writer, tracked))
+    sentence, more_problems, more_warnings = _recorded(writer, tracked)
+    return sentence, problems + more_problems, warnings + more_warnings
+
+
 def _others(writer, attached):
     """Top-level names that belong to a harness other than `attached` (None for no harness)."""
     try:
@@ -159,7 +307,8 @@ def examine(writer):
         recorded = localmanifest.read(writer)
     except localmanifest.LocalManifestError as exc:
         problems.append("%s: %s" % (localmanifest.PATH, display.ascii_text(str(exc))[:200]))
-        return Report(None, problems, warnings)
+        sentence, more_problems, more_warnings = _tracked_report(writer)
+        return Report(None, problems + more_problems, warnings + more_warnings, sentence)
     attached = recorded["harness"] if recorded else None
     others, trouble = _others(writer, attached)
     problems.extend(trouble)
@@ -173,7 +322,10 @@ def examine(writer):
         problems.extend(_drift(writer, recorded))
         problems.extend(_strays(writer, attached, recorded))
         warnings.extend(_shallow(writer, attached, recorded))
-    return Report(attached, problems, warnings)
+    sentence, tracked_problems, tracked_warnings = _tracked_report(writer)
+    problems.extend(tracked_problems)
+    warnings.extend(tracked_warnings)
+    return Report(attached, problems, warnings, sentence)
 
 
 def _listed(err, prefix, items):
@@ -205,6 +357,7 @@ def run(guarded, command, out, err):
                                                           display.ascii_text(path)))
             out.write("the local manifest is a scratch record: a file that matches it is the one "
                       "attach wrote, not a file known to be safe\n")
+        out.write("%s\n" % (report.manifest or "manifest: not known, git's index could not be read"))
         _listed(err, "warning", report.warnings)
         _listed(err, "problem", report.problems)
         if report.problems:

@@ -361,6 +361,23 @@ class Writer:
         not there, ``("dir", None)`` for a directory, ``("file", sha256)`` for a regular file of at
         most `limit` bytes with one link. Nothing is followed; a link, another kind of file or a
         larger file is a conflict. Read-only, for looking at a ``.git`` the workbench made."""
+        found = self._git_look(rel, limit)
+        if found is not None and found[0] == "file":
+            return ("file", hashlib.sha256(found[1]).hexdigest())
+        return found
+
+    def git_bytes(self, rel, limit):
+        """The bytes of the regular file `rel` below ``.git`` (at most `limit`, one link), or None
+        when it is not there. Nothing is followed; a link, a directory, another kind of file or a
+        larger file is a conflict. Read-only."""
+        found = self._git_look(rel, limit)
+        if found is None:
+            return None
+        if found[0] != "file":
+            raise WriteConflict("not a plain regular file: %s" % self._shown(".git/" + rel))
+        return found[1]
+
+    def _git_look(self, rel, limit):
         parts = [".git"] + (rel.split("/") if rel else [])
         for part in parts[1:]:
             safefs.validate_relpath("git/" + part)
@@ -397,7 +414,7 @@ class Writer:
                 data = self._read_all(fd, shown)
             finally:
                 os.close(fd)
-            return ("file", hashlib.sha256(data).hexdigest())
+            return ("file", data)
         finally:
             for each in fds:
                 os.close(each)

@@ -300,8 +300,21 @@ in the project, not only those under `.workbench/`, and `upgrade` scans twice, e
 fresh budget. After a reinstall at the same path, a manifest carrying an old seed
 from git history is checked against the baselines kept for that seed, and `acknowledge` shows
 the project id but does not highlight a change in it. A manifest source with
-credentials stripped may not match the cache record. `wb check` reports a clone's harness files (drift against the local manifest, files of another
-harness, strays); what git tracks is added by a later increment of the same plan.
+credentials stripped may not match the cache record.
+
+`wb check` reads a clone and writes nothing. It reports harness files (drift against the local
+manifest, files of another harness, strays) and what git tracks: tracked files that look like harness
+output or scratch (`CLAUDE.md`, `.claude/`, `.debug/`, `.workbench/local/` and the files of the other
+harnesses it knows), tracked Markdown documents that link or import (`[x](path)`, `[x]: path`, `href`,
+`src`, `@path`) into content git does not track or out of the project (code, plain mentions of a path
+and source files are ignored), committed files that differ from the manifest beyond their owner class (the working tree is compared)
+(a module-owned file or a slot block that was edited; a seeded file may change), and whether the
+manifest is tracked. It never runs git: a repository can name programs git would run (a
+filesystem monitor, a filter, an included file), so the paths come from `.git/index` itself, version
+2, 3 or 4 with SHA-1 or SHA-256 names, in at most 16 MiB and 1,000,000 entries, paths of at most 4,096 bytes and 64 MiB in all. "Tracked" means in
+the index, so a staged file counts. A split or sparse index is reported as a problem. At most 5,000
+documents, 64 MiB of them and 5,000 existing-path lookups are examined, and a larger project is
+reported as not fully looked at.
 
 ## Recovering from an unfinished write
 

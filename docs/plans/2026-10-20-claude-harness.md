@@ -657,7 +657,7 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   end-of-run output does not repeat the staged warnings (the owner saw them in the plan); the digest
   test does not change a file's mode or the settings path on their own; the `--package` hint in the
   failure text is generic.
-- **J** (not yet committed): `wb check` for the harness files, `workbench/check.py`, routed in
+- **J** (`3d7e5eb`): `wb check` for the harness files, `workbench/check.py`, routed in
   `cli.py` and classified agent-safe in `rules.AGENT_SAFE`. It opens the target without following
   links, requires an existing project, and reads only through the no-follow `Writer`
   (`read_file`, `list_dir`); `list_dir` now accepts the empty string for the project directory.
@@ -683,3 +683,45 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   (`list_dir` has no limit), so a clone with a huge `.claude/commands` makes `check` slow; a
   hostile local manifest can force up to 2048 bounded reads; the scanned directories are a table,
   not derived from the module's layout; empty stray directories are not reported.
+- **K** (not yet committed): `wb check` also reports what git tracks, in `check.py` with two new
+  modules. **Git is never run.** Planned alternative considered and not taken: a private git
+  directory; reading the index directly needs no program, no configuration and no copy, so the
+  hostile-configuration risk does not arise (the plan allowed this: "read the index format directly
+  and record why"). `workbench/gitindex.py` parses `.git/index` (versions 2, 3, 4; SHA-1 or SHA-256,
+  told apart by the trailing checksum so the configuration is not read; optional extensions
+  skipped; a required one such as a split or sparse index is refused; at most 16 MiB, the shared
+  reader's limit, and 1,000,000 entries; every length checked against the bytes), read through a new
+  no-follow `Writer.git_bytes`. `workbench/pointers.py` finds links, reference definitions,
+  `href`/`src` and `@path` imports in Markdown outside code. Reports: tracked files under any known
+  harness root, `.debug/` or `.workbench/local/` (compared without case) are problems; tracked
+  Markdown that points to a path git does not track, where that path exists or is scratch/harness
+  output, or points outside the project, are problems; a tracked symbolic link is a warning (its
+  target is not read); a module-owned file edited or missing, or a slot block edited, against the
+  committed manifest is a problem, a seeded file may change, and recorded files not yet tracked are
+  one warning; the manifest line says tracked, not tracked ("not committed") or none, and an
+  uncommitted manifest is not a problem; a damaged or unreadable index is a problem and the other
+  checks still run. Limits, recorded: "tracked" means in the index, so a staged file counts as
+  committed; only Markdown is scanned (manifests and `.gitignore` carry no links); a link to a
+  missing ordinary path is not flagged; document, byte and lookup bounds are 5000, 64 MiB and 5000
+  and say so when passed; comparing files with the manifest reads the working tree, not git's
+  objects. `tests/test_check.py` now builds a real git repository (22 earlier tests unchanged in
+  intent; 20 new), `tests/test_gitindex.py` (11, real git for versions 2 to 4, SHA-256, a split
+  index, a submodule entry, truncation at every length, and random corruption with the checksum
+  repaired), `tests/test_pointers.py` (9, including hostile text in linear time; a quadratic fence
+  pattern was found and fixed). The hostile-configuration test sets `core.fsmonitor`, `hooksPath`,
+  `sshCommand`, `editor`, `include.path`, a filter and `diff.external` in `.git/config`, forbids any
+  process start, and checks nothing ran and `.git/index` is byte-identical. Mutation check: 25
+  mutants, 25 killed (after adding bound tests for the first run's survivors; one mutant of a
+  limit parameter was dropped with the parameter). Suite 1671 passing, 1 skipped.
+  `workflow-reviewer` of K (from reading and 64 tests): no Critical or High. Medium, fixed, both
+  reproduced first: a hostile index with one long path took quadratic time (80,000 path parts: 3
+  s and growing) and a version 4 index could grow each path by a byte per entry; paths are now
+  limited to 4096 bytes and 64 MiB in all. The `](<` form in the Markdown patterns rescanned its
+  line each time (80,000 repeats: 55 s); every bracketed form is now bounded to 2048 characters.
+  Tests added for both, with the unterminated forms in the linear-time test. Low, fixed: a tracked
+  document that cannot be read (a path the reader refuses, as a hostile index can name) is now
+  one `problem:` instead of being skipped silently; the manifest comparison says it reads the
+  working tree. Low, recorded: `@/...` and `@~/...` in prose are reported as outside the project;
+  a link whose case differs from the file is not flagged on a case-insensitive filesystem; a
+  version 4 index out of sorted order and unknown modes are accepted; an intent-to-add entry counts
+  as tracked. Suite to be re-run before the commit.
