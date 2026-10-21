@@ -1,6 +1,6 @@
 # The groundwork module
 
-Status: Approved
+Status: Completed
 Created: 2026-10-21
 Candidate: workbench-v1#groundwork-module
 Specs: groundwork, module-contract, installer-interface, harness-modules
@@ -589,3 +589,21 @@ against the code and fixed with a regression test that fails on the earlier code
   case variant of `.workbench`, and the test builds the marker from a valid one and checks the
   refusal and that nothing is removed. The suite passes on macOS (1878 tests, 1 skipped); a rerun
   on Linux is pending. Linux showed 2 skips against 1 on macOS; the second is not yet identified.
+
+### Hand run on Linux
+
+- The owner ran the flow by hand on a Linux machine (ned) from a fresh checkout and an empty
+  `~/.claude`: the suite (after the `recover` fix above, OK with 2 skips, both for a case-sensitive
+  filesystem), `verify` (both modules first-party, no `approve`), `preview install` and `install`
+  with `claude` and `groundwork` into a new directory, a commit, and `check`, which reported no
+  problems.
+- In a live `claude` session the three skills loaded, used their templates and wrote documents of
+  the right form: `docs/specs/die-roll.md` (Draft), a Proposed decision with a dated name, and
+  `docs/roadmaps/die-roll.md` (Draft, two candidates). The decision skill declined to accept the
+  decision it was asked to accept. `check` was clean once the three were committed.
+- A committed spec with `Status: Wibble` was reported as `problem: docs/specs/test.md has the
+  status Wibble; a spec is Draft, Current or Superseded`, and `check` exited 1.
+- Found on a fresh machine: git needs a user identity before the first commit (not a workbench
+  fault), and the target's parent directory must exist (the documented rule).
+- Not exercised by hand: a tracked reference with no index, and the owner accepting a decision
+  through the session.
