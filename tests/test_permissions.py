@@ -4,7 +4,8 @@ import os
 import unittest
 
 from workbench import cli, floor, harnessplan, neutral, rules
-from tests.test_layout import CLAUDE, edit
+from tests.support_harness import CLAUDE
+from tests.test_layout import edit
 
 HOME = "/Users/tester"
 STORE = HOME + "/.config/project-workbench"

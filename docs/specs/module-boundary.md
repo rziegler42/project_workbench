@@ -127,7 +127,7 @@ directories**:
 - `ships` is unchanged: it names what is installed and runs at use time. A script a user runs belongs in
   `ships`, not in `tools/`.
 - A module's tests may import the installer and the kit, the repository's shared test support
-  (`tests/support.py`), and load the module's own files by path. They may not import another module's
+  (`tests/support.py` and `tests/support_*.py`), and load the module's own files by path. They may not import another module's
   tests.
 - **One command runs everything.** The repository's full test command becomes
   `python3 -B -W error tests/run_all.py`, recorded in `docs/development.md` in place of the `unittest

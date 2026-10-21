@@ -4,31 +4,8 @@ import os
 import unittest
 
 from workbench import layout, neutral
+from tests.support_harness import CLAUDE
 from tests.test_modulefiles import Base
-
-CLAUDE = {
-    "root": {"file": "CLAUDE.md", "import": "AGENTS.md"},
-    "kinds": {
-        "skill": {"path": ".claude/skills/{name}/SKILL.md",
-                  "fields": {"name": "name", "description": "description"}},
-        "agent": {"path": ".claude/agents/{name}.md",
-                  "fields": {"name": "name", "description": "description", "tools": "tools",
-                             "model": "model"},
-                  "tools": {"read": ["Read"], "search": ["Grep", "Glob"],
-                            "edit": ["Edit", "Write"], "shell": ["Bash"]}},
-        "command": {"path": ".claude/commands/{name}.md",
-                    "fields": {"name": "name", "description": "description",
-                               "args": "argument-hint"}},
-    },
-    "local_settings": {
-        "path": ".claude/settings.local.json", "format": "json",
-        "actions": {"deny": "permissions.deny", "ask": "permissions.ask"},
-        "rules": {"shell": "Bash({pattern})", "read": "Read({path})", "write": "Edit({path})"},
-        "absolute": "//"},
-    "hooks": "none",
-    "exclude": ["CLAUDE.md", ".claude/"],
-    "notes": ["Restart the session to load the new settings."],
-}
 
 
 def edit(path, new, base=None):

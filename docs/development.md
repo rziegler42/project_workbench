@@ -43,13 +43,13 @@ ambiguous blank.
 | Run a pinned helper | `python3 -m workbench launch <project-id> <name> --root <project-dir> -- <args>` |
 | Release time: write the approvals shipped with first-party packages | `python3 -m workbench release-approvals` |
 | Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
-| One focused test file | `python3 -m unittest discover -s tests -p 'test_approvals.py'` (a test module that imports `support` only loads under `discover -s tests`) |
-| Full tests | `python3 -B -W error -m unittest discover -s tests` |
+| One focused test file | `python3 -m unittest discover -s tests -p 'test_approvals.py'` (a test module that imports `support` only loads under `discover -s tests`); for a module's own tests, `python3 -B -m unittest discover -s packages/<package>/<module>/tests -t packages/<package>/<module>/tests` from the repository root |
+| Full tests | `python3 -B -W error tests/run_all.py` (runs `tests/` and every `packages/*/*/tests/`, each as its own root) |
 | Format | not applicable (none configured) |
 | Lint or static analysis | not applicable (none configured) |
 | Type check | not applicable (none configured) |
 | Build | not applicable (none configured) |
-| All required checks | `python3 -B -W error -m unittest discover -s tests`; document checks are run by the owner in session, as `docs/README.md` states |
+| All required checks | `python3 -B -W error tests/run_all.py`; document checks are run by the owner in session, as `docs/README.md` states |
 
 ## The verify command
 
@@ -580,8 +580,8 @@ tests instead.
 
 ## Debugging
 
-Run `python3 -m unittest discover -s tests -v` for per-test output. Run all
-commands from the repository root.
+Run `python3 -m unittest discover -s tests -v` for per-test output of the repository's tests, or
+the focused module form above with `-v`. Run all commands from the repository root.
 
 ## Tool-specific guidance
 

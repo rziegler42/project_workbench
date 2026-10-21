@@ -56,7 +56,7 @@ exact arguments as the command table in [Development](docs/development.md) state
 
 `upgrade`, `add`, `acknowledge`, `recover` and `attach` are described in
 [Development](docs/development.md). The owner-run commands refuse to run from an agent
-session. Run the tests with `python3 -B -W error -m unittest discover -s tests`.
+session. Run the tests with `python3 -B -W error tests/run_all.py`.
 
 ## Documentation
 

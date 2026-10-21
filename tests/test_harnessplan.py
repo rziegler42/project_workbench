@@ -4,12 +4,8 @@ import unittest
 from unittest import mock
 
 from workbench import harnessplan, neutral
-from tests.test_layout import CLAUDE, edit
-from tests.test_neutral import AGENT, COMMAND, SKILL, tree
-
-
-def items(**extra):
-    return neutral.read_items(tree(**extra))
+from tests.support_harness import AGENT, CLAUDE, COMMAND, SKILL, items, tree
+from tests.test_layout import edit
 
 
 def run(layout=CLAUDE, found=None, overrides=None, excludes=None, **kw):

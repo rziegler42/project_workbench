@@ -11,7 +11,7 @@ import unittest.mock
 from tests import support
 from tests import test_preview as preview_tests
 from tests import test_upgrade_preview as base_tests
-from tests.test_neutral import AGENT, COMMAND, SKILL
+from tests.support_harness import AGENT, COMMAND, SKILL
 from workbench import (acknowledgement, attach, cli, harnessplan, installplan, localmanifest, manifest,
                        neutral, projectfs, rules, snapshot, sources)
 from workbench.wbkit import safefs

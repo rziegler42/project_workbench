@@ -1,18 +1,7 @@
 import unittest
 
 from workbench import neutral
-
-SKILL = b"---\nname: sample\ndescription: A sample skill\n---\nDo the thing.\n"
-AGENT = (b"---\nname: reviewer\ndescription: Reviews changes\ntools: read, search\n"
-         b"model: sonnet\n---\nYou review.\n")
-COMMAND = b"---\nname: ship\ndescription: Ship it\nargs: [target]\n---\nShip $ARGUMENTS\n"
-
-
-def tree(**extra):
-    files = {"skills/sample/SKILL.md": SKILL, "agents/reviewer.md": AGENT,
-             "commands/ship.md": COMMAND}
-    files.update(extra)
-    return files
+from tests.support_harness import AGENT, COMMAND, SKILL, tree
 
 
 def refused(case, files, text=""):

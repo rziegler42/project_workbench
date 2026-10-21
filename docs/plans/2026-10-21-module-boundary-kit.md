@@ -432,3 +432,33 @@ directories were listed in the approval text as installed; the verifier now omit
 `tests`), look-alike and case-variant names unaccounted, mode and content swaps fail the snapshot. Not run
 by the reviewer: an upgrade across a module that gains or loses `tests/` (by reading, no old manifest holds
 these paths, since the old verifier refused them), and case-insensitive filesystems beyond `Tests/x.py`.
+
+### Increment F
+
+`tests/run_all.py` is the one test command: it sets `sys.dont_write_bytecode`, puts the repository root on the
+search path, and runs `tests/` and each `packages/*/*/tests/` as its own discovery root (start and top-level
+directory the same), dropping the modules a root loaded before the next. It names each root, prints a total,
+and exits non-zero if a test fails, a test file cannot be imported, a root runs no test (none found, or all
+skipped), or a root's `tests` is a symbolic link; the last two are additions the plan did not list, made so a misnamed or linked
+directory cannot be skipped silently. `tests/test_claude_module.py` is now
+`packages/workbench/claude/tests/test_claude_module.py` (paths from its own location; the directory-listing
+assertion now expects `module.json` and `tests`). Its records-match test gained `support.require_release`,
+since the module's hash changed with the move and the shipped approval is stale until G. The fixtures it took
+from three installer test files moved to new `tests/support_harness.py` (`SKILL`, `AGENT`, `COMMAND`, `tree`,
+`items`, `CLAUDE`); `test_neutral`, `test_layout`, `test_harnessplan`, `test_attach` and `test_permissions`
+import them from there. `module-boundary.md` now names `tests/support.py` and `tests/support_*.py` as the
+shared support. `docs/development.md` and `README.md` give `python3 -B -W error tests/run_all.py`, and the
+focused module form. New: `tests/test_run_all.py` (13 tests, built on a temporary repository) and
+`tests/test_module_test_imports.py` (4 tests; an `ast` scan that a module's tests import from `tests` only
+`support` or `support_*`; static, so an `importlib` or `sys.path` trick is outside it).
+Verification: `python3 -B -W error tests/run_all.py`: 2142 tests in 2 roots, OK (2125 before, plus 17 new);
+109 skipped, which are the stale shipped approvals (one more than before, from the moved test); no
+`__pycache__` under `packages/`. The one-module form passes on its own.
+Review: an independent `workflow-reviewer` pass found no Critical or High issue. Fixed after it, each with a
+test: (Low) a stray file in `packages/` or a package directory crashed `roots()`; (Low) a root whose tests
+were all skipped passed, it now fails like an empty one; (Low) `forget()` left the dropped module as an
+attribute of the `tests` namespace package, so `from tests import support` could return the first root's
+object, it now removes the attribute; (Low) the focused module command no longer says `PYTHONPATH=.`, which
+it does not need. Left as is: the moved claude test's records-match check now skips while approvals are stale
+(disclosed above; increment G ends the skips); the import rule is static by design. The reviewer could not run
+`run_all.py` itself; I did, with `-W error`.

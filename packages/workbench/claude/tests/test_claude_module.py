@@ -6,13 +6,11 @@ import unittest
 
 from workbench import approvals, declarations, firstparty, harnessplan, request, verify
 from tests import support
-from tests.test_harnessplan import items
-from tests.test_neutral import SKILL
-from tests.test_layout import CLAUDE
+from tests.support_harness import CLAUDE, SKILL, items, tree
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PACKAGE = os.path.join(ROOT, "packages", "workbench")
-MODULE = os.path.join(PACKAGE, "claude", "module.json")
+CLAUDE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PACKAGE = os.path.dirname(CLAUDE_DIR)
+MODULE = os.path.join(CLAUDE_DIR, "module.json")
 
 
 def declaration():
@@ -36,6 +34,7 @@ class Shipped(unittest.TestCase):
         self.assertEqual([m.name for m in result.modules], ["claude", "code-work", "groundwork"])
 
     def test_the_shipped_records_match_the_current_hashes(self):
+        support.require_release(self)
         result = verify.verify_package(PACKAGE, first_party=True)
         self.assertTrue(result.accepted, [str(p) for p in result.problems])
         tree = firstparty.shipped_tree(firstparty.default_distribution())
@@ -48,7 +47,7 @@ class Shipped(unittest.TestCase):
     def test_the_package_is_the_claude_code_work_and_groundwork_modules(self):
         self.assertEqual(sorted(os.listdir(PACKAGE)),
                          ["claude", "code-work", "groundwork", "package.json"])
-        self.assertEqual(sorted(os.listdir(os.path.join(PACKAGE, "claude"))), ["module.json"])
+        self.assertEqual(sorted(os.listdir(CLAUDE_DIR)), ["module.json", "tests"])
 
 
 class Changed(unittest.TestCase):
@@ -164,7 +163,6 @@ class Rendering(unittest.TestCase):
 
     def test_an_item_that_needs_hooks_is_skipped_because_hooks_are_not_provided(self):
         from workbench import neutral
-        from tests.test_neutral import tree
         text = SKILL.replace(b"A sample skill\n", b"A sample skill\nneeds: hooks\n")
         found = neutral.read_items(tree(**{"skills/sample/SKILL.md": text}))
         result = self.plan(found)
