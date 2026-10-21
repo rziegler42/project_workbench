@@ -29,6 +29,7 @@ LIMIT = safefs.MAX_FILE_BYTES
 MAX_ENTRIES = 1000000
 MAX_PATH = 4096
 MAX_PATH_BYTES = 64 * 1024 * 1024
+DIR_COST = 64  # what a directory name costs beyond its bytes: the string and its place in a set
 
 _HEADER = 12
 _FIXED = 40  # the stat data in front of the object name
@@ -124,7 +125,11 @@ def parse(data):
         parent = name.rpartition("/")[0]
         while parent and parent not in dirs:
             dirs.add(parent)
+            spent += len(parent) + DIR_COST  # a deep path makes a name for each directory above it
             parent = parent.rpartition("/")[0]
+        if spent > MAX_PATH_BYTES:
+            raise GitIndexError("the paths and their directories add up to more than %d bytes"
+                                % MAX_PATH_BYTES)
     if pos > end:
         raise GitIndexError("the entries run past the end")
     while pos < end:

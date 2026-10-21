@@ -13,7 +13,7 @@ def _no_duplicates(pairs):
     seen = {}
     for key, value in pairs:
         if key in seen:
-            raise ValueError("duplicate key %r" % key)
+            raise ValueError("duplicate key")  # the key is the file's text, so it is not repeated
         seen[key] = value
     return seen
 
@@ -23,7 +23,7 @@ def _refuse_constant(text):
 
 
 def _refuse_float(text):
-    raise ValueError("numbers with a fraction or exponent are not allowed: %s" % text)
+    raise ValueError("numbers with a fraction or exponent are not allowed: %s" % text[:40])
 
 
 def parse_object(data, limit):

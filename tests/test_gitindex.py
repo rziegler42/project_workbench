@@ -211,6 +211,14 @@ class Index(unittest.TestCase):
                 gitindex.parse(self.signed(self.entry(b"abcdef") * 40, count=40))
         self.assertLess(time.monotonic() - start, 5)
 
+    def test_the_directory_names_of_deep_paths_count_against_the_byte_bound(self):
+        # One 1,800 byte path makes 900 directory names of 900 bytes on average: the bound counts them.
+        deep = b"p/" + b"a/" * 898 + b"f"
+        with unittest.mock.patch.object(wbkit_gitindex, "MAX_PATH_BYTES", 10000):
+            with self.assertRaises(gitindex.GitIndexError):
+                gitindex.parse(self.signed(self.entry(deep)))
+        self.assertEqual(1, len(gitindex.parse(self.signed(self.entry(deep))).files))
+
     def test_the_number_of_entries_is_bounded(self):
         data = self.repo()
         self.assertEqual(7, len(gitindex.parse(data).files))

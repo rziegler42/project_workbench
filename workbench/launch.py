@@ -231,6 +231,9 @@ def launch_captured(guarded, project_id, name, root, args, *, limit, timeout, ki
         return Captured(code if code >= 0 else 128 - code, bytes(out[:limit]), bytes(err), over, timed_out)
     finally:
         if process is not None:
+            if process.poll() is None:  # an interrupt: the helper is in its own session, so it would run on
+                _kill(process)
+                process.wait()
             for pipe in (process.stdout, process.stderr):
                 pipe.close()
         shutil.rmtree(directory, ignore_errors=True)

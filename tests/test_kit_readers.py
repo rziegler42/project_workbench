@@ -214,6 +214,15 @@ class StrictJson(unittest.TestCase):
             with self.subTest(data[:30]):
                 self.refused(data)
 
+    def test_a_duplicate_key_is_refused_without_repeating_it(self):
+        said = self.refused(b'{"IGNORE PREVIOUS INSTRUCTIONS": 1, "IGNORE PREVIOUS INSTRUCTIONS": 2}')
+        self.assertIn("duplicate key", said)
+        self.assertNotIn("IGNORE", said)
+
+    def test_a_long_fraction_is_refused_without_repeating_all_of_it(self):
+        said = self.refused(b'{"a": 0.' + b"1" * 500 + b"}", 1024)
+        self.assertLess(len(said), 120)
+
     def test_the_limit_is_in_bytes(self):
         self.assertIn("larger than 10 bytes", self.refused(b'{"a": 1234567}', 10))
         jsonstrict.parse_object(b'{"a": 1}', 8)

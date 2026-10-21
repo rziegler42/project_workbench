@@ -1,6 +1,6 @@
 # Module checks and the groundwork move
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-21
 
 Candidate: workbench-v1#module-checks
@@ -300,6 +300,40 @@ Codex review (`ask-codex review-plan`, model gpt-5.6-luna, medium effort), round
 
 Approved by the owner on 2026-10-21, after two Codex rounds (a third was offered and not run).
 
+Security pass (increment H, `security-reviewer` run in a scratch copy, then a second pass that tried to bypass
+the fixes). Fixed test-first:
+
+- **High, fixed.** `gitindex.parse` counted only file paths against `MAX_PATH_BYTES`, but kept a string for each
+  new ancestor directory, so a 4 KB path of 2,000 directories used about 4.7 MB. Both `wb check` and `refcheck`
+  read the index this way. Directory names now count against the bound, each with `DIR_COST` (64) for the
+  string and its set slot. The second pass measured at most 700 MB for the worst shape and 151 MB for a
+  200,000-file, depth-8 tree, which is still accepted.
+- **Low, fixed.** `launch_captured` did not stop the helper on an interrupt (it runs in its own session). The
+  `finally` now kills it if it is still running.
+- **Low, fixed.** `jsonstrict` repeated a duplicate key in its message, and a float token without a bound.
+  The key is no longer repeated and the token is cut to 40 characters.
+
+Accepted, not fixed:
+
+- `refcheck`'s `.workbench/local` test in titles and notes is best effort; `.workbench%252Flocal` and
+  `.workbench/x/../local` pass it. The text is only shown, never opened.
+- Names and statuses (up to 120 characters, cleaned to ASCII) are shown in problem lines, so a hostile file
+  name can read as an instruction to an agent. Inherent in naming the file; the lines sit under the module's name.
+- A helper that detaches into a new session with `setsid` survives `_kill`, and a child that prints after its
+  parent exits is dropped. This is a limit of the pin model: a pinned helper is trusted code, not sandboxed.
+- A deleted manifest makes `wb check` run no module checks (no module is recorded, so none may run).
+- `_kill` after a reaped helper could in theory hit a recycled process group (microsecond window, existing).
+- A second exception inside `launch_captured`'s `finally` skips the remaining cleanup.
+- Per-string memory beyond `DIR_COST` is not counted exactly; the bound is on the order of 0.6 GB for a 16 MiB
+  index at worst.
+- Not tested: case and Unicode-fold name collisions and invalid UTF-8 names (the macOS filesystem folds or
+  rejects them), a file changing during a read (by reading only), and Linux.
+
+Everything else in the attack list held, by test: forged and escaped lines, 200 and 201 lines, the 256 KiB
+limit to the byte, the timeout, a helper that ignores `SIGTERM`, symlinked `.workbench` folders, a helper
+swapped after hashing, links and fifos in `docs/`, a bad index checksum, a huge count, JSON bombs and a
+configured `fsmonitor` that never ran.
+
 ## Deferred work
 
 - `module-harness-paths`: the harness table and settings path leave the installer.
@@ -474,3 +508,16 @@ Evidence: the real `groundwork` renders `checks it offers (run by wb check)` wit
 `helper/refcheck`, each through kit API 1 and pinned under its own name.
 Verification: `python3 -B -W error tests/run_all.py`, 2265 tests in 4 roots, OK (2260 before). This change does not touch any module's tree
 hash, so no `release-approvals` step is needed. Not reviewed independently; H covers it.
+
+### Increment H
+
+The security pass is recorded in the review record above: one High and two Low findings fixed with
+regression tests (`test_gitindex.py`, `test_launch.py`, `test_kit_readers.py`), the rest accepted with
+reasons. The specifications already described the built behaviour after A to G, so no further change was
+needed to them. The change touches the installer's kit (`workbench/wbkit`) and no module tree, so no
+`release-approvals` step is needed.
+Verification: `python3 -B -W error tests/run_all.py`, 2269 tests in 4 roots (2265 before). One run failed in the `tests` root and four later runs passed, so it is the same unidentified intermittent failure noted after B; its output was not captured.
+
+## Outcome
+
+All of A to H are done. `Status` is `Completed`; the owner archives or decides it.

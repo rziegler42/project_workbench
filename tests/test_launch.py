@@ -328,6 +328,31 @@ class CapturedTest(Base):
         self.assertTrue(self.gone(child))
         self.nothing_left()
 
+    def test_an_interrupt_while_reading_stops_the_helper(self):
+        pid_file = os.path.join(self.root, "helper.pid")
+        self.helper_text('echo $$ > %s\necho started\nsleep 60\n' % pid_file)
+
+        real = os.read
+
+        def interrupted(descriptor, size):
+            chunk = real(descriptor, size)
+            if chunk and stat.S_ISFIFO(os.fstat(descriptor).st_mode):
+                raise KeyboardInterrupt()
+            return chunk
+
+        with unittest.mock.patch.object(launch.os, "read", interrupted):
+            with self.assertRaises(KeyboardInterrupt):
+                self.captured(timeout=20)
+        with open(pid_file) as held:
+            pid = int(held.read())
+        for _ in range(50):
+            if self.gone(pid):
+                break
+            time.sleep(0.1)
+        self.assertTrue(self.gone(pid))
+        os.unlink(pid_file)
+        self.nothing_left()
+
     def test_a_helper_that_quits_leaving_a_child_holding_the_pipe_does_not_hang_and_leaves_nothing(self):
         self.helper_text('sleep 60 >&1 2>&2 &\necho $!\nexit 0\n')
         started = time.monotonic()
