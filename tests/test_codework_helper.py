@@ -115,7 +115,7 @@ class Source(unittest.TestCase):
                 names.update(alias.name.split(".")[0] for alias in node.names)
             elif isinstance(node, ast.ImportFrom):
                 names.add((node.module or "").split(".")[0])
-        self.assertEqual({"datetime", "io", "itertools", "os", "re", "stat", "sys"}, names)
+        self.assertEqual({"datetime", "html", "io", "itertools", "os", "re", "stat", "sys"}, names)
         self.assertTrue(names <= set(sys.stdlib_module_names))
 
     def test_it_opens_nothing_for_writing_and_runs_no_program(self):
@@ -430,7 +430,7 @@ class Hostile(Project):
         for index in range(helper.MAX_FILES + 5):
             self.plan("2026-10-21-p%05d.md" % index)
         lines = self.problems()
-        self.assertProblem("not looked at; more than %d plans" % helper.MAX_FILES, lines)
+        self.assertProblem("not looked at; more than %d files" % helper.MAX_FILES, lines)
         self.assertTrue(len(lines) <= helper.MAX_REPORTED + 1)
 
     def test_findings_are_bounded(self):

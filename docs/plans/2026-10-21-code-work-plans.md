@@ -383,3 +383,51 @@ a regular `.workbench/manifest.json`), and bounds what it reads as `doccheck.py`
   the tests and by the security pass in increment G.
 - Run as a program from a directory holding `json.py`, `os.py` and `re.py`, it imports none of them.
 - Only `check` exists; `plans` and `report` are increment C.
+
+### Increment C — `plans` and `report` (2026-10-21)
+
+The helper gains `plans` and `report`; `tests/test_codework_reports.py` (40 tests) covers both and
+`tests/test_codework_helper.py` is adjusted for two changed messages. Full suite: 1986 tests, 108
+skipped, passing with `-W error`. The skips are the stale shipped approvals (see B).
+
+- **Output.** `plans` prints `<name>: <status>` for each plan that is Proposed, Approved or In
+  Progress, in name order. `report` prints `complete <roadmap>#<id>` for each candidate that a
+  Completed plan names, sorted, then `unresolved <plan> names <ref>: no such roadmap|candidate` in
+  plan order. Both write only to standard output, and `problem:` lines on standard error with exit 1
+  when something could not be read (a link, a bound, an unclosed fence). Unresolved references are
+  information and exit 0. With no `docs/roadmaps/` (or no readable one), `report` prints nothing and
+  succeeds, even if plans name candidates; a roadmap folder that cannot be listed is a problem and
+  produces no `unresolved` lines, because nothing was looked at.
+- **One reader.** The folder reading that `check` did is now `collect`, used by all three, so the
+  file, byte, size and link rules are the same. Moving the size notice there means it is also given by
+  `plans` and `report`. The `not looked at` message now says "files" and not "plans", because roadmaps
+  are read too. The bounds of `report` are shared between roadmaps and plans.
+- **Facts a plan states.** The status is the first `Status:` line in the header (words followed by a
+  note count: `Approved (by the owner)`; `Approvedish` and lowercase do not). The candidate is the
+  one `Candidate:` line when exactly one is present and it has the form `<slug>#<slug>`; `none` and a
+  second line name nothing (`check` reports those). IDs are exact: a different case never matches.
+- **Candidates as `doccheck` reads them.** `roadmap_candidates` follows `doccheck._candidates`: the
+  `###` headings under `## Candidates`, with decorated, entity-written and setext headings, and a
+  five-text corpus test agrees with it. One known difference: the helper hides a heading inside an HTML
+  comment and `doccheck` does not, so the helper may report fewer candidates, never more. A dropped
+  candidate stays in the file and so stays resolvable. The same ID in two roadmaps is two candidates.
+- **Real data.** Run on a scratch copy of this repository's `docs/`: `check` found no problems in 11
+  plans; `plans` listed this plan; `report` listed nine candidates complete, matching the plans. The
+  unfinished-write-recovery plan has `Candidate: none`, so it names nothing.
+- **Found while testing:** reaching the candidate cap returned before the generator finished, so the
+  "fence never closed" state was missing and the run crashed with a `KeyError`; the scan now carries
+  on without recording more and says what was cut.
+- **Review (workflow-reviewer, read-only, 2026-10-21):** no Critical or High finding; it could run
+  only the two test files. Applied: (Medium) the rest of the line that closes an HTML comment, and the
+  whole of a one-line comment, is hidden, as a renderer reads it, so `--> ### forged` is not a
+  candidate and `--> Status: Approved` is not a field (this also corrects the claim above that the
+  helper never reports more candidates than `doccheck`: `doccheck` has no comment handling at all, so
+  it reads a heading inside a comment and the helper does not, but the forged-heading case went the
+  other way until now); (Low) `report` makes no `unresolved` claim when any roadmap was not read in
+  full (a link, a bound, an unclosed fence), and keeps its `complete` lines; (Low) `plans` and
+  `report` give a problem, and exit 1, for a plan whose status could not be found because a fence or
+  comment was never closed. Not changed, by decision: a Completed plan with a bad name or a malformed
+  `Candidate:` is counted by `plans` and ignored by `report`; `check` reports it. The new tests were
+  not run against the old code to see them fail. The hostile-input experiments the reviewer could not
+  run are for the security pass in increment G.
+- `html` joins the helper's standard-library imports (entity decoding, as `doccheck` does).
