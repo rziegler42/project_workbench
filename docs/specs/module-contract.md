@@ -317,9 +317,10 @@ empty one. Known-answer tests in `tests/` fix both.
 
 **Set checks.** They run on a selection of modules, not on every module of a package.
 A selected module is named `<module>`, or `<package>/<module>` where two packages
-share a name. Pin names are one namespace *(specified by `module-boundary.md`; not built yet)*: a command is pinned under its name and a check under
-the last segment of its helper path, and a name given twice among the selected modules is refused, naming
-both. A module is never its own provider. A `requires` entry for a `slot:` capability is hard
+share a name. Pin names are one namespace *(specified by `module-boundary.md`)*: a command is pinned under its name and a
+check under the last segment of its helper path, and a name given twice among the selected modules is
+refused, naming both. The verifier enforces this for command names (rule `command-name`); the check half is
+not built yet. A module is never its own provider. A `requires` entry for a `slot:` capability is hard
 unless marked `soft`, like any other; only a slot fill is always soft. A slot has one
 owner among the selected modules. A hard requirement with no provider
 among the selected modules names the capability and the unselected modules that could

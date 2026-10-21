@@ -281,3 +281,16 @@ earlier, by the strict JSON loader, so those two are not `commands` cases). The 
 approval-request gap above. The reviewer ran no adversarial probes; this increment runs nothing.
 Verification: `python3 -B -W error tests/run_all.py`: 2155 tests in 2 roots, OK (2145 before). No
 first-party module changed, so no approval changed.
+
+### Increment B
+
+`verify._check_set` refuses a command name that more than one selected module declares: rule
+`command-name`, subject `command:<name>`, message naming the command and every declaring module as
+`<package>/<module>`. A name declared once, several commands in one module, and an unselected module that
+declares the same name all pass. (A single module cannot repeat a name; the parser already refuses a
+duplicate JSON key.) `module-contract.md` "Set checks" now says command names are enforced and the check half
+of the namespace is not built.
+Verification: four new tests in `tests/test_verify.py` failed before the rule and pass after;
+`python3 -B -W error tests/run_all.py`: 2158 tests in 2 roots, OK (2155 before). No first-party module
+changed, so no approval changed. Not reviewed independently; the change is one loop mirroring the slot-owner
+check.

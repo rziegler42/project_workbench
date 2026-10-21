@@ -200,6 +200,15 @@ def _check_set(selected, modules, harness_required, which, problems, warnings):
                     "module", module.name, "slot-owner", "owns slot %r, which the base owns"
                     % slot, key[0]))
 
+    named = collections.defaultdict(list)
+    for key, module in chosen:
+        for command in module.commands:
+            named[command.name].append(_label(key))
+    for name, who in sorted(named.items()):
+        if len(who) > 1:
+            problems.append(_problem("command:" + name, "command-name", "more than one selected "
+                                     "module declares the command %r: %s" % (name, ", ".join(who))))
+
     deps = {key: set() for key in keys}
     for key, module in chosen:
         for capability, soft in _requirements(module):

@@ -305,6 +305,41 @@ class RequirementTest(Base):
         self.assertEqual(self.rules(result), ["slot-owner"])
         self.accepted(self.run_set(path, ["h", "x"]))
 
+    def with_commands(self, name, modules, **others):
+        """A package whose harness is h, whose modules each declare the named commands."""
+        declared = {module: {"ships": [c + ".sh" for c in names],
+                             "commands": {c: {"helper": c + ".sh"} for c in names}}
+                    for module, names in modules.items()}
+        path = self.package(name, dict(declared, **others))
+        for module, names in modules.items():
+            for command in names:
+                with open(os.path.join(path, module, command + ".sh"), "w") as handle:
+                    handle.write("x")
+        return path
+
+    def test_two_modules_of_one_package_may_not_share_a_command_name(self):
+        path = self.with_commands("p", {"x": ["go"], "y": ["go"]}, h=HARNESS)
+        result = self.run_set(path, ["h", "x", "y"])
+        self.assertEqual(self.rules(result), ["command-name"])
+        message = str(result.problems[0])
+        self.assertIn("go", message)
+        self.assertIn("p/x", message)
+        self.assertIn("p/y", message)
+        self.accepted(self.run_set(path, ["h", "x"]))
+
+    def test_two_packages_may_not_share_a_command_name(self):
+        one = self.with_commands("one", {"x": ["go"]}, h=HARNESS)
+        two = self.with_commands("two", {"y": ["go"]})
+        result = self.run_set([one, two], ["one/h", "one/x", "two/y"])
+        self.assertEqual(self.rules(result), ["command-name"])
+        self.assertIn("one/x", str(result.problems[0]))
+        self.assertIn("two/y", str(result.problems[0]))
+
+    def test_distinct_command_names_and_an_unselected_module_are_accepted(self):
+        path = self.with_commands("p", {"x": ["go", "stop"], "y": ["halt"], "z": ["go"]},
+                                  h=HARNESS)
+        self.accepted(self.run_set(path, ["h", "x", "y"]))
+
     def test_a_slot_fill_is_soft_and_met_by_the_owner(self):
         path = self.package("p", {"h": HARNESS, "owner": {"slots": ["x"]},
                                   "filler": {"fills": [{"slot": "slot:x", "source": "x.md"}]}})
