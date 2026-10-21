@@ -110,6 +110,16 @@ meet here and the order matters.
   nothing above Low unresolved. The hand run in a live `claude` session was not done. The plan's Result
   and `harness-modules.md` ("As built, and its limits") list the limits. Compact Instructions waits
   for `code-work-module`.
+- `groundwork-module` is implemented (plan `2026-10-21-groundwork-module`, increments A to I; its
+  completion is derived from that plan): the first-party module `groundwork` in
+  `packages/workbench/` with the four READMEs, the `docs-index` and policy blocks and three skills
+  (`draft-spec`, `draft-roadmap`, `draft-decision`), shipping no code; the reference index format
+  (`docs/references/index.json`, canonical JSON); and the document and reference checks, which the
+  installer runs in `wb check` for a project that has the module. Two adversarial security passes
+  found nothing above Medium unresolved. The package was released again with its approvals. The two
+  decisions it proposed (`2026-10-21-reference-index-format`,
+  `2026-10-21-installer-runs-document-checks`) await the owner. The hand run in a live `claude`
+  session was not done. `groundwork.md` ("As built, and its limits") lists the limits.
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.
 

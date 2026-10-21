@@ -1,7 +1,8 @@
 # groundwork
 
-Status: Current. Approved by the owner on 2026-10-19; implementation has not started. Paths, field names
-and file formats are proposals; the rules are the substance.
+Status: Current. Approved by the owner on 2026-10-19. Built by the plan `2026-10-21-groundwork-module`:
+the module, its three skills and the two checks in `wb check`; "As built, and its limits" lists what
+is not detected. The researcher and the fetch tool are not built.
 
 Terms are defined in `terms.md`. The declaration it must satisfy is defined in
 `module-contract.md`; the places and upgrade rules in `repository-boundary.md`; the
@@ -53,8 +54,8 @@ project is learned and redesigned. It is not a work log.
 - Every spec has: a status line, scope, non-goals, assumptions and constraints, the
   interfaces or behavior it specifies, acceptance criteria, and references to the
   decisions and external material that govern it.
-- Status is `Draft`, `Current` or `Superseded`. A superseded spec names its
-  successor.
+- Status is `Draft`, `Current` or `Superseded`, in one `Status: <value>` line before the
+  first `##` heading. A superseded spec names its successor in a `Superseded by <name>` line.
 - Numbers, dimensions and tolerances in a spec carry their source: a decision, a
   reference, or an evidence note (see below).
 - Changing what a spec says about direction is a checkpoint (see "Checkpoints").
@@ -105,8 +106,9 @@ durable history and the authority above current code.
   two people add records at once.
 - Sections: context, the decision, alternatives considered and rejected, consequences,
   and evidence. Evidence uses the evidence-note form.
-- Status is `Proposed`, `Accepted`, `Rejected` or `Superseded`. A superseded record
-  names its successor. Once accepted, a record's text is not rewritten; a correction
+- Status is `Proposed`, `Accepted`, `Rejected` or `Superseded`, in one `Status: <value>` line
+  before the first `##` heading. A superseded record names its successor in a
+  `Superseded by <name>` line. Once accepted, a record's text is not rewritten; a correction
   or a change of mind is a new record that supersedes it.
 - **Accepting a decision is a checkpoint that stops for the owner by default,**
   because accepted decisions outrank current code. It can be delegated by the owner's
@@ -157,8 +159,10 @@ Placement:
 - Nothing tracked points to anything untracked. A tracked document that relies on an
   untracked reference cites it by source URL, retrieval date and content hash, and
   never by path.
-- A check reports a tracked-index entry whose file is missing or whose hash differs,
-  and any entry for a file that is not tracked.
+- A check reports a tracked-index entry whose file is missing, is a link or whose hash differs,
+  any entry for a file that is not tracked, and a tracked file under `docs/references/` that the
+  index lacks. A size over 2 MiB, a total over 50 MiB and an entry with no license are warnings
+  only, since the owner may have added the file by hand.
 
 ### The researcher and the fetch-reference tool (module `groundwork-research`)
 
@@ -225,6 +229,49 @@ tier). Recording evidence and correcting a typo are not checkpoints.
 - **Limit of enforcement:** whether an edit changes a spec's or roadmap's direction is
   a judgment, so that checkpoint is enforced by instruction and acknowledgement, not
   mechanically. A typo fix and a direction change cannot be told apart by the harness.
+
+## As built, and its limits
+
+The module is `packages/workbench/groundwork/`. It ships no code: a declaration, four READMEs, two
+slot blocks and three neutral skills (`draft-spec`, `draft-roadmap`, `draft-decision`), each with
+its own template beside it. The checks are the installer's, not the module's
+(`docs/decisions/2026-10-21-installer-runs-document-checks.md`), and `wb check` runs them only for a
+project whose committed manifest records the module `groundwork` of the package `workbench`. They
+are in `workbench/doccheck.py` (names, status, successor, candidate IDs) and
+`workbench/refcheck.py` (the index against what git tracks), read through the no-follow reader,
+run no program and write nothing. An adversarial security pass over them found nothing above
+Medium unresolved; the Mediums were fixed and the plan's Result lists them.
+
+What is checked:
+
+- Spec and roadmap names are `<topic>.md` in kebab-case; a decision's is `YYYY-MM-DD-<topic>.md`
+  with a real date; names that differ only in case collide.
+- One `Status:` line, with a value of the kind, within 40 lines and before the first `##` heading.
+  A superseded record needs a `Superseded by <name>` line.
+- Candidate IDs, the text up to the first space or colon of a `###` heading under `## Candidates`,
+  are kebab-case slugs of at most 64 characters, unique after Unicode folding.
+- The reference index is in its canonical form, and agrees with git (see "Indexes").
+- Bounds: 2,000 documents, 4 MiB in all, 1 MiB per document (only the start of a larger one is
+  examined, and the cut is reported), 2,000 candidates per roadmap, 200 findings, and 128 MiB of
+  references read. Passing a bound is a report, never a silent stop.
+
+What is not detected:
+
+- Only the files directly in each folder are read; `archive/` and other subfolders are ignored.
+- A heading inside an HTML comment counts as a candidate. HTML blocks and multi-line setext
+  headings are not modelled.
+- A successor line passes with any non-space name; it is not matched to an existing document.
+- The `.workbench/local` guard on titles and notes is best-effort: a double-encoded or lookalike
+  character passes.
+- An untracked index is not read. Windows aliasing of `a.pdf` and `a.pdf.`, and `INDEX.json` on a
+  filesystem that folds case, were not tested.
+- Not exercised: a folder over 1,500 files, the 128 MiB bound, a change made during a read, and
+  Linux and Windows filesystems.
+- A name that cannot be written in the index (for example one with a control character) is
+  reported with a request to rename the file.
+- The hand run of an install and a live `claude` session using the skills was not done.
+- A fixture first-party distribution to render the skills in a second layout was not built; the
+  rendering is covered by the harness tests.
 
 ## Acceptance criteria
 

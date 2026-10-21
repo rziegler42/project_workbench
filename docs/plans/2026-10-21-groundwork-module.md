@@ -556,3 +556,21 @@ against the code and fixed with a regression test that fails on the earlier code
   owner's approval it was removed (`claude-workflow remove`), and the release now reports no
   stale record. The two new records are added in this commit.
 - Suite: 1878 tests, 1 skipped, passing with `-W error`; `git diff --check` clean.
+
+### Increment I — result
+
+- `docs/specs/groundwork.md`: the status line no longer says implementation has not started; the
+  status-line and `Superseded by <name>` rule is stated for specs and decisions; the check of the
+  reference index is described as built (links, the missing-entry case, warnings); a new section
+  "As built, and its limits" lists what is checked, the bounds and every limit found in the
+  security passes and in H.
+- `docs/specs/installer-interface.md` (`check`): the document checks, when they run, what they
+  report, the warnings, and that a project without the module gets none.
+- `docs/development.md`: the same in the `wb check` paragraph, with the added bounds.
+- `docs/roadmaps/workbench-v1.md` (Current state): `groundwork-module` implemented.
+  The candidate text was not changed.
+- Each claim was matched to a test (`test_doccheck`, `test_refcheck`, `test_refindex`,
+  `test_groundwork_module`) or to the security-pass record above. `module-contract.md` did not
+  change. The hand run and the second-layout fixture are listed as not done.
+- Left for the owner: accept the two `Proposed` decisions, run the hand run, push, and mark this
+  plan `Completed` (Completion criterion 9 holds with the records `Proposed`).

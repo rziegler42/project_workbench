@@ -346,6 +346,15 @@ publishes, and none edits a living or historical document** (`repository-boundar
   (not an existing project, a refused target) says `refused:` and exits 1. "Tracked" means in the
   index, and the bounds and what is not detected are listed in `harness-modules.md`, "As built,
   and its limits".
+- **Document checks (built by `groundwork-module`).** For a project whose committed manifest
+  records the module `groundwork` of the package `workbench`, `check` also reports a wrong name
+  or status of a spec, roadmap or decision, a superseded record with no successor line, a
+  duplicate or malformed candidate ID in a roadmap, and the reference index against what git
+  tracks (an entry whose file is not tracked, is missing, is a link or has a different hash; a
+  tracked reference the index lacks; an index that is not canonical). A file over 2 MiB, references
+  over 50 MiB in all and an entry with no license are warnings. A project without the module gets
+  none of these, and one with the module and none of the folders gets none either. The rules are
+  in `groundwork.md`, and the bounds and what is not detected under "As built, and its limits".
 - It exits 1 when it reports a problem and 0 when it reports none (exit codes).
 
 ### `upgrade` and adding a module (built by `ownership-and-upgrade`)
