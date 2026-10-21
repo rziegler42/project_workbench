@@ -11,13 +11,12 @@ form is refused. The manifest is untrusted text when it is read back: this modul
 shape and nothing else.
 """
 
-import hashlib
 import json
 import re
 import uuid
 
 from . import declarations
-from .wbkit import safefs
+from .wbkit import project, safefs
 
 VERSION = 1
 BASE_IGNORE = b"/local/\n"
@@ -26,7 +25,6 @@ CLASSES = ("module-owned", "seeded", "slot block")
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}\Z")
 _COMMIT = re.compile(r"^([0-9a-f]{40}|[0-9a-f]{64})?\Z")
-_SEED = re.compile(r"^[A-Za-z0-9._-]{1,128}\Z")
 _WORKBENCH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}\Z")
 _BLOCK = re.compile(r"^[a-z][a-z0-9-]{0,63}/[a-z][a-z0-9-]{0,63}\Z")
 _TEXT_LIMIT = 512
@@ -47,14 +45,18 @@ def new_seed():
 
 
 def _check_seed(seed):
-    if not isinstance(seed, str) or not _SEED.match(seed):
-        raise ManifestError("the seed is not a plain token of at most 128 characters")
-    return seed
+    try:
+        return project.check_seed(seed)
+    except project.SeedError as exc:
+        raise ManifestError(str(exc))
 
 
 def project_id(seed):
-    """The project ID: SHA-256 of the seed as 64 lowercase hex digits."""
-    return hashlib.sha256(_check_seed(seed).encode("ascii")).hexdigest()
+    """The project ID: SHA-256 of the seed as 64 lowercase hex digits (derived in the kit)."""
+    try:
+        return project.project_id(seed)
+    except project.SeedError as exc:
+        raise ManifestError(str(exc))
 
 
 # --- shape ---------------------------------------------------------------------

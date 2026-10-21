@@ -13,6 +13,7 @@ import unittest.mock
 
 from tests import test_codework_fixture as fixture
 from workbench import cli, dispatch, harnessplan, pins
+from workbench.wbkit import project
 
 SCRIPT = (b"#!/bin/sh\n"
           b"echo \"n:$#\"\n"
@@ -111,7 +112,7 @@ class Usage(Dispatched):
 
     def test_the_usage_error_does_not_look_for_a_project(self):
         with tempfile.TemporaryDirectory() as bare:
-            with unittest.mock.patch.object(dispatch, "find_root", side_effect=AssertionError):
+            with unittest.mock.patch.object(project, "find_root", side_effect=AssertionError):
                 code, out, err = self.go("bogus", cwd=os.path.realpath(bare))
         self.assertEqual((2, ""), (code, out))
 
@@ -206,7 +207,7 @@ class Refuses(Dispatched):
     def test_a_project_deeper_than_the_search_limit_is_not_searched_for_ever(self):
         self.installed()
         deep = self.place
-        for _ in range(dispatch.MAX_DEPTH + 2):
+        for _ in range(project.MAX_DEPTH + 2):
             deep = os.path.join(deep, "d")
         os.makedirs(deep)
         self.refused("not inside a workbench project", deep)
@@ -233,7 +234,7 @@ class Refuses(Dispatched):
     def test_the_limit_is_exact_64_levels_are_searched_and_65_are_not(self):
         self.installed()
         deep = self.place
-        for _ in range(dispatch.MAX_DEPTH - 1):
+        for _ in range(project.MAX_DEPTH - 1):
             deep = os.path.join(deep, "d")
         os.makedirs(deep)
         self.assertEqual(0, self.go("check", cwd=deep)[0])

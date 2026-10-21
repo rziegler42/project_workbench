@@ -341,11 +341,34 @@ removed `workbench/display.py`.
 
 `workbench/wbkit/safefs.py` holds the code of the old `workbench/safefs.py`, byte for byte (copied, not
 `git mv`, so the commit helper sees a plain add and a plain delete; the old file was removed with
-`claude-workflow remove`). 53 files changed: the installer and test imports now read `from .wbkit import
+`claude-workflow remove`). 56 files changed in the commit (53 of them rewritten imports): the installer and test imports now read `from .wbkit import
 safefs` (tests: `from workbench.wbkit import safefs`), merged with the existing `display` import where there was
-one; five parenthesised lists lost only that name and were re-wrapped; `tests/test_safefs.py` and
+one; eight parenthesised lists lost only that name and were re-wrapped; `tests/test_safefs.py` and
 `tests/test_doccheck.py` use the new dotted name for the import and the patch. `tests/test_kit.py` now also
 asserts that `workbench/safefs.py` is gone from the installer and present in the kit. A repository search for
 `workbench.safefs`, `workbench/safefs` and `from . import safefs` finds only this plan and the completed older
 plans, which are history.
-Verification: `python3 -B -W error -m unittest discover -s tests`: 2051 tests, OK, skipped=108.
+Verification: `python3 -B -W error -m unittest discover -s tests`: 2051 tests, OK, skipped=108. The
+independent review found nothing material. Committed by the owner by hand as `b44815a`, because the commit
+helper refuses a change that deletes a file along with other changes.
+
+### Increment C
+
+`workbench/wbkit/project.py` holds `find_root(start)` (the `lstat`-only finder, `MAX_DEPTH = 64`),
+`check_seed`, `project_id(seed)` and `read_id(root)`, with `ProjectError` and its subclass `SeedError`.
+`dispatch.py` calls `project.find_root` and `project.read_id`; its own finder, `project_id`, `MANIFEST` and
+`MAX_DEPTH` are gone, and a `ProjectError` is a refusal like a `DispatchError`. `manifest.project_id` and
+`manifest._check_seed` stay as wrappers that turn `SeedError` into `ManifestError`; `manifest.py` has no
+`hashlib` and no seed pattern of its own, and a test says so. The seven installer callers and the nine test
+files were not changed. `tests/test_dispatch.py` changed only in naming the kit's `MAX_DEPTH` and patching
+the kit's `find_root`. New `tests/test_kit_project.py` (25 tests) pins the finder's cases directly, the
+derivation, and a differential check that `read_id` equals `manifest.project_id(manifest.parse(...)["seed"])`
+on the manifests built from `test_manifest.document()`.
+Two things to know. `wb code-work` now reads the ID without the installer's strict `manifest.parse`: a
+manifest that is not in canonical form but has a valid `seed` is accepted by `read_id`, as the module
+docstring says. The pin check still binds the ID to the pinned helper, and the installer's own commands still
+parse strictly. The kit's boundary test caught `re.compile` as indirect code loading on the first run; the
+kit uses `re.fullmatch` with the pattern string, and `KIT_STDLIB` in `tests/test_kit.py` gained `hashlib`,
+`json` and `re`.
+Verification: `python3 -B -W error -m unittest discover -s tests`: 2076 tests, OK, skipped=108. The independent review found nothing material; its Low suggestions (raw invalid UTF-8, non-ASCII digits in the seed, comparing refusal messages) were added as tests. A search for
+`dispatch.find_root`, `dispatch.project_id` and `dispatch.MAX_DEPTH` finds no remaining use.
