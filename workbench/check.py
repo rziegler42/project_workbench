@@ -21,7 +21,7 @@ safe, and the report says so. Git is never run: what it tracks is read from ``.g
 
 import collections
 
-from . import (__version__, doccheck, gitindex, installed, localmanifest, pointers, projectfs, refcheck,
+from . import (__version__, checks, doccheck, gitindex, installed, localmanifest, pointers, projectfs, refcheck,
                sources, target)
 from .wbkit import display, safefs
 
@@ -47,8 +47,9 @@ LISTED = 40
 
 Command = collections.namedtuple("Command", "target")
 # `manifest` is a sentence about the committed manifest, or None when git could not be asked.
-Report = collections.namedtuple("Report", "harness problems warnings manifest",
-                                defaults=(None,))
+# `modules` are the ``checks.Section`` of the installed modules, run after the installer's own checks.
+Report = collections.namedtuple("Report", "harness problems warnings manifest modules",
+                                defaults=(None, ()))
 
 
 def parse(tokens):
@@ -351,6 +352,7 @@ def run(guarded, command, out, err):
                 return 1
             report = examine(projectfs.Writer(held))
             path = held.path
+        report = report._replace(modules=checks.run_all(guarded, path))
     except target.TargetError as exc:
         return target.write_refusal(err, exc)
     except safefs.SafeFsError as exc:
@@ -365,14 +367,17 @@ def run(guarded, command, out, err):
             out.write("the local manifest is a scratch record: a file that matches it is the one "
                       "attach wrote, not a file known to be safe\n")
         out.write("%s\n" % (report.manifest or "manifest: not known, git's index could not be read"))
-        _listed(err, "warning", report.warnings)
-        _listed(err, "problem", report.problems)
-        if report.problems:
-            out.write("check found %d problem%s\n" % (len(report.problems),
-                                                       "" if len(report.problems) == 1 else "s"))
+        warnings, problems = list(report.warnings), list(report.problems)
+        for section in report.modules:
+            warnings.extend("%s: %s" % (section.label, line) for line in section.warnings)
+            problems.extend("%s: %s" % (section.label, line) for line in section.problems)
+        _listed(err, "warning", warnings)
+        _listed(err, "problem", problems)
+        if problems:
+            out.write("check found %d problem%s\n" % (len(problems), "" if len(problems) == 1 else "s"))
         else:
             out.write("check found no problems\n")
         out.flush()
     except BrokenPipeError:
         pass
-    return 1 if report.problems else 0
+    return 1 if problems else 0

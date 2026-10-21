@@ -3,13 +3,14 @@
 The modules are synthetic (``support_project``). Each check helper is a kit helper that appends its
 own name to a log, so a test can show what ran, in which order, and that a refused check ran nothing."""
 
+import io
 import os
 import tempfile
 import unittest
 import unittest.mock
 
 from tests import support_project
-from workbench import checks, launch, pins
+from workbench import check, checks, cli, launch, pins
 
 LOG = '''
 import os
@@ -235,3 +236,60 @@ class Refused(Checks):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Command(Checks):
+    """`wb check` prints the module sections after the installer's own findings."""
+
+    def check(self):
+        out, err = io.StringIO(), io.StringIO()
+        code = cli.main(["check", self.place], out, err, store_root=self.store_root, home=self.home)
+        return code, out.getvalue(), err.getvalue()
+
+    def lines(self, text, prefix):
+        return [line for line in text.splitlines() if line.startswith(prefix)]
+
+    def with_body(self, body):
+        self.MODULES = {"h": (support_project.HARNESS, {}), "a": module("lint", bodies={"lint": body})}
+        self.ready()
+        self.pin_check("a", "lint")
+
+    def test_the_lines_appear_under_the_module_name(self):
+        self.with_body('print("problem: bad")\nprint("warning: odd")\n')
+        code, out, err = self.check()
+        self.assertEqual(["problem: p/a: bad"], [l for l in self.lines(err, "problem: ") if "p/a" in l])
+        self.assertEqual(["warning: p/a: odd"], self.lines(err, "warning: p/a"))
+        self.assertEqual(1, code)
+
+    def test_a_problem_is_counted_and_a_warning_is_not(self):
+        self.with_body('print("problem: bad")\nprint("warning: odd")\n')
+        with unittest.mock.patch.object(check, "examine", return_value=check.Report(None, ["own"], [], "m")):
+            code, out, err = self.check()
+        self.assertEqual(1, code)
+        self.assertTrue(out.endswith("check found 2 problems\n"), out)
+
+    def test_a_warning_alone_does_not_fail_the_check(self):
+        self.with_body('print("warning: odd")\n')
+        with unittest.mock.patch.object(check, "examine", return_value=check.Report("none", [], [], "m")):
+            code, out, err = self.check()
+        self.assertEqual((0, "warning: p/a: odd\n"), (code, err))
+        self.assertTrue(out.endswith("check found no problems\n"), out)
+
+    def test_an_unpinned_helper_is_a_problem_and_the_rest_still_run(self):
+        self.MODULES = {"h": (support_project.HARNESS, {}), "a": module("lint", "style")}
+        self.ready()
+        self.pin_check("a", "style")
+        with unittest.mock.patch.object(check, "examine", return_value=check.Report(None, [], [], "m")):
+            code, out, err = self.check()
+        self.assertEqual(1, code)
+        self.assertIn("problem: p/a: the check lint is not pinned", err)
+        self.assertEqual(["style"], self.ran())
+        self.assertTrue(out.endswith("check found 1 problem\n"), out)
+
+    def test_a_project_without_module_checks_prints_what_it_printed_before(self):
+        self.MODULES = {"h": (support_project.HARNESS, {}), "a": ({}, {})}
+        self.ready()
+        with unittest.mock.patch.object(check, "examine", return_value=check.Report(None, [], [], "m")):
+            code, out, err = self.check()
+        self.assertEqual((0, "", ), (code, err))
+        self.assertEqual("harness: none attached in %s\nm\ncheck found no problems\n" % self.real, out)

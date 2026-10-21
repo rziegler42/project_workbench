@@ -317,6 +317,12 @@ manifest is tracked. For a project that has the `groundwork` module it also chec
 `docs/specs`, `docs/roadmaps` and `docs/decisions` (names, status, successor, candidate IDs) and the
 reference index `docs/references/index.json` against the tracked files (`workbench/doccheck.py`,
 `workbench/refcheck.py`, `workbench/refindex.py`); a project without the module gets none of this.
+After its own findings it runs the checks that installed modules declare (`checks` in `module.json`): each is a
+pinned kit helper started from the project root, and its `problem:` and `warning:` lines are printed under the
+module's name (`problem: <package>/<module>: <text>`). A module problem counts in "check found N problems" and
+makes the exit code 1; a warning does not. A check that is not pinned, was pinned for another helper or kit, or
+whose bytes changed is a problem and does not run; the other checks still run. A project whose modules declare
+no checks prints what it printed before.
 It never runs git: a repository can name programs git would run (a
 filesystem monitor, a filter, an included file), so the paths come from `.git/index` itself, version
 2, 3 or 4 with SHA-1 or SHA-256 names, in at most 16 MiB and 1,000,000 entries, paths of at most 4,096 bytes and 64 MiB in all. "Tracked" means in

@@ -371,3 +371,16 @@ is left). `module-boundary.md` states the bounds.
 Verification: `python3 -B -W error tests/run_all.py`: 2267 tests in 3 roots, OK (2231 before); no
 `__pycache__` under `packages/`. Not reviewed independently; H covers it (the security pass should try a helper
 that detaches into a new session and holds the pipe, and output that arrives just under the time bound).
+
+### Increment D
+
+`check.run` calls `checks.run_all(guarded, path)` after the installer's own checks and `Report` gained a
+`modules` field (default `()`, so `examine` is unchanged and still read-only). Each module's lines are printed
+as `warning: <package>/<module>: <text>` and `problem: <package>/<module>: <text>`, after the installer's own
+lines; module problems count in "check found N problems" and make the exit code 1, warnings do not. The
+existing output lines are unchanged. 5 new tests in `test_checks.py` (class `Command`, through `cli.main`):
+lines under the module name, problem counted, warning alone exits 0, an unpinned helper is a problem while the
+other check still runs, and a project without module checks prints exactly the earlier text (examine patched).
+The 40-line display bound is shared, so a module that floods the report can push later lines into "and N more";
+the count is always complete. `docs/development.md` records the behaviour.
+Verification: `python3 -B -W error tests/run_all.py`: 2272 tests in 3 roots, OK (2267 before).
