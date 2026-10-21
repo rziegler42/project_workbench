@@ -73,12 +73,12 @@ def _file(position, value, area):
         safefs.validate_relpath(value)
     except safefs.SafeFsError as exc:
         _fail(position, "file", "is not a safe relative path (%s)" % _reason(exc))
-    folded = value.casefold()
-    prefix = area.casefold() + "/"
-    if not folded.startswith(prefix) or folded == prefix:
+    # Exact, not folded: a name that only folds into the area (`docs/REFERENCES`, a long s) is a
+    # different directory on a filesystem that tells letters apart.
+    prefix = area + "/"
+    if not value.startswith(prefix) or value == prefix:
         _fail(position, "file", "is not a file under %s" % area)
-    if "/" not in value[len(prefix):] and value[len(prefix):].casefold() in \
-            tuple(name.casefold() for name in METADATA):
+    if value[len(prefix):] in METADATA:
         _fail(position, "file", "names the index or the README, which are not references")
 
 

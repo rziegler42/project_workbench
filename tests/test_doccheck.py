@@ -273,8 +273,12 @@ class Candidates(Base):
                  "# R\n\nStatus: Active\n\n## CANDIDATES\n\n### a-b\n\n### a-b\n")
         self.only("repeats")
 
-    def test_a_roadmap_without_a_candidates_section_has_none_to_check(self):
+    def test_a_roadmap_with_headings_and_no_candidates_section_says_none_was_checked(self):
         self.put("docs/roadmaps/first.md", "# R\n\nStatus: Active\n\n### a-b\n\n### a-b\n")
+        self.only("no ## Candidates section", "no candidate was checked")
+
+    def test_a_roadmap_with_no_headings_and_no_section_is_clean(self):
+        self.put("docs/roadmaps/first.md", "# R\n\nStatus: Active\n\nText.\n")
         self.assertEqual([], self.problems())
 
     def test_a_deeper_or_indented_heading_is_not_a_candidate(self):
@@ -297,6 +301,179 @@ class Candidates(Base):
             self.only("more than 2 candidates")
             self.roadmap("a-a", "b-b")
             self.assertEqual([], self.problems())
+
+
+class Evasions(Base):
+    """Forms a renderer reads as a heading, a line or a fence that a scanner can miss."""
+
+    def setUp(self):
+        super().setUp()
+        self.install()
+
+    def roadmap(self, text):
+        self.put("docs/roadmaps/first.md", text)
+
+    def test_a_candidates_heading_with_decoration_is_still_the_section(self):
+        for heading in ("## Candidates ##", "## Candidates:", "## Candidates <!-- x -->",
+                        "## Candidates #", "## CANDIDATES.", "##   Candidates   ##  ",
+                        "## Candidates ## <!-- x -->"):
+            with self.subTest(heading=heading):
+                self.roadmap("# R\n\nStatus: Active\n\n%s\n\n### a\n\n### a\n" % heading)
+                self.only("repeats")
+
+    def test_other_headings_are_not_the_section(self):
+        for heading in ("## Candidates of the past", "## Candidate", "## Not Candidates"):
+            with self.subTest(heading=heading):
+                self.roadmap("# R\n\nStatus: Active\n\n%s\n\n### a\n\n### a\n" % heading)
+                self.only("no ## Candidates section")
+
+    def test_a_carriage_return_alone_ends_a_line(self):
+        self.roadmap("# R\rStatus: Active\r## Candidates\r### a\r### a\r")
+        self.only("repeats")
+        self.put("docs/specs/power.md", "# T\rStatus: Current\rStatus: Draft\r")
+        found = self.problems()
+        self.assertTrue(any("2 status lines" in line for line in found), found)
+
+    def test_carriage_return_and_line_feed_together_end_one_line(self):
+        self.roadmap("# R\r\nStatus: Active\r\n\r\n## Candidates\r\n\r\n### a\r\n### b\r\n")
+        self.assertEqual([], self.problems())
+
+    def test_a_backtick_fence_with_a_backtick_in_its_info_string_is_not_a_fence(self):
+        self.roadmap("# R\n\nStatus: Active\n\n```x`y\n\n## Candidates\n\n### a\n\n### a\n")
+        self.only("repeats")
+
+    def test_a_tilde_fence_may_have_a_backtick_in_its_info_string(self):
+        self.roadmap("# R\n\nStatus: Active\n\n## Candidates\n\n~~~x`y\n### a\n### a\n~~~\n")
+        self.assertEqual([], self.problems())
+
+    def test_an_unclosed_fence_is_reported(self):
+        self.roadmap("# R\n\nStatus: Active\n\n## Candidates\n\n### a\n\n```\n### a\n")
+        self.only("a code fence is never closed")
+        self.put("docs/specs/power.md", "# T\n\nStatus: Current\n\n~~~\ntext\n")
+        self.assertTrue(any("never closed" in line for line in self.problems()))
+
+    def test_a_closed_fence_is_not_reported(self):
+        self.roadmap("# R\n\nStatus: Active\n\n## Candidates\n\n```\n### a\n```\n")
+        self.assertEqual([], self.problems())
+
+    def test_a_superseded_by_with_no_name_or_in_the_title_names_no_successor(self):
+        for text in ("# T superseded by x\n\nStatus: Superseded\n",
+                     "# T\n\nStatus: Superseded\nSuperseded by:\n",
+                     "# T\n\nStatus: Superseded\nSuperseded by :  \n",
+                     "# T\n\nStatus: Superseded\nThis was superseded by x.\n"):
+            with self.subTest(text=text):
+                self.fresh("docs/specs/old.md", text)
+                self.only("names no successor")
+
+    def test_the_named_forms_of_a_successor_are_accepted(self):
+        for text in ("Status: Superseded by new\n", "Status: Superseded\nSuperseded by: new\n",
+                     "Status: Superseded\nsuperseded by [new](new.md)\n",
+                     "Status: Superseded. Superseded by new\n"):
+            with self.subTest(text=text):
+                self.fresh("docs/specs/old.md", "# T\n\n" + text)
+                self.assertEqual([], self.problems())
+
+    def test_a_document_over_the_per_document_limit_is_examined_only_in_part_and_says_so(self):
+        with unittest.mock.patch.object(doccheck, "MAX_DOCUMENT", 200):
+            self.put("docs/specs/power.md", SPEC + "x\n" * 500)
+            self.only("larger than the 200 bytes looked at", "only the start was examined")
+
+    def test_a_status_after_the_per_document_limit_is_not_seen_and_the_cut_is_a_problem(self):
+        with unittest.mock.patch.object(doccheck, "MAX_DOCUMENT", 100):
+            self.put("docs/specs/power.md", "# T\n" + "\n" * 150 + "Status: Current\n")
+            found = self.problems()
+        self.assertTrue(any("only the start was examined" in line for line in found), found)
+
+    def test_a_large_file_of_newlines_is_not_held_as_a_list_of_lines(self):
+        import time
+        import tracemalloc
+        self.put("docs/specs/power.md", "# T\n\nStatus: Current\n" + "\n" * (3 * 1024 * 1024))
+        tracemalloc.start()
+        try:
+            start = time.monotonic()
+            found = self.problems()
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        self.assertLess(time.monotonic() - start, 10)
+        self.assertTrue(any("only the start was examined" in line for line in found), found)
+        # Held as a list of lines this was several hundred megabytes.
+        self.assertLess(peak, 64 * 1024 * 1024)
+
+    def test_a_fence_opener_with_a_backtick_beyond_the_line_cut_is_not_a_fence(self):
+        opener = "```" + " " * (doccheck._LINE + 100) + "`"
+        self.roadmap("# R\n\nStatus: Active\n\n## Candidates\n\n%s\n### a\n\n### a\n```\n" % opener)
+        found = self.problems()
+        self.assertTrue(any("repeats" in line for line in found), found)
+
+    def test_a_second_status_line_cannot_be_hidden_behind_such_an_opener(self):
+        opener = "```" + " " * (doccheck._LINE + 100) + "`"
+        self.put("docs/specs/power.md", "# T\n\nStatus: Current\n%s\nStatus: Draft\n```\n" % opener)
+        found = self.problems()
+        self.assertTrue(any("2 status lines" in line for line in found), found)
+
+    def test_headings_inside_list_items_count_as_candidates(self):
+        self.roadmap("# R\n\nStatus: Active\n\n## Candidates\n\n- ### a\n\n1. ### a\n")
+        self.only("repeats")
+
+    def test_a_candidates_heading_written_with_markup_is_still_the_section(self):
+        for heading in ("## *Candidates*", "## &#67;andidates", "## `Candidates`", "## _Candidates_",
+                        "## Candi&#100;ates", "## \\Candidates"):
+            with self.subTest(heading=heading):
+                self.roadmap("# R\n\nStatus: Active\n\n## Candidates\n\n### x\n\n## Notes\n\n"
+                             "%s\n\n### a\n\n### a\n" % heading)
+                self.only("repeats")
+
+    def test_a_setext_candidates_heading_is_still_the_section(self):
+        for underline in ("---", "-", "  ----  "):
+            with self.subTest(underline=underline):
+                self.roadmap("# R\n\nStatus: Active\n\n## Candidates\n\n### x\n\n## Notes\n\n"
+                             "Candidates\n%s\n\n### a\n\n### a\n" % underline)
+                self.only("repeats")
+
+    def test_a_setext_heading_of_another_name_ends_the_section(self):
+        self.roadmap("# R\n\nStatus: Active\n\n## Candidates\n\n### x\n\nNotes\n---\n\n"
+                     "### a\n\n### a\n")
+        self.assertEqual([], self.problems())
+        self.roadmap("# R\n\nStatus: Active\n\n## Candidates\n\n### x\n\nNotes\n=====\n\n"
+                     "### a\n\n### a\n")
+        self.assertEqual([], self.problems())
+
+    def test_a_rule_after_a_blank_line_is_not_a_setext_underline(self):
+        self.roadmap("# R\n\nStatus: Active\n\n## Candidates\n\n### a\n\n---\n\n### a\n")
+        self.only("repeats")
+
+    def test_padding_cannot_push_the_words_out_of_a_heading(self):
+        for heading in ("## Candidates" + " " * 500 + "##", "## Candidates" + " " * 500 + "<!-- x -->",
+                        "## Candidates <!-- " + "x" * 600 + " -->", "## Candidates <!-- " + "x" * 600,
+                        "##" + " " * 500 + "Candidates"):
+            with self.subTest(heading=heading[:40]):
+                self.roadmap("# R\n\nStatus: Active\n\n%s\n\n### a\n\n### a\n" % heading)
+                self.only("repeats")
+
+    def test_a_roadmap_of_padded_headings_is_not_quadratic(self):
+        import time
+        lines = ["## a" + " " * 1990 + "x\n"] * 300 + ["## a <!--" * 200 + "\n"] * 100
+        self.roadmap("# R\n\nStatus: Active\n\n## Candidates\n\n" + "".join(lines))
+        start = time.monotonic()
+        self.problems()
+        self.assertLess(time.monotonic() - start, 2)
+
+    def test_a_fence_opened_on_a_list_item_line_is_closed_by_its_indented_fence(self):
+        self.put("docs/specs/power.md", "# T\n\nStatus: Current\n\n- ```\n  code\n  ```\n\ntext\n")
+        self.assertEqual([], self.problems())
+
+    def test_a_directory_of_many_bad_names_stops_at_the_reported_bound(self):
+        for n in range(doccheck.MAX_REPORTED + 30):
+            self.put("docs/specs/Bad%d.md" % n, SPEC)
+        found = self.problems()
+        self.assertEqual(doccheck.MAX_REPORTED + 1, len(found))
+        self.assertEqual("more document problems are not listed", found[-1])
+
+    def test_a_fifo_named_as_a_document_is_reported_without_hanging(self):
+        os.makedirs(os.path.join(self.root, "docs", "specs"))
+        os.mkfifo(os.path.join(self.root, "docs", "specs", "power.md"))
+        self.only("docs/specs/power.md: is not a regular file (other)")
 
 
 class Hostile(Base):
@@ -343,9 +520,9 @@ class Hostile(Base):
             for n in range(5):
                 self.put("docs/specs/s%d.md" % n, SPEC + "x" * 300)
             found = self.problems()
-        self.assertTrue(found)
-        self.assertTrue(all("not looked at" in line for line in found), found)
-        self.assertEqual(3, len(found))
+        self.assertEqual(4, len(found), found)
+        self.assertIn("only the start was examined", found[0])
+        self.assertTrue(all("not looked at" in line for line in found[1:]), found)
 
     def test_more_documents_than_the_bound_stop_the_reading_and_say_so(self):
         with unittest.mock.patch.object(doccheck, "MAX_FILES", 3):
@@ -360,7 +537,7 @@ class Hostile(Base):
             self.put("docs/specs/Bad%d.md" % n, SPEC)
         found = self.problems()
         self.assertEqual(doccheck.MAX_REPORTED + 1, len(found))
-        self.assertIn("more document problems are not listed", found[-1])
+        self.assertEqual("more document problems are not listed", found[-1])
 
     def test_names_that_differ_only_in_case_are_reported_as_a_collision(self):
         class Fake:

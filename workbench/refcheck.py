@@ -20,6 +20,9 @@ problem that says what was not looked at. A path and every other value read from
 shown with its escapes removed, and a message never repeats an index value.
 """
 
+import re
+import urllib.parse
+
 from . import display, doccheck, projectfs, refindex, safefs
 
 FILE_WARN = 2 * 1024 * 1024
@@ -35,14 +38,16 @@ def _shown(path):
 
 def _split(path):
     """The name below the area for a tracked `path`, or None when it is outside the area."""
-    prefix = refindex.AREA.casefold() + "/"
-    if not path.casefold().startswith(prefix):
+    prefix = refindex.AREA + "/"
+    if not path.startswith(prefix):
         return None
     return path[len(prefix):]
 
 
 def _is_metadata(rest):
-    return rest.casefold() in tuple(name.casefold() for name in refindex.METADATA)
+    # Exact, as in the reader: a file that differs in letter case is a file of its own on a
+    # filesystem that tells letters apart, and it needs an entry.
+    return rest in refindex.METADATA
 
 
 def _tracked_files(tracked):
@@ -71,11 +76,21 @@ def _read_index(writer, tracked, problems):
         return None
 
 
+def _flat(text):
+    """`text` as a path would be read: decoded, folded, with separators run together. A best-effort
+    guard against a slip, not a boundary: a lookalike character defeats it."""
+    text = " ".join(urllib.parse.unquote(text).casefold().replace("\\", "/").split())
+    text = re.sub(r" ?/ ?", "/", text)
+    while "//" in text or "/./" in text:
+        text = text.replace("//", "/").replace("/./", "/")
+    return text
+
+
 def _entry(writer, tracked, entry, spent, problems, warnings):
     """Check one entry against its file; `spent` is the running count of bytes read."""
     name = _shown(entry["file"])
     for field in ("title", "notes"):
-        if LOCAL in entry[field].casefold():
+        if LOCAL in _flat(entry[field]):
             problems.append("%s: its %s names a path into %s, which is not tracked; cite an "
                             "untracked reference by URL, date and hash" % (name, field, LOCAL))
     if not entry["license"]:
@@ -139,7 +154,10 @@ def examine(writer, tracked):
                         "keep" % (refindex.AREA, spent[2], FOLDER_WARN))
     lacking = [path for path in files if path not in indexed]
     for path in lacking[:MAX_LISTED]:
-        problems.append("%s: git tracks it, but the index has no entry for it" % _shown(path))
+        more = "" if safefs.relpath_ok(path) else \
+            " (its name cannot be written in an index; rename the file)"
+        problems.append("%s: git tracks it, but the index has no entry for it%s"
+                        % (_shown(path), more))
     if len(lacking) > MAX_LISTED:
         problems.append("%d more tracked reference files have no entry in the index"
                         % (len(lacking) - MAX_LISTED))

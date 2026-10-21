@@ -15,6 +15,9 @@ evaluated, and a name or heading is shown with its escapes removed.
 """
 
 import datetime
+import html
+import io
+import itertools
 import re
 import unicodedata
 
@@ -25,6 +28,7 @@ MODULE = "groundwork"
 
 MAX_FILES = 2000
 MAX_BYTES = 4 * 1024 * 1024
+MAX_DOCUMENT = 1024 * 1024
 MAX_CANDIDATES = 2000
 MAX_HEADER = 40
 MAX_REPORTED = 200
@@ -38,13 +42,18 @@ _TOPIC = re.compile(r"\A%s\.md\Z" % _SLUG)
 _DECISION = re.compile(r"\A([0-9]{4})-([0-9]{2})-([0-9]{2})-(%s)\.md\Z" % _SLUG)
 _DATED = re.compile(r"\A[0-9]{4}-[0-9]{2}-[0-9]{2}(-|\.md\Z)")
 _ID = re.compile(r"\A%s\Z" % _SLUG)
-_FENCE = re.compile(r"\A[ ]{0,3}(`{3,}|~{3,})")
+_ITEM = r"(?:(?:[-*+]|[0-9]{1,9}[.)])[ \t]+)?"
+_FENCE = re.compile(r"\A[ ]{0,3}" + _ITEM + r"(`{3,}|~{3,})")
 _QUOTE = re.compile(r"\A[ ]{0,3}>")
 _TWO = re.compile(r"\A[ ]{0,3}##[ \t]+(.*)")
 _STATUS = re.compile(r"\A[ ]{0,3}Status:[ \t]*([A-Za-z][A-Za-z0-9_-]*)?")
-_SUCCESSOR = re.compile(r"\bsuperseded by\b[: \t]*\S", re.I)
-_CANDIDATE = re.compile(r"\A[ ]{0,3}###[ \t]+([^\s:]+)")
+# A line that is the status line or starts with the words, and then names something.
+_SUCCESSOR = re.compile(r"\A[ ]{0,3}(?:Status:[ \t]*(?:Superseded[ \t,.;-]+)?)?superseded by\b"
+                        r"[ \t]*:?[ \t]*[^\s:]", re.I)
+_CANDIDATE = re.compile(r"\A[ ]{0,3}" + _ITEM + r"###[ \t]+([^\s:]+)")
+_UNDERLINE = re.compile(r"\A[ ]{0,3}(=+|-+)[ \t]*\Z")
 _LINE = 2000
+_HEADING = 200
 
 # (folder, kind, statuses)
 AREAS = (("docs/specs", "spec", SPEC_STATUSES),
@@ -70,24 +79,54 @@ def has_module(writer):
                for package in document["packages"])
 
 
-def _lines(text):
-    """``(number, line, plain)`` for each line of `text`; `plain` is False inside a code fence and
-    for a quoted line, which are not the document's own statements."""
+def _lines(text, state=None):
+    """``(number, line, plain)`` for each line of `text`, one at a time; `plain` is False inside a
+    code fence and for a quoted line, which are not the document's own statements. A line ends at
+    ``\\n``, ``\\r\\n`` or a lone ``\\r``, as a renderer reads it. When `state` is a dict, its
+    ``open`` is set if a fence is still open at the end."""
     fence = None
-    for number, line in enumerate(text.split("\n"), 1):
-        line = line[:_LINE].rstrip("\r")
+    for number, line in enumerate(io.StringIO(text, newline=None), 1):
+        line = line.rstrip("\n")
+        # The fence is read on the whole line, because a backtick far along it decides whether it
+        # is a fence at all; only then is the line cut.
         match = _FENCE.match(line)
+        opener = match and not (match.group(1)[0] == "`" and "`" in line[match.end():])
+        closer = match and match.group(1)[0] == (fence or " ")[0] \
+            and len(match.group(1)) >= len(fence or "") and not line[match.end():].strip()
+        line = line[:_LINE]
         if fence is None:
-            if match:
+            if opener:
                 fence = match.group(1)
                 yield number, line, False
                 continue
-        elif match and match.group(1)[0] == fence[0] and len(match.group(1)) >= len(fence) \
-                and not line.lstrip(" ")[len(match.group(1)):].strip():
+        elif closer:
             fence = None
             yield number, line, False
             continue
         yield number, line, fence is None and not _QUOTE.match(line)
+    if state is not None:
+        state["open"] = fence is not None
+
+
+def _heading(text):
+    """A ``##`` heading's words as a reader sees them: entities decoded, no emphasis marks,
+    comment, closing hashes or trailing colon or full stop. Only the start is looked at, so a
+    long run of spaces or comment markers costs nothing; the spaces are run together first so
+    that padding cannot push the words out of the part that is looked at."""
+    text = " ".join(html.unescape(" ".join(text.split())[:_HEADING * 4]).split())[:_HEADING]
+    for mark in "*_`\\":
+        text = text.replace(mark, "")
+    while True:
+        start = text.find("<!--")
+        if start < 0:
+            break
+        end = text.find("-->", start + 4)
+        text = text[:start] + (text[end + 3:] if end >= 0 else "")
+    text = text.strip()
+    bare = text.rstrip("#")
+    if bare != text and (not bare or bare[-1] in " \t"):
+        text = bare
+    return text.strip().rstrip(":.").strip().casefold()
 
 
 def _name_problem(kind, name):
@@ -111,7 +150,7 @@ def _name_problem(kind, name):
 def _status_problems(kind, statuses, name, lines):
     """Problems with the status line of one document."""
     status, count, successor = None, 0, False
-    for number, line, plain in lines:
+    for number, line, plain in itertools.islice(lines, MAX_HEADER + 1):
         if number > MAX_HEADER:
             break
         if plain and _TWO.match(line):
@@ -122,7 +161,7 @@ def _status_problems(kind, statuses, name, lines):
         if found:
             count += 1
             status = status or (found.group(1) or "")
-        if _SUCCESSOR.search(line):
+        if _SUCCESSOR.match(line):
             successor = True
     if count == 0:
         return ["%s has no status line near the top" % name]
@@ -140,27 +179,45 @@ def _status_problems(kind, statuses, name, lines):
 
 
 def _candidates(lines):
-    """``[(number, id)]`` for the candidate headings under ``## Candidates``, and whether the list
-    was cut at ``MAX_CANDIDATES``."""
-    inside, found = False, []
+    """``([(number, id)], cut, section, headings)``: the candidate headings under
+    ``## Candidates``, whether the list was cut at ``MAX_CANDIDATES``, whether the section was
+    there, and whether any ``###`` heading was."""
+    inside = section = headings = False
+    found, before = [], None
     for number, line, plain in lines:
         if not plain:
+            before = None
+            continue
+        under = _UNDERLINE.match(line)
+        if under and before is not None:
+            # A setext heading: the line above it, underlined with `---` (level 2) or `===`.
+            inside = under.group(1)[0] == "-" and _heading(before) == "candidates"
+            section = section or inside
+            before = None
             continue
         two = _TWO.match(line)
         if two:
-            inside = two.group(1).strip().casefold() == "candidates"
+            inside = _heading(two.group(1)) == "candidates"
+            section = section or inside
+            before = None
             continue
+        text = line.strip()
+        before = text if text and not text.startswith(("#", ">")) else None
+        headings = headings or bool(_CANDIDATE.match(line))
         match = _CANDIDATE.match(line) if inside else None
         if match:
             if len(found) >= MAX_CANDIDATES:
-                return found, True
+                return found, True, section, headings
             found.append((number, match.group(1)))
-    return found, False
+    return found, False, section, headings
 
 
 def _candidate_problems(name, lines):
-    found, cut = _candidates(lines)
+    found, cut, section, headings = _candidates(lines)
     problems, first = [], {}
+    if headings and not section:
+        problems.append("%s has ### headings but no ## Candidates section, so no candidate was "
+                        "checked" % name)
     for number, each in found:
         if not _ID.match(each) or len(each) > 64:
             problems.append("%s line %d: the candidate ID %s is not a lowercase kebab-case slug"
@@ -199,7 +256,7 @@ def _area(writer, folder, kind, statuses, budget, problems):
                             % (shown, _shown(seen[folded])))
         seen[folded] = name
         if entry_kind != "file":
-            problems.append("%s: is a %s, not a regular file, so it was not read"
+            problems.append("%s: is not a regular file (%s), so it was not read"
                             % (shown, entry_kind))
             continue
         trouble = _name_problem(kind, name)
@@ -215,13 +272,26 @@ def _area(writer, folder, kind, statuses, budget, problems):
             continue
         if state is None:
             continue
+        # The read is whole, so what it cost is charged whole; only the first bytes are examined.
+        limit = min(MAX_DOCUMENT, budget[1])
         budget[1] -= len(state.data)
         if trouble:
             problems.append("%s: %s" % (shown, trouble))
-        lines = list(_lines(state.data.decode("utf-8", "replace")))
-        problems.extend(_status_problems(kind, statuses, shown, lines))
+        if len(state.data) > limit:
+            problems.append("%s: larger than the %d bytes looked at; only the start was examined"
+                            % (shown, limit))
+        text = state.data[:limit].decode("utf-8", "replace")
+        closing = {}
+        for _ in _lines(text, closing):
+            pass
+        if closing["open"]:
+            problems.append("%s: a code fence is never closed, so what follows it was not looked "
+                            "at" % shown)
+        problems.extend(_status_problems(kind, statuses, shown, _lines(text)))
         if kind == "roadmap":
-            problems.extend(_candidate_problems(shown, lines))
+            problems.extend(_candidate_problems(shown, _lines(text)))
+        if len(problems) > MAX_REPORTED:
+            return
 
 
 def examine(writer):
@@ -233,6 +303,5 @@ def examine(writer):
     for folder, kind, statuses in AREAS:
         _area(writer, folder, kind, statuses, budget, problems)
     if len(problems) > MAX_REPORTED:
-        extra = len(problems) - MAX_REPORTED
-        problems = problems[:MAX_REPORTED] + ["%d more document problems are not listed" % extra]
+        problems = problems[:MAX_REPORTED] + ["more document problems are not listed"]
     return problems, []

@@ -498,3 +498,39 @@ format and the place of the checks are Proposed in E and F. Full suite: 1843 tes
   letter case is reported as both an untracked entry and a file with no entry.
 - **Spot check of the guards:** with the hash compare, the tracked-link rule, the metadata rule, the
   untracked-entry rule or the untracked-index rule removed, tests fail (2, 1, 43, 2 and 1).
+
+**Security pass over E, F and G** (2026-10-21): two `security-reviewer` rounds, the second
+trying to bypass the fixes of the first. Both reports are untrusted input; each finding was checked
+against the code and fixed with a regression test that fails on the earlier code (the suite is
+1876 tests, 106 skipped, passing with `-W error`). The fixes are `doccheck.py`, `refindex.py` and
+`refcheck.py`, in the commit that follows the one for G, trailer `Plan: ...#G`.
+
+- **No Critical or High finding in either round.** Verified by experiment in round 1: no link
+  followed at any step, no fifo hang, no raw escape in output, no traceback from the reader on
+  hostile JSON, no regex backtracking within the bounds, no Unicode duplicate of a candidate ID.
+- **Round 1, Medium (fixed):** a candidates heading with decoration (`## Candidates ##`,
+  a trailing colon, a comment), a bare carriage return as a line end, and a backtick fence with a
+  backtick in its info string each switched the duplicate check off silently; one 16 MiB file cost
+  about 800 MB and 5 s. Now: the heading is normalised, lines end at `\n`, `\r\n` or `\r`, a
+  document is examined only up to 1 MiB (or what is left of the 4 MiB budget) with the cut reported,
+  lines are streamed, an unclosed fence is a problem, and `###` headings with no candidates section
+  are a problem.
+- **Round 1, Low (fixed):** the `index.json` and `README.md` exemption and the area prefix are now
+  exact, not case-folded; `Superseded by` needs a name on a line of its own; the untracked-path
+  guard also reads `//`, `/./`, `%2f`, backslashes and spaced slashes; a fifo is "not a regular
+  file (other)".
+- **Round 2, Medium (fixed):** a fence opener whose backtick lay beyond the 2,000-character line cut
+  (the fence is now read on the whole line); headings in list items (counted as candidates);
+  a candidates heading written with emphasis, an entity or a setext underline (normalised, and a
+  setext heading of another name ends the section); quadratic regex cost on padded headings (the
+  heading is run together and cut to 200 characters, comments and closing hashes handled without
+  regexes). Low: `_flat` on long space runs, a fence on a list-item line, and a tracked file whose
+  name cannot be indexed (the message says to rename it).
+- **Left as limits, by design:** the untracked-path guard is best-effort (a double-encoded or
+  lookalike character such as a long s passes); a successor line passes with any non-space name
+  (`Superseded by -`); only the next-line successor form and `Status: Superseded on <date> by x`
+  fail where a person might expect them to pass; Windows aliasing of `a.pdf` and `a.pdf.`;
+  Markdown constructs not modelled (HTML blocks, multi-line setext headings); a very large
+  directory (past 1,500 files), the 128 MiB read bound, a race during a read, and Linux and Windows
+  filesystem behaviour were not exercised; whether `INDEX.json` aliases `index.json` on APFS was
+  not tested (it would be a different file in git).

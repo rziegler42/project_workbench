@@ -104,11 +104,24 @@ class Fields(unittest.TestCase):
                 refused(self, document(entry(name)), "entry 0: file")
 
     def test_the_index_and_the_readme_are_not_references(self):
-        for name in ("docs/references/index.json", "docs/references/README.md",
-                     "docs/references/INDEX.JSON", "docs/references/readme.md"):
+        for name in ("docs/references/index.json", "docs/references/README.md"):
             with self.subTest(name=name):
                 message = refused(self, document(entry(name)), "entry 0: file")
                 self.assertIn("not references", message)
+
+    def test_a_name_that_differs_from_the_metadata_in_letter_case_is_a_reference(self):
+        # The exemption is exact: such a file is a file of its own where letters are told apart,
+        # so it is indexed like any other.
+        for name in ("INDEX.JSON", "readme.md", "README.MD", "index.j\u017fon"):
+            with self.subTest(name=name):
+                doc = document(entry("docs/references/" + name))
+                self.assertEqual(doc, refindex.parse(refindex.serialize(doc)))
+
+    def test_an_area_that_only_folds_into_the_real_one_is_refused(self):
+        for name in ("docs/REFERENCES/x.pdf", "Docs/references/x.pdf", "docs/referenceſ/x.pdf",
+                     "docſ/references/x.pdf", "DOCS/REFERENCES/x.pdf"):
+            with self.subTest(name=name):
+                refused(self, document(entry(name)), "entry 0: file")
 
     def test_a_file_named_like_metadata_below_the_area_is_a_reference(self):
         doc = document(entry("docs/references/sub/index.json"))

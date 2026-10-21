@@ -88,11 +88,16 @@ class Presence(Setup):
         self.assertIn("docs/references/sub/index.json: git tracks it, but the index has no entry",
                       problems[0])
 
-    def test_the_names_are_matched_without_case_for_the_area_and_the_metadata(self):
+    def test_the_metadata_and_the_area_are_matched_exactly(self):
         self.good()
-        tracked = tracked_of("DOCS/References/Index.JSON", "docs/references/README.MD",
-                             refindex.PATH, "docs/references/a.pdf", "docs/references/b.png")
+        tracked = tracked_of("DOCS/References/Index.JSON", refindex.PATH, "docs/references/a.pdf",
+                             "docs/references/b.png")
         self.assertEqual(([], []), refcheck.examine(self.writer(), tracked))
+        for name in ("README.MD", "readme.md", "INDEX.JSON", "index.JSON", "index.j\u017fon"):
+            with self.subTest(name=name):
+                problems, _ = self.run_check("a.pdf", "b.png", name)
+                self.assertEqual(1, len(problems), problems)
+                self.assertIn("git tracks it, but the index has no entry", problems[0])
 
 
 class Lies(Setup):
@@ -195,6 +200,37 @@ class Lies(Setup):
                 self.assertEqual(1, len(problems), problems)
                 self.assertIn("its %s names a path into .workbench/local" % field, problems[0])
 
+    def test_a_path_into_the_untracked_area_is_found_through_common_disguises(self):
+        for text in (".workbench//local/refs/x", ".workbench/./local/x", ".workbench%2Flocal/x",
+                     ".workbench / local", ".workbench\\local\\x", "%2eworkbench/local",
+                     ".WORKBENCH/LOCAL", "a/../.workbench/local/x"):
+            with self.subTest(text=text):
+                self.reference("a.pdf", PDF)
+                self.index(entry("a.pdf", PDF, notes=text))
+                problems, _ = self.run_check("a.pdf")
+                self.assertEqual(1, len(problems), (text, problems))
+                self.assertIn("names a path into .workbench/local", problems[0])
+
+    def test_a_long_run_of_spaces_in_a_note_costs_little(self):
+        import time
+        self.reference("a.pdf", PDF)
+        self.index(entry("a.pdf", PDF, notes=(" " * 900 + "/") * 2 + "x"))
+        start = time.monotonic()
+        for _ in range(200):
+            refcheck._flat(" " * 1000 + "/ " + " " * 1000 + "/" + "x" * 5)
+        self.assertLess(time.monotonic() - start, 0.25)
+        self.assertEqual(([], []), self.run_check("a.pdf"))
+
+    def test_odd_escapes_in_a_note_do_not_crash(self):
+        for text in ("%", "%zz", "%e0%80", "%00", "\udc80", "/. /." * 300, "%2f" * 500):
+            with self.subTest(text=text[:20]):
+                self.assertIsInstance(refcheck._flat(text), str)
+
+    def test_a_note_that_only_looks_similar_is_not_reported(self):
+        self.reference("a.pdf", PDF)
+        self.index(entry("a.pdf", PDF, notes="the .workbench folder and a local copy"))
+        self.assertEqual(([], []), self.run_check("a.pdf"))
+
     def test_many_files_without_an_entry_are_listed_up_to_a_bound(self):
         self.index()
         names = ["f%03d.txt" % n for n in range(refcheck.MAX_LISTED + 7)]
@@ -203,6 +239,16 @@ class Lies(Setup):
         problems, _ = self.run_check(*names)
         self.assertEqual(refcheck.MAX_LISTED + 1, len(problems))
         self.assertEqual("7 more tracked reference files have no entry in the index", problems[-1])
+
+    def test_a_tracked_file_whose_name_cannot_be_indexed_says_to_rename_it(self):
+        self.index()
+        self.reference("a:b.pdf", b"x")
+        problems, _ = self.run_check("a:b.pdf")
+        self.assertEqual(1, len(problems))
+        self.assertIn("rename the file", problems[0])
+        self.reference("plain.pdf", b"x")
+        problems, _ = self.run_check("plain.pdf")
+        self.assertNotIn("rename", problems[0])
 
     def test_a_tracked_name_with_an_escape_is_shown_escaped(self):
         self.index()
