@@ -13,10 +13,10 @@ import tempfile
 import unittest
 import unittest.mock
 
-from tests import test_attach, test_groundwork_fixture as groundwork_fixture, test_upgrade
+from tests import support_install
 from workbench import approve, cli, declarations, launch, manifest, pins, request, verify
 
-HARNESS = test_attach.HARNESS
+HARNESS = support_install.HARNESS
 README = b"# Plans\n\nv1\n"
 INDEX_V1 = b"- [Plans](plans/README.md)\n"
 POLICY_V1 = b"A plan needs the owner's explicit approval.\n"
@@ -39,21 +39,21 @@ def codework(helper=HELPER_V1, readme=README, index=INDEX_V1, policy=POLICY_V1, 
     return fields, files
 
 
-class Fixture(test_attach.Base):
+class Fixture(support_install.Base):
     """A project installed as `install` writes it, from a package with the fixture modules."""
 
-    MODULES = {"h": (HARNESS, {}), "groundwork": groundwork_fixture.groundwork(),
+    MODULES = {"h": (HARNESS, {}), "groundwork": support_install.groundwork(),
                "codework": codework()}
 
     def setUp(self):
-        test_attach.Base.setUp(self)
+        support_install.Base.setUp(self)
         terminal = unittest.mock.patch.object(approve, "is_terminal", lambda stream: True)
         terminal.start()
         self.addCleanup(terminal.stop)
 
-    upgrade = test_upgrade.Upgrade.upgrade
-    baselines = test_upgrade.Upgrade.baselines
-    snapshot = test_upgrade.Upgrade.snapshot
+    upgrade = support_install.Upgrade.upgrade
+    baselines = support_install.Upgrade.baselines
+    snapshot = support_install.Upgrade.snapshot
 
     def newer(self, **changes):
         package = self.version(**changes)
@@ -97,8 +97,8 @@ class Verifies(Fixture):
         fields, files = codework()
         fields["provides"] = ["plans"]
         fields["requires"] = ["specs", "roadmaps", "decisions"]
-        gw_fields, gw_files = groundwork_fixture.groundwork()
-        gw_fields["provides"] = list(groundwork_fixture.AREAS)
+        gw_fields, gw_files = support_install.groundwork()
+        gw_fields["provides"] = list(support_install.GROUNDWORK_AREAS)
         path = self.package("workbench", {"groundwork": (gw_fields, gw_files),
                                           "code-work": (fields, files)})
         result = verify.verify_package(path, first_party=True, harness_required=False)

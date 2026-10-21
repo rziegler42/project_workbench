@@ -14,12 +14,12 @@ import shutil
 import tempfile
 import unittest
 
-from tests import test_install
+from tests import support_install
 from workbench import (cli, commands, firstparty, harnessplan, install, manifest, neutral, pins, sources,
                        verify)
 from workbench.wbkit import project
 
-ROOT = test_install.ROOT
+ROOT = support_install.ROOT
 PACKAGE = os.path.join(ROOT, "packages", "workbench")
 MODULE = os.path.join(PACKAGE, "code-work")
 NEUTRAL = os.path.join(MODULE, "harness", "neutral")
@@ -73,6 +73,8 @@ class Declaration(unittest.TestCase):
     def test_every_file_is_the_declaration_the_helper_a_block_the_readme_or_the_skill(self):
         found = []
         for base, dirs, files in os.walk(MODULE):
+            if base == MODULE:
+                dirs.remove("tests")  # the module's own tests are not part of what it installs
             for name in files:
                 found.append(os.path.relpath(os.path.join(base, name), MODULE))
         self.assertEqual(sorted(["module.json", HELPER, "files/blocks/docs-index.md",
@@ -202,11 +204,11 @@ class Skill(unittest.TestCase):
         self.assertTrue(head[1].startswith("description: "))
 
 
-class Install(test_install.InstallBase):
+class Install(support_install.InstallBase):
     """Install into an empty directory, as a released copy of the package."""
 
     def setUp(self):
-        test_install.InstallBase.setUp(self)
+        support_install.InstallBase.setUp(self)
         self.dist = os.path.join(self.root, "dist")
         shutil.copytree(os.path.join(ROOT, "packages"), os.path.join(self.dist, "packages"),
                         ignore=shutil.ignore_patterns("__pycache__"))
@@ -222,8 +224,8 @@ class Install(test_install.InstallBase):
     def install(self, place, select=SELECT, extra=()):
         out, err = io.StringIO(), io.StringIO()
         command = sources.Command(place, [(self.package_path, None)] + list(extra), list(select))
-        code = install.run(self.guarded, command, test_install.Typist(out, test_install.correct),
-                           out, err, distribution=self.dist, seed=test_install.SEED,
+        code = install.run(self.guarded, command, support_install.Typist(out, support_install.correct),
+                           out, err, distribution=self.dist, seed=support_install.SEED,
                            home=self.home)
         return code, out.getvalue(), err.getvalue()
 
@@ -312,7 +314,7 @@ class Install(test_install.InstallBase):
         out, err = io.StringIO(), io.StringIO()
         code = cli.main(["upgrade", place, "--package", self.package_path], out, err,
                         store_root=self.store_root, distribution=self.dist,
-                        stdin=test_install.Typist(out, test_install.correct), home=self.home)
+                        stdin=support_install.Typist(out, support_install.correct), home=self.home)
         self.assertEqual((0, ""), (code, err.getvalue()), out.getvalue())
         agents = self.read(place, "AGENTS.md").decode()
         self.assertIn("<!-- BEGIN workbench/code-work slot:policy -->\n- A newer rule.\n", agents)

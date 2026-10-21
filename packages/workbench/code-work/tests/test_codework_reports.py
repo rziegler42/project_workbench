@@ -8,7 +8,7 @@ import os
 import shutil
 import unittest
 
-from tests.test_codework_helper import Project, helper, plan
+from test_codework_helper import Project, helper, plan
 
 ROADMAP = """# Roadmap: {name}
 

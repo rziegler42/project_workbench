@@ -385,3 +385,19 @@ shows `wb run code-work check` refused while unpinned, pins the shipped helper, 
 standard error); `commit`, which the declaration does not list, is refused.
 Verification: `python3 -B -W error tests/run_all.py`: 2189 tests in 2 roots, OK; only the three macOS
 filesystem skips remain, so no stale-approval skip. Not reviewed independently; the security pass is G.
+
+### Increment F
+
+`tests/test_codework_fixture.py`, `test_codework_helper.py`, `test_codework_module.py` and
+`test_codework_reports.py` moved (`git mv`) to `packages/workbench/code-work/tests/` and run as a third root of
+`tests/run_all.py`. They reached four installer test files (`test_attach`, `test_upgrade`, `test_install`,
+`test_groundwork_fixture`), which `test_module_test_imports` forbids, and the shared support from C did not
+cover them, so a new `tests/support_install.py` names exactly those fixtures (`Base`, `Upgrade`, `InstallBase`,
+`Typist`, `correct`, `SEED`, `ROOT`, `HARNESS`, `groundwork`, `GROUNDWORK_AREAS`) and the module tests import
+only that. `test_codework_reports.py` imports its sibling by flat name, and the "every file" test skips the
+module's own `tests/` directory, which the module does not install. `tests/test_groundwork_module.py` did not
+use the code-work fixture, so it is unchanged.
+Verification: `python3 -B -W error tests/run_all.py`: 2189 tests in 3 roots (2035, 18 and 136), the same total
+as before the move (the 136 `code-work` tests were 136 in `tests/`); no `__pycache__` under `packages/`. The owner
+then ran `release-approvals` (two new records) and approved removing the two stale ones (`1c51e4df0acd`,
+`ec112778f781`); with them gone only the three macOS filesystem skips remain. Not reviewed independently; G does.

@@ -15,9 +15,10 @@ import sys
 import tempfile
 import unittest
 
+from tests import support_install
 from workbench import doccheck
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = support_install.ROOT
 HELPER = os.path.join(ROOT, "packages", "workbench", "code-work", "helper", "code-work")
 
 
