@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 from workbench import approvals, declarations, firstparty, harnessplan, request, verify
+from tests import support
 from tests.test_harnessplan import items
 from tests.test_neutral import SKILL
 from tests.test_layout import CLAUDE
@@ -27,6 +28,7 @@ def loaded_module():
 
 class Shipped(unittest.TestCase):
     def test_the_package_verifies_as_first_party_and_installs_claude(self):
+        support.require_release(self)
         self.assertTrue(firstparty.is_first_party(PACKAGE))
         result = verify.verify_package(PACKAGE, select=["claude"],
                                        first_party=firstparty.is_first_party(PACKAGE))
@@ -43,8 +45,8 @@ class Shipped(unittest.TestCase):
         self.assertTrue(got.approved, got.reason)
         self.assertEqual(got.record.approver, firstparty.RELEASE_APPROVER)
 
-    def test_the_package_is_only_the_claude_module(self):
-        self.assertEqual(sorted(os.listdir(PACKAGE)), ["claude", "package.json"])
+    def test_the_package_is_the_claude_and_groundwork_modules(self):
+        self.assertEqual(sorted(os.listdir(PACKAGE)), ["claude", "groundwork", "package.json"])
         self.assertEqual(sorted(os.listdir(os.path.join(PACKAGE, "claude"))), ["module.json"])
 
 
@@ -69,6 +71,7 @@ class Changed(unittest.TestCase):
             json.dump(document, handle)
 
     def test_the_unchanged_copy_is_first_party(self):
+        support.require_release(self)
         self.assertTrue(firstparty.is_first_party(self.package, self.dist))
 
     def test_a_changed_description_is_third_party_again(self):

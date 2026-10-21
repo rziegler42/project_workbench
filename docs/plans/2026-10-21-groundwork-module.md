@@ -372,3 +372,23 @@ skipped, passing with `-W error`. No decision is blocked: Decisions 1 to 3 hold.
   never written. Increment B's test for "no other file under the four areas" covers it.
 - **First-party status is lost on any change** to a first-party package until `release-approvals`,
   as the plan's Risks say.
+
+**Increment B** (2026-10-21): `packages/workbench/groundwork/` (the declaration and four READMEs)
+is added and listed in `package.json`. `tests/test_groundwork_module.py` has 9 tests: the module
+verifies as first-party, declares exactly the four capabilities and the four `writes`, ships no code
+and no executable, each README states its area's naming and status values and holds no template, and
+an install into an empty directory creates the four READMEs and no other file in the areas, no
+plan and no researcher, with the READMEs `seeded` in the manifest. Full suite: 1697 tests, 106
+skipped, passing with `-W error`.
+
+- **The shipped approvals are stale, as the plan said.** Adding the module changes the package
+  tree hash, so the real package is third-party and loses its unprefixed names. 105 tests that
+  need the real package as first-party now skip with a stated reason (`tests/support.py`,
+  `require_release`): the attach tests, the install-attach tests, the `claude` module's shipped
+  checks, and the two attach tests of the fixture. They run again once the owner has run
+  `release-approvals` (increment H). Until then the install tests here use a temporary copy of the
+  package with approvals recorded in that copy by `release_approvals`, so they exercise the real
+  module files. Risk for F and G: the existing `check` tests that attach are among the skipped, so
+  a change to `check` is not run against them until H. F and G should add tests that do not attach.
+- `test_the_package_is_only_the_claude_module` became `test_the_package_is_the_claude_and_groundwork_modules`.
+- The manifest records only `groundwork`; the harness module is never committed.

@@ -10,7 +10,7 @@ import subprocess
 import unittest
 import unittest.mock
 
-from tests import test_install
+from tests import support, test_install
 from tests.test_preview import NOTES
 from workbench import (__version__, attach, cli, fetch, harnessstage, install, localmanifest,
                        preview, projectfs, sources)
@@ -32,6 +32,7 @@ class Base(test_install.InstallBase):
         return path
 
     def command(self, place, path):
+        support.require_release(self)
         return sources.Command(place, [(path, None), (CLAUDE, None)], ["claude", "notes"])
 
     def install(self, place, path, reply=test_install.correct):
@@ -206,6 +207,7 @@ class Attached(Base):
         self.assertEqual(64, len(document["tree"]))
 
     def test_the_rules_name_the_home_directory_given_through_the_command_line(self):
+        support.require_release(self)
         path = self.notes()
         place = self.place()
         out, err = io.StringIO(), io.StringIO()
@@ -217,6 +219,7 @@ class Attached(Base):
             place, ".claude", "settings.local.json").decode())
 
     def test_the_preview_command_shows_the_rules_for_the_home_directory_given(self):
+        support.require_release(self)
         path = self.notes()
         shown = []
         for name in ("one", "two"):

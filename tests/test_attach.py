@@ -8,6 +8,7 @@ import types
 import unittest
 import unittest.mock
 
+from tests import support
 from tests import test_preview as preview_tests
 from tests import test_upgrade_preview as base_tests
 from tests.test_neutral import AGENT, COMMAND, SKILL
@@ -55,6 +56,8 @@ class Base(base_tests.UpgradePreview):
         return self.pkg
 
     def attach(self, *args, harness="workbench/claude", package=CLAUDE, place=None, packages=None):
+        if package == CLAUDE:
+            support.require_release(self)
         argv = ["attach", place or self.place, "--harness", harness]
         for given in (packages if packages is not None else [self.pkg] + ([package] if package else [])):
             argv += ["--package", given]
@@ -206,6 +209,7 @@ class Attached(Base):
         self.assertEqual(sorted(HARNESS_PATHS), sorted(order[1:-2]))
 
     def test_it_is_not_terminal_gated(self):
+        support.require_release(self)
         self.ready()
         out, err = io.StringIO(), io.StringIO()
         code = cli.main(["attach", self.place, "--harness", "workbench/claude", "--package",
@@ -214,6 +218,7 @@ class Attached(Base):
         self.assertEqual(0, code, err.getvalue())
 
     def test_the_dir_option_names_the_target(self):
+        support.require_release(self)
         self.ready()
         out, err = io.StringIO(), io.StringIO()
         code = cli.main(["attach", "--dir", self.place, "--harness", "workbench/claude",
@@ -575,6 +580,7 @@ class Refusals(Base):
         self.refuses(contains="cannot write the path")
 
     def test_a_home_that_is_unknown_refuses(self):
+        support.require_release(self)
         self.ready()
         with unittest.mock.patch.object(attach, "default_home", lambda: None):
             out, err = io.StringIO(), io.StringIO()
