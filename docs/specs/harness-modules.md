@@ -41,7 +41,7 @@ module needs no extra file for it. Field names are proposals.
 |---|---|
 | `root` | The root instruction file: its name and how it is built, or `none`. |
 | `kinds` | For each of `skill`, `agent`, `command`: the directory, the file layout, and the field mapping from the neutral front matter. A kind the harness lacks is absent. |
-| `local_settings` | The per-clone file that receives rendered permission rules and hooks, or `none`. |
+| `local_settings` | The per-clone file that receives rendered permission rules and hooks, or `none`. Its `path` is a safe path of exactly two segments (not git metadata, not under `.workbench`, not the guarded store): a dot-directory, then a non-blank name ending `.json`; the layout's `exclude` must cover it. The installer cannot know that the harness reads the file, so the owner's approval of the layout is what stops a settings file the tool ignores. |
 | `hooks` | Where hooks are declared, or `none`. |
 | `exclude` | The paths to add to `.git/info/exclude` at attach. |
 | `tolerated` | Literal paths, each inside a directory the layout writes into, that the harness or the owner may keep there; `wb check` does not warn about them. Optional, at most 16. |

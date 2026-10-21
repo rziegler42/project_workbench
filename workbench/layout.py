@@ -79,7 +79,6 @@ REQUIRED_RULE_TOOLS = ("shell", "write")
 # harness adds its own names here when its formats are verified.
 RULE_NAMES = {"shell": ("Bash",), "read": ("Read",), "write": ("Edit",), "web": ("WebFetch",)}
 SETTINGS_KEYS = ("permissions",)
-SETTINGS_PATHS = (".claude/settings.local.json",)
 AGENT_TOOLS_FIELD = "tools"
 # The harness tool names that may grant each neutral tool, so a "read" agent cannot be given Bash.
 TOOL_NAMES = {"read": ("Read",), "search": ("Grep", "Glob"),
@@ -120,10 +119,12 @@ class _Collect:
             self.add(where, str(exc))
             return None
         folded = _fold(parts)
-        if folded[0] == ".workbench":
+        # Windows ignores trailing dots and spaces, so `.workbench.` is `.workbench` there.
+        reserved = tuple(part.rstrip(" .") for part in folded)
+        if reserved[0] == ".workbench":
             self.add(where, "%r is inside .workbench/" % value)
             return None
-        if folded[:2] == (".config", "project-workbench"):
+        if reserved[:2] == (".config", "project-workbench"):
             self.add(where, "%r is the guarded store" % value)
             return None
         if one_segment and len(parts) != 1:
@@ -274,8 +275,9 @@ def _settings(settings, out):
     if not out.keys(settings, where, keys, keys):
         return []
     folded = out.path(settings["path"], where + ".path")
-    if settings["path"] not in SETTINGS_PATHS:
-        out.add(where + ".path", "must be one of %s" % ", ".join(SETTINGS_PATHS))
+    if folded and not _settings_path(settings["path"]):
+        out.add(where + ".path", "must be <.directory>/<name>.json, directly inside a "
+                                 "dot-directory other than .git and .workbench")
     if settings["format"] != "json":
         out.add(where + ".format", "must be \"json\"")
     actions = settings["actions"]
@@ -320,6 +322,17 @@ def _settings(settings, out):
     if settings["absolute"] not in ABSOLUTE_PREFIXES:
         out.add(where + ".absolute", "must be one of %s" % ", ".join(ABSOLUTE_PREFIXES))
     return [(where + ".path", folded, tuple(settings["path"].split("/")), False)] if folded else []
+
+
+def _settings_path(path):
+    """True for exactly two segments: a dot-directory, then a `.json` name. (`out.path` has already
+    refused `.`, .git, .workbench and the guarded store, so only the shape is checked here.)"""
+    parts = path.split("/")
+    if len(parts) != 2:
+        return False
+    directory, name = parts
+    return (directory.startswith(".") and name.endswith(".json")
+            and name[:-len(".json")].strip() != "")
 
 
 def _exclude(entries, out):

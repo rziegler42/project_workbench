@@ -444,8 +444,47 @@ class AgentAndSettingsTables(unittest.TestCase):
                       {"shell": ["Read"]}, {"search": ["Edit"]}):
             self.bad(edit(["kinds", "agent", "tools"], table), "may only grant")
 
-    def test_the_settings_path_is_pinned(self):
-        for path in (".claude/settings.json", ".claude/settings.local.json.bak",
-                     "docs/settings.local.json"):
-            layout_value = edit(["local_settings", "path"], path)
-            self.bad(layout_value, "must be one of")
+    def test_a_settings_path_is_a_json_file_directly_in_a_dot_directory(self):
+        for path in (".claude/settings.json", ".claude/settings.local.json", ".fixture/s.json",
+                     ".a/b.json"):
+            value = edit(["local_settings", "path"], path,
+                         edit(["exclude"], ["CLAUDE.md", ".claude/skills/", ".claude/agents/",
+                                            ".claude/commands/", path]))
+            self.assertEqual(layout.problems(value), [], path)
+
+    def test_a_settings_path_of_the_wrong_shape_is_refused_even_when_excluded(self):
+        for path in ("settings.json", ".claude/sub/settings.json", "claude/settings.json",
+                     ".claude/settings", ".claude/settingsjson", ".claude/settings.json.bak",
+                     ".claude/settings.JSON", ".claude/.json", "docs/settings.local.json",
+                     ".claude/x.json/y.json", ".claude/ .json", ".claude/  .json"):
+            value = edit(["local_settings", "path"], path,
+                         edit(["exclude"], ["CLAUDE.md", ".claude/", path]))
+            self.bad(value, "layout.local_settings.path: must be <.directory>/<name>.json")
+
+    def test_a_reserved_or_unsafe_settings_path_is_refused_for_its_own_reason(self):
+        for path, reason in (
+                (".git/settings.json", "git metadata"), (".GIT/settings.json", "git metadata"),
+                (".git./settings.json", "git metadata"),
+                (".workbench/settings.json", "inside .workbench"),
+                (".WorkBench/settings.json", "inside .workbench"),
+                (".workbench /settings.json", "inside .workbench"),
+                (".workbench./settings.json", "inside .workbench"),
+                (".config/project-workbench/settings.json", "guarded store"),
+                (".Config/Project-Workbench/settings.json", "guarded store"),
+                (".config/project-workbench./settings.json", "guarded store"),
+                ("../settings.json", "empty, '.' or '..'"), ("./settings.json", "empty, '.' or '..'"),
+                (".", "empty, '.' or '..'"), (".claude/", "empty, '.' or '..'"),
+                ("/abs/settings.json", "absolute"), (".claude\\settings.json", "backslash or colon"),
+                (".claude/a\x00.json", "non-printable"), (5, "must be a string")):
+            value = edit(["local_settings", "path"], path,
+                         edit(["exclude"], ["CLAUDE.md", ".claude/", path] if isinstance(path, str)
+                              else ["CLAUDE.md", ".claude/"]))
+            self.bad(value, "layout.local_settings.path: ")
+            self.bad(value, reason)
+
+    def test_a_settings_path_the_exclude_list_does_not_cover_is_refused(self):
+        value = edit(["local_settings", "path"], ".claude/other.json",
+                     edit(["exclude"], ["CLAUDE.md", ".claude/skills/", ".claude/agents/",
+                                        ".claude/commands/"]))
+        self.bad(value, "local_settings.path")
+        self.bad(value, "no exclude entry")
