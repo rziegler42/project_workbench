@@ -445,3 +445,32 @@ Decision 3 and written into `docs/specs/groundwork.md` ("Indexes"; the item is r
   reference. The reader takes the area, so G reads the untracked index with the same code.
 - **For the security pass:** `refindex.parse` is a new parser of repository content; it reuses
   `declarations.parse_json` (1 MiB, depth 32, duplicate keys, NaN, fractions refused).
+
+**Increment F** (2026-10-21): `workbench/doccheck.py`, called first by `check.examine`, and
+`tests/test_doccheck.py` (53 tests, none attaches a harness: the unit tests use a fixture project
+with a hand-made manifest, the command tests a real git repository). The decision record
+`docs/decisions/2026-10-21-installer-runs-document-checks.md` is `Proposed`, for the owner to accept.
+Full suite: 1806 tests, 106 skipped, passing with `-W error`.
+
+- **What it reports:** a spec or roadmap named with a date or not in kebab-case; a decision not
+  named `YYYY-MM-DD-<topic>.md` with a real date; a name that is not usable (not examined) or that
+  differs from another only in case; a missing, repeated or wrong status line; a superseded record
+  with no `Superseded by` line; a candidate ID that is not a slug or repeats another after NFKC and
+  case folding. A status or candidate in a code fence or a quotation does not count.
+- **Keyed on the manifest:** a project has the module when its committed manifest records module
+  `groundwork` in package `workbench`. Anything else, an unreadable manifest, or a missing folder
+  gives no report. The key is the name the manifest records, as A found.
+- **Bounds:** 2,000 documents and 4 MiB across the three folders, 2,000 candidates in a roadmap, a
+  40-line header, 200 findings. Each one passed is a problem that says what was not looked at.
+  A link at a folder is "cannot be listed", a link at a file is "not read"; neither is followed.
+- **Choices of mine, to confirm:** roadmap statuses `Draft`, `Active`, `Archived` (the plan said "a
+  roadmap's own list"); a successor is a `Superseded by <name>` line in the header; the status line
+  is the one before the first `##` heading; candidates are the `###` headings under `## Candidates`,
+  the ID being the heading text up to the first space or colon (this repository's roadmap writes
+  `### id — Title`, which is read the same way). The module's three READMEs and the roadmap and
+  decision skills now say so.
+- **Known limits:** a heading inside an HTML comment counts; only direct files of each folder
+  are read, so a subfolder such as `docs/roadmaps/archive/` is not checked; a successor's existence
+  is not checked; the existing `check` tests that attach remain skipped until H.
+- **Spot check of the guards:** with the fence and quotation rule, the case and Unicode folding, or
+  the link rule removed, tests fail (5, 1 and 1 respectively).

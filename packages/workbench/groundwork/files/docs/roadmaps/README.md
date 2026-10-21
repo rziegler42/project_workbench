@@ -11,8 +11,11 @@ example `first-release.md`. There may be several.
 ## Contents
 
 A roadmap states its status, the date it was updated, its purpose, the current state, its
-candidates, deferred work, and the decisions that bear on it.
+candidates, deferred work, and the decisions that bear on it. The status is one line,
+`Status: <value>`, before the first `##` heading, and the values are `Draft`, `Active` and
+`Archived`.
 
+Candidates are the `###` headings under a `## Candidates` heading, written `### <id>: <title>`.
 A candidate has an ID, a title, the outcome wanted, dependency hints, a boundary and the
 trigger for starting it. The ID is a short topic slug in lowercase kebab-case, fixed when
 the candidate is created and unique within the roadmap. It is never reused, renumbered or

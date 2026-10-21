@@ -14,7 +14,7 @@ A spec is living: it is edited in place and is not a work log.
 3. Copy the template that sits beside this skill, `template.md`, into `docs/specs/` under that
    name and fill in every section. Leave no placeholder text.
 4. Start with a status line. The values are `Draft`, `Current` and `Superseded`. A new spec is
-   `Draft`. A superseded spec names its successor.
+   `Draft`. A superseded spec names its successor on a line `Superseded by <name>`.
 5. Give every number, dimension and tolerance its source: a decision, a reference or an
    evidence note. An evidence note says what was run, with which tool versions, at which
    commit, and the conclusion. A reference is cited by source URL, retrieval date and content

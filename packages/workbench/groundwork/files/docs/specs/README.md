@@ -10,8 +10,9 @@ One spec per topic, named by the topic in lowercase kebab-case with no date, for
 
 ## Status
 
-The first lines carry a status line. The values are `Draft`, `Current` and `Superseded`.
-A superseded spec names its successor.
+The first lines carry one status line, `Status: <value>`, before the first `##` heading. The
+values are `Draft`, `Current` and `Superseded`. A superseded spec names its successor with a
+line `Superseded by <name>` beside the status line.
 
 ## Contents
 

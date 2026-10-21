@@ -11,8 +11,9 @@ renamed. Its file name without the extension is its ID.
 
 ## Status
 
-The values are `Proposed`, `Accepted`, `Rejected` and `Superseded`. A superseded record
-names its successor.
+One status line, `Status: <value>`, comes before the first `##` heading. The values are
+`Proposed`, `Accepted`, `Rejected` and `Superseded`. A superseded record names its successor
+with a line `Superseded by <name>` beside the status line.
 
 Accepting a decision is the owner's act. An agent writes a record as `Proposed` and asks.
 Once accepted, a record is not rewritten: a correction or a change of mind is a new record

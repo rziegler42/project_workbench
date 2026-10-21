@@ -68,7 +68,9 @@ it does not authorize work and does not alter a plan that is in progress.
 - A roadmap is named by its scope in lowercase kebab-case, with no number or date.
   There may be several roadmaps, used alternately.
 - A roadmap states its status, its update date, its purpose, the current state, its
-  candidates, deferred work, and the decisions that bear on it.
+  candidates, deferred work, and the decisions that bear on it. The status is one line
+  before the first `##` heading, and its values are `Draft`, `Active` and `Archived`.
+  Candidates are the `###` headings under `## Candidates`, `### <id>: <title>`.
 - A **candidate** is sized to be exactly one unit of work. It has a stable ID, a
   title, the outcome wanted, dependency hints, a boundary, and the trigger for
   starting it. Order and dependencies are hints only: investigative work may

@@ -15,7 +15,7 @@ a choice was made and what was rejected.
    that name and fill in every section: context, the decision, the alternatives considered and
    rejected, the consequences, and evidence.
 4. Set the status to `Proposed`. The values are `Proposed`, `Accepted`, `Rejected` and
-   `Superseded`. A superseded record names its successor.
+   `Superseded`. A superseded record names its successor on a line `Superseded by <name>`.
 5. Write evidence with a provenance line: what was run, with which tool versions, at which
    commit, and the conclusion. For a reference, give the source URL, the retrieval date and the
    content hash.

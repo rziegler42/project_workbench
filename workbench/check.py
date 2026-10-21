@@ -6,6 +6,8 @@ The report, from ``repository-boundary.md`` and ``installer-interface.md``:
 * files of a harness other than the attached one;
 * generated files whose hash differs from the local manifest, or that are missing;
 * extra files under the directories the attached harness generates into (strays);
+* for a project that has the ``groundwork`` module, the form of its specs, roadmaps and decisions
+  (``doccheck``): names, statuses, and candidate IDs;
 * what git tracks: tracked files that look like harness output or scratch, tracked documents that
   link or import into untracked content, tracked files that differ from the committed manifest in a
   way their owner class does not allow, and whether the manifest is committed.
@@ -18,7 +20,7 @@ safe, and the report says so. Git is never run: what it tracks is read from ``.g
 
 import collections
 
-from . import (__version__, display, gitindex, installed, localmanifest, pointers, projectfs,
+from . import (__version__, display, doccheck, gitindex, installed, localmanifest, pointers, projectfs,
                safefs, sources, target)
 
 # Paths each harness is known to use, for the files of one harness found beside another and for the
@@ -302,7 +304,7 @@ def _others(writer, attached):
 
 def examine(writer):
     """The ``Report`` for the project `writer` holds. Reads only."""
-    problems, warnings = [], []
+    problems, warnings = doccheck.examine(writer)
     try:
         recorded = localmanifest.read(writer)
     except localmanifest.LocalManifestError as exc:

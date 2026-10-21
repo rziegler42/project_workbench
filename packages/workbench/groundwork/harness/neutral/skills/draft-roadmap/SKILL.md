@@ -14,7 +14,10 @@ work in progress.
    `first-release.md`.
 3. Copy the template that sits beside this skill, `template.md`, into `docs/roadmaps/` under
    that name and fill it in.
-4. Give each candidate an ID: a short topic slug in lowercase kebab-case. Search the roadmap
+   The status line is `Status: <value>` before the first `##` heading, and the values are
+   `Draft`, `Active` and `Archived`.
+4. Write each candidate as a `###` heading under `## Candidates`, `### <id>: <title>`, and give
+   it an ID: a short topic slug in lowercase kebab-case. Search the roadmap
    first so the ID is not already used. Never reuse, renumber or change an ID, even when the
    title is reworded. Refer to a candidate as `<roadmap>#<id>`.
 5. Give each candidate a title, the outcome wanted, dependency hints, a boundary and the trigger
