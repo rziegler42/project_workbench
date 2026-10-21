@@ -300,14 +300,20 @@ class RecoverInstall(InstallBase):
         self.assertIn("the marker is gone", err)
 
     def test_a_case_variant_of_workbench_is_never_removed(self):
+        """The record is refused wherever the filesystem tells letters apart or not, so the
+        variant, which may be `.workbench` itself, is never a directory to remove."""
         place = self.place("variant", "empty")
         os.makedirs(os.path.join(place, ".Workbench", "stuff"))
-        write_marker(place, unfinished.build(
+        good = unfinished.build(
             "install", None, "1", [("f", "create", None, "1" * 64)],
-            dirs=[".Workbench", ".Workbench/stuff"],
-            store=[("projects/x/baselines", None, "1" * 64)]))
+            dirs=[".workbench", ".workbench/stuff"],
+            store=[("projects/x/baselines", None, "1" * 64)])
+        with self.assertRaises(unfinished.UnfinishedError):
+            unfinished.parse(good.replace(b'".workbench', b'".Workbench'))
+        write_marker(place, good.replace(b'".workbench', b'".Workbench'))
         code, out, err = run_recover(self, place)
-        self.assertTrue(os.path.isdir(os.path.join(place, ".Workbench")))
+        self.assertEqual(1, code, out)
+        self.assertTrue(os.path.isdir(os.path.join(place, ".Workbench", "stuff")))
         self.assertTrue(os.path.exists(os.path.join(place, projectfs.MARKER)))
 
     def test_a_marker_without_a_record_is_refused_and_left(self):

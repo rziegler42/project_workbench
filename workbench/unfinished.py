@@ -133,6 +133,11 @@ def _check_files(items):
 
 def _check_dirs(items):
     dirs = tuple(_project_path(item, "a directory path") for item in _list(items, "dirs"))
+    for directory in dirs:
+        # On a filesystem that tells letters apart this is another directory, and on one that
+        # does not it is `.workbench`; a plan writes neither spelling, so the record is refused.
+        if _fold(directory)[:1] == (".workbench",) and directory.split("/")[0] != ".workbench":
+            _fail("a directory path is a case variant of .workbench")
     _unique(dirs, "directories")
     return dirs
 

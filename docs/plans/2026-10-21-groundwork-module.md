@@ -579,3 +579,13 @@ against the code and fixed with a regression test that fails on the earlier code
 
 - The owner accepted `2026-10-21-reference-index-format` and
   `2026-10-21-installer-runs-document-checks` on 2026-10-21; their status lines read `Accepted`.
+
+### Found on the first Linux run
+
+- The owner ran the suite on a Linux machine (ned): one failure, `test_recover`
+  `test_a_case_variant_of_workbench_is_never_removed`, which assumed a filesystem that folds case.
+  On a filesystem that tells letters apart, `recover` removed an empty `.Workbench` that a marker
+  named. The marker reader (`workbench/unfinished.py`) now refuses a record whose directory is a
+  case variant of `.workbench`, and the test builds the marker from a valid one and checks the
+  refusal and that nothing is removed. The suite passes on macOS (1878 tests, 1 skipped); a rerun
+  on Linux is pending. Linux showed 2 skips against 1 on macOS; the second is not yet identified.
