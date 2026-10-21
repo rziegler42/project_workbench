@@ -1,6 +1,6 @@
 # The code-work module: plans and its read-only helper
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-21
 Candidate: workbench-v1#code-work-plans
 Specs: code-work, module-contract, trust-and-approval, installer-interface, harness-modules
@@ -326,4 +326,24 @@ roadmap candidate and the current code. The review is still open (not archived).
 
 ## Result
 
-Not started.
+### Increment A — what the installer already does (2026-10-21)
+
+`tests/test_codework_fixture.py` (15 tests) runs a fixture `process` module that provides `plans`,
+requires the three groundwork capabilities, writes a README, fills both slots and ships
+`helper/codework`. Full suite: 1893 tests, 1 skipped, passing with `-W error`. Nothing in the
+installer changed. Recorded:
+
+- It verifies, as a first-party package too. The approval request lists the shipped path.
+- The shipped file lands at `.workbench/<package>/<module>/helper/<name>` (for the real module
+  `.workbench/workbench/code-work/helper/code-work`), class `module-owned`, hash in the manifest and
+  a baseline in the store. It has no executable bit, and the launcher does not need one.
+- `docs/plans/README.md` is `seeded`: written once, then the project's. Both slot blocks land between
+  markers. The manifest records the module by package, name, version and hashes only.
+- A missing provider of a required capability stops the install, and a second `process` module is
+  refused.
+- **Gap for increment F:** install records no pin, and an upgrade that replaces an unedited helper
+  moves no pin, so the new bytes are refused by `launch` until pinned again.
+- An edited helper is refused by `launch`, and `upgrade` refuses until it is acknowledged, naming the
+  path. Existing plans are never changed by an upgrade.
+- No gap blocks Decisions 1, 3 or 4. Decision 2 (dispatch) needs the project ID, which the committed
+  manifest holds; increment E reads it from there.
