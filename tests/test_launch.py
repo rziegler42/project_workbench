@@ -5,6 +5,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import unittest.mock
 
@@ -258,6 +259,116 @@ class RefusalTest(Base):
                 err = io.StringIO()
                 self.assertEqual(launch.run(self.store, project, name, self.root, [], err), 1)
                 self.assertIn("refused:", err.getvalue())
+
+
+class CapturedTest(Base):
+    """`launch_captured`: the helper's output is read here, bounded in size and in time."""
+
+    def helper_text(self, text):
+        self.write(self.helper, "#!/bin/sh\n" + text)
+        self.pin()
+
+    def captured(self, *args, limit=1000, timeout=10, **kwargs):
+        return launch.launch_captured(self.store, PROJECT, "commit", self.root, list(args),
+                                      limit=limit, timeout=timeout, **kwargs)
+
+    def gone(self, pid):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        except PermissionError:
+            return False
+        return False
+
+    def test_output_the_exit_code_and_a_little_of_standard_error_come_back(self):
+        self.helper_text('echo "problem: x"\necho oops >&2\nexit 4\n')
+        got = self.captured()
+        self.assertEqual((4, b"problem: x\n", b"oops\n", False, False), tuple(got))
+        self.nothing_left()
+
+    def test_the_working_directory_is_the_one_asked_for_and_input_is_closed(self):
+        self.helper_text('pwd\ncat\necho done\n')
+        got = self.captured(cwd=self.root)
+        self.assertEqual((0, False, False), (got.code, got.over, got.timed_out))
+        self.assertEqual([os.path.realpath(self.root), "done"], got.stdout.decode().split("\n")[:2])
+
+    def test_output_at_the_limit_is_kept_and_one_byte_more_stops_the_helper(self):
+        self.helper_text('printf %s 0123456789\n')
+        self.assertEqual((b"0123456789", False), (self.captured(limit=10).stdout, self.captured(limit=10).over))
+        got = self.captured(limit=9)
+        self.assertTrue(got.over)
+        self.assertEqual(b"012345678", got.stdout)
+
+    def test_endless_output_is_stopped_at_the_limit(self):
+        self.helper_text('while :; do echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; done\n')
+        got = self.captured(limit=5000, timeout=20)
+        self.assertTrue(got.over)
+        self.assertLessEqual(len(got.stdout), 5000)
+        self.assertNotEqual(0, got.code)
+        self.nothing_left()
+
+    def test_a_helper_that_ignores_a_closed_pipe_is_still_stopped(self):
+        self.helper_text('trap "" PIPE\nwhile :; do echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 2>/dev/null; done\n')
+        got = self.captured(limit=2000, timeout=20)
+        self.assertTrue(got.over)
+        self.nothing_left()
+
+    def test_a_helper_that_runs_too_long_is_stopped_with_what_it_started(self):
+        self.helper_text('sleep 60 &\necho $!\nwait\n')
+        started = time.monotonic()
+        got = self.captured(timeout=1)
+        self.assertLess(time.monotonic() - started, 15)
+        self.assertTrue(got.timed_out)
+        child = int(got.stdout.split()[0])
+        for _ in range(50):
+            if self.gone(child):
+                break
+            time.sleep(0.1)
+        self.assertTrue(self.gone(child))
+        self.nothing_left()
+
+    def test_a_helper_that_quits_leaving_a_child_holding_the_pipe_does_not_hang_and_leaves_nothing(self):
+        self.helper_text('sleep 60 >&1 2>&2 &\necho $!\nexit 0\n')
+        started = time.monotonic()
+        got = self.captured(timeout=30)
+        self.assertLess(time.monotonic() - started, 10)
+        self.assertEqual((0, False), (got.code, got.timed_out))
+        child = int(got.stdout.split()[0])
+        for _ in range(50):
+            if self.gone(child):
+                break
+            time.sleep(0.1)
+        self.assertTrue(self.gone(child))
+        self.nothing_left()
+
+    def test_a_helper_killed_by_a_signal_returns_128_plus_the_signal(self):
+        self.helper_text('kill -9 $$\n')
+        self.assertEqual(137, self.captured().code)
+
+    def test_standard_error_is_cut_to_what_is_kept(self):
+        self.helper_text('head -c 100000 /dev/zero | tr "\\0" e >&2\n')
+        self.assertEqual(launch.STDERR_KEPT, len(self.captured().stderr))
+
+    def test_a_changed_helper_is_refused_and_does_not_run(self):
+        self.write(self.helper, HELPER + "echo changed >> %s\n" % os.path.join(self.base, "ran"))
+        with self.assertRaises(launch.LaunchError):
+            self.captured()
+        self.assertFalse(os.path.exists(os.path.join(self.base, "ran")))
+        self.nothing_left()
+
+    def test_a_missing_pin_is_refused(self):
+        with self.assertRaises(launch.LaunchError):
+            launch.launch_captured(self.store, PROJECT, "other", self.root, [], limit=10, timeout=1)
+
+    def test_a_caller_kit_that_differs_from_the_pin_is_refused(self):
+        with self.assertRaises(launch.LaunchError):
+            self.captured(kit=1)
+
+    def test_the_helper_cannot_be_started_without_an_interpreter_or_with_a_nul_argument(self):
+        with self.assertRaises(launch.LaunchError):
+            self.captured("a\x00b")
+        self.nothing_left()
 
 
 class Caller(Base):

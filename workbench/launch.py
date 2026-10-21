@@ -33,10 +33,14 @@ self-contained file, or locate its project through the working directory.
 store is initialized (see the end of this module).
 """
 
+import collections
 import os
+import selectors
 import shutil
+import signal
 import subprocess
 import sys
+import time
 import uuid
 
 from . import pins, store
@@ -109,13 +113,9 @@ def _command(path, args, kit):
     return [sys.executable, "-I", RUNNER, str(kit), path] + rest
 
 
-def launch(guarded, project_id, name, root, args, *, stdin=None, stdout=None, stderr=None, kit=None):
-    """Run the pinned helper. Returns its exit code. Raises LaunchError if it was not run.
-
-    How it runs is the pin's: a pin that records a kit API number runs the helper through the runner,
-    which refuses unless that number equals the workbench's kit API; a pin without one runs it as it
-    is. `kit` is what the caller expects, and a caller that expects another way is refused; None
-    accepts whatever the pin records."""
+def _prepare(guarded, project_id, name, root, kit):
+    """Check the pin and the bytes and write the private copy: ``(path, directory, kit)``. The caller
+    removes `directory`. Raises LaunchError, and nothing has run."""
     if kit is not None and (type(kit) is not int or kit < 1 or not sys.executable):
         raise LaunchError("the kit API number or the Python interpreter is not usable; nothing was run")
     try:
@@ -141,6 +141,17 @@ def launch(guarded, project_id, name, root, args, *, stdin=None, stdout=None, st
     if _after_hash is not None:
         _after_hash()
     path, directory = _make_copy(guarded, name, data)
+    return path, directory, kit
+
+
+def launch(guarded, project_id, name, root, args, *, stdin=None, stdout=None, stderr=None, kit=None):
+    """Run the pinned helper. Returns its exit code. Raises LaunchError if it was not run.
+
+    How it runs is the pin's: a pin that records a kit API number runs the helper through the runner,
+    which refuses unless that number equals the workbench's kit API; a pin without one runs it as it
+    is. `kit` is what the caller expects, and a caller that expects another way is refused; None
+    accepts whatever the pin records."""
+    path, directory, kit = _prepare(guarded, project_id, name, root, kit)
     try:
         try:
             done = subprocess.run(_command(path, args, kit), stdin=stdin, stdout=stdout,
@@ -150,6 +161,78 @@ def launch(guarded, project_id, name, root, args, *, stdin=None, stdout=None, st
             raise LaunchError("the helper could not be run: %s" % (getattr(exc, "strerror", None) or exc))
         return done.returncode if done.returncode >= 0 else 128 - done.returncode
     finally:
+        shutil.rmtree(directory, ignore_errors=True)
+
+
+# What `launch_captured` keeps of the end of the helper's standard error: enough to say why it failed.
+STDERR_KEPT = 4096
+
+Captured = collections.namedtuple("Captured", "code stdout stderr over timed_out")
+
+
+def _kill(process):
+    """Stop the helper and anything it started in its own process group."""
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+    try:
+        process.kill()
+    except ProcessLookupError:
+        pass
+
+
+def launch_captured(guarded, project_id, name, root, args, *, limit, timeout, kit=None, cwd=None):
+    """Run the pinned helper like ``launch`` with its standard output read here, at most `limit`
+    bytes, and for at most `timeout` seconds. Returns ``Captured(code, stdout, stderr, over,
+    timed_out)``; the helper has been stopped (with its process group) when `over` or `timed_out`
+    is true, and `stderr` is the last ``STDERR_KEPT`` bytes of what it wrote there. Standard input is
+    closed. Raises LaunchError if the helper was not run."""
+    path, directory, kit = _prepare(guarded, project_id, name, root, kit)
+    process = None
+    try:
+        try:
+            process = subprocess.Popen(_command(path, args, kit), stdin=subprocess.DEVNULL,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd,
+                                       start_new_session=True)
+        except (OSError, ValueError) as exc:
+            raise LaunchError("the helper could not be run: %s" % (getattr(exc, "strerror", None) or exc))
+        out, err = bytearray(), bytearray()
+        over = timed_out = False
+        deadline = time.monotonic() + timeout
+        with selectors.DefaultSelector() as pipes:
+            pipes.register(process.stdout, selectors.EVENT_READ, out)
+            pipes.register(process.stderr, selectors.EVENT_READ, err)
+            while pipes.get_map() and not over:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    timed_out = True
+                    break
+                ready = pipes.select(min(left, 0.2))
+                for key, _ in ready:
+                    chunk = os.read(key.fileobj.fileno(), 65536)
+                    if not chunk:
+                        pipes.unregister(key.fileobj)
+                    elif key.data is out:
+                        out += chunk
+                        over = len(out) > limit
+                    else:
+                        err += chunk
+                        del err[:-STDERR_KEPT]
+                if not ready and process.poll() is not None:
+                    break
+        _kill(process)  # also what a helper that has exited left running in its group
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _kill(process)
+            process.wait()
+        code = process.returncode
+        return Captured(code if code >= 0 else 128 - code, bytes(out[:limit]), bytes(err), over, timed_out)
+    finally:
+        if process is not None:
+            for pipe in (process.stdout, process.stderr):
+                pipe.close()
         shutil.rmtree(directory, ignore_errors=True)
 
 

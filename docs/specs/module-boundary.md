@@ -230,7 +230,10 @@ Behaviour of `wb check`:
    a line in another form, is a problem of `wb check` itself: "the check <name> failed", with the cleaned
    start of its output.
 3. `wb check` cleans every line, bounds the number and length of lines it takes (a bound that is passed
-   is reported, as the existing budgets are), and prints them under the module's name. A helper cannot
+   is reported, as the existing budgets are), and prints them under the module's name. The launcher reads a check's
+   standard output itself, at most 256 KiB and for at most 120 seconds; a helper that passes either is
+   stopped, with the processes it started, and that is a problem of `wb check`. Standard input is closed,
+   and only the last 4 KiB of standard error is kept, to say why a helper failed. A helper cannot
    write a line that looks like the installer's own.
 4. A check helper that is not pinned, or whose bytes no longer match the pin, is a **problem**, not a
    skip: a silent skip would let a damaged module look clean. The other checks still run.

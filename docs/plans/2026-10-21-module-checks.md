@@ -344,3 +344,30 @@ new readers.
 Verification: `python3 -B -W error tests/run_all.py`: 2231 tests in 3 roots, OK (2207 before); one earlier run of
 the same command printed `FAILED: tests` and two reruns passed, so a flaky test is possible and is not
 identified; no `__pycache__` under `packages/`. Not reviewed independently; H covers it.
+
+### Increment C
+
+`launch.launch_captured(guarded, project_id, name, root, args, *, limit, timeout, kit=None, cwd=None)` runs a
+pinned helper like `launch` (a shared `_prepare` does the pin, hash and private copy, so the checks are the
+same) with its standard input closed, its standard output read in the caller up to `limit` bytes and for
+`timeout` seconds, and the last 4 KiB of its standard error kept. It starts the helper in its own session,
+and stops its whole process group at the end, on passing either bound and also after a clean exit, so a
+child that kept the pipe open is not left running. It returns `Captured(code, stdout, stderr, over,
+timed_out)`; `launch` and `wb run` are unchanged.
+`workbench/checks.py` has `run_all(guarded, root)`: it reads the committed manifest (none: no sections; unreadable:
+one `manifest` section with a problem), takes each recorded module's checks from its installed `module.json`
+through `commands.installed_module` (split out of `commands._declared`, same messages), in manifest order
+sorted by package and module, and for each check requires the pin named by the last segment of the helper path
+to record exactly `.workbench/<package>/<module>/<helper>` and the declared kit, then launches it from the
+project root with a 256 KiB and 120 second bound. Exit 0 with empty output is clean; every other case is a
+problem worded "the check <name> failed ..." (non-zero exit with the start of its output or the last line of
+its error, a line not in the report form, output not text or without a final newline, over the byte bound,
+over the time bound), or "... is not pinned", "... not the declared helper", "... kit" or "... did not run";
+more than 200 lines keep the first 200 and add a problem. A refused or failing check does not stop the
+others; a module whose declaration hash changed is a problem for that module only. Returned lines are
+cleaned ASCII of at most 300 characters and carry no prefix, for D to print under the module's name.
+36 new tests: 23 in `test_checks.py` and 13 in `test_launch.py` for the captured launch (no orphan process
+is left). `module-boundary.md` states the bounds.
+Verification: `python3 -B -W error tests/run_all.py`: 2267 tests in 3 roots, OK (2231 before); no
+`__pycache__` under `packages/`. Not reviewed independently; H covers it (the security pass should try a helper
+that detaches into a new session and holds the pipe, and output that arrives just under the time bound).

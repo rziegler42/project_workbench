@@ -30,37 +30,48 @@ def _shown(value):
     return display.ascii_text(str(value))[:120]
 
 
+def installed_module(held, package, item):
+    """The ``Module`` read from the installed ``module.json`` of the manifest entry `item` of the
+    manifest package `package`, after its declaration hash equals the manifest's. Raises
+    ``CommandError`` when the file cannot be used, has changed since it was installed or is not valid."""
+    rel = ".workbench/%s/%s/module.json" % (package["name"], item["name"])
+    label = "%s/%s" % (package["name"], item["name"])
+    try:
+        data = held.read_file(rel)
+        current = hashing.declaration_hash(declarations.parse_json(data))
+    except (safefs.SafeFsError, ValueError) as exc:
+        raise CommandError("the installed module.json of %s cannot be used: %s"
+                           % (label, display.clean(str(exc))[:200]))
+    if current != item["declaration"]:
+        raise CommandError("the module.json of %s has changed since it was installed; nothing was run"
+                           % label)
+    try:
+        # First-party only gates which capabilities a module may provide; the declaration
+        # was approved at install and its hash was just compared, so only commands are read.
+        return declarations.parse_module(data, package["name"], item["name"], first_party=True)
+    except declarations.DeclarationError as exc:
+        raise CommandError("the installed module.json of %s is not valid: %s"
+                           % (label, display.clean(str(exc))[:200]))
+
+
+def is_installed(document, package, item):
+    """Whether the manifest lists the ``module.json`` of the module: a harness module writes nothing
+    into the project, so it is not installed and declares nothing here."""
+    rel = ".workbench/%s/%s/module.json" % (package["name"], item["name"])
+    return any(entry["path"] == rel for entry in document["files"])
+
+
 def _declared(held, document):
     """Every command declared by an installed module that the manifest records, as ``Declared``.
 
-    A module is installed when the manifest lists its ``module.json``; a harness module writes
-    nothing into the project, so it is not, and declares no command here. An installed declaration
-    that cannot be read, or whose hash differs from the manifest's, refuses the whole lookup."""
-    installed = {item["path"] for item in document["files"]}
+    An installed declaration that cannot be read, or whose hash differs from the manifest's,
+    refuses the whole lookup."""
     found = []
     for package in document["packages"]:
         for item in package["modules"]:
-            rel = ".workbench/%s/%s/module.json" % (package["name"], item["name"])
-            if rel not in installed:
+            if not is_installed(document, package, item):
                 continue
-            label = "%s/%s" % (package["name"], item["name"])
-            try:
-                data = held.read_file(rel)
-                current = hashing.declaration_hash(declarations.parse_json(data))
-            except (safefs.SafeFsError, ValueError) as exc:
-                raise CommandError("the installed module.json of %s cannot be used: %s"
-                                   % (label, display.clean(str(exc))[:200]))
-            if current != item["declaration"]:
-                raise CommandError(
-                    "the module.json of %s has changed since it was installed; nothing was run" % label)
-            try:
-                # First-party only gates which capabilities a module may provide; the declaration
-                # was approved at install and its hash was just compared, so only commands are read.
-                module = declarations.parse_module(data, package["name"], item["name"],
-                                                   first_party=True)
-            except declarations.DeclarationError as exc:
-                raise CommandError("the installed module.json of %s is not valid: %s"
-                                   % (label, display.clean(str(exc))[:200]))
+            module = installed_module(held, package, item)
             for command in module.commands:
                 found.append(Declared(package["name"], item["name"], command))
     return found
