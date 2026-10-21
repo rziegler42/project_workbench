@@ -412,4 +412,18 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   is never consulted, so E renders `Edit(...)`; an absolute path needs `//` (a single `/` is
   project-relative and silently matches nothing), so E renders `Edit(//…)` or `~/…`; a Bash deny
   matched every tested form except a path-qualified `wb` and `bash -c`, as the documentation says.
-  The recorded evidence is in `harness-modules.md`.
+  The recorded evidence is in `harness-modules.md`. Committed as `17685ca`.
+- **B** (not yet committed): `workbench/neutral.py` and `tests/test_neutral.py` (36 tests; suite
+  1315, 1 skipped, `-W error`; `workflow-reviewer` found no High, and its two Medium and the
+  Low items on lookalikes and ordering are fixed). Choices the later increments rely on: the neutral tree is
+  `skills/<name>/SKILL.md` (+ bundled files), `agents/<name>.md`, `commands/<name>.md`, and any
+  other path is refused; a skill and a command may not share a name (Claude serves both as
+  `/<name>`); front-matter values are read literally, one line, printable, with no edge space or
+  block indicator, so D must quote them when it writes Claude's YAML; an agent with an empty
+  `tools` is refused, since an empty list could be read as "inherit everything"; `read_rules`
+  takes parsed data and limits a pattern to ASCII words, paths and `*`, with no bracket, quote,
+  colon, backslash or `..` segment, so E must re-check a pattern against Claude's syntax before it
+  renders one; the file that holds a rule list is not defined yet. Descriptions and args are
+  printable ASCII. `tools` and `needs` come back sorted. D must quote every value, since a name
+  such as `null` or `true` is valid here and would be read as non-text by unquoted YAML.
+  `modulefiles.py` still accepts the provisional `<kind>/<name>` layout and is not tightened here.
