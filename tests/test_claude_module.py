@@ -46,7 +46,9 @@ class Shipped(unittest.TestCase):
         self.assertEqual(got.record.approver, firstparty.RELEASE_APPROVER)
 
     def test_the_package_is_the_claude_and_groundwork_modules(self):
-        self.assertEqual(sorted(os.listdir(PACKAGE)), ["claude", "groundwork", "package.json"])
+        # `code-work` holds only its helper until increment D of its plan lists it in the package.
+        self.assertEqual(sorted(os.listdir(PACKAGE)),
+                         ["claude", "code-work", "groundwork", "package.json"])
         self.assertEqual(sorted(os.listdir(os.path.join(PACKAGE, "claude"))), ["module.json"])
 
 

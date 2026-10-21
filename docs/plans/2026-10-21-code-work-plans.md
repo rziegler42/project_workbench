@@ -347,3 +347,39 @@ installer changed. Recorded:
   path. Existing plans are never changed by an upgrade.
 - No gap blocks Decisions 1, 3 or 4. Decision 2 (dispatch) needs the project ID, which the committed
   manifest holds; increment E reads it from there.
+
+### Increment B — the helper: bounded reading and `check` (2026-10-21)
+
+`packages/workbench/code-work/helper/code-work` (one file, standard library only) and
+`tests/test_codework_helper.py` (46 tests, 2 skipped on macOS: a non-UTF-8 name and a case-variant
+name). Full suite: 1939 tests, 108 skipped, passing with `-W error`. The helper reads
+`docs/plans/` through descriptors opened with `O_NOFOLLOW`, never writes or runs a program (a test
+reads the source for the calls), finds the project from its working directory (a `.git` directory and
+a regular `.workbench/manifest.json`), and bounds what it reads as `doccheck.py` does.
+
+- **The 108 skips are new.** The package gained a directory, so its tree hash no longer matches the
+  shipped approvals and the tests that need them skip, as the plan said they would from D. They begin
+  at B and not D because the helper is written in its final place. Nothing in B or C touches what
+  those tests cover; the owner's `release-approvals` in G ends it.
+- **Found by the repository test:** this repository's own plans repeat a heading of the form
+  `### Increment A — ...` in their Result notes. Only headings under `## Increments` are therefore
+  increments, and a plan with no such section is a problem that says how many headings were not
+  checked. Other rules fixed by the test: `Created` must equal the date in the name; a missing
+  `Specs:` line is a problem (its value may be empty); the status may be followed by text (`Superseded
+  by <plan>`).
+- **Agreement with the installer:** a test compares the helper's fence and quotation reader with
+  `doccheck._lines` on a corpus. The helper goes one step further than the installer: a comment that
+  starts a line hides its lines (header fields, headings and the `## Increments` section), and an
+  unclosed comment is a problem. Setext `Increments` headings are not modelled.
+- **Review (workflow-reviewer, read-only, 2026-10-21):** no Critical or High finding. Applied: HTML
+  comments (above); a heading close to the form (any case, any level, `## Increment`) is a problem and
+  not silence; a link at `.workbench` is not a project; a valid name longer than 120 characters is
+  judged whole and cut only for display; reaching the findings bound says which plans were not
+  looked at and keeps that line when others are dropped; a status must be followed by a space or
+  punctuation, and a `none` reason needs a letter or digit; the tests now pin the header-field guards,
+  a byte-identical `.git/index`, and more write calls absent from the source. Not changed, by
+  decision: a folder named `*.md` in `docs/plans/` is not a plan and is not reported (the installer's
+  checks do the same). The reviewer could run only the test file, so the hostile inputs are covered by
+  the tests and by the security pass in increment G.
+- Run as a program from a directory holding `json.py`, `os.py` and `re.py`, it imports none of them.
+- Only `check` exists; `plans` and `report` are increment C.
