@@ -1,14 +1,14 @@
-"""The document form of ``wb check``: names, statuses and candidate IDs of specs, roadmaps and
-decisions, for a project that has the ``groundwork`` module.
+#!/usr/bin/env python3
+"""The groundwork check: the form of a project's specs, roadmaps and decisions.
 
-The rules are in ``docs/specs/groundwork.md`` and in the READMEs the module writes into each area;
-the decision to run them in the installer is ``docs/decisions/2026-10-21-installer-runs-document-
-checks.md``. A project has the module when its committed manifest records the module ``groundwork``
-of the package ``workbench``. Any other project, including one with a hand-written ``docs/specs``,
-gets no report from here. A project with the module and none of the folders gets none either.
+It reports names, statuses and candidate IDs under ``docs/specs``, ``docs/roadmaps`` and
+``docs/decisions`` as ``problem:`` lines, for ``wb check``. The rules are in ``docs/specs/groundwork.md``
+and in the READMEs the module writes into each area. It is a kit helper (kit API 1), one file over the
+kit's no-follow reader, started from the project root, and it changes nothing. A project with none of
+the folders gets no line.
 
 Everything read is untrusted repository content. The areas are listed and each document is read
-through the writer, which follows no link and reads only a regular file. The count of documents, the
+through the kit, which follows no link and reads only a regular file. The count of documents, the
 total bytes, the candidates in one roadmap, the lines of a header and the findings reported are all
 bounded, and passing a bound is itself a problem that says what was not looked at. Nothing is
 evaluated, and a name or heading is shown with its escapes removed.
@@ -18,14 +18,12 @@ import datetime
 import html
 import io
 import itertools
+import os
 import re
+import sys
 import unicodedata
 
-from . import installed, manifest, projectfs
-from .wbkit import display, safefs
-
-PACKAGE = "workbench"
-MODULE = "groundwork"
+from wbkit import display, safefs
 
 MAX_FILES = 2000
 MAX_BYTES = 4 * 1024 * 1024
@@ -64,20 +62,6 @@ AREAS = (("docs/specs", "spec", SPEC_STATUSES),
 
 def _shown(text):
     return display.ascii_text(text)[:120]
-
-
-def has_module(writer):
-    """Whether the committed manifest records the module. A manifest that cannot be read is not
-    this module's to report: ``check`` reports it already."""
-    try:
-        state = writer.read_file(installed.MANIFEST)
-        if state is None:
-            return False
-        document = manifest.parse(state.data)
-    except (safefs.SafeFsError, projectfs.WriteConflict, manifest.ManifestError):
-        return False
-    return any(package["name"] == PACKAGE and any(m["name"] == MODULE for m in package["modules"])
-               for package in document["packages"])
 
 
 def _lines(text, state=None):
@@ -235,10 +219,10 @@ def _candidate_problems(name, lines):
     return problems
 
 
-def _area(writer, folder, kind, statuses, budget, problems):
+def _area(held, folder, kind, statuses, budget, problems):
     try:
-        entries = writer.list_dir(folder, lenient=True)
-    except (safefs.SafeFsError, projectfs.WriteConflict) as exc:
+        entries = held.list_dir(folder, lenient=True)
+    except safefs.SafeFsError as exc:
         problems.append("%s: cannot be listed: %s" % (folder, display.ascii_text(str(exc))[:160]))
         return
     seen = {}
@@ -247,7 +231,7 @@ def _area(writer, folder, kind, statuses, budget, problems):
         if entry_kind == "dir":
             continue
         folded = name.casefold()
-        if entry_kind == writer.BAD_NAME:
+        if entry_kind == safefs.BAD_NAME:
             problems.append("%s: the name is not usable" % shown)
             continue
         if not folded.endswith(".md") or folded == "readme.md":
@@ -267,21 +251,21 @@ def _area(writer, folder, kind, statuses, budget, problems):
             continue
         budget[0] -= 1
         try:
-            state = writer.read_file("%s/%s" % (folder, name))
-        except (safefs.SafeFsError, projectfs.WriteConflict) as exc:
+            data = held.read_if_present("%s/%s" % (folder, name), safefs.MAX_FILE_BYTES)
+        except safefs.SafeFsError as exc:
             problems.append("%s: cannot be read: %s" % (shown, display.ascii_text(str(exc))[:160]))
             continue
-        if state is None:
+        if data is None:
             continue
         # The read is whole, so what it cost is charged whole; only the first bytes are examined.
         limit = min(MAX_DOCUMENT, budget[1])
-        budget[1] -= len(state.data)
+        budget[1] -= len(data)
         if trouble:
             problems.append("%s: %s" % (shown, trouble))
-        if len(state.data) > limit:
+        if len(data) > limit:
             problems.append("%s: larger than the %d bytes looked at; only the start was examined"
                             % (shown, limit))
-        text = state.data[:limit].decode("utf-8", "replace")
+        text = data[:limit].decode("utf-8", "replace")
         closing = {}
         for _ in _lines(text, closing):
             pass
@@ -295,14 +279,26 @@ def _area(writer, folder, kind, statuses, budget, problems):
             return
 
 
-def examine(writer):
-    """``(problems, warnings)`` for the specs, roadmaps and decisions of the project `writer` holds.
-    Both are empty for a project without the module."""
-    if not has_module(writer):
-        return [], []
+def examine(held):
+    """The problems for the specs, roadmaps and decisions of the project `held` is open on."""
     problems, budget = [], [MAX_FILES, MAX_BYTES]
     for folder, kind, statuses in AREAS:
-        _area(writer, folder, kind, statuses, budget, problems)
+        _area(held, folder, kind, statuses, budget, problems)
     if len(problems) > MAX_REPORTED:
-        problems = problems[:MAX_REPORTED] + ["more document problems are not listed"]
-    return problems, []
+        problems = problems[:MAX_REPORTED - 1] + ["more document problems are not listed"]
+    return problems
+
+
+def main():
+    try:
+        with safefs.Root(os.getcwd(), "project root") as held:
+            problems = examine(held)
+    except (safefs.SafeFsError, OSError) as exc:
+        problems = ["the project cannot be read: %s" % display.ascii_text(str(exc))[:160]]
+    for problem in problems:
+        sys.stdout.write("problem: %s\n" % display.ascii_text(problem))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

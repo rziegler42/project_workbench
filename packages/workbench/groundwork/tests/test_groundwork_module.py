@@ -12,12 +12,12 @@ import shutil
 import subprocess
 import unittest
 
-from tests import test_install
-from tests.test_preview import HARNESS
-from workbench import (cli, firstparty, harnessplan, install, manifest, neutral, sources, store,
-                       verify)
+from tests import support_install
+from workbench import (cli, firstparty, harnessplan, install, manifest, neutral, pins, sources,
+                       store, verify)
 
-ROOT = test_install.ROOT
+ROOT = support_install.ROOT
+HARNESS = support_install.HARNESS
 PACKAGE = os.path.join(ROOT, "packages", "workbench")
 MODULE = os.path.join(PACKAGE, "groundwork")
 SKILLS = ("draft-decision", "draft-roadmap", "draft-spec")
@@ -43,18 +43,22 @@ class Declaration(unittest.TestCase):
         self.assertEqual("module", document["type"])
         self.assertEqual(list(AREAS), document["provides"])
         self.assertEqual(sorted(READMES), document["writes"])
-        for field in ("ships", "helpers", "requires", "blocks", "slots", "layout"):
+        self.assertEqual(["helper/doccheck"], document["ships"])
+        self.assertEqual([{"helper": "helper/doccheck", "kit": 1}], document["checks"])
+        for field in ("commands", "helpers", "requires", "blocks", "slots", "layout"):
             self.assertNotIn(field, document)
 
-    def test_it_ships_no_code_and_every_file_is_a_readme_a_block_a_skill_file_or_the_declaration(self):
+    def test_it_ships_one_check_helper_and_every_other_file_is_a_readme_a_block_a_skill_file_or_the_declaration(self):
         found = []
         for base, dirs, files in os.walk(MODULE):
+            if base == MODULE:
+                dirs.remove("tests")
             for name in files:
                 found.append(os.path.relpath(os.path.join(base, name), MODULE))
                 self.assertEqual(0, os.stat(os.path.join(base, name)).st_mode & 0o111, name)
         skills = ["harness/neutral/skills/%s/%s" % (name, file) for name in SKILLS
                   for file in ("SKILL.md", "template.md")]
-        self.assertEqual(sorted(["module.json", "files/blocks/docs-index.md",
+        self.assertEqual(sorted(["module.json", "helper/doccheck", "files/blocks/docs-index.md",
                                  "files/blocks/policy.md"] + skills
                                 + ["files/" + rel for rel in READMES]), sorted(found))
 
@@ -228,11 +232,11 @@ def block(name):
         return handle.read()
 
 
-class Install(test_install.InstallBase):
+class Install(support_install.InstallBase):
     """Install into an empty directory with the Claude module, as a released copy of the package."""
 
     def setUp(self):
-        test_install.InstallBase.setUp(self)
+        support_install.InstallBase.setUp(self)
         self.dist = os.path.join(self.root, "dist")
         shutil.copytree(os.path.join(ROOT, "packages"), os.path.join(self.dist, "packages"))
         shutil.copytree(os.path.join(ROOT, "base"), os.path.join(self.dist, "base"))
@@ -247,8 +251,8 @@ class Install(test_install.InstallBase):
     def install(self, place, select=("claude", "groundwork")):
         out, err = io.StringIO(), io.StringIO()
         command = sources.Command(place, [(self.package_path, None)], list(select))
-        code = install.run(self.guarded, command, test_install.Typist(out, test_install.correct),
-                           out, err, distribution=self.dist, seed=test_install.SEED,
+        code = install.run(self.guarded, command, support_install.Typist(out, support_install.correct),
+                           out, err, distribution=self.dist, seed=support_install.SEED,
                            home=self.home)
         return code, out.getvalue(), err.getvalue()
 
@@ -332,8 +336,8 @@ class Install(test_install.InstallBase):
         out, err = io.StringIO(), io.StringIO()
         command = sources.Command(other_place, [(self.package_path, None), (other, None)],
                                   ["hq", "groundwork"])
-        code = install.run(second, command, test_install.Typist(out, test_install.correct),
-                           out, err, distribution=self.dist, seed=test_install.SEED,
+        code = install.run(second, command, support_install.Typist(out, support_install.correct),
+                           out, err, distribution=self.dist, seed=support_install.SEED,
                            home=self.home)
         self.assertEqual(0, code, (out.getvalue(), err.getvalue()))
         self.assertEqual(self.snapshot(claude_place), self.snapshot(other_place))
@@ -355,7 +359,7 @@ class Install(test_install.InstallBase):
         out, err = io.StringIO(), io.StringIO()
         code = cli.main(["upgrade", place, "--package", self.package_path], out, err,
                         store_root=self.store_root, distribution=self.dist,
-                        stdin=test_install.Typist(out, test_install.correct), home=self.home)
+                        stdin=support_install.Typist(out, support_install.correct), home=self.home)
         return code, out.getvalue(), err.getvalue()
 
     def test_an_unedited_policy_block_is_replaced_on_upgrade(self):
@@ -392,6 +396,12 @@ class Install(test_install.InstallBase):
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.assertEqual(0, done.returncode, done.stderr)
 
+    def pin_doccheck(self, place):
+        """What the owner does with `pin`: record the installed helper under the name `doccheck`."""
+        rel = ".workbench/workbench/groundwork/helper/doccheck"
+        pins.set_pin(self.guarded, manifest.project_id(support_install.SEED), "doccheck", rel,
+                     pins.hash_bytes(self.read(place, rel)), "owner", kit=1)
+
     def check(self, place):
         out, err = io.StringIO(), io.StringIO()
         code = cli.main(["check", place], out, err, store_root=self.store_root,
@@ -407,8 +417,24 @@ class Install(test_install.InstallBase):
         self.assertEqual(0, self.install(place)[0])
         self.commit(place)
         code, out, err = self.check(place)
+        self.assertEqual(1, code)
+        self.assertIn("problem: workbench/groundwork: the check doccheck is not pinned", err)
+        self.pin_doccheck(place)
+        code, out, err = self.check(place)
         self.assertEqual((0, ""), (code, err), out)
         self.assertTrue(out.endswith("check found no problems\n"), out)
+
+    def test_a_pinned_helper_reports_a_badly_named_spec_through_wb_check(self):
+        place = self.place()
+        self.assertEqual(0, self.install(place)[0])
+        self.pin_doccheck(place)
+        with open(os.path.join(place, "docs", "specs", "Power.md"), "w", encoding="utf-8") as handle:
+            handle.write("# Power\n\nStatus: Current\n")
+        self.commit(place)
+        code, out, err = self.check(place)
+        self.assertEqual(1, code)
+        self.assertIn("problem: workbench/groundwork: docs/specs/Power.md: a spec is named", err)
+        self.assertIn("check found 1 problem\n", out)
 
     def test_documents_written_by_hand_are_checked_and_an_upgrade_changes_none_of_them(self):
         place = self.place()

@@ -332,7 +332,8 @@ class Report(Reports):
         """The same roadmap text gives the same IDs as `doccheck`, so the two cannot disagree on
         which candidate a plan completes. (`doccheck` does not hide a heading inside an HTML comment and
         the helper does; that is the one known difference and it errs toward reporting less.)"""
-        from workbench import doccheck
+        from tests import support_doccheck
+        doccheck = support_doccheck.load()
         corpus = [
             roadmap("alpha", "beta-two", extra="```\n### x — y\n```\n"),
             "# R\n\nStatus: Active\n\n## **Candidates**\n\n### a — A\n\n## Other\n\n### b — B\n",

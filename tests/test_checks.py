@@ -289,6 +289,10 @@ class Command(Checks):
     def test_a_project_without_module_checks_prints_what_it_printed_before(self):
         self.MODULES = {"h": (support_project.HARNESS, {}), "a": ({}, {})}
         self.ready()
+        # Hand-written documents are nobody's to check unless a recorded module declares the check.
+        os.makedirs(os.path.join(self.place, "docs", "specs"))
+        with open(os.path.join(self.place, "docs", "specs", "Bad_Name.md"), "w") as handle:
+            handle.write("no status\n")
         with unittest.mock.patch.object(check, "examine", return_value=check.Report(None, [], [], "m")):
             code, out, err = self.check()
         self.assertEqual((0, "", ), (code, err))

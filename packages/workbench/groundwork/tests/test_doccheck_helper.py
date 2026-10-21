@@ -1,33 +1,35 @@
-import io
+"""The groundwork check helper: names, statuses and candidate IDs of specs, roadmaps and decisions.
+
+The helper is one file over the kit that the launcher runs from a private copy, so it is loaded here by its
+path and run in process on a synthetic project. The kit is made importable as ``wbkit`` the way the
+runner does it. How the installer starts it, and that a project without the module runs nothing, are
+tested in ``tests/test_checks.py`` and below."""
+
 import os
 import shutil
-import subprocess
+import tempfile
 import unittest
 import unittest.mock
 
-from tests.test_projectfs import Fixture
-from workbench import check, cli, doccheck, manifest
+from tests import support_doccheck
+from tests.support_docs import DECISION, ROADMAP, SPEC
+from workbench.wbkit import safefs
 
-HASH = "a" * 64
-
-SPEC = "# Power\n\nStatus: Current. Approved on 2026-10-21.\n\n## Scope\n\nText.\n"
-DECISION = "# Use SPI flash\n\nStatus: Accepted\nDate: 2026-01-15\n\n## Context\n\nText.\n"
-ROADMAP = ("# Roadmap: first-release\n\nStatus: Active\nUpdated: 2026-10-21\n\n## Purpose\n\nx\n\n"
-           "## Candidates\n\n### pick-a-board: Pick a board\n\nx\n\n### write-driver — Write\n")
+doccheck = support_doccheck.load()
 
 
-def installed_document(module=doccheck.MODULE, package=doccheck.PACKAGE):
-    return {
-        "base": HASH, "files": [],
-        "packages": [{"commit": "", "modules": [{"declaration": HASH, "name": module,
-                                                  "tree": HASH, "version": "0.1.0"}],
-                      "name": package, "ref": "", "source": "https://example.test/p",
-                      "tree": HASH}],
-        "seed": "11111111-2222-4333-8444-555555555555", "version": 1, "workbench": "0.1.0",
-    }
+class Base(unittest.TestCase):
+    """A project directory and a directory outside it."""
 
+    def setUp(self):
+        holder = tempfile.TemporaryDirectory()
+        self.addCleanup(holder.cleanup)
+        self.base = os.path.realpath(holder.name)
+        self.root = os.path.join(self.base, "proj")
+        os.mkdir(self.root)
+        self.outside = os.path.join(self.base, "outside")
+        os.mkdir(self.outside)
 
-class Base(Fixture):
     def put(self, rel, data):
         full = os.path.join(self.root, *rel.split("/"))
         os.makedirs(os.path.dirname(full), exist_ok=True)
@@ -39,13 +41,9 @@ class Base(Fixture):
         shutil.rmtree(os.path.join(self.root, "docs"), ignore_errors=True)
         self.put(rel, data)
 
-    def install(self, **changes):
-        self.put(".workbench/manifest.json", manifest.serialize(installed_document(**changes)))
-
     def problems(self):
-        problems, warnings = doccheck.examine(self.writer())
-        self.assertEqual([], warnings)
-        return problems
+        with safefs.Root(self.root, "project root") as held:
+            return doccheck.examine(held)
 
     def only(self, *needles):
         """The one problem, which holds every needle."""
@@ -57,49 +55,16 @@ class Base(Fixture):
 
 
 class Presence(Base):
-    def test_a_project_without_a_manifest_gets_no_report_whatever_its_documents(self):
-        self.put("docs/specs/Bad_Name.md", "no status\n")
-        self.assertEqual(([], []), doccheck.examine(self.writer()))
-
-    def test_a_project_with_another_module_gets_no_report(self):
-        self.install(module="other")
-        self.put("docs/specs/Bad_Name.md", "no status\n")
-        self.assertEqual([], self.problems())
-
-    def test_a_package_of_another_name_does_not_count(self):
-        self.install(package="elsewhere")
-        self.put("docs/specs/Bad_Name.md", "no status\n")
-        self.assertEqual([], self.problems())
-
-    def test_an_unreadable_manifest_is_not_this_checks_to_report(self):
-        self.put(".workbench/manifest.json", b"not json")
-        self.put("docs/specs/Bad_Name.md", "no status\n")
-        self.assertEqual([], self.problems())
-
-    def test_the_module_with_none_of_the_folders_gives_no_problem(self):
-        self.install()
+    def test_a_project_with_none_of_the_folders_gets_no_problem(self):
         self.assertEqual([], self.problems())
 
     def test_the_module_with_only_a_readme_in_each_folder_is_clean(self):
-        self.install()
         for folder in ("specs", "roadmaps", "decisions", "references"):
             self.put("docs/%s/README.md" % folder, "# %s\n" % folder)
         self.assertEqual([], self.problems())
 
-    def test_a_link_in_place_of_the_manifest_is_not_followed(self):
-        os.makedirs(os.path.join(self.root, ".workbench"))
-        self.put("../outside/manifest.json", manifest.serialize(installed_document()))
-        os.symlink(os.path.join(self.outside, "manifest.json"),
-                   os.path.join(self.root, ".workbench", "manifest.json"))
-        self.put("docs/specs/Bad_Name.md", "x\n")
-        self.assertEqual([], self.problems())
-
 
 class Documents(Base):
-    def setUp(self):
-        super().setUp()
-        self.install()
-
     def test_well_formed_documents_are_clean(self):
         self.put("docs/specs/power-supply.md", SPEC)
         self.put("docs/decisions/2026-01-15-use-spi-flash.md", DECISION)
@@ -220,10 +185,6 @@ class Documents(Base):
 
 
 class Candidates(Base):
-    def setUp(self):
-        super().setUp()
-        self.install()
-
     def roadmap(self, *headings, extra=""):
         body = "# R\n\nStatus: Active\n\n## Candidates\n\n" + "".join(
             "### %s\n\ntext\n\n" % each for each in headings) + extra
@@ -305,10 +266,6 @@ class Candidates(Base):
 
 class Evasions(Base):
     """Forms a renderer reads as a heading, a line or a fence that a scanner can miss."""
-
-    def setUp(self):
-        super().setUp()
-        self.install()
 
     def roadmap(self, text):
         self.put("docs/roadmaps/first.md", text)
@@ -467,7 +424,7 @@ class Evasions(Base):
         for n in range(doccheck.MAX_REPORTED + 30):
             self.put("docs/specs/Bad%d.md" % n, SPEC)
         found = self.problems()
-        self.assertEqual(doccheck.MAX_REPORTED + 1, len(found))
+        self.assertEqual(doccheck.MAX_REPORTED, len(found))
         self.assertEqual("more document problems are not listed", found[-1])
 
     def test_a_fifo_named_as_a_document_is_reported_without_hanging(self):
@@ -477,10 +434,6 @@ class Evasions(Base):
 
 
 class Hostile(Base):
-    def setUp(self):
-        super().setUp()
-        self.install()
-
     def test_a_link_at_the_folder_is_not_followed(self):
         self.put("../outside/first.md", "# R\n\nStatus: Nonsense\n")
         os.makedirs(os.path.join(self.root, "docs"))
@@ -509,9 +462,8 @@ class Hostile(Base):
 
     def test_a_file_over_the_read_limit_is_a_problem_and_not_a_crash(self):
         with unittest.mock.patch("workbench.wbkit.safefs.MAX_FILE_BYTES", 1000):
-            with unittest.mock.patch("workbench.projectfs.safefs.MAX_FILE_BYTES", 1000):
-                self.put("docs/specs/power.md", "# T\n\nStatus: Current\n" + "x" * 5000)
-                found = self.problems()
+            self.put("docs/specs/power.md", "# T\n\nStatus: Current\n" + "x" * 5000)
+            found = self.problems()
         self.assertEqual(1, len(found), found)
         self.assertIn("cannot be read", found[0])
 
@@ -536,18 +488,16 @@ class Hostile(Base):
         for n in range(doccheck.MAX_REPORTED + 50):
             self.put("docs/specs/Bad%d.md" % n, SPEC)
         found = self.problems()
-        self.assertEqual(doccheck.MAX_REPORTED + 1, len(found))
+        self.assertEqual(doccheck.MAX_REPORTED, len(found))
         self.assertEqual("more document problems are not listed", found[-1])
 
     def test_names_that_differ_only_in_case_are_reported_as_a_collision(self):
         class Fake:
-            BAD_NAME = "badname"
-
             def list_dir(self, rel, lenient=False):
                 return [("Power.md", "file"), ("power.md", "file")] if rel == "docs/specs" else None
 
-            def read_file(self, rel):
-                return unittest.mock.Mock(data=SPEC.encode())
+            def read_if_present(self, rel, limit=None):
+                return SPEC.encode()
 
         problems = []
         doccheck._area(Fake(), "docs/specs", "spec", doccheck.SPEC_STATUSES, [10, 10 ** 6],
@@ -572,83 +522,6 @@ class Hostile(Base):
         before = snapshot()
         self.problems()
         self.assertEqual(before, snapshot())
-
-
-class Command(Base):
-    """`wb check` end to end, in a real git repository, without attaching a harness."""
-
-    def setUp(self):
-        super().setUp()
-        os.chmod(self.store, 0o700)
-        self.git("init", "-q", "--template=")
-
-    def git(self, *args):
-        env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
-        env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
-        done = subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.test",
-                               "-c", "commit.gpgsign=false"] + list(args), cwd=self.root, env=env,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        self.assertEqual(0, done.returncode, done.stderr)
-
-    def check(self):
-        out, err = io.StringIO(), io.StringIO()
-        code = cli.main(["check", self.root], out, err, store_root=self.store,
-                        home=os.path.join(self.base, "nohome"))
-        return code, out.getvalue(), err.getvalue()
-
-    def commit(self):
-        self.git("add", "-A")
-        self.git("commit", "-q", "-m", "x")
-
-    def test_a_clean_project_with_the_module_has_no_problems(self):
-        self.install()
-        self.put("docs/specs/power-supply.md", SPEC)
-        self.put("docs/roadmaps/first-release.md", ROADMAP)
-        self.commit()
-        code, out, err = self.check()
-        self.assertEqual((0, ""), (code, err), err)
-        self.assertTrue(out.endswith("check found no problems\n"), out)
-
-    def test_a_wrong_name_and_a_duplicate_candidate_are_problems_with_exit_one(self):
-        self.install()
-        self.put("docs/specs/Power.md", SPEC)
-        self.put("docs/roadmaps/first-release.md", ROADMAP + "\n### pick-a-board\n")
-        self.commit()
-        code, out, err = self.check()
-        self.assertEqual(1, code)
-        lines = [line for line in err.splitlines() if line.startswith("problem: ")]
-        self.assertEqual(2, len(lines), err)
-        self.assertTrue(any("docs/specs/Power.md: a spec is named" in line for line in lines))
-        self.assertTrue(any("repeats" in line for line in lines))
-        self.assertIn("check found 2 problems", out)
-
-    def test_a_project_without_the_module_is_not_reported(self):
-        self.put(".workbench/manifest.json", manifest.serialize(installed_document(module="other")))
-        self.put("docs/specs/Power.md", "no status\n")
-        self.commit()
-        code, out, err = self.check()
-        self.assertEqual((0, ""), (code, err), err)
-
-    def test_a_hostile_heading_never_reaches_the_terminal_raw(self):
-        self.install()
-        self.put("docs/roadmaps/first-release.md",
-                 "# R\n\nStatus: Active\n\n## Candidates\n\n### \x1b]0;pwned\x07\n")
-        self.commit()
-        code, out, err = self.check()
-        self.assertEqual(1, code)
-        self.assertNotIn("\x1b", out + err)
-        self.assertNotIn("\x07", out + err)
-
-    def test_the_git_index_is_not_changed(self):
-        self.install()
-        self.put("docs/specs/Power.md", SPEC)
-        self.commit()
-        path = os.path.join(self.root, ".git", "index")
-        with open(path, "rb") as handle:
-            before = handle.read()
-        self.check()
-        with open(path, "rb") as handle:
-            self.assertEqual(before, handle.read())
 
 
 if __name__ == "__main__":

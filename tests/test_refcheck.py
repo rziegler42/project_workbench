@@ -5,7 +5,7 @@ import subprocess
 import unittest
 import unittest.mock
 
-from tests.test_doccheck import Base, installed_document
+from tests.support_docs import Base, installed_document
 from workbench import cli, gitindex, manifest, refcheck, refindex
 
 PDF = b"%PDF-1.4 datasheet\n"

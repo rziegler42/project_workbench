@@ -15,6 +15,15 @@
     "docs/roadmaps/README.md",
     "docs/specs/README.md"
   ],
+  "ships": [
+    "helper/doccheck"
+  ],
+  "checks": [
+    {
+      "helper": "helper/doccheck",
+      "kit": 1
+    }
+  ],
   "fills": [
     {
       "slot": "slot:docs-index",

@@ -234,12 +234,13 @@ tier). Recording evidence and correcting a typo are not checkpoints.
 
 The module is `packages/workbench/groundwork/`. It ships no code: a declaration, four READMEs, two
 slot blocks and three neutral skills (`draft-spec`, `draft-roadmap`, `draft-decision`), each with
-its own template beside it. The checks are the installer's, not the module's
-(`docs/decisions/2026-10-21-installer-runs-document-checks.md`), and `wb check` runs them only for a
-project whose committed manifest records the module `groundwork` of the package `workbench`. They
-are in `workbench/doccheck.py` (names, status, successor, candidate IDs) and
-`workbench/refcheck.py` (the index against what git tracks), read through the no-follow reader,
-run no program and write nothing. An adversarial security pass over them found nothing above
+its own template beside it. The document-form check is the module's own: it ships `helper/doccheck`
+and declares it in `checks` with kit API 1 (`docs/decisions/2026-10-21-module-code-lives-in-modules.md`),
+so `wb check` starts it, from the project root, only for a project whose committed manifest records the
+module and whose owner has pinned it under the name `doccheck`. It checks names, status, successor and
+candidate IDs, reads through the kit's no-follow reader, runs no program and writes nothing. The reference
+index check (`workbench/refcheck.py`) is still the installer's; it moves in a later increment, and both
+read through the no-follow reader and write nothing. An adversarial security pass over them found nothing above
 Medium unresolved; the Mediums were fixed and the plan's Result lists them.
 
 What is checked:

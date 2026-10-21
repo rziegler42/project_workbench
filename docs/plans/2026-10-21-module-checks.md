@@ -384,3 +384,43 @@ other check still runs, and a project without module checks prints exactly the e
 The 40-line display bound is shared, so a module that floods the report can push later lines into "and N more";
 the count is always complete. `docs/development.md` records the behaviour.
 Verification: `python3 -B -W error tests/run_all.py`: 2272 tests in 3 roots, OK (2267 before).
+
+### Increment E
+
+`groundwork` now ships `helper/doccheck` and declares it in `checks` (`kit` 1). The helper is the old
+`workbench/doccheck.py` over the kit: one file, the same rules, bounds and messages, reading through
+`Root.list_dir` and `Root.read_if_present` and printing one `problem:` line per finding. It no longer tests
+whether the module is recorded: the runner starts a helper only for a recorded module, and a project with the
+module and none of the folders prints nothing. One difference in the output: the report is capped at 200 lines
+(199 findings and the "more document problems are not listed" line) where the installer's was 201, so the
+runner's own 200-line bound is never what cuts it. The kit's reader also refuses a hard-linked document,
+which the installer's did not; it is reported as "cannot be read".
+`workbench/doccheck.py`, `tests/test_doccheck.py` and `tests/test_groundwork_module.py` are removed (with
+`claude-workflow remove`, the plan naming them). `check.examine` no longer calls it, and `check.run` reports the
+module sections after the installer's own. `refcheck` kept the one thing it took from `doccheck`: a private
+`_has_module`, until F moves it. Tests: `groundwork/tests/test_doccheck_helper.py` (69 tests, the old document
+rules run on the helper in process; the manifest-presence tests are gone because the runner is the gate) and
+`groundwork/tests/test_groundwork_module.py` (moved; imports `support_install` only, as
+`test_module_test_imports` requires, and gained an end-to-end test: `wb check` with the helper pinned reports a
+badly named spec under `workbench/groundwork`, and without a pin reports the check as not pinned). New shared
+support: `tests/support_doccheck.py` (loads the helper by path, with the kit as `wbkit`) and
+`tests/support_docs.py` (the manifest and file fixture `test_refcheck.py` used from `test_doccheck.py`, until F).
+`code-work`'s two agreement tests compare with the groundwork helper through `support_doccheck`.
+`test_groundwork_fixture.py` stays where `support_install` imports it. `tests/test_checks.py` gained the
+case the old gate needed: a recorded module that is not `groundwork` and hand-written `docs/specs` print nothing.
+Evidence: the old module (from `HEAD`, with the gate bypassed) and the helper return the same list on a fixture of nine
+findings across all three areas, and 0 on this repository's own documents.
+Verification: `python3 -B -W error tests/run_all.py`: 2263 tests in 4 roots, OK. 103 tests in `tests/` and 3 in
+`claude/tests` skip with "the shipped approvals are stale", because this change alters `groundwork`'s tree hash
+(the one other skip is the macOS filesystem one). They run again after the owner's step, and the full suite
+must be run again then.
+
+Owner steps, not run by me:
+1. `python3 -m workbench release-approvals`, then approve removing the stale records (`claude-workflow remove
+   --recursive` on the previewed paths).
+2. In a project that installs `groundwork`, pin the helper:
+   `python3 -m workbench pin <project-id> doccheck .workbench/workbench/groundwork/helper/doccheck --root <dir> --kit 1`.
+   This repository has no `.workbench/manifest.json`, so there is nothing to pin here and `wb check` cannot be
+   compared against this repository; the fixture comparison above stands in for it.
+Not reviewed independently; H covers it (the security pass should run the helper against hostile documents:
+links, fifos, huge files, deep folders, and a name that is not valid UTF-8).

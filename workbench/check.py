@@ -6,12 +6,13 @@ The report, from ``repository-boundary.md`` and ``installer-interface.md``:
 * files of a harness other than the attached one;
 * generated files whose hash differs from the local manifest, or that are missing;
 * extra files under the directories the attached harness generates into (strays);
-* for a project that has the ``groundwork`` module, the form of its specs, roadmaps and decisions
-  (``doccheck``): names, statuses, and candidate IDs; and its reference index against the files
-  git tracks (``refcheck``);
+* for a project that has the ``groundwork`` module, its reference index against the files git
+  tracks (``refcheck``);
 * what git tracks: tracked files that look like harness output or scratch, tracked documents that
   link or import into untracked content, tracked files that differ from the committed manifest in a
-  way their owner class does not allow, and whether the manifest is committed.
+  way their owner class does not allow, and whether the manifest is committed;
+* after those, what the installed modules' own checks report (``checks``), such as the form of the
+  specs, roadmaps and decisions from the ``groundwork`` module.
 
 Everything is read through the no-follow reader and nothing is written. The local manifest is
 scratch (``repository-boundary.md``): its hashes say a file is the one attach wrote, not that it is
@@ -21,7 +22,7 @@ safe, and the report says so. Git is never run: what it tracks is read from ``.g
 
 import collections
 
-from . import (__version__, checks, doccheck, gitindex, installed, localmanifest, pointers, projectfs, refcheck,
+from . import (__version__, checks, gitindex, installed, localmanifest, pointers, projectfs, refcheck,
                sources, target)
 from .wbkit import display, safefs
 
@@ -310,7 +311,7 @@ def _others(writer, attached):
 
 def examine(writer):
     """The ``Report`` for the project `writer` holds. Reads only."""
-    problems, warnings = doccheck.examine(writer)
+    problems, warnings = [], []
     try:
         recorded = localmanifest.read(writer)
     except localmanifest.LocalManifestError as exc:

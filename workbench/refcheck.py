@@ -23,7 +23,7 @@ shown with its escapes removed, and a message never repeats an index value.
 import re
 import urllib.parse
 
-from . import doccheck, projectfs, refindex
+from . import installed, manifest, projectfs, refindex
 from .wbkit import display, safefs
 
 FILE_WARN = 2 * 1024 * 1024
@@ -35,6 +35,20 @@ LOCAL = ".workbench/local"
 
 def _shown(path):
     return display.ascii_text(path)[:120]
+
+
+def _has_module(writer):
+    """Whether the committed manifest records the module ``workbench/groundwork``. A manifest that
+    cannot be read is not this check's to report: ``check`` reports it already."""
+    try:
+        state = writer.read_file(installed.MANIFEST)
+        if state is None:
+            return False
+        document = manifest.parse(state.data)
+    except (safefs.SafeFsError, projectfs.WriteConflict, manifest.ManifestError):
+        return False
+    return any(package["name"] == "workbench" and any(m["name"] == "groundwork" for m in package["modules"])
+               for package in document["packages"])
 
 
 def _split(path):
@@ -129,7 +143,7 @@ def examine(writer, tracked):
     """``(problems, warnings)`` for the reference index of the project `writer` holds, given what
     git tracks. Both are empty for a project without the module, and for one with the module and
     no references."""
-    if not doccheck.has_module(writer):
+    if not _has_module(writer):
         return [], []
     problems, warnings = [], []
     files = _tracked_files(tracked)

@@ -313,10 +313,12 @@ harnesses it knows), tracked Markdown documents that link or import (`[x](path)`
 `src`, `@path`) into content git does not track or out of the project (code, plain mentions of a path
 and source files are ignored), committed files that differ from the manifest beyond their owner class (the working tree is compared)
 (a module-owned file or a slot block that was edited; a seeded file may change), and whether the
-manifest is tracked. For a project that has the `groundwork` module it also checks the form of
-`docs/specs`, `docs/roadmaps` and `docs/decisions` (names, status, successor, candidate IDs) and the
-reference index `docs/references/index.json` against the tracked files (`workbench/doccheck.py`,
-`workbench/refcheck.py`, `workbench/refindex.py`); a project without the module gets none of this.
+manifest is tracked. For a project that has the `groundwork` module it also checks the reference index
+`docs/references/index.json` against the tracked files (`workbench/refcheck.py`, `workbench/refindex.py`);
+a project without the module gets none of this. The form of `docs/specs`, `docs/roadmaps` and
+`docs/decisions` (names, status, successor, candidate IDs) is the module's own check,
+`packages/workbench/groundwork/helper/doccheck`, run as below once its owner has pinned it
+(`python3 -m workbench pin <project-id> doccheck .workbench/workbench/groundwork/helper/doccheck --root <dir> --kit 1`).
 After its own findings it runs the checks that installed modules declare (`checks` in `module.json`): each is a
 pinned kit helper started from the project root, and its `problem:` and `warning:` lines are printed under the
 module's name (`problem: <package>/<module>: <text>`). A module problem counts in "check found N problems" and
