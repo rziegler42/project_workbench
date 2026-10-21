@@ -300,7 +300,8 @@ in the project, not only those under `.workbench/`, and `upgrade` scans twice, e
 fresh budget. After a reinstall at the same path, a manifest carrying an old seed
 from git history is checked against the baselines kept for that seed, and `acknowledge` shows
 the project id but does not highlight a change in it. A manifest source with
-credentials stripped may not match the cache record. `attach` and `check` are not built.
+credentials stripped may not match the cache record. `wb check` reports a clone's harness files (drift against the local manifest, files of another
+harness, strays); what git tracks is added by a later increment of the same plan.
 
 ## Recovering from an unfinished write
 

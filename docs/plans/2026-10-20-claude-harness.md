@@ -618,7 +618,7 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   `prepare` and the writer is reported as exit 3. Test gaps noted, not filled: the local manifest
   under a real `git` (it relies on the committed `.workbench/.gitignore`), a hard-linked harness
   path, hostile control characters in a module's report text, and a partial file on rerun.
-- **I** (not yet committed): `wb install` attaches as its last step. The code `attach` used to
+- **I** (`d66b6d7`): `wb install` attaches as its last step. The code `attach` used to
   build the harness files is now `workbench/harnessstage.py` (`stage` returns the files, the
   exclude lines and the local manifest; `inputs`, `check_paths` and the override and exclusion
   readers moved with it), and `workbench/refusal.py` holds the one `Refused` class (with the
@@ -657,3 +657,29 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   end-of-run output does not repeat the staged warnings (the owner saw them in the plan); the digest
   test does not change a file's mode or the settings path on their own; the `--package` hint in the
   failure text is generic.
+- **J** (not yet committed): `wb check` for the harness files, `workbench/check.py`, routed in
+  `cli.py` and classified agent-safe in `rules.AGENT_SAFE`. It opens the target without following
+  links, requires an existing project, and reads only through the no-follow `Writer`
+  (`read_file`, `list_dir`); `list_dir` now accepts the empty string for the project directory.
+  Reports: "none attached" (valid, exit 0); top-level names of a known harness other than the
+  attached one (`problem:`, or `warning:` when none is attached, so an owner's own `.claude` does
+  not fail a clone); a recorded file that is missing, differs, or cannot be read (a link, a
+  linked directory); files not recorded under the directories attach generates into (a link is
+  listed, never followed). The scratch-record statement is printed whenever a harness is attached.
+  A damaged local manifest is a `problem:`. Findings go to standard error with `problem:` /
+  `warning:`, the summary to standard output, at most 40 findings of each kind are listed; exit 1
+  only for a problem. Known limits, recorded: the table of other harnesses' top-level names and the
+  stray directories lives in `check.py` (`HARNESSES`) and covers only `claude`, `opencode` and
+  `codex`; a harness not in it has no stray scan and its files are not recognised in another clone;
+  the committed manifest is not read, so a damaged or uncommitted one is K's report; the stray
+  scan stops after 5000 entries or 8 levels and says so. `tests/test_check.py` (22). Mutation
+  check: 10 mutants, 10 killed. Suite 1629 passing, 1 skipped.
+  `workflow-reviewer` of J (from reading and 17 tests): no Critical or High. Medium, fixed: files
+  directly under `.claude/` (a hook, rules) were never looked at; they now give a `warning:` (not a
+  problem, since the harness or owner may keep files there; `settings.json` is allowed). Low, fixed:
+  the unreadable-directory text is bounded; "1 problems" grammar. Tests added: hostile names,
+  entry and depth bounds, a recorded path below a linked directory, an unknown harness name, the
+  hooks warning. Low, recorded: a directory is listed in full before the entry budget applies
+  (`list_dir` has no limit), so a clone with a huge `.claude/commands` makes `check` slow; a
+  hostile local manifest can force up to 2048 bounded reads; the scanned directories are a table,
+  not derived from the module's layout; empty stray directories are not reported.

@@ -304,8 +304,9 @@ class Writer:
         ``safefs.classify`` says of the entry itself (a link is ``symlink``, never followed), or
         None when the directory is not there. A link or a file in the way of the directory is a
         conflict. A name that fails the path validator is refused, or with `lenient` is listed
-        with the kind ``BAD_NAME`` and is not examined further."""
-        parts = safefs.validate_relpath(rel)
+        with the kind ``BAD_NAME`` and is not examined further. The empty string is the project
+        directory itself."""
+        parts = safefs.validate_relpath(rel) if rel else []
         fds = []
         try:
             try:

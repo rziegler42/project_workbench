@@ -8,7 +8,7 @@ import argparse
 import os
 import sys
 
-from . import (acknowledge, approve, attach, display, firstparty, install, launch, pins, preview, recover,
+from . import (acknowledge, approve, attach, check, display, firstparty, install, launch, pins, preview, recover,
                safefs, settings, sources, store, target, upgrade, verify)
 
 PROG = "python3 -m workbench"
@@ -32,6 +32,7 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench recover [<target> | --dir <path>]   (owner-run, terminal only)\n"
          "       python3 -m workbench attach [<target> | --dir <path>] --harness <package>/<module>\n"
          "                                   [--package <source> [--ref <ref>]] ...   (owner-run)\n"
+         "       python3 -m workbench check [<target> | --dir <path>]   (read-only)\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
 
@@ -228,6 +229,22 @@ def _attach(tokens, out, err, store_root, distribution, home):
     return attach.run(guarded, command, out, err, distribution, home=home)
 
 
+def _check(tokens, out, err, store_root, distribution):
+    try:
+        command = check.parse(tokens)
+    except sources.UsageError as exc:
+        err.write("%s\n%s" % (_clean(str(exc)), USAGE))
+        return 2
+    opened = _open_store(store_root, err)
+    if opened is None:
+        return 1
+    guarded, notes = opened
+    notes += launch.install_wrapper(guarded, distribution or firstparty.default_distribution())
+    for note in notes:
+        err.write("warning: %s\n" % _clean(note))
+    return check.run(guarded, command, out, err)
+
+
 def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=None, home=None):
     """Run a command. `store_root`, `distribution`, `stdin` and `home` are for tests; the command
     line cannot set them."""
@@ -251,6 +268,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         return _recover(argv[1:], err, out, store_root, stdin)
     if argv and argv[0] == "attach":
         return _attach(argv[1:], out, err, store_root, distribution, home)
+    if argv and argv[0] == "check":
+        return _check(argv[1:], out, err, store_root, distribution)
     if argv and argv[0] in ("upgrade", "add"):
         return _upgrade(argv[1:], out, err, store_root, distribution, stdin, argv[0])
     if argv and argv[0] == "install":
