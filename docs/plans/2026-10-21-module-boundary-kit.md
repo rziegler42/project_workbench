@@ -336,3 +336,16 @@ and names above and is tested on text that breaks each rule; and `sys.stdlib_mod
 `getattr(__builtins__, ...)` tricks, which a reviewer of a kit change reads for. The commit must list the
 three new paths (`workbench/wbkit/__init__.py`, `workbench/wbkit/display.py`, `tests/test_kit.py`) with the
 removed `workbench/display.py`.
+
+### Increment B
+
+`workbench/wbkit/safefs.py` holds the code of the old `workbench/safefs.py`, byte for byte (copied, not
+`git mv`, so the commit helper sees a plain add and a plain delete; the old file was removed with
+`claude-workflow remove`). 53 files changed: the installer and test imports now read `from .wbkit import
+safefs` (tests: `from workbench.wbkit import safefs`), merged with the existing `display` import where there was
+one; five parenthesised lists lost only that name and were re-wrapped; `tests/test_safefs.py` and
+`tests/test_doccheck.py` use the new dotted name for the import and the patch. `tests/test_kit.py` now also
+asserts that `workbench/safefs.py` is gone from the installer and present in the kit. A repository search for
+`workbench.safefs`, `workbench/safefs` and `from . import safefs` finds only this plan and the completed older
+plans, which are history.
+Verification: `python3 -B -W error -m unittest discover -s tests`: 2051 tests, OK, skipped=108.

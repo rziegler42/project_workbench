@@ -3,8 +3,8 @@ import stat
 import tempfile
 import unittest
 
-from workbench import safefs
-from workbench.safefs import SafeFsError
+from workbench.wbkit import safefs
+from workbench.wbkit.safefs import SafeFsError
 
 
 class TempTest(unittest.TestCase):

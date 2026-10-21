@@ -102,8 +102,10 @@ class Boundary(unittest.TestCase):
                 self.assertNotIn(word, text, "%s names %r" % (os.path.relpath(path, ROOT), word))
 
     def test_the_old_location_is_gone(self):
-        self.assertFalse(os.path.exists(os.path.join(ROOT, "workbench", "display.py")))
-        self.assertFalse(hasattr(workbench, "display"))
+        for name in ("display", "safefs"):
+            self.assertFalse(os.path.exists(os.path.join(ROOT, "workbench", name + ".py")), name)
+            self.assertFalse(hasattr(workbench, name), name)
+            self.assertTrue(os.path.isfile(os.path.join(KIT, name + ".py")), name)
 
 
 class Display(unittest.TestCase):

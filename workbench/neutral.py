@@ -24,7 +24,8 @@ is refused. The pattern grammar is applied by the layout that renders it.
 import collections
 import hashlib
 
-from . import declarations, safefs
+from . import declarations
+from .wbkit import safefs
 
 KINDS = {"skills": "skill", "agents": "agent", "commands": "command"}
 TOOLS = ("read", "search", "edit", "shell", "web", "agents")

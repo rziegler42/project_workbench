@@ -4,7 +4,8 @@ import tempfile
 import unittest
 import unittest.mock
 
-from workbench import hashing, safefs, verify
+from workbench import hashing, verify
+from workbench.wbkit import safefs
 
 HARNESS = {"type": "harness", "layout": {}}
 

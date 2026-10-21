@@ -54,8 +54,8 @@ import time
 import urllib.parse
 import uuid
 
-from . import approvals, safefs
-from .wbkit import display
+from . import approvals
+from .wbkit import display, safefs
 
 MAX_FILES = 2048
 MAX_FILE_BYTES = safefs.MAX_FILE_BYTES          # 16 MiB

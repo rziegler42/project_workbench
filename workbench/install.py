@@ -25,9 +25,9 @@ import os
 import shutil
 import stat
 
-from . import (__version__, approve, attach, confirm, fetch, installplan, manifest,
-               preview, projectfs, safefs, sources, target, unfinished)
-from .wbkit import display
+from . import (__version__, approve, attach, confirm, fetch, installplan, manifest, preview, projectfs,
+               sources, target, unfinished)
+from .wbkit import display, safefs
 
 CONFIRM_CHARS = confirm.CONFIRM_CHARS
 MAX_ANSWER = confirm.MAX_ANSWER

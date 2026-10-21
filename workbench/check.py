@@ -21,9 +21,9 @@ safe, and the report says so. Git is never run: what it tracks is read from ``.g
 
 import collections
 
-from . import (__version__, doccheck, gitindex, installed, localmanifest, pointers,
-               projectfs, refcheck, safefs, sources, target)
-from .wbkit import display
+from . import (__version__, doccheck, gitindex, installed, localmanifest, pointers, projectfs, refcheck,
+               sources, target)
+from .wbkit import display, safefs
 
 # Paths each harness is known to use, for the files of one harness found beside another and for the
 # strays. `roots` are top-level names, `generated` the directories attach fills. A harness not

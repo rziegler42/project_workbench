@@ -26,7 +26,8 @@ file-level checks are made here.
 
 import collections
 
-from . import declarations, hashing, layout, safefs
+from . import declarations, hashing, layout
+from .wbkit import safefs
 
 RESERVED_DIRS = ("harness", "templates", "files")
 MANIFEST = "manifest.json"

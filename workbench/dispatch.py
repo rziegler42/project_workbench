@@ -11,8 +11,8 @@ and anything after the subcommand goes to the helper unchanged.
 import os
 import stat
 
-from . import launch, manifest, pins, safefs
-from .wbkit import display
+from . import launch, manifest, pins
+from .wbkit import display, safefs
 
 NAME = "code-work"
 SUBCOMMANDS = ("check", "plans", "report")

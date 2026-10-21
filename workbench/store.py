@@ -27,7 +27,7 @@ Checks and limits, recorded on purpose:
 import os
 import stat
 
-from . import safefs
+from .wbkit import safefs
 
 LAYOUT = ("packages", "cache", "projects", "bin")
 DIR_MODE = 0o700

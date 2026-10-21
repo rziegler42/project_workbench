@@ -508,7 +508,7 @@ class Hostile(Base):
         self.assertEqual([], self.problems())
 
     def test_a_file_over_the_read_limit_is_a_problem_and_not_a_crash(self):
-        with unittest.mock.patch("workbench.safefs.MAX_FILE_BYTES", 1000):
+        with unittest.mock.patch("workbench.wbkit.safefs.MAX_FILE_BYTES", 1000):
             with unittest.mock.patch("workbench.projectfs.safefs.MAX_FILE_BYTES", 1000):
                 self.put("docs/specs/power.md", "# T\n\nStatus: Current\n" + "x" * 5000)
                 found = self.problems()

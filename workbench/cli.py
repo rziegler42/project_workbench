@@ -8,9 +8,9 @@ import argparse
 import os
 import sys
 
-from . import (acknowledge, approve, attach, check, dispatch, firstparty, install, launch, pins, preview, recover,
-               safefs, settings, sources, store, target, upgrade, verify)
-from .wbkit import display
+from . import (acknowledge, approve, attach, check, dispatch, firstparty, install, launch, pins, preview,
+               recover, settings, sources, store, target, upgrade, verify)
+from .wbkit import display, safefs
 
 PROG = "python3 -m workbench"
 USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "

@@ -11,7 +11,8 @@ the reader accepts nothing but the serializer's own output. It is untrusted text
 this module checks its shape and nothing else.
 """
 
-from . import declarations, manifest, safefs
+from . import declarations, manifest
+from .wbkit import safefs
 
 PATH = ".workbench/local/harness.json"
 LOCAL = ".workbench/local"

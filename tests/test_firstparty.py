@@ -8,7 +8,8 @@ import tempfile
 import unittest
 
 import support
-from workbench import approvals, cli, declarations, firstparty, hashing, safefs, store, verify
+from workbench import approvals, cli, declarations, firstparty, hashing, store, verify
+from workbench.wbkit import safefs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIXTURE = os.path.join(ROOT, "tests", "fixtures", "sample-package")

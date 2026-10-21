@@ -28,7 +28,8 @@ import hashlib
 import json
 import re
 
-from . import declarations, floor, layout, neutral, safefs
+from . import declarations, floor, layout, neutral
+from .wbkit import safefs
 from . import rules as rules_module
 
 _PLAIN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._,()/=+-]*\Z")

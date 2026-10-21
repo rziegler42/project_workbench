@@ -22,7 +22,8 @@ create it, and the loss is a hand edit made in the same instant.
 import collections
 import json
 
-from . import declarations, floor, safefs
+from . import declarations, floor
+from .wbkit import safefs
 
 SETTINGS = "settings"
 VERSION = 1

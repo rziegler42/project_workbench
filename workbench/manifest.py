@@ -16,7 +16,8 @@ import json
 import re
 import uuid
 
-from . import declarations, safefs
+from . import declarations
+from .wbkit import safefs
 
 VERSION = 1
 BASE_IGNORE = b"/local/\n"

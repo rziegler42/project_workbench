@@ -31,10 +31,10 @@ import collections
 import os
 import shutil
 
-from . import (__version__, acknowledgement, declarations, firstparty, gate,
-               harnessstage, installed, localmanifest, manifest, preview, projectfs, refusal,
-               safefs, snapshot, sources, target, upgrade, verify)
-from .wbkit import display
+from . import (__version__, acknowledgement, declarations, firstparty, gate, harnessstage, installed,
+               localmanifest, manifest, preview, projectfs, refusal, snapshot, sources, target, upgrade,
+               verify)
+from .wbkit import display, safefs
 
 LISTED = 40
 MAX_WRITE_BYTES = harnessstage.MAX_WRITE_BYTES

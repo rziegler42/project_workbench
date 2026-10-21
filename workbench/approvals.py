@@ -44,7 +44,8 @@ import hashlib
 import json
 import re
 
-from . import __version__, declarations, safefs
+from . import __version__, declarations
+from .wbkit import safefs
 
 FORMAT = 1
 KINDS = ("module", "package")

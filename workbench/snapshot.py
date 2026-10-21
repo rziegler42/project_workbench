@@ -9,7 +9,8 @@ reads the package again afterwards.
 
 import collections
 
-from . import declarations, hashing, safefs
+from . import declarations, hashing
+from .wbkit import safefs
 
 Snapshot = collections.namedtuple("Snapshot", "package module files executable")
 

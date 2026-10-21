@@ -22,8 +22,8 @@ import collections
 import json
 import re
 
-from . import declarations, projectfs, safefs
-from .wbkit import display
+from . import declarations, projectfs
+from .wbkit import display, safefs
 
 FORMAT = 1
 MANIFEST = ".workbench/manifest.json"

@@ -33,8 +33,8 @@ import shutil
 import subprocess
 import uuid
 
-from . import pins, safefs, store
-from .wbkit import display
+from . import pins, store
+from .wbkit import display, safefs
 
 # Test seam: called after the helper is hashed and before the copy is written.
 _after_hash = None

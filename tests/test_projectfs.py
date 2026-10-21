@@ -4,7 +4,8 @@ import stat
 import tempfile
 import unittest
 
-from workbench import projectfs, safefs, target
+from workbench import projectfs, target
+from workbench.wbkit import safefs
 from workbench.projectfs import WriteConflict, Writer
 
 

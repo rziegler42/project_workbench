@@ -49,7 +49,7 @@ import collections
 import hashlib
 import json
 
-from . import safefs
+from .wbkit import safefs
 
 
 class HashError(safefs.SafeFsError):

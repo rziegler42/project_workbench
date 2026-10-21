@@ -36,7 +36,8 @@ earlier records of that run on disk. They are valid and a rerun is idempotent.
 import collections
 import os
 
-from . import approvals, declarations, hashing, safefs, store, verify
+from . import approvals, declarations, hashing, store, verify
+from .wbkit import safefs
 
 PACKAGES = "packages"
 SHIPPED = os.path.join("workbench", "shipped_approvals")

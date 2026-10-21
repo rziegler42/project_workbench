@@ -9,7 +9,8 @@ import unittest
 import unittest.mock
 
 import support
-from workbench import fetch, safefs, store
+from workbench import fetch, store
+from workbench.wbkit import safefs
 
 REAL_GIT = shutil.which("git")
 SHA = "a" * 40

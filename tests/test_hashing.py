@@ -2,7 +2,8 @@ import os
 import tempfile
 import unittest
 
-from workbench import hashing, safefs
+from workbench import hashing
+from workbench.wbkit import safefs
 
 DECLARATION_HASH = "17c8c6f7f948ee1c9b93b1bc35f6edc29cbaf3022bff7d076d1c4831dd8a44a2"
 TREE_HASH = "197194d481cbcbef872feb29ff03a8febe57a5cfceeba57dc8fa2088771633fe"

@@ -6,7 +6,8 @@ import unittest
 import unittest.mock
 
 import support
-from workbench import safefs, store
+from workbench import store
+from workbench.wbkit import safefs
 
 
 def listing(top):

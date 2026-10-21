@@ -19,7 +19,8 @@ because the value is hostile text.
 import datetime
 import re
 
-from . import declarations, manifest, safefs
+from . import declarations, manifest
+from .wbkit import safefs
 
 PATH = "docs/references/index.json"
 AREA = "docs/references"

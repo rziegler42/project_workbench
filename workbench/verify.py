@@ -35,7 +35,8 @@ cycle.
 import collections
 import shutil
 
-from . import base, declarations, hashing, modulefiles, safefs
+from . import base, declarations, hashing, modulefiles
+from .wbkit import safefs
 
 # `module` is the parsed Module the hashes were taken for, and `executable` the module's files
 # with the owner execute bit, from the same walk that produced the tree hash. A caller that

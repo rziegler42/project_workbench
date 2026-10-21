@@ -21,8 +21,8 @@ import itertools
 import re
 import unicodedata
 
-from . import installed, manifest, projectfs, safefs
-from .wbkit import display
+from . import installed, manifest, projectfs
+from .wbkit import display, safefs
 
 PACKAGE = "workbench"
 MODULE = "groundwork"

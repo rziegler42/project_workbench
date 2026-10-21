@@ -44,7 +44,7 @@ import json
 import re
 import unicodedata
 
-from . import safefs
+from .wbkit import safefs
 
 SUPPORTED_CONTRACT = 1
 MAX_DECLARATION_BYTES = 1024 * 1024

@@ -4,7 +4,8 @@ import tempfile
 import unittest
 
 import support
-from workbench import floor, safefs, settings, store
+from workbench import floor, settings, store
+from workbench.wbkit import safefs
 
 
 class SettingsBase(unittest.TestCase):

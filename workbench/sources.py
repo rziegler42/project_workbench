@@ -15,7 +15,8 @@ import os
 import re
 import stat
 
-from . import declarations, fetch, safefs
+from . import declarations, fetch
+from .wbkit import safefs
 
 Parsed = collections.namedtuple("Parsed", "positional dir_option packages select")
 # What a project command works from once its target has been chosen.

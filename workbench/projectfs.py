@@ -36,7 +36,7 @@ import hashlib
 import os
 import stat
 
-from . import safefs
+from .wbkit import safefs
 
 MARKER = ".workbench/local/incomplete"
 EXCLUDE = ".git/info/exclude"

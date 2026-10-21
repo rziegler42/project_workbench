@@ -13,7 +13,8 @@ stored files only.
 
 import os
 
-from . import hashing, safefs
+from . import hashing
+from .wbkit import safefs
 
 DIRECTORY = "base"
 BASE_SLOTS = ("docs-index", "policy")

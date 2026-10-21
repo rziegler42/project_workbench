@@ -27,8 +27,8 @@ import json
 import os
 import re
 
-from . import approvals, approve, declarations, safefs
-from .wbkit import display
+from . import approvals, approve, declarations
+from .wbkit import display, safefs
 
 FORMAT = 1
 CONFIRM_CHARS = 12

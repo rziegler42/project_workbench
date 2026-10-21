@@ -45,7 +45,7 @@ here, and is then never installed, because it cannot be restricted.
 import re
 import unicodedata
 
-from . import safefs
+from .wbkit import safefs
 
 KINDS = ("skill", "agent", "command")
 KIND_FIELDS = {"skill": ("name", "description"),

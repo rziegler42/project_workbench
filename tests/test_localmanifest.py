@@ -3,7 +3,8 @@ import json
 import os
 import unittest
 
-from workbench import localmanifest, safefs
+from workbench import localmanifest
+from workbench.wbkit import safefs
 from workbench.localmanifest import LocalManifestError
 from workbench.projectfs import WriteConflict
 from tests.test_projectfs import Fixture

@@ -3,7 +3,8 @@ import shutil
 import stat
 import unittest
 
-from workbench import projectfs, safefs
+from workbench import projectfs
+from workbench.wbkit import safefs
 from workbench.projectfs import WriteConflict
 from tests.test_projectfs import Fixture
 

@@ -12,8 +12,9 @@ from tests import support
 from tests import test_preview as preview_tests
 from tests import test_upgrade_preview as base_tests
 from tests.test_neutral import AGENT, COMMAND, SKILL
-from workbench import (acknowledgement, attach, cli, harnessplan, installplan, localmanifest,
-                       manifest, neutral, projectfs, rules, safefs, snapshot, sources)
+from workbench import (acknowledgement, attach, cli, harnessplan, installplan, localmanifest, manifest,
+                       neutral, projectfs, rules, snapshot, sources)
+from workbench.wbkit import safefs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CLAUDE = os.path.join(ROOT, "packages", "workbench")

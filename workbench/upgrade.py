@@ -28,10 +28,10 @@ import os
 import shutil
 import stat
 
-from . import (__version__, acknowledgement, approve, base, confirm, declarations, firstparty,
-               gate, installed, installplan, manifest, preview, projectfs, safefs,
-               snapshot, sources, target, unfinished, upgradeplan, verify)
-from .wbkit import display
+from . import (__version__, acknowledgement, approve, base, confirm, declarations, firstparty, gate,
+               installed, installplan, manifest, preview, projectfs, snapshot, sources, target, unfinished,
+               upgradeplan, verify)
+from .wbkit import display, safefs
 
 ENDING = preview.ENDING
 LISTED = 40

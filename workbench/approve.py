@@ -36,8 +36,8 @@ from an environment variable, and is text only: it grants nothing.
 
 import os
 
-from . import approvals, fetch, firstparty, request, safefs, verify
-from .wbkit import display
+from . import approvals, fetch, firstparty, request, verify
+from .wbkit import display, safefs
 
 try:
     import pwd
