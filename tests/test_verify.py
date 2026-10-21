@@ -335,6 +335,46 @@ class RequirementTest(Base):
         self.assertIn("one/x", str(result.problems[0]))
         self.assertIn("two/y", str(result.problems[0]))
 
+    def with_checks(self, name, modules, **others):
+        """A package whose harness is h, whose modules each declare checks (and commands) by file name."""
+        declared = {}
+        for module, (checks, commands) in modules.items():
+            declared[module] = {"ships": list(checks) + [c + ".sh" for c in commands],
+                                "checks": [{"helper": c, "kit": 1} for c in checks],
+                                "commands": {c: {"helper": c + ".sh"} for c in commands}}
+        path = self.package(name, dict(declared, **others))
+        for module, (checks, commands) in modules.items():
+            for file in list(checks) + [c + ".sh" for c in commands]:
+                with open(os.path.join(path, module, file), "w") as handle:
+                    handle.write("x")
+        return path
+
+    def test_two_modules_may_not_share_a_check_pin_name(self):
+        path = self.with_checks("p", {"x": (["lint"], []), "y": (["lint"], [])}, h=HARNESS)
+        result = self.run_set(path, ["h", "x", "y"])
+        self.assertEqual(self.rules(result), ["pin-name"])
+        message = str(result.problems[0])
+        self.assertIn("lint", message)
+        self.assertIn("p/x", message)
+        self.assertIn("p/y", message)
+        self.accepted(self.run_set(path, ["h", "x"]))
+
+    def test_a_check_pin_name_may_not_be_another_modules_command_name(self):
+        path = self.with_checks("p", {"x": (["lint"], []), "y": ([], ["lint"])}, h=HARNESS)
+        result = self.run_set(path, ["h", "x", "y"])
+        self.assertEqual(self.rules(result), ["pin-name"])
+        self.assertIn("p/x", str(result.problems[0]))
+        self.assertIn("p/y", str(result.problems[0]))
+
+    def test_a_check_pin_name_may_not_differ_from_another_only_in_case(self):
+        path = self.with_checks("p", {"x": (["Lint"], []), "y": (["lint"], [])}, h=HARNESS)
+        self.assertEqual(self.rules(self.run_set(path, ["h", "x", "y"])), ["pin-name"])
+
+    def test_distinct_pin_names_across_commands_and_checks_are_accepted(self):
+        path = self.with_checks("p", {"x": (["lint"], ["go"]), "y": (["style"], ["stop"])},
+                                h=HARNESS)
+        self.accepted(self.run_set(path, ["h", "x", "y"]))
+
     def test_distinct_command_names_and_an_unselected_module_are_accepted(self):
         path = self.with_commands("p", {"x": ["go", "stop"], "y": ["halt"], "z": ["go"]},
                                   h=HARNESS)

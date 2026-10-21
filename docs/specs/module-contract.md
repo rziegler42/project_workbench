@@ -7,8 +7,8 @@ specification; where the table descriptions and "Concrete schema" differ in prec
 "Concrete schema" is the one the code enforces.
 
 Terms are defined in `terms.md`. The fields `commands` and `checks` and the pin-name rule are specified by
-`module-boundary.md` and added here on 2026-10-21; `commands` is built, and the others are marked "not built yet"
-until the plan that builds them lands, and the verifier accepts none of those until then. The maintainer directories `tests/` and
+`module-boundary.md` and added here on 2026-10-21; `commands` is built, and the `checks` field and the pin-name rule are built in the verifier; running a check
+with `wb check` is marked "not built yet" until the plan that builds it lands. The maintainer directories `tests/` and
 `tools/`, specified there too, are built.
 
 ## Purpose and scope
@@ -75,7 +75,7 @@ Each module has one declaration file, `module.json`, at the root of its director
 | `writes` | The project paths the module writes, beyond its own namespace. |
 | `ships` | Executable or code-bearing items it ships, such as hooks or helper scripts. |
 | `commands` | Commands it offers, each a pinned helper it ships and the first arguments it accepts, run with `wb run`. *(built: verified, and run with `wb run`)* |
-| `checks` | Pinned Python helpers it contributes to `wb check`. *(specified by `module-boundary.md`; not built yet)* |
+| `checks` | Pinned Python helpers it contributes to `wb check`. *(the field and its verification are built; `wb check` does not run it yet)* |
 | `layout` | Harness modules only: the layout description (see `harness-modules.md`). It is part of the declaration and its hash. |
 
 `provides`, `requires` and `blocks` are lists of capability names. A module that
@@ -286,7 +286,7 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   file and directory.
 - `ships`: each item is a file, or a directory that holds at least one file. An empty
   directory is refused because the content hash does not cover it.
-- `commands` *(built)* and `checks` *(specified by `module-boundary.md`; not built yet)*: the exact shapes,
+- `commands` *(built)* and `checks` *(the field is built; `wb check` does not run it yet)*: the exact shapes,
   limits and refusals are in `module-boundary.md`, "Declaration schema". The verifier also requires a
   command's helper to be a regular file of the module. In short, each names a helper that is an item of `ships` (or a file below one),
   a Python helper declares the kit API number it needs in `kit`, and an unknown field is refused as
@@ -317,10 +317,11 @@ empty one. Known-answer tests in `tests/` fix both.
 
 **Set checks.** They run on a selection of modules, not on every module of a package.
 A selected module is named `<module>`, or `<package>/<module>` where two packages
-share a name. Pin names are one namespace *(specified by `module-boundary.md`)*: a command is pinned under its name and a
+share a name. Pin names are one namespace: a command is pinned under its name and a
 check under the last segment of its helper path, and a name given twice among the selected modules is
-refused, naming both. The verifier enforces this for command names (rule `command-name`); the check half is
-not built yet. A module is never its own provider. A `requires` entry for a `slot:` capability is hard
+refused, naming both. The verifier enforces this for command names alone (rule `command-name`) and for any
+name that a check uses, compared with case and Unicode variants folded (rule `pin-name`); inside one module
+the same collision is refused as a `checks` error. A module is never its own provider. A `requires` entry for a `slot:` capability is hard
 unless marked `soft`, like any other; only a slot fill is always soft. A slot has one
 owner among the selected modules. A hard requirement with no provider
 among the selected modules names the capability and the unselected modules that could
@@ -369,5 +370,5 @@ result is a refusal and carries no hashes and no order.
   installed as maintainer files. An executable file there changes the tree hash but is not listed among
   the approval's executables, since nothing in it is installed.
 - A `commands` entry with an unknown field, a helper that is not in
-  `ships`, or a missing or misplaced `kit` is refused, naming the module and the field. *(Not built yet: the
-  same for a `checks` entry, and a pin name already used by another entry.)*
+  `ships`, or a missing or misplaced `kit` is refused, naming the module and the field. The same holds for a `checks` entry
+  (it has no `runtime` and no `arguments`), and for a pin name already used by another entry.

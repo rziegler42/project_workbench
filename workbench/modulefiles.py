@@ -131,6 +131,9 @@ def _declared_paths(module, files, dirs, bad):
         if command.helper not in files:
             bad("commands", "command %s: helper %s is not a file of the module"
                 % (command.name, command.helper))
+    for entry in module.checks:
+        if entry.helper not in files:
+            bad("checks", "helper %s is not a file of the module" % entry.helper)
     for rel in module.writes:
         if "files/" + rel not in files:
             bad("writes", "%s has no source file at files/%s" % (rel, rel))

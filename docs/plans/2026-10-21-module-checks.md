@@ -1,6 +1,6 @@
 # Module checks and the groundwork move
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-21
 
 Candidate: workbench-v1#module-checks
@@ -308,4 +308,18 @@ Approved by the owner on 2026-10-21, after two Codex rounds (a third was offered
 
 ## Result
 
-Not started.
+### Increment A
+
+`declarations.parse_module` reads a `checks` list (`Check(helper, kit)` with a `pin_name` property, the last path
+segment; `Module` gains `checks` after `commands`). Refused, naming the module and `checks`: more than 16
+entries, an unknown field (so no `runtime` or `arguments`), a missing or non-integer `kit` (1 to 999999), a
+helper that is not an item of `ships` or below one, one helper twice (or differing in case), a helper that is
+also a command's, a pin name outside the helper-name form, two checks with one pin name, and a pin name equal to
+a command name of the module (case and Unicode folded). `modulefiles` requires a check helper to be a file of the
+module. `verify` adds rule `pin-name` across the selected modules for any collision that involves a check
+(folded); command-only duplicates keep rule `command-name`. `module-contract.md` marks the field and the rule
+built and `wb check` running a check not built. 13 new tests in `test_declarations.py`, `test_modulefiles.py`
+and `test_verify.py`; `test_request.py` gains `checks=()` in two fixtures. No first-party module declares
+`checks` yet, so no approval changed.
+Verification: `python3 -B -W error tests/run_all.py`: 2207 tests in 3 roots, OK (2194 before); no `__pycache__`
+under `packages/`. Not reviewed independently; H covers it.

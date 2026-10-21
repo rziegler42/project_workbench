@@ -24,7 +24,7 @@ def only_plain_ascii(text):
 def module_with(**fields):
     base = dict(name="m", version=(1, 0, 0), type="module", description="d", provides=(),
                 requires=(), blocks=(), helpers=(), slots=(), fills=(), writes=(), ships=(),
-                commands=(), layout=None, declaration={})
+                commands=(), checks=(), layout=None, declaration={})
     base.update(fields)
     return declarations.Module(**base)
 
@@ -310,7 +310,7 @@ class HostileTextTest(Base):
             HOSTILE, HOSTILE, HOSTILE, HOSTILE, (HOSTILE,), ((HOSTILE, True),), (HOSTILE,),
             (HOSTILE,), (HOSTILE,), ((HOSTILE, HOSTILE),), (HOSTILE,), (HOSTILE,),
             (declarations.Command(HOSTILE, HOSTILE, HOSTILE, HOSTILE, (HOSTILE,)),),
-            {HOSTILE: HOSTILE}, {})
+            (), {HOSTILE: HOSTILE}, {})
 
         class Hostile:
             declaration_hash = HOSTILE

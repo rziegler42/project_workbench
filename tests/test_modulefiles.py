@@ -147,6 +147,20 @@ class AccountingTest(Base):
         self.put("sample-notes/scripts/more/run.sh")
         self.refused("commands")
 
+    def test_a_check_helper_that_is_shipped_is_accepted(self):
+        self.edit_module(checks=[{"helper": "scripts/check.sh", "kit": 1}])
+        self.assertEqual(self.check().problems, [])
+
+    def test_a_check_helper_that_does_not_exist_is_refused(self):
+        self.edit_module(ships=["scripts"], checks=[{"helper": "scripts/gone.sh", "kit": 1}])
+        result = self.refused("checks")
+        self.assertIn("gone.sh", str(result.problems[0]))
+
+    def test_a_check_helper_that_is_a_directory_is_refused(self):
+        self.edit_module(ships=["scripts"], checks=[{"helper": "scripts/more", "kit": 1}])
+        self.put("sample-notes/scripts/more/run.sh")
+        self.refused("checks")
+
     def test_missing_writes_source(self):
         self.edit_module(writes=["docs/notes.md", "docs/other.md"])
         result = self.refused("writes")

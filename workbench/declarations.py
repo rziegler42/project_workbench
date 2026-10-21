@@ -29,12 +29,15 @@ commands    an object of at most ``MAX_COMMANDS`` entries, each a command name i
             helper-name form mapped to ``{"helper", "runtime", "kit", "arguments"}``
             (``module-boundary.md``, "Declaration schema"). The helper is an item of
             ``ships`` or a file below one.
+checks      a list of at most ``MAX_CHECKS`` objects ``{"helper", "kit"}``, both required. The
+            helper is an item of ``ships`` or a file below one, and its last path segment, the
+            check's pin name, is in the helper-name form (``module-boundary.md``).
 layout      present exactly for a harness module: an object whose keys come from
             ``LAYOUT_KEYS``. Its values are not checked beyond being JSON data;
             that belongs to the harness specification.
 
 Optional fields (``type``, ``provides``, ``requires``, ``blocks``, ``helpers``,
-``slots``, ``fills``, ``writes``, ``ships``, ``commands``) default to ``module`` and empty. The
+``slots``, ``fills``, ``writes``, ``ships``, ``commands``, ``checks``) default to ``module`` and empty. The
 declaration hash covers the declaration as written, never the defaults.
 
 A ``writes`` path may not name the guarded store and may not enter ``.workbench/``
@@ -62,7 +65,7 @@ LAYOUT_KEYS = ("root", "kinds", "local_settings", "hooks", "exclude", "notes")
 
 PACKAGE_FIELDS = ("name", "version", "contract", "modules")
 MODULE_FIELDS = ("name", "version", "type", "description", "provides", "requires", "blocks",
-                 "helpers", "slots", "fills", "writes", "ships", "commands", "layout")
+                 "helpers", "slots", "fills", "writes", "ships", "commands", "checks", "layout")
 
 _NAME = re.compile(r"^[a-z][a-z0-9-]*\Z")
 _VERSION = re.compile(r"^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){0,3}\Z")
@@ -71,6 +74,7 @@ _HELPER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*\Z")
 _ARGUMENT = re.compile(r"^[a-z][a-z0-9-]*\Z")
 
 MAX_COMMANDS = 16
+MAX_CHECKS = 16
 MAX_ARGUMENTS = 16
 MAX_ARGUMENT_CHARS = 32
 MAX_KIT = 999999
@@ -79,8 +83,18 @@ RUNTIMES = ("python", "exec")
 Package = collections.namedtuple("Package", "name version contract modules declaration")
 Module = collections.namedtuple(
     "Module", "name version type description provides requires blocks helpers slots fills "
-              "writes ships commands layout declaration")
+              "writes ships commands checks layout declaration")
 Command = collections.namedtuple("Command", "name helper runtime kit arguments")
+
+
+class Check(collections.namedtuple("Check", "helper kit")):
+    """A check helper and the kit API number it needs. It is pinned under the last segment of its path."""
+
+    @property
+    def pin_name(self):
+        return self.helper.rsplit("/", 1)[-1]
+
+
 Loaded = collections.namedtuple("Loaded", "package modules problems")
 
 
@@ -245,6 +259,11 @@ class _Checker:
                 self.fail(field, "missing key %r" % key)
 
 
+def fold_name(name):
+    """A pin name as it is compared: the same fold as a path segment, so case and Unicode variants meet."""
+    return _fold(name)
+
+
 def _shown(text):
     """Text from a declaration, escaped and shortened for a message."""
     text = repr(text)[1:-1]
@@ -338,6 +357,42 @@ def _commands(check, value, ships):
                            % (name, _shown(argument), MAX_ARGUMENT_CHARS))
         commands.append(Command(name, helper, runtime, kit, tuple(arguments)))
     return tuple(commands)
+
+
+def _checks(check, value, ships, commands):
+    """The ``checks`` field as a tuple of ``Check``, or a refusal naming the field."""
+    if not isinstance(value, list):
+        check.fail("checks", "must be a list")
+    if len(value) > MAX_CHECKS:
+        check.fail("checks", "at most %d checks, not %d" % (MAX_CHECKS, len(value)))
+    taken = {"/".join(_fold(part) for part in c.helper.split("/")): "a command" for c in commands}
+    names = {_fold(c.name): "a command name" for c in commands}
+    checks = []
+    for entry in value:
+        check.exact_keys(entry, "checks", ("helper", "kit"), ())
+        helper = "/".join(check.path(entry["helper"], "checks"))
+        if not any("/".join(helper.split("/")[:n]) in ships
+                   for n in range(1, len(helper.split("/")) + 1)):
+            check.fail("checks", "helper %s is not an item of 'ships' or below one" % _shown(helper))
+        folded = "/".join(_fold(part) for part in helper.split("/"))
+        if folded in taken:
+            check.fail("checks", "the helper %s is already named by %s of this module (or one that "
+                                 "differs only in letter case)" % (_shown(helper), taken[folded]))
+        taken[folded] = "another check"
+        pin_name = helper.rsplit("/", 1)[-1]
+        if len(pin_name) > MAX_NAME_CHARS or not _HELPER.match(pin_name):
+            check.fail("checks", "the pin name %s (the last part of helper %s) must be letters, digits "
+                                 "and ._+-, starting with a letter or digit, at most %d characters"
+                       % (_shown(pin_name), _shown(helper), MAX_NAME_CHARS))
+        if _fold(pin_name) in names:
+            check.fail("checks", "the pin name %s is already used by %s of this module"
+                       % (_shown(pin_name), names[_fold(pin_name)]))
+        names[_fold(pin_name)] = "another check"
+        kit = entry["kit"]
+        if type(kit) is not int or not 1 <= kit <= MAX_KIT:
+            check.fail("checks", "'kit' must be an integer from 1 to %d" % MAX_KIT)
+        checks.append(Check(helper, kit))
+    return tuple(checks)
 
 
 def parse_module(data, package_name, expected_name, first_party=False):
@@ -451,6 +506,7 @@ def parse_module(data, package_name, expected_name, first_party=False):
         check.fail("writes", str(exc))
 
     commands = _commands(check, declaration.get("commands", {}), ships)
+    checks = _checks(check, declaration.get("checks", []), ships, commands)
 
     layout = declaration.get("layout")
     if mtype == "harness":
@@ -467,7 +523,7 @@ def parse_module(data, package_name, expected_name, first_party=False):
 
     return Module(name, version, mtype, description, tuple(provides), tuple(requires),
                   tuple(blocks), tuple(helpers), tuple(slots), tuple(fills), tuple(writes),
-                  tuple(ships), commands, layout, declaration)
+                  tuple(ships), commands, checks, layout, declaration)
 
 
 # --- from a directory ------------------------------------------------------------------------

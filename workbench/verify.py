@@ -209,6 +209,19 @@ def _check_set(selected, modules, harness_required, which, problems, warnings):
             problems.append(_problem("command:" + name, "command-name", "more than one selected "
                                      "module declares the command %r: %s" % (name, ", ".join(who))))
 
+    pins = collections.defaultdict(list)
+    for key, module in chosen:
+        for command in module.commands:
+            pins[declarations.fold_name(command.name)].append((command.name, "command", _label(key)))
+        for entry in module.checks:
+            pins[declarations.fold_name(entry.pin_name)].append((entry.pin_name, "check", _label(key)))
+    for folded, users in sorted(pins.items()):
+        if len(users) > 1 and not (all(kind == "command" for _, kind, _ in users)
+                                   and len({name for name, _, _ in users}) == 1):
+            problems.append(_problem("pin:" + folded, "pin-name", "one pin name is used more than "
+                                     "once across commands and checks: %s" % ", ".join(
+                                         "%s %r in %s" % (kind, name, who) for name, kind, who in users)))
+
     deps = {key: set() for key in keys}
     for key, module in chosen:
         for capability, soft in _requirements(module):

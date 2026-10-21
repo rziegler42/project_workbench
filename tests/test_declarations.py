@@ -402,6 +402,71 @@ class ModuleTest(unittest.TestCase):
         self.refused("commands", ships=["scripts/Run", "scripts/run"],
                      commands={"a": {"helper": "scripts/Run"}, "b": {"helper": "scripts/run"}})
 
+    def check_entry(self, **fields):
+        entry = {"helper": "scripts/check.sh", "kit": 1}
+        entry.update(fields)
+        return [entry]
+
+    def test_a_module_without_checks_has_none(self):
+        self.assertEqual((), self.parse(module()).checks)
+
+    def test_a_check_is_read(self):
+        got = self.parse(module(ships=["scripts"], checks=[
+            {"helper": "scripts/doccheck", "kit": 1},
+            {"helper": "scripts/deep/refcheck", "kit": 2}])).checks
+        self.assertEqual([("scripts/doccheck", 1), ("scripts/deep/refcheck", 2)],
+                         [(c.helper, c.kit) for c in got])
+        self.assertEqual(["doccheck", "refcheck"], [c.pin_name for c in got])
+
+    def test_checks_refusals(self):
+        many = [{"helper": "scripts/c%d" % n, "kit": 1} for n in range(17)]
+        cases = {
+            "not a list": {"helper": "scripts/check.sh", "kit": 1},
+            "too many": many,
+            "entry not an object": ["scripts/check.sh"],
+            "no helper": [{"kit": 1}],
+            "no kit": [{"helper": "scripts/check.sh"}],
+            "unknown field": self.check_entry(runtime="python"),
+            "arguments are not allowed": self.check_entry(arguments=[]),
+            "helper not shipped": self.check_entry(helper="elsewhere/run"),
+            "helper not a string": self.check_entry(helper=3),
+            "helper path refused": self.check_entry(helper="../scripts/check.sh"),
+            "helper in another case than ships": self.check_entry(helper="scripts/CHECK.sh"),
+            "kit zero": self.check_entry(kit=0),
+            "kit above the pin limit": self.check_entry(kit=1000000),
+            "kit a string": self.check_entry(kit="1"),
+            "kit true": self.check_entry(kit=True),
+            "kit null": self.check_entry(kit=None),
+            "one helper twice": self.check_entry() + self.check_entry(),
+            "pin name too long": self.check_entry(helper="scripts/" + "a" * 65),
+            "pin name starts with a dot": self.check_entry(helper="scripts/.hidden"),
+            "pin name has a space": self.check_entry(helper="scripts/a b"),
+            "pin name with a lookalike letter": self.check_entry(helper="scripts/\u0430bc"),
+        }
+        for label, checks in cases.items():
+            with self.subTest(label):
+                self.refused("checks", ships=["scripts/check.sh"] if label in (
+                    "helper not shipped", "helper in another case than ships") else ["scripts"],
+                    checks=checks)
+
+    def test_two_checks_may_not_share_a_pin_name(self):
+        self.refused("checks", ships=["a/run", "b/run"], checks=[
+            {"helper": "a/run", "kit": 1}, {"helper": "b/run", "kit": 1}])
+        self.refused("checks", ships=["a/Run", "b/run"], checks=[
+            {"helper": "a/Run", "kit": 1}, {"helper": "b/run", "kit": 1}])
+
+    def test_a_helper_may_not_be_a_command_and_a_check(self):
+        self.refused("checks", ships=["scripts/check.sh"], commands=self.command(),
+                     checks=self.check_entry())
+        self.refused("checks", ships=["scripts/Check.sh", "scripts/check.sh"],
+                     commands={"a": {"helper": "scripts/Check.sh"}}, checks=self.check_entry())
+
+    def test_a_check_pin_name_may_not_be_a_command_name_of_the_module(self):
+        self.refused("checks", ships=["scripts/check.sh", "tools/go"],
+                     commands={"check.sh": {"helper": "tools/go"}}, checks=self.check_entry())
+        self.refused("checks", ships=["scripts/check.sh", "tools/go"],
+                     commands={"CHECK.sh": {"helper": "tools/go"}}, checks=self.check_entry())
+
     def test_writes_path_rules(self):
         bad = ["/etc/passwd", "../x", "a/../../x", "a\\b", "C:/x", ".git/config", ".GIT/config",
                ".git./config", "GIT~1/config", "a/.git/x", "link/../x", ".config/project-workbench/s",
