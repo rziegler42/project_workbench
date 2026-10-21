@@ -25,7 +25,7 @@ Rules this text follows, because the owner decides from it and a package wrote i
 
 import json
 
-from . import display
+from .wbkit import display
 
 NEEDS_OWN_APPROVAL = ("harness", "process")
 INLINE_LIMIT = 6        # more entries than this get a header with a count and one line each

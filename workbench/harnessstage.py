@@ -11,8 +11,9 @@ import collections
 import hashlib
 import os
 
-from . import (declarations, display, harnessplan, installplan, localmanifest, manifest, neutral,
+from . import (declarations, harnessplan, installplan, localmanifest, manifest, neutral,
                safefs, target)
+from .wbkit import display
 from .refusal import Refused
 
 # Bytes of harness files one attach writes: the neutral tree, and the overrides, are each bounded

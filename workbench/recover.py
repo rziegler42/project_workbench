@@ -29,8 +29,9 @@ typed text is friction, not authentication; what stops an agent is the deny rule
 for this command and for the guarded store.
 """
 
-from . import (acknowledge, approve, confirm, display, installplan, projectfs, safefs, target,
+from . import (acknowledge, approve, confirm, installplan, projectfs, safefs, target,
                unfinished)
+from .wbkit import display
 
 MAX_LISTED = 500
 

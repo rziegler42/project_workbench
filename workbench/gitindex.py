@@ -20,7 +20,8 @@ import hashlib
 import os
 import struct
 
-from . import display, projectfs, safefs
+from . import projectfs, safefs
+from .wbkit import display
 
 LIMIT = safefs.MAX_FILE_BYTES
 MAX_ENTRIES = 1000000

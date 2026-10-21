@@ -24,8 +24,9 @@ for the guarded store.
 
 import hashlib
 
-from . import (__version__, acknowledgement, approve, confirm, display, installed, installplan,
+from . import (__version__, acknowledgement, approve, confirm, installed, installplan,
                manifest, projectfs, safefs, sources, target)
+from .wbkit import display
 
 MANIFEST = acknowledgement.MANIFEST
 MAX_LISTED = 500          # a longer list cannot be reviewed; it is refused, not truncated

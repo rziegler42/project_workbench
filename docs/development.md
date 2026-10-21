@@ -489,7 +489,7 @@ ships (`[executable]` when a file under it has the owner execute bit, otherwise
   (`Verified.module`, `Verified.executable`). Nothing is read again, so what is shown cannot
   differ from what is recorded because a file changed between two reads.
 
-`workbench/display.py` has the two cleaners. `clean` (used for the command's own messages)
+`workbench/wbkit/display.py` (part of the kit) has the two cleaners. `clean` (used for the command's own messages)
 keeps ordinary letters in any script and escapes control, invisible, combining, format,
 separator and filler characters. `ascii_text` (used for the request) escapes everything
 outside printable ASCII.

@@ -20,7 +20,8 @@ import os
 import re
 import unicodedata
 
-from . import declarations, display, projectfs, safefs, store as store_module
+from . import declarations, projectfs, safefs, store as store_module
+from .wbkit import display
 
 FORMAT = 1
 MAX_ENTRIES = 10000          # files, directories, .git entries and store entries together

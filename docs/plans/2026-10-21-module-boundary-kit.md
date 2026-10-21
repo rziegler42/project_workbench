@@ -314,4 +314,25 @@ makes (the runner loads the kit by file location and adds no directory to the se
 
 ## Result
 
-Empty until work starts.
+### Increment A
+
+`workbench/wbkit/` exists with `__init__.py` (`API = 1`) and `display.py`, moved with `git mv`.
+`tests/test_kit.py` (13 tests after review) checks that `API` is an integer, that every kit source imports only the
+standard library or the kit (`ast`, relative imports at level 1 only), that the kit makes no dynamic import,
+that it names no first-party module or harness, that the old `workbench/display.py` is gone, and
+characterizes `clean` and `ascii_text` (control, bidirectional, zero-width, combining, no-break and filler
+characters, a plain space, non-ASCII text, non-string input). The tests failed before the move (no
+`wbkit`) and pass after. 26 installer files and `tests/test_request.py` import `display` from the kit; a
+parenthesised import list lost only that name, and `docs/development.md` names the new path.
+Verification: `python3 -B -W error -m unittest discover -s tests`: 2051 tests, OK, skipped=108 (before review; the rerun is below) (the stale
+shipped approvals, until G). Two things for the commit: the move is a rename, and the commit helper has
+refused a deletion combined with additions before, so a refusal there needs the owner's decision.
+
+Review (read-only `workflow-reviewer`): no Critical, High or functional Medium finding, and the import rewrite,
+the launcher path and the references to the old path were checked sound. Two Low gaps in `tests/test_kit.py`,
+both fixed: the dynamic-import check only matched two call names, so it now forbids the indirect modules
+and names above and is tested on text that breaks each rule; and `sys.stdlib_module_names` needs Python
+3.10, so the test falls back to a list of the modules the kit uses. Not caught by the check, by design:
+`getattr(__builtins__, ...)` tricks, which a reviewer of a kit change reads for. The commit must list the
+three new paths (`workbench/wbkit/__init__.py`, `workbench/wbkit/display.py`, `tests/test_kit.py`) with the
+removed `workbench/display.py`.

@@ -27,7 +27,8 @@ import json
 import re
 
 from . import base as base_module
-from . import display, localmanifest, manifest, safefs
+from . import localmanifest, manifest, safefs
+from .wbkit import display
 
 Action = collections.namedtuple("Action", "kind path owner_class mode size hash detail data")
 PackageSource = collections.namedtuple("PackageSource", "name source ref commit tree")

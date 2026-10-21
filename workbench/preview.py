@@ -10,8 +10,9 @@ and the write cannot differ.
 import os
 import shutil
 
-from . import (__version__, base, declarations, display, firstparty, gate, harnessstage,
+from . import (__version__, base, declarations, firstparty, gate, harnessstage,
                installplan, manifest, projectfs, refusal, safefs, snapshot, sources, target, verify)
+from .wbkit import display
 
 ENDING = "preview only: nothing was written"
 

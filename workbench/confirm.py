@@ -12,7 +12,8 @@ The typed text is friction, not authentication; what stops an agent is the deny 
 renders for each command and for the guarded store.
 """
 
-from . import display, projectfs
+from . import projectfs
+from .wbkit import display
 
 CONFIRM_CHARS = 12
 MAX_ANSWER = 200

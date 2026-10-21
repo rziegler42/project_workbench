@@ -27,7 +27,8 @@ import collections
 import hashlib
 import re
 
-from . import blocks, display, manifest, projectfs, safefs
+from . import blocks, manifest, projectfs, safefs
+from .wbkit import display
 
 MANIFEST = ".workbench/manifest.json"
 LOCAL = ".workbench/local"

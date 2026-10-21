@@ -14,7 +14,8 @@ import os
 import pwd
 import stat
 
-from . import display, projectfs, safefs, unfinished
+from . import projectfs, safefs, unfinished
+from .wbkit import display
 
 STATES = ("new-missing", "new-empty", "new-git", "existing")
 

@@ -23,7 +23,8 @@ shown with its escapes removed, and a message never repeats an index value.
 import re
 import urllib.parse
 
-from . import display, doccheck, projectfs, refindex, safefs
+from . import doccheck, projectfs, refindex, safefs
+from .wbkit import display
 
 FILE_WARN = 2 * 1024 * 1024
 FOLDER_WARN = 50 * 1024 * 1024

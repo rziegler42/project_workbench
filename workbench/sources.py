@@ -107,7 +107,8 @@ def parse_packages(tokens):
 
 
 def _shown(source):
-    from . import display, installplan
+    from . import installplan
+    from .wbkit import display
     return display.ascii_text(installplan.public_source(source))[:200]
 
 

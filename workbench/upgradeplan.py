@@ -34,7 +34,8 @@ import copy
 import hashlib
 
 from . import base as base_module
-from . import blocks, display, installed, installplan, manifest, safefs
+from . import blocks, installed, installplan, manifest, safefs
+from .wbkit import display
 
 MODES = ("upgrade", "add")
 MANIFEST = installed.MANIFEST

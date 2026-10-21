@@ -5,7 +5,8 @@ import stat
 import tempfile
 import unittest
 
-from workbench import declarations, display, request, verify
+from workbench import declarations, request, verify
+from workbench.wbkit import display
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIXTURE = os.path.join(ROOT, "tests", "fixtures", "sample-package")
