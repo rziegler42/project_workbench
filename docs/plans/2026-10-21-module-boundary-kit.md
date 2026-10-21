@@ -1,6 +1,6 @@
 # The kit and the maintainer directories
 
-Status: Approved
+Status: Completed
 Created: 2026-10-21
 Candidate: workbench-v1#module-boundary-kit
 Specs: module-boundary, module-contract, trust-and-approval, installer-interface, terms
