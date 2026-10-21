@@ -136,11 +136,22 @@ Placement:
 
 ### Indexes
 
-- The **tracked index** (`docs/references/index`) records only tracked files. Each
-  entry has the file, a title, the source URL, the license, the retrieval date, the
-  version, the content hash, and the owner's notes or extracted values.
-- The **untracked index** (`.workbench/local/refs/index`) records the untracked files
-  with the same fields. It is scratch.
+- The **tracked index** (`docs/references/index.json`) records only tracked files. It is
+  canonical JSON, `{"entries": [...], "format": 1}`, with one entry per line, entries sorted by
+  `file` and no other layout accepted. Each entry has exactly these fields: `file` (the path
+  from the project root, under `docs/references/`), `title`, `url` (http or https), `license`
+  (may be empty), `retrieved` (`YYYY-MM-DD`), `version` (may be empty), `sha256` (64 lowercase
+  hex digits of the file's content) and `notes` (the owner's notes or extracted values, one
+  line, may be empty). Text is printable, with limits per field.
+- The index and the area's `README.md` are metadata, not references: neither needs an entry,
+  and an entry that names either is refused.
+- The **untracked index** (`.workbench/local/refs/index.json`) records the untracked files
+  with the same format and fields, `file` being under `.workbench/local/refs/`. It is scratch.
+- The reader is strict and bounded: at most 1 MiB and 5,000 entries (the byte bound is reached
+  first for all but the smallest entries), duplicate keys, NaN and non-printable characters
+  refused, and anything that is not the serializer's own output refused. A refusal names the
+  entry and the field and never repeats the value. The reader is `workbench/refindex.py`; the
+  decision is `docs/decisions/2026-10-21-reference-index-format.md`.
 - Nothing tracked points to anything untracked. A tracked document that relies on an
   untracked reference cites it by source URL, retrieval date and content hash, and
   never by path.
@@ -209,8 +220,6 @@ tier). Recording evidence and correcting a typo are not checkpoints.
 ## Deferred
 
 - **Knowledge-base name and capability:** `knowledge-base-package` candidate.
-- **Index file format:** `docs/references/index` is a proposal, decided with the
-  schema in `groundwork-module`.
 - **Limit of enforcement:** whether an edit changes a spec's or roadmap's direction is
   a judgment, so that checkpoint is enforced by instruction and acknowledgement, not
   mechanically. A typo fix and a direction change cannot be told apart by the harness.

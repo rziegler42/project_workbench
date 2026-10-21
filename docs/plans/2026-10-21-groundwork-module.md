@@ -422,3 +422,26 @@ Full suite: 1716 tests, 106 skipped, passing with `-W error`.
   layout renders the template at its own path is not tested here; it needs a fixture first-party
   distribution and stays open for H.
 - The skills were not tried with a live Claude session. That is the owner's hand run.
+
+**Increment E** (2026-10-21): `workbench/refindex.py`, a strict reader and canonical serializer
+for the reference index, with `tests/test_refindex.py` (37 tests). The format is decided as in
+Decision 3 and written into `docs/specs/groundwork.md` ("Indexes"; the item is removed from
+"Deferred"). The decision record `docs/decisions/2026-10-21-reference-index-format.md` is
+`Proposed`, for the owner to accept. Full suite: 1753 tests, 106 skipped, passing with `-W error`.
+
+- **Each Review focus 2 case is refused with the field named:** not JSON, duplicate keys, NaN and
+  fractions, a huge list, a `file` that is absolute, has `..`, `.git` or `git~1`, a backslash,
+  a colon, an escape, or lies outside the area (including the untracked area and a sibling
+  directory with the area's name as a prefix), a hash that is not 64 lowercase hex digits, and a
+  field of the wrong type. A refusal never repeats the value, and an unexpected key is not shown.
+  A link is a filesystem fact, so it is left to G.
+- **Found: the two bounds do not both bind.** The smallest entry is about 230 bytes, so 5,000
+  entries exceed 1 MiB; the byte bound is reached first. Both stay as approved and the spec and
+  the record say so.
+- **Choices of mine within Decision 3:** the date must be real, `url` must be http or https,
+  `license`, `version` and `notes` may be empty (the check warns about a missing license), notes
+  are one line, `file` is the path from the project root, and `index.json` and `README.md` are
+  refused as entries (also case-insensitively), but a file of that name in a subfolder is a
+  reference. The reader takes the area, so G reads the untracked index with the same code.
+- **For the security pass:** `refindex.parse` is a new parser of repository content; it reuses
+  `declarations.parse_json` (1 MiB, depth 32, duplicate keys, NaN, fractions refused).
