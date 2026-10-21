@@ -68,6 +68,17 @@ _NO_EXCLUDE_CHARS = set("*?[]!# \\")
 # Claude accepts a path rule under these names and never consults it (checked on 2.1.305).
 INERT_TEMPLATE_NAMES = ("Write", "NotebookEdit", "Glob", "MultiEdit")
 REQUIRED_RULE_TOOLS = ("shell", "write")
+# The one rule name each tool class may use, so a deny cannot be written under a name that does
+# not stop its tool (a store-write deny as `Read(...)`). Checked on Claude Code 2.1.305; another
+# harness adds its own names here when its formats are verified.
+RULE_NAMES = {"shell": ("Bash",), "read": ("Read",), "write": ("Edit",), "web": ("WebFetch",)}
+SETTINGS_KEYS = ("permissions",)
+SETTINGS_PATHS = (".claude/settings.local.json",)
+AGENT_TOOLS_FIELD = "tools"
+# The harness tool names that may grant each neutral tool, so a "read" agent cannot be given Bash.
+TOOL_NAMES = {"read": ("Read",), "search": ("Grep", "Glob"),
+              "edit": ("Edit", "Write", "NotebookEdit", "MultiEdit"), "shell": ("Bash",),
+              "web": ("WebFetch", "WebSearch"), "agents": ("Task", "Agent")}
 
 
 def _fold(parts):
@@ -225,6 +236,8 @@ def _fields(kind, fields, where, out):
     for key in ("name", "description"):
         if key not in fields:
             out.add(where, "must map %r" % key)
+    if fields.get("tools", AGENT_TOOLS_FIELD) != AGENT_TOOLS_FIELD:
+        out.add(where, "'tools' must map to the harness field %r" % AGENT_TOOLS_FIELD)
     for key, target in fields.items():
         if key != "tools" and target == "tools":
             out.add(where, "%r may not map to the harness field 'tools'" % key)
@@ -244,6 +257,8 @@ def _tools(tools, where, out):
                 or not all(isinstance(n, str) and _TOOL.match(n) for n in names)
                 or len(set(names)) != len(names)):
             out.add(where, "%r must be a list of 1 to 8 distinct tool names" % key)
+        elif key in TOOL_NAMES and any(n not in TOOL_NAMES[key] for n in names):
+            out.add(where, "%r may only grant %s" % (key, ", ".join(TOOL_NAMES[key])))
 
 
 def _settings(settings, out):
@@ -252,6 +267,8 @@ def _settings(settings, out):
     if not out.keys(settings, where, keys, keys):
         return []
     folded = out.path(settings["path"], where + ".path")
+    if settings["path"] not in SETTINGS_PATHS:
+        out.add(where + ".path", "must be one of %s" % ", ".join(SETTINGS_PATHS))
     if settings["format"] != "json":
         out.add(where + ".format", "must be \"json\"")
     actions = settings["actions"]
@@ -266,6 +283,13 @@ def _settings(settings, out):
                                             "'ask', so a deny cannot be written as an allow")
             if _prefix(deny, ask) or _prefix(ask, deny):
                 out.add(where + ".actions", "deny and ask must be different, un-nested keys")
+            if len(deny) != 2 or len(ask) != 2 or deny[0] != ask[0]:
+                out.add(where + ".actions", "deny and ask must be <key>.deny and <key>.ask "
+                                            "with the same <key>")
+            if deny[0] not in SETTINGS_KEYS:
+                out.add(where + ".actions", "the key must be one of %s" % ", ".join(SETTINGS_KEYS))
+            if any(part.casefold() == "allow" for part in deny + ask):
+                out.add(where + ".actions", "no key may be named allow")
     rules = settings["rules"]
     if out.keys(rules, where + ".rules", RULE_TOOLS, REQUIRED_RULE_TOOLS):
         for tool, template in rules.items():
@@ -273,9 +297,19 @@ def _settings(settings, out):
             wanted = "{path}" if tool in ("read", "write") else "{pattern}"
             if not match or match.group(2) != wanted:
                 out.add(where + ".rules", "%s must be Name(%s)" % (tool, wanted))
+            elif match.group(1) not in RULE_NAMES[tool] and match.group(1) not in INERT_TEMPLATE_NAMES:
+                out.add(where + ".rules", "%s must use the rule name %s, not %s"
+                        % (tool, " or ".join(RULE_NAMES[tool]), match.group(1)))
             elif match.group(1) in INERT_TEMPLATE_NAMES:
                 out.add(where + ".rules", "%s uses %s, a rule name the harness accepts and never "
                                           "consults" % (tool, match.group(1)))
+    if isinstance(rules, dict):
+        names = [t.split("(")[0] for t in rules.values() if isinstance(t, str)]
+        if len(set(names)) != len(names):
+            out.add(where + ".rules", "two tool classes use the same rule name, so a deny meant "
+                                      "for one would apply to the other")
+        if any(name.casefold() == "allow" for name in names):
+            out.add(where + ".rules", "a rule name may not be allow")
     if settings["absolute"] not in ABSOLUTE_PREFIXES:
         out.add(where + ".absolute", "must be one of %s" % ", ".join(ABSOLUTE_PREFIXES))
     return [(where + ".path", folded, tuple(settings["path"].split("/")), False)] if folded else []

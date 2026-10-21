@@ -211,7 +211,7 @@ class Refused(unittest.TestCase):
                         {"deny": "permissions.deny", "ask": "permissions.deny.ask"},
                         {"deny": "permissions.deny.deny", "ask": "permissions.deny"}):
             self.bad(edit(base, actions), "actions")
-        self.assertEqual(layout.problems(edit(base, {"deny": "a.b.deny", "ask": "a.b.ask"})), [])
+        self.assertEqual(layout.problems(edit(base, {"deny": "permissions.deny", "ask": "permissions.ask"})), [])
         value = edit(["hooks"], {"settings_key": "permissions"})
         self.bad(value, "top-level key")
 
@@ -271,3 +271,63 @@ class Verification(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SettingsKeysAndNames(unittest.TestCase):
+    def bad(self, value, text):
+        found = layout.problems(value)
+        self.assertTrue(any(text in m for m in found), found)
+
+    def test_action_keys_are_one_parent_with_deny_and_ask(self):
+        for actions in ({"deny": "a.b.deny", "ask": "a.b.ask"},
+                        {"deny": "a.deny", "ask": "b.ask"},
+                        {"deny": "permissions.allow.deny", "ask": "permissions.ask"}):
+            self.bad(edit(["local_settings", "actions"], actions), "layout.local_settings")
+
+    def test_only_the_permissions_key_is_accepted(self):
+        for key in ("env", "Permissions", "zzz"):
+            self.bad(edit(["local_settings", "actions"],
+                          {"deny": key + ".deny", "ask": key + ".ask"}), "must be one of")
+
+    def test_each_tool_class_uses_only_its_own_rule_name(self):
+        for rules in ({"shell": "bash({pattern})", "write": "Edit({path})"},
+                      {"shell": "Bash({pattern})", "write": "Read({path})"},
+                      {"shell": "Bash({pattern})", "write": "Edit({path})", "read": "Edit({path})"},
+                      {"shell": "Task({pattern})", "write": "Edit({path})"},
+                      {"shell": "Bash({pattern})", "write": "Edit({path})", "web": "BASH({pattern})"}):
+            self.bad(edit(["local_settings", "rules"], rules), "layout.local_settings.rules")
+
+    def test_no_key_is_named_allow(self):
+        self.bad(edit(["local_settings", "actions"], {"deny": "allow.deny", "ask": "allow.ask"}),
+                 "allow")
+
+    def test_two_tool_classes_may_not_share_a_rule_name(self):
+        rules = {"shell": "Bash({pattern})", "write": "Bash({path})"}
+        self.bad(edit(["local_settings", "rules"], rules), "same rule name")
+
+    def test_a_rule_may_not_be_named_allow(self):
+        rules = {"shell": "Allow({pattern})", "write": "Edit({path})"}
+        self.bad(edit(["local_settings", "rules"], rules), "allow")
+
+
+class AgentAndSettingsTables(unittest.TestCase):
+    def bad(self, value, text=""):
+        found = layout.problems(value)
+        self.assertTrue(any(text in m for m in found), found)
+
+    def test_the_tools_field_is_the_harness_field_tools(self):
+        fields = {"name": "name", "description": "description", "tools": "x-tools"}
+        self.bad(edit(["kinds", "agent", "fields"], fields), "'tools' must map")
+        fields["tools"] = "allowed-tools"
+        self.bad(edit(["kinds", "agent", "fields"], fields), "'tools' must map")
+
+    def test_a_neutral_tool_only_grants_its_own_harness_tools(self):
+        for table in ({"read": ["Bash"]}, {"read": ["Task"]}, {"read": ["Read", "Bash"]},
+                      {"shell": ["Read"]}, {"search": ["Edit"]}):
+            self.bad(edit(["kinds", "agent", "tools"], table), "may only grant")
+
+    def test_the_settings_path_is_pinned(self):
+        for path in (".claude/settings.json", ".claude/settings.local.json.bak",
+                     "docs/settings.local.json"):
+            layout_value = edit(["local_settings", "path"], path)
+            self.bad(layout_value, "must be one of")

@@ -208,6 +208,66 @@ class Overrides(unittest.TestCase):
             self.assertNotIn(".claude/agents/reviewer.md", by_path(result))
             self.assertEqual([r.item for r in levels(result, "skipped")], ["agent/reviewer"])
 
+    def test_an_agent_override_is_held_to_a_strict_tools_line(self):
+        head = b"---\nname: a\n"
+        bad = [head + b"tools: # nothing\n---\n", head + b"tools: null\n---\n",
+               head + b"tools: ~\n---\n", head + b"tools: []\n---\n",
+               head + b"tools: |\n---\n", head + b"tools: *\n---\n",
+               head + b"tools: Read\ntools: Read\n---\n", head + b"tools: Read\n",
+               head + b"tools: Read\n---\r\ntools: Read\n", head + b"tools: Read\n--- \ntools: Read\n",
+               head + b'tools: "Read\n---\n', head + b"tools: Read, Bogus\n---\n",
+               head + b"description: 'x\ntools: Read'\ntools:\n---\n",
+               head + b" tools: Read\n---\n", head + b"tools: ''  # x\n---\n"]
+        for data in bad:
+            result = run(overrides={("agent", "reviewer"): {"reviewer.md": data}})
+            self.assertNotIn(".claude/agents/reviewer.md", by_path(result), data)
+
+    def test_a_value_that_can_swallow_the_tools_line_is_refused(self):
+        for opening in (b'description: "x', b"description: 'x", b"description: [x",
+                        b"description: {x", b"description: x---", b"description: |",
+                        b"description: >", b"description: &a x", b"description: *a",
+                        b"description: !!str x", b"description: a: b", b"description: x #c",
+                        b"description: x:", b"description: @x", b"description: -x"):
+            data = b"---\nname: a\n" + opening + b"\ntools: Read\nmodel: y\n---\n"
+            result = run(overrides={("agent", "reviewer"): {"reviewer.md": data}})
+            self.assertNotIn(".claude/agents/reviewer.md", by_path(result), data)
+
+    def test_a_key_the_layout_does_not_map_is_refused(self):
+        for line in (b"hooks: {PreToolUse: x}", b"allowed-tools: Bash", b"permissionmode: x",
+                     b"mcpservers: x", b"skills: x"):
+            data = b"---\nname: a\ntools: Read\n" + line + b"\n---\n"
+            result = run(overrides={("agent", "reviewer"): {"reviewer.md": data}})
+            self.assertNotIn(".claude/agents/reviewer.md", by_path(result), data)
+
+    def test_non_ascii_and_control_characters_in_the_front_matter_are_refused(self):
+        for char in ("\u2028", "\u2029", "\u0085", "\u00a0", "\x0b", "\x0c", "\x1c", "\t"):
+            for line in ("model: x%stools:%s Bash" % (char, char), "tools: Read%s,Bash" % char,
+                         "tools: Read,%sBash" % char, "description: a%s" % char,
+                         'description: "a%s\\ntools:%s Bash"' % (char, char),
+                         'description: "a%s"' % char):
+                data = ("---\nname: a\ntools: Read\n%s\n---\n" % line).encode("utf-8")
+                result = run(overrides={("agent", "reviewer"): {"reviewer.md": data}})
+                self.assertNotIn(".claude/agents/reviewer.md", by_path(result), repr(line))
+
+    def test_a_repeated_key_or_a_non_string_plain_value_is_refused(self):
+        for lines in ("name: a\nname: b", "description: d\ndescription: e", "model: x\nmodel: y",
+                      "name: null", "name: 0x10", "model: true", "model: 1e3", "model: ~",
+                      "model: 12", "model: No"):
+            data = ("---\ntools: Read\n%s\n---\n" % lines).encode()
+            result = run(overrides={("agent", "reviewer"): {"reviewer.md": data}})
+            self.assertNotIn(".claude/agents/reviewer.md", by_path(result), lines)
+
+    def test_a_double_quoted_json_string_value_is_accepted(self):
+        data = b'---\nname: "a"\ndescription: "x: y # z"\ntools: "Read"\n---\nb\n'
+        result = run(overrides={("agent", "reviewer"): {"reviewer.md": data}})
+        self.assertIn(".claude/agents/reviewer.md", by_path(result))
+
+    def test_good_agent_overrides_are_installed(self):
+        for line in (b"tools: Read", b'tools: "Read, Grep"', b"tools: Read,Grep"):
+            data = b"---\nname: a\n" + line + b"\n---\nbody\n"
+            result = run(overrides={("agent", "reviewer"): {"reviewer.md": data}})
+            self.assertIn(".claude/agents/reviewer.md", by_path(result), data)
+
     def test_an_agent_override_is_skipped_when_the_layout_cannot_restrict(self):
         own = b"---\ntools: Read\n---\n"
         for layout in (edit(["kinds", "agent", "tools"], None),

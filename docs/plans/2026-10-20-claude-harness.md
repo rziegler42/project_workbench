@@ -444,3 +444,68 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   guard or the `needs` guard each fails tests. Not yet proved: that Claude's parser reads a
   quoted `tools` or `argument-hint` value as the unquoted one; G's end-to-end check must show it.
   How `harness/<name>/` files are read into the override mapping is H's job.
+- **E** (not yet committed): `workbench/rules.py` (new: `OWNER_RUN`, `AGENT_SAFE`, `SPELLINGS`,
+  `NOT_YET_ROUTED`, `FLOOR_RULES`, `owner_run_patterns()`), `render_permissions(rules, layout,
+  store_root, home)` in `workbench/harnessplan.py`, and `tests/test_permissions.py` (21 tests;
+  suite 1406, 1 skipped, `-W error`). The output is sorted JSON with only the layout's `deny` and
+  `ask` keys. It always holds: `Edit` denies for the store and `<store>/**` (spelled `//abs` or
+  `~/rel` by the layout, refused when the store is outside home for `~/`, or when a path has a
+  character outside the pattern set); a deny for each of the nine owner-run commands, bare and
+  with ` *`, in the `wb` and `python3 -m workbench` spellings; and ask rules for each floor stop
+  from a compiled table, a best-effort match on command text, not a sandbox. A module rule is
+  added by action, a leading `/` or `~/` in a path pattern is made absolute, and an ask equal to
+  a deny is dropped. A drift test parses `cli.py` and fails when a command is routed that
+  `rules.py` has not classified as owner-run or agent-safe (`attach` is allowed unrouted until
+  H). Mutation checks: the `//` spelling and an owner-run entry each fail tests. Not covered, as
+  the plan said: a path-qualified `wb`, `env`, `bash -c`. The floor table is my choice of
+  patterns; the owner may want to review it. The settings file must be created only when it is
+  absent (H), and the output has no `allow` key.
+  `workflow-reviewer` found two Medium and three Low (no probes could run). Fixed, with tests (suite
+  1411): a layout without a `read` or `web` template is a `PlanError`, not a `KeyError`; the owner-run
+  spellings now include `python3 -B -m workbench`, `python -m workbench` and `python -B -m workbench`
+  (other interpreter forms stay unmatched); module rule patterns are re-checked by
+  `neutral.read_rules` inside `render_permissions`; a `..`, `.` or empty segment in `home` or the
+  store path is refused; more install and delete forms are in the floor table; the drift test now
+  also fails when something in `NOT_YET_ROUTED` has been routed. Not done, on purpose: the drift test
+  still reads only `argv[0]` string comparisons and `add_parser` calls, so a differently shaped
+  dispatch could evade it; the floor table's over-matches (`git clean -n`, `.env.example`) are
+  accepted as asks. `trust-and-approval.md`'s owner-run list omits `recover`; L corrects it.
+  `security-reviewer` over D and E (probes in a scratch copy): one Medium, four Low, no bypass of
+  `translate`'s own rendering and no non-`PlanError` crash on any accepted layout (a mutation fuzz
+  of every layout node). Fixed, with tests (suite 1418): the agent-override check is now a strict
+  parse (complete front matter, plain `key: value` lines only, no carriage return, the tools key
+  exactly once, a value that is a comma list of tool names the layout defines, quotes balanced), so
+  `tools: null`, `~`, `[]`, `*`, a comment, a duplicate, an unclosed fence and a `tools:` line
+  inside a quoted value are refused; a layout's permission keys must be `<key>.deny` and
+  `<key>.ask` with one `<key>` and none named `allow`, and no two tool classes may share a rule
+  name or one named `allow`; a path rule starting with `~` but not `~/` is refused. Not done:
+  the drift test still reads the AST (the reviewer's alternative, a single route table in
+  `cli.py` that the test reads, is better and is a change to `cli.py` for H); field-name targets
+  of a layout are not allowlisted; skill and command overrides are not inspected; the caller must
+  pass a resolved `store_root`. G must pin the Claude template names (`Bash`, `Edit`, `Read`) in
+  its own test, since the validator now only requires them to be distinct. The fix has not been
+  re-reviewed by a second `security-reviewer`.
+  Second `security-reviewer` pass, on the fixes only: one High, two Medium. The High: the
+  line-by-line `tools` check was fooled by a multi-line quoted or flow value (`description: "x` /
+  `tools: Read` / `model: y"`) or a value ending in `---`, which YAML reads as one string with no
+  `tools` key (tested against PyYAML, not Claude). Fixed (suite 1423): each value must be a complete
+  double-quoted JSON string without `---`, or a plain scalar with no leading indicator and no
+  `---`, ` #`, `: ` or trailing colon; every key must be one the layout maps (so `hooks`,
+  `allowed-tools`, `mcpServers` are refused); and the validator now allows one rule name per tool
+  class (`Bash`, `Read`, `Edit`, `WebFetch`, compared with case) and only the `permissions`
+  top-level key. Tests: the three multi-line shapes, 15 swallowing openings, unmapped keys, and the
+  rule-name and key tables. Residual: the override check is still an approximation of YAML, not a
+  parser; the robust alternative is to stop accepting hand-written agent front matter and render it
+  from structured fields. The second round of fixes has not had a third review.
+  Third `security-reviewer` pass (PyYAML as the oracle): one High, one Medium, three Low. The High:
+  U+2028, U+2029 and U+0085 are line breaks to a YAML 1.1 reader but not to `split("\n")`, so a
+  value could smuggle a second `tools:` key that wins. Fixed (suite 1428): every front-matter line
+  must be printable ASCII (no tab, no control character); a repeated key is refused; a plain value
+  must match a conservative pattern and not read as a number, boolean or null; the tools value must
+  match a strict list pattern and each name must be in the layout's table exactly (no `strip`).
+  The layout validator now also pins the agent `tools` field to `tools`, restricts each neutral
+  tool to its own harness names (`read` cannot grant `Bash`) and pins the settings path to
+  `.claude/settings.local.json`. Mutation check: without the ASCII guard the quoted-value test
+  fails. The reviewer's verdict: a regex approximation of YAML is not acceptable as the only gate;
+  the robust change is to render an override's agent front matter from structured fields. Not
+  done; recorded for the owner. Reachability against Claude's own parser was not tested.

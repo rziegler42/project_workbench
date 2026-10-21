@@ -1,4 +1,4 @@
-"""Turn neutral harness items into the exact files a harness receives.
+"""Turn neutral harness items into the exact files a harness receives, and render its permissions.
 
 ``translate`` is a pure function: it reads nothing and writes nothing. Its input is the items of
 ``neutral.read_items``, a layout that ``layout.problems`` accepts, the hand-written overrides of
@@ -14,6 +14,9 @@ Every front-matter value is written as a double-quoted string, so a name such as
 description such as ``a: b`` stays the text the author wrote. A neutral value is printable ASCII
 (``neutral``), which a JSON string quotes into the same text as a YAML double-quoted one.
 
+``render_permissions`` (below) builds the local settings file from the neutral rules, the floor and
+the owner-run commands of ``rules``.
+
 An override replaces the translation of one item, by kind and name, with files the module author
 wrote in the harness's own format. Apart from an agent, which must still name a tools allowlist
 (``_unrestricted``), they are not inspected: the owner approves them with the module, and every
@@ -23,9 +26,15 @@ override is reported.
 import collections
 import hashlib
 import json
+import re
 
-from . import declarations, layout, neutral, safefs
+from . import declarations, floor, layout, neutral, safefs
+from . import rules as rules_module
 
+_PLAIN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._,()/=+-]*\Z")
+_TOOL_LIST = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(, ?[A-Za-z][A-Za-z0-9_]*)*\Z")
+_YAML_WORDS = ("null", "true", "false", "yes", "no", "on", "off", "y", "n", "nan", "inf")
+_FRONT_LINE = re.compile(r"^([a-z][a-z-]*): (\S.*)\Z")
 FILE_MODE = 0o644
 CAPABILITY = {"skill": "skills", "agent": "agents", "command": "commands"}
 FIELD_ORDER = {"skill": ("name", "description"),
@@ -224,16 +233,76 @@ def _unrestricted(spec, data):
     if "tools" not in spec["fields"] or not spec.get("tools"):
         return ("this harness cannot restrict an agent's tools, so the agent cannot be "
                 "restricted and its override is not installed")
-    lines = data.decode("utf-8", "replace").split("\n")
-    if not lines or lines[0] != "---":
-        return "the agent override has no front matter, so it names no tools; not installed"
-    prefix = spec["fields"]["tools"] + ":"
-    for line in lines[1:]:
-        if line == "---":
-            break
-        if line.startswith(prefix) and line[len(prefix):].strip(" \"'"):
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return "the agent override is not UTF-8; not installed"
+    if "\r" in text:
+        return "the agent override has a carriage return; not installed"
+    lines = text.split("\n")
+    if lines[0] != "---" or "---" not in lines[1:]:
+        return "the agent override has no complete front matter, so it names no tools; not installed"
+    key = spec["fields"]["tools"]
+    allowed = {name for names in spec["tools"].values() for name in names}
+    mapped = set(spec["fields"].values())
+    found = []
+    seen = set()
+    for line in lines[1:lines.index("---", 1)]:
+        if not all(" " <= c <= "~" for c in line):
+            return ("the agent override's front matter has a character other than printable "
+                    "ASCII, which a YAML reader may take as a line break; not installed")
+        match = _FRONT_LINE.match(line)
+        if not match:
+            return ("the agent override has a front-matter line that is not a plain "
+                    "'key: value'; not installed")
+        name, value = match.groups()
+        if name in seen:
+            return "the agent override gives %r twice; not installed" % name
+        seen.add(name)
+        if name not in mapped:
+            return ("the agent override sets %r, which this harness's layout does not map; "
+                    "not installed" % name)
+        value = _scalar(value)
+        if value is None:
+            return ("the agent override has a value that is not a plain or a double-quoted "
+                    "single-line string; not installed")
+        if name == key:
+            found.append(value)
+    if len(found) != 1:
+        return "the agent override must name its tools exactly once; not installed"
+    if not _TOOL_LIST.match(found[0]) or not all(
+            part in allowed for part in re.split(r", ?", found[0])):
+        return ("the agent override lists tools this harness's layout does not define, "
+                "so it is not installed")
+    return None
+
+
+def _scalar(value):
+    """The text of a front-matter value that is one self-contained string, or None.
+
+    Two shapes only: a complete double-quoted string (what ``quote`` writes), or a plain scalar
+    of letters, digits and a few marks that YAML reads as text and not as a number, a boolean or
+    null. Anything else could be read across lines or as another type.
+    """
+    if value.startswith('"'):
+        try:
+            text = json.loads(value)
+        except ValueError:
             return None
-    return "the agent override names no tools, which would give it every tool; not installed"
+        return text if isinstance(text, str) and "---" not in text else None
+    if not _PLAIN.match(value) or "---" in value or value.casefold() in _YAML_WORDS:
+        return None
+    for convert in (int, float):
+        try:
+            convert(value.replace("_", "x"))
+            return None
+        except ValueError:
+            pass
+    try:
+        int(value, 0)
+        return None
+    except ValueError:
+        return value
 
 
 def _no_collision(files):
@@ -247,3 +316,96 @@ def _no_collision(files):
         safefs.check_tree_paths(sorted(seen))
     except safefs.SafeFsError as exc:
         raise PlanError(str(exc))
+
+
+# --- permission rendering ----------------------------------------------------
+
+_PATH_CHARS = set(neutral.PATTERN_CHARS) - {"*"}
+
+
+def _absolute(prefix, path, home):
+    """Spell the absolute `path` as the layout's `prefix` requires, or raise PlanError."""
+    if not path.startswith("/") or any(c not in neutral.PATTERN_CHARS for c in path):
+        raise PlanError("cannot write the path %r as a permission rule" % path)
+    if prefix == "~/":
+        base = home.rstrip("/") + "/"
+        if not path.startswith(base):
+            raise PlanError("%s is outside the home directory, which this harness cannot "
+                            "write as a rule" % path)
+        return "~/" + path[len(base):]
+    return "//" + path.lstrip("/")
+
+
+def _path_pattern(prefix, pattern, home):
+    """A neutral path pattern: `~/x` is under home, `/x` is absolute, anything else is kept."""
+    if pattern.startswith("~") and not pattern.startswith("~/"):
+        raise PlanError("%r: only '~/...' names the home directory" % pattern)
+    if pattern.startswith("~/"):
+        return _absolute(prefix, home.rstrip("/") + "/" + pattern[2:], home)
+    if pattern.startswith("/"):
+        return _absolute(prefix, pattern, home)
+    return pattern
+
+
+def render_permissions(rules, harness_layout, store_root, home):
+    """Return the bytes of the local settings file for ``rules`` plus what is always rendered.
+
+    Always rendered: a deny for writes to the guarded store at ``store_root``, a deny for every
+    owner-run command in each spelling, and the ask rules of every hard stop of the floor. ``rules``
+    are the module's own ``neutral.Rule`` tuples. Nothing here can produce an ``allow``: the
+    layout validator ties the two output keys to ``deny`` and ``ask``, and only those are built.
+    ``home`` and ``store_root`` are absolute paths; the output has no clock and no ordering
+    that depends on the input.
+    """
+    found = layout.problems(harness_layout)
+    if found:
+        raise PlanError("the layout is refused: " + "; ".join(found))
+    settings = harness_layout.get("local_settings", "none")
+    if settings == "none":
+        raise PlanError("this layout has no local settings to render permissions into")
+    for rule in rules:
+        if not isinstance(rule, neutral.Rule) or rule.action not in neutral.RULE_ACTIONS \
+                or rule.tool not in neutral.RULE_TOOLS:
+            raise PlanError("not a neutral rule: %r" % (rule,))
+        try:
+            neutral.read_rules([{"action": rule.action, "tool": rule.tool,
+                                 "pattern": rule.pattern}])
+        except neutral.NeutralError as exc:
+            raise PlanError(str(exc))
+    if not (isinstance(home, str) and isinstance(store_root, str) and home.startswith("/")
+            and store_root.startswith("/")):
+        raise PlanError("the home directory and the guarded store must be absolute paths")
+    for base in (home, store_root):
+        if (any(c not in _PATH_CHARS for c in base) or base.rstrip("/") == ""
+                or any(part in ("", ".", "..") for part in base.rstrip("/").split("/")[1:])):
+            raise PlanError("cannot write the path %r as a permission rule" % base)
+    templates, prefix = settings["rules"], settings["absolute"]
+
+    def render(tool, pattern):
+        if tool not in templates:
+            raise PlanError("this layout has no rule template for %s, which a rule needs" % tool)
+        slot = "{path}" if tool in ("read", "write") else "{pattern}"
+        value = _path_pattern(prefix, pattern, home) if slot == "{path}" else pattern
+        return templates[tool].replace(slot, value)
+
+    wanted = {"deny": set(), "ask": set()}
+    store = store_root.rstrip("/")
+    for pattern in (store, store + "/**"):
+        wanted["deny"].add(render("write", pattern))
+    for pattern in rules_module.owner_run_patterns():
+        wanted["deny"].add(render("shell", pattern))
+    floor_ids = {stop.id for stop in floor.FLOOR}
+    for stop_id in sorted(floor_ids):
+        for action, tool, pattern in rules_module.FLOOR_RULES[stop_id]:
+            wanted[action].add(render(tool, pattern))
+    for rule in rules:
+        wanted[rule.action].add(render(rule.tool, rule.pattern))
+    wanted["ask"] -= wanted["deny"]
+    document = {}
+    for action in ("deny", "ask"):
+        node = document
+        *parents, last = settings["actions"][action].split(".")
+        for part in parents:
+            node = node.setdefault(part, {})
+        node[last] = sorted(wanted[action])
+    return (json.dumps(document, indent=2, sort_keys=True) + "\n").encode("utf-8")
