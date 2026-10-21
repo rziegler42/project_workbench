@@ -509,7 +509,7 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   fails. The reviewer's verdict: a regex approximation of YAML is not acceptable as the only gate;
   the robust change is to render an override's agent front matter from structured fields. Not
   done; recorded for the owner. Reachability against Claude's own parser was not tested.
-- **F** (not yet committed): `Writer.add_exclude(entries)` and `exclude_line(entry)` in
+- **F** (`cda2248`): `Writer.add_exclude(entries)` and `exclude_line(entry)` in
   `workbench/projectfs.py`, `workbench/localmanifest.py` (new), `tests/test_exclude.py` (29 tests)
   and `tests/test_localmanifest.py` (20); suite 1477, 1 skipped, `-W error`. `add_exclude` writes
   each entry as the anchored literal line `/<entry>` (a trailing `/` marks a directory), refuses an
@@ -535,3 +535,33 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   limits, not fixed: an entry already present is skipped even if a later owner `!` line re-includes
   the path (the owner's own negation wins); a write that fails part-way (ENOSPC) can leave an
   unterminated fragment, which a rerun separates with a newline.
+- **G** (not yet committed): `packages/workbench/package.json` and `packages/workbench/claude/
+  module.json` (type `harness`; the layout of `tests/test_layout.CLAUDE` plus one note), the two
+  shipped records written by `release-approvals` under `workbench/shipped_approvals/packages/`
+  (package and module; approver `workbench-release`, fixed time), and `tests/test_claude_module.py`
+  (15 tests; suite 1493, 1 skipped, `-W error`). `verify packages/workbench --select claude` passes
+  and is first-party; before `release-approvals` it is refused for its unprefixed capabilities, as
+  designed. **Deviation from the plan's wording:** the module provides five capabilities, not six:
+  `instructions`, `skills`, `agents`, `commands`, `permissions`. `hooks` is not provided because
+  the layout says `hooks: none` and nothing renders hooks yet (non-goal); providing it would let an
+  item that `needs` hooks install without any. `code-work-module` adds it with the rendering.
+  Tests: records match the current hashes; a changed description, a changed layout and an added
+  file each make the copy third-party again; the layout equals the verified one; the rule
+  templates are pinned to `Bash(...)`, `Read(...)`, `Edit(...)` with `//` and never `Write(`; the
+  rendered permissions use Claude's syntax; the approval request shows the harness-risk flag, the
+  need for its own approval and the layout leaves. **Claude's own parser** (Claude Code, haiku,
+  scratch project outside the repo, rendered by `translate` with this layout): the agent written
+  with quoted `name`, `description`, `tools: "Glob, Grep, Read"` loaded as `reviewer` and had
+  `Read`, `Glob`, `Grep` and no `Bash`; a command with quoted `name`, `description` and
+  `argument-hint` loaded and substituted `$ARGUMENTS` (`/echoer zebra42` answered `GOT:zebra42`).
+  Not probed: a skill's quoted fields beyond the skill being listed, and an override-supplied
+  unquoted form. `docs/development.md` still says "none yet" for first-party packages; L fixes it.
+  `workflow-reviewer`: no Critical, High or Medium; the shipped records, the first-party path and
+  the layout against the spec were found sound (the records by reading and by test; no mutation run
+  by the reviewer). Four Low. Fixed, with tests (18 in the file; suite 1496): the rendering test now
+  passes the module's own `provides`; the tools table and the rendered agent and command front
+  matter are pinned literally, not only against the shared `CLAUDE` constant; an item that needs
+  `hooks` is shown to be skipped. Left for L: `harness-modules.md` still says Claude "provides all
+  six capabilities", and `development.md` says "none yet"; both must say five, with `hooks`
+  joining when `code-work-module` renders hooks. The owner-run protections come from `rules.py`,
+  not from `module.json`, and E's tests cover that list.

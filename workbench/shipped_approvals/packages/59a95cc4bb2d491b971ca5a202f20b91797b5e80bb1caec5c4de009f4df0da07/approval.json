@@ -1,0 +1,18 @@
+{
+  "approver": "workbench-release",
+  "commit": null,
+  "declaration_hash": "4f21c38f6af9b9adc7a271bdbfb8f2c2cf29f0fbeebcd10ff5de4bbb58b38659",
+  "format": 1,
+  "kind": "package",
+  "modules": [
+    {
+      "declaration_hash": "2d29e7a7ac8edc697fbf198ad978f88ee9847eabd8441d79e40e0413505f0b82",
+      "name": "claude",
+      "tree_hash": "cb8ceecf81005f62c915450075530f7ad0113c3b136799d8682b8d3b90f5da17"
+    }
+  ],
+  "subject": "workbench",
+  "time": "1970-01-01T00:00:00Z",
+  "tree_hash": "89d4ba8e23fa351cfbefe529cf3e88dba002cfd384215954a6b438ab30edba61",
+  "workbench_version": "0.1.0"
+}

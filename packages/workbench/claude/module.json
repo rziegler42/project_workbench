@@ -1,0 +1,31 @@
+{
+  "name": "claude",
+  "version": "0.1.0",
+  "type": "harness",
+  "description": "The Claude Code harness: skills, agents, commands, the root file and local permissions.",
+  "provides": ["instructions", "skills", "agents", "commands", "permissions"],
+  "layout": {
+    "root": {"file": "CLAUDE.md", "import": "AGENTS.md"},
+    "kinds": {
+      "skill": {"path": ".claude/skills/{name}/SKILL.md",
+                "fields": {"name": "name", "description": "description"}},
+      "agent": {"path": ".claude/agents/{name}.md",
+                "fields": {"name": "name", "description": "description", "tools": "tools",
+                           "model": "model"},
+                "tools": {"read": ["Read"], "search": ["Grep", "Glob"],
+                          "edit": ["Edit", "Write"], "shell": ["Bash"]}},
+      "command": {"path": ".claude/commands/{name}.md",
+                  "fields": {"name": "name", "description": "description",
+                             "args": "argument-hint"}}
+    },
+    "local_settings": {
+      "path": ".claude/settings.local.json", "format": "json",
+      "actions": {"deny": "permissions.deny", "ask": "permissions.ask"},
+      "rules": {"shell": "Bash({pattern})", "read": "Read({path})", "write": "Edit({path})"},
+      "absolute": "//"
+    },
+    "hooks": "none",
+    "exclude": ["CLAUDE.md", ".claude/"],
+    "notes": ["Restart the Claude session to load the new settings."]
+  }
+}
