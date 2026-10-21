@@ -3,8 +3,8 @@
 Status: Current. Approved by the owner on 2026-10-19. The guarded store, the personal settings, approval
 records, first-party shipped approvals, the approval request and gate, the owner-run `approve` and `pin`
 commands, the inert download and the launcher are built (`module-approvals`), and "Concrete formats" records what
-the code does. Acknowledgement (the baseline check and `wb acknowledge`) is built (`ownership-and-upgrade`). Plan approval,
-delegation and the rendering into a harness are not built yet, and their record formats and setting names
+the code does. Acknowledgement (the baseline check and `wb acknowledge`) is built (`ownership-and-upgrade`). The rendering into the Claude harness is built (`claude-harness`). Plan approval,
+delegation and the opencode rendering are not built yet, and their record formats and setting names
 remain proposals. The rules are the substance.
 
 Terms are defined in `terms.md`. Places and manifests are defined in
@@ -203,9 +203,13 @@ Rules:
 - A rule is rendered into local, uncommitted harness configuration only.
 - A harness that provides `permissions` renders a `deny` for each owner-run command, so an
   agent cannot run it: `wb install`, `wb upgrade`, `wb add`, `wb attach`, `wb acknowledge`,
-  `wb approve`, `wb pin` and `wb release-approvals`. The read-only `wb preview` is not denied. The commands
-  are listed in `installer-interface.md`. *(Required by that specification; not yet
-  rendered by any harness module, which is for `claude-harness` and `opencode-harness`.)*
+  `wb recover`, `wb approve`, `wb pin` and `wb release-approvals`, in the `wb` spelling and
+  the four interpreter spellings of `-m workbench` (`rules.SPELLINGS`). The read-only `wb preview` is not denied. The commands
+  are listed in `installer-interface.md`. *(Rendered by the Claude harness module, built by
+  `claude-harness`; the opencode module is `opencode-harness`.)* The deny is best effort: it
+  matches the command text the agent submits, not what a wrapper script runs, and the rendered
+  rules do not deny edits to the local settings file or `.git/info/exclude` themselves
+  (`harness-modules.md`, "As built, and its limits").
 
 ## Acknowledgement
 

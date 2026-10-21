@@ -239,7 +239,7 @@ python3 -m workbench add             <the same arguments>                     (o
   given, else from the newest cached download of its recorded source and ref (filled by `approve
   --source`); a package recorded as `local:<name>` must be given with `--package <directory>`.
   Every installed module is verified again and must be approved on this machine, even one whose
-  files do not change; the harness-required rule is off, because `attach` is not built. A module
+  files do not change; the harness-required rule is off, because the manifest names no harness. A module
   the package no longer declares is left in place.
 - **The preview** classifies every path as `create`, `append`, `replace`, `skip` or `conflict`
   and shows each module with its declaration change, the directories and file writes with hashes,
@@ -430,7 +430,7 @@ it is not run until the owner pins it again.
 ## First-party packages and shipped approvals
 
 The workbench distribution is the repository root: code in `workbench/`, first-party
-packages in `packages/` (none yet), and the approvals made for them in
+packages in `packages/` (`workbench`, whose module `claude` is the Claude harness), and the approvals made for them in
 `workbench/shipped_approvals/`. Shipping with the workbench counts as explicit approval, and
 the records are read from the installed workbench, never copied into the guarded store.
 

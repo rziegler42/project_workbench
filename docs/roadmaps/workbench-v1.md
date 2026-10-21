@@ -89,7 +89,7 @@ meet here and the order matters.
   committed manifest with the project seed and ID, the write plan with its digest, `wb preview
   install` (read-only) and the owner-run `wb install` into a missing, empty or lone-`.git` target,
   with the acknowledgement baselines and the first-seen record written to the guarded store.
-  Attach is not built, so `install` ends with `harness not attached`. Its three decisions were
+  It ended with `harness not attached` until `claude-harness`. Its three decisions were
   accepted on 2026-10-20. It writes the empty `.git` itself and runs no program in the target, after a
   security review found that `git init` followed a link planted at `.git`.
 - `ownership-and-upgrade` is implemented (plan `2026-10-20-ownership-and-upgrade`, increments A to M;
@@ -100,6 +100,16 @@ meet here and the order matters.
   deletion. Its two decisions (`2026-10-20-acknowledge-before-upgrade`,
   `2026-10-20-upgrade-needs-no-git`) were accepted on 2026-10-20. The owner-class declaration field is
   deferred; a rerun after a part-way failure is not repaired (the plan's Result lists the limits).
+- `claude-harness` is implemented (plan `2026-10-20-claude-harness`, increments A to L; its completion
+  is derived from that plan): the Claude formats verified against Claude Code 2.1.305, the neutral
+  skill, agent and command reader, the layout field, translation and rendering (the `deny` rules for
+  every owner-run command), the first-party module `claude` in `packages/workbench/` with its
+  shipped approval, the owner-run `wb attach`, `wb install` attaching as its last step, and the
+  read-only `wb check` (harness drift, strays, other harnesses' files, tracked output and pointers,
+  the manifest), which reads `.git/index` itself and runs no git. An adversarial security pass found
+  nothing above Low unresolved. The hand run in a live `claude` session was not done. The plan's Result
+  and `harness-modules.md` ("As built, and its limits") list the limits. Compact Instructions waits
+  for `code-work-module`.
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.
 
@@ -217,8 +227,8 @@ that reports drift, stray files and tracked-pointer problems.
 **Dependencies:** `ownership-and-upgrade`, `module-approvals`.
 **Boundary:** Claude only. Translating neutral skills, agents and commands, with
 fail-closed handling of restrictions the harness cannot express. It must render a `deny`
-for the owner-run commands `wb install`, `upgrade`, `add`, `attach`, `approve`, `pin` and
-`release-approvals` (`trust-and-approval.md`, "Rendering rules"), and call `wb` and not the
+for the owner-run commands `wb install`, `upgrade`, `add`, `attach`, `acknowledge`, `recover`,
+`approve`, `pin` and `release-approvals` (`trust-and-approval.md`, "Rendering rules"), and call `wb` and not the
 `-m` form. `opencode-harness` carries the same duty.
 **Promotion trigger:** `ownership-and-upgrade` and `module-approvals` complete.
 

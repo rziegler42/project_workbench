@@ -153,10 +153,10 @@ says so.
 
 | command | kind | takes | writes | terminal only | state |
 |---|---|---|---|---|---|
-| `install` | project | target, a module selection | committed content, manifest, the project's store directory, then per-clone harness files | yes, owner-run | built (without attach) |
+| `install` | project | target, a module selection | committed content, manifest, the project's store directory, then per-clone harness files | yes, owner-run | built |
 | `preview` | project | `install`, `upgrade` or `add` and their arguments | nothing; no network, it reads only the approved cache | no | built |
-| `attach` | project | target, `--harness` | per-clone harness files, `.git/info/exclude`, the local manifest | no, but owner-run (harness deny rule) | proposed |
-| `check` | project | target | nothing | no | proposed |
+| `attach` | project | target, `--harness` | per-clone harness files, `.git/info/exclude`, the local manifest | no, but owner-run (harness deny rule) | built |
+| `check` | project | target | nothing | no | built |
 | `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run | built |
 | add a module | project | target, a module | the same as `upgrade`, new files and blocks only | yes, owner-run | built |
 | `acknowledge` | project | target | the guarded store: the project's acknowledgement baselines | yes, owner-run | built |
@@ -234,7 +234,7 @@ publishes, and none edits a living or historical document** (`repository-boundar
 - **Baselines.** Approving an install or an upgrade preview updates the acknowledgement
   baselines for exactly the files in that preview (`trust-and-approval.md`).
 
-### `install` (built by `base-and-manifests`, without attach)
+### `install` (built by `base-and-manifests` and `claude-harness`)
 
 `wb install [<target> | --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...`
 
@@ -264,10 +264,13 @@ publishes, and none edits a living or historical document** (`repository-boundar
   where the project was first seen; the acknowledgement baselines for the files written; and
   last, attach for the chosen harness, which writes the per-clone harness files, the
   `.git/info/exclude` entries and the local manifest. Everything is left uncommitted.
-- **Until `attach` is built** *(owner; `base-and-manifests`)*: `install` requires, verifies and
-  approves the harness module as above, writes nothing for it, skips attach and prints
-  `harness not attached: attach is not built yet`; `claude-harness` adds the attach step to this
-  command. A harness module that declares `writes` or `fills` is refused.
+- **The attach step** *(owner; `base-and-manifests`, built by `claude-harness`)*: `install`
+  requires, verifies and approves the harness module as above, and attaches as its last step,
+  after its own unfinished-write marker is gone. The preview lists the harness files, the
+  exclude lines and the local manifest. If attach fails, the install is complete: `install`
+  prints `failed:`, says so, names `wb attach --harness <package>/<module>` and exits 3, and a
+  rerun of `wb attach` finishes it. No new marker or recovery command exists for this. A harness
+  module that declares `writes` or `fills` is refused.
 - **`.git`** *(owner; changed in the build after a security review)*: where the target has no
   `.git`, `install` creates an empty one itself, as an action of the preview covered by the
   digest. It does not run git: it makes `.git` with `mkdir`, which refuses any existing path
@@ -285,16 +288,16 @@ publishes, and none edits a living or historical document** (`repository-boundar
   preview there. An agent runs `wb preview install ...` to see the same preview and write
   nothing (the preview and approval section).
 
-### `attach` (proposed)
+### `attach` (built by `claude-harness`)
 
 `wb attach [<target> | --dir <path>] --harness <package>/<module> [--package <source> [--ref <ref>]]`
 
 - **Needs:** an existing project.
 - **Reads:** the committed manifest and its lock, and the harness module. It requires approval
   of each module it uses, the harness module included, on this machine. A package the
-  manifest names is fetched at the recorded commit into the inert cache, only if the owner has
-  already approved it here (the common rule above), and its tree hash is verified against the
-  lock.
+  manifest names is read from the inert cache that `approve` filled, or from `--package`, only if
+  the owner has already approved it here (the common rule above), and its tree hash is verified
+  against the lock. As built, attach never fetches and contacts no network.
 - **The harness is not committed.** The committed manifest never names a harness, so the
   harness is given to attach, and its source, version and tree hash are pinned in the local
   manifest, `.workbench/local/harness.json` (`repository-boundary.md`). A fresh clone gets its
@@ -303,10 +306,11 @@ publishes, and none edits a living or historical document** (`repository-boundar
   `.git/info/exclude`; records the local manifest. It writes nothing that git tracks. It runs
   no git. The exclude file is opened with no-follow descriptors as a regular file, entries
   are anchored literal paths, a leading `!` or `#` and glob characters are refused, and an
-  entry already present is not added twice. `safefs` refuses `.git` paths today, so this needs
-  a primitive of its own *(from the code)*.
+  entry already present is not added twice. `safefs` refuses `.git` paths, so the writer has
+  a primitive of its own (`add_exclude`, which can name no other `.git` path) *(from the code)*.
 - **Refuses** when a local manifest already records a harness (changing harness means a new
-  clone); when a harness path already exists (a conflict); a content-hash mismatch between a
+  clone); when a harness path already exists with other content (a conflict; a path holding exactly the
+  planned bytes is kept, which makes a rerun after a failure safe); a content-hash mismatch between a
   package and the lock; a module not yet approved on this machine. A difference in workbench
   version between the lock and the installed workbench warns and continues.
 - **Prints** post-install notes for steps it cannot perform, such as a harness's project trust,
@@ -317,7 +321,7 @@ publishes, and none edits a living or historical document** (`repository-boundar
   attach` is the barrier, as it is for `approve`. It is not terminal-gated, because setting up
   a clone is routinely scripted by the owner.
 
-### `check` (proposed)
+### `check` (built by `claude-harness`)
 
 `wb check [<target> | --dir <path>]`
 
@@ -335,8 +339,13 @@ publishes, and none edits a living or historical document** (`repository-boundar
   scratch, which grants no authority, so "no drift" says the files match the scratch record
   and not that they are safe.
 - **Options:** none in this version.
-- **Agent may run it:** yes. Any question it asks git is subject to the git rule in the states
-  section.
+- **Agent may run it:** yes. It asks git nothing: it reads `.git/index` itself, so the git rule
+  in the states section is met without running a program or reading the repository's
+  configuration. As built, a problem is reported on stderr as `problem:` and a warning as
+  `warning:`; the harness lines and the manifest line go to stdout. A `check` that cannot run
+  (not an existing project, a refused target) says `refused:` and exits 1. "Tracked" means in the
+  index, and the bounds and what is not detected are listed in `harness-modules.md`, "As built,
+  and its limits".
 - It exits 1 when it reports a problem and 0 when it reports none (exit codes).
 
 ### `upgrade` and adding a module (built by `ownership-and-upgrade`)
@@ -355,8 +364,8 @@ publishes, and none edits a living or historical document** (`repository-boundar
   and needs a new `approve`. Every package the manifest records is resolved: from `--package`
   when given, else from the recorded source and ref in the cache, and a package recorded as
   `local:<name>` must be given with `--package <directory>`. The whole set is verified and
-  gated, so the manifest cannot shrink it. The manifest never names a harness and `attach` is
-  not built, so the harness-required rule is off here; counts of the other types (at most one
+  gated, so the manifest cannot shrink it. The manifest never names a harness, so the
+  harness-required rule is off here; counts of the other types (at most one
   process module), conflicts, requirements, slot owners and order are checked as for an install
   *(my call)*.
 - **Acknowledged first:** the project must be known on this machine and every difference from

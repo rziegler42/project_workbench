@@ -1,9 +1,10 @@
 # Repository boundary, manifests and upgrades
 
 Status: Current. Approved by the owner on 2026-10-19. The guarded store, with its approvals, cache, pins
-and launcher, is built (`module-approvals`) and the layout below records it; attach and check are not
-built yet; upgrade and add are built (`ownership-and-upgrade`). `base-and-manifests` built the base, the committed
-manifest, the seed, the baselines and `install` (the formats below are those it wrote), without attach.
+and launcher, is built (`module-approvals`) and the layout below records it; attach and check are built
+(`claude-harness`); upgrade and add are built (`ownership-and-upgrade`). `base-and-manifests` built the base, the committed
+manifest, the seed, the baselines and `install` (the formats below are those it wrote); `claude-harness`
+added the attach step.
 File names and marker syntax are as built.
 
 Terms are defined in `terms.md`. The declarations the installer reads are defined in
@@ -278,9 +279,8 @@ are not repeated here.
   and the empty `objects/` and `refs/` directories, and its hash is covered by the plan's
   digest. A target that already holds a lone `.git` is used as it is, and its configuration is
   never read or run.
-- **Until attach is built (`base-and-manifests`).** The harness module is required,
-  verified and approved as above, but `install` writes nothing for it, skips attach, and
-  prints `harness not attached: attach is not built yet`. A harness module declares no
+- **The attach step (built by `claude-harness`).** The harness module is required, verified
+  and approved as above, and `install` attaches as its last step. A harness module declares no
   `writes` or `fills`, because its files are per-clone and a committed file would name the
   harness.
 - Stops, before writing anything, on any verification failure defined in
@@ -299,9 +299,9 @@ are not repeated here.
   store, as data only, so the declaration can be shown. The approval binds the package's
   content by its declaration and tree hashes, and the first approval from a source also
   records the resolved commit as provenance; identical content reached by another commit is
-  the same approval and the first record is kept. Later attaches and teammates fetch the
-  recorded commit and verify the tree hash against the approval, so a mutable ref cannot
-  change what they receive.
+  the same approval and the first record is kept. A teammate's `approve` fetches the recorded
+  commit, and attach, which never fetches, reads the cache that filled and verifies the tree hash
+  against the approval, so a mutable ref cannot change what they receive.
 - A version difference between the installed workbench and the lock produces a
   warning and attach continues. A content-hash mismatch between a package and the
   lock stops attach.

@@ -125,12 +125,15 @@ does not receive them.
 
 ## The Claude harness module
 
-Provides all six capabilities. Layout, verified against Claude Code 2.1.305 (see
-"Evidence" below):
+Built as the first-party module `claude` in `packages/workbench/`, declared as data (`layout`
+in `module.json`) and rendered by the installer. It provides five capabilities:
+`instructions`, `skills`, `agents`, `commands` and `permissions`. It declares `hooks: none`;
+the sixth, `hooks`, is added when `code-work-module` ships a hook. Layout, verified against
+Claude Code 2.1.305 (see "Evidence" below):
 
 | kind or file | path |
 |---|---|
-| root file | `CLAUDE.md`: an `@AGENTS.md` pointer, followed by a generated "Compact Instructions" section once a module supplies the neutral preservation guidance |
+| root file | `CLAUDE.md`: an `@AGENTS.md` pointer only. The generated "Compact Instructions" section is added once a module supplies the neutral preservation guidance (`code-work-module`) |
 | skill | `.claude/skills/<name>/SKILL.md`; bundled files beside it |
 | agent | `.claude/agents/<name>.md` (`name`, `description`, `tools` as an allowlist, optional `model`) |
 | command | `.claude/commands/<name>.md` (`description`, `argument-hint`; `$ARGUMENTS`) |
@@ -175,6 +178,49 @@ memory, hooks), fetched that day; and a scratch project with a recording stand-i
 normalisation beyond doubled spaces, and loading of an untracked skill, agent or
 command (a scratch test showed an untracked skill, agent and command all listed by the
 session; the documentation is silent).
+
+### As built, and its limits
+
+Recorded by `claude-harness` (`docs/plans/2026-10-20-claude-harness.md`), each limit found in
+review or in the security pass:
+
+- **An existing `.claude/settings.local.json` is a conflict.** Attach creates the file
+  exclusively. If another file is there, attach refuses it and prints the entries to add by
+  hand. There is no merge, and the owner's `allow` rules are never read or written.
+- **Attach is idempotent.** A path that already holds exactly the planned bytes is kept; a
+  different one is a conflict. The local manifest, `.workbench/local/harness.json`, is written
+  last, so a part-written attach has none and can be rerun. It is scratch and grants no
+  authority.
+- **`install` attaches as its last step,** after its own unfinished-write marker is removed. If
+  attach fails, the install is complete, `install` prints `failed:` and names `wb attach`, and
+  exits 3.
+- **The deny list** covers the guarded store and every owner-run command (`install`, `upgrade`,
+  `add`, `attach`, `acknowledge`, `recover`, `approve`, `pin`, `release-approvals`) in five
+  spellings: `wb` and the four interpreter forms of `-m workbench` (`rules.SPELLINGS`). `wb preview` is not denied. A Bash deny is not a security
+  boundary; see "Verified rendering rules".
+- **The rendered rules do not deny edits to `.claude/settings.local.json` or
+  `.git/info/exclude`.** Claude prompts for an edit, but an agent that has been allowed edits
+  could change its own deny rules. Adding a rule is a separate decision.
+- **`.git/info/exclude` has the lowest precedence of git's ignore sources,** so a committed
+  `.gitignore` can re-include a path with `!`. `wb check` reports such a file once it is tracked.
+  An exclude file that already holds a later `!` line defeats an exclude line that is present.
+- **Files are written in path order,** so agents and commands can exist for a moment before the
+  settings file does, until a failed attach is rerun.
+- **`wb check` never runs git.** It reads `.git/index` itself (versions 2 to 4, SHA-1 or SHA-256,
+  at most 16 MiB and 1,000,000 entries; a split or sparse index is refused), so the repository's
+  configuration, hooks and filters cannot run. "Tracked" means in the index, so a staged file
+  counts as committed. It scans Markdown only, within 4 MiB, 5,000 documents and 5,000 existing-
+  path lookups; passing any of these bounds is itself a problem, so `check` exits 1. The stray
+  scan stops at 5,000 entries and depth 8 and reports a problem past that, and it warns about an
+  unknown entry directly under `.claude`.
+- **Not detected by `check`:** a link whose case differs from the file on a case-insensitive
+  filesystem; a link to a missing ordinary path; a tracked symbolic link's target (a warning
+  only). Only Claude, opencode and Codex roots are scanned for strays.
+- **Not done by the installer:** it does not inspect skill and command overrides, and attach
+  never fetches.
+- **Not verified:** case-insensitive filesystem behavior (the development machine cannot create
+  the colliding names), and a live `claude` session started in an installed project, which needs
+  the owner's allowance.
 
 ## The opencode harness module
 
@@ -262,6 +308,7 @@ area, therefore does not get a shell. It is given a **dedicated tool**.
   the command that records an approval, for a harness that provides `permissions`.
 - A hook appears only if the module ships it under `harness/<name>/`, and it is listed
   at approval.
-- The Claude root file contains the pointer and the generated Compact Instructions
-  section, and the opencode harness writes none.
+- The Claude root file contains the pointer, and the generated Compact Instructions
+  section once a module supplies the neutral guidance. The opencode harness writes no
+  root file.
 - A generated file edited after attach is reported by the check.

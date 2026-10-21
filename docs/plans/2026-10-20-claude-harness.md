@@ -750,3 +750,24 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   varint fuzz, a symlinked `.workbench/local` and `.git/index` through the CLI, case variants on
   APFS, and the install exit-3 path. `test_a_split_index_is_refused` failed once and passed on
   every rerun; it asserts "split index" in a message that sometimes says "split or sparse index".
+- **Fake-`git` run, in L** (scratch test, not committed): with a recording `git` first on `PATH` and
+  `core.fsmonitor`, `hooksPath` and `sshCommand` pointing at it, `wb check` exited 0 and the
+  recorder was never called. The split-index assertion was relaxed in the commit after K (`b0d07f1`).
+- **L** (documentation, uncommitted when written): `harness-modules.md` (five capabilities, the
+  Compact Instructions criterion corrected per Decision 3, and a new "As built, and its limits"
+  section holding every limit found), `installer-interface.md` (`install`, `attach` and `check`
+  built, the attach step, how `check` reports), `trust-and-approval.md` (the full owner-run list
+  with `recover`, rendered now, the Edit gap), `repository-boundary.md`, `docs/development.md` (the
+  first-party package, the harness-required note) and the roadmap's Current state and
+  `claude-harness` boundary list (now with `acknowledge` and `recover`). Not done and left to the
+  owner: the hand run of `install` plus a live `claude` session, `release-approvals`, and moving
+  this plan's status to `Completed`.
+- **`workflow-reviewer` of L** (read-only, from the diff, the code and grepping tests; the suite was
+  not run by the reviewer): no Critical or High. Medium, fixed: `installer-interface.md` and
+  `repository-boundary.md` still said attach fetches a package; attach reads the cache or
+  `--package` and never fetches. Low, fixed: the `install` heading still said "without attach";
+  attach's refusal is a path with other content (the same bytes are kept); the exclude primitive
+  is described as built; the deny spellings are the five in `rules.SPELLINGS`, not two; the
+  installer's override limit no longer sits in the `check` list; the stray-scan bounds (5,000
+  entries, depth 8), the `.claude` warning and the fact that passing a bound is a problem are
+  now stated. Not checked by the reviewer: the internals of `harnessstage`/`harnessplan`.
