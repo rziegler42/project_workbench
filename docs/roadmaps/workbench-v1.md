@@ -118,7 +118,7 @@ meet here and the order matters.
   installer runs in `wb check` for a project that has the module. Two adversarial security passes
   found nothing above Medium unresolved. The package was released again with its approvals. The two
   decisions it proposed (`2026-10-21-reference-index-format`,
-  `2026-10-21-installer-runs-document-checks`) await the owner. The hand run in a live `claude`
+  `2026-10-21-installer-runs-document-checks`) were accepted on 2026-10-21. The hand run in a live `claude`
   session was not done. `groundwork.md` ("As built, and its limits") lists the limits.
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.
@@ -395,3 +395,8 @@ Accepted 2026-10-20:
 - `2026-10-20-isolated-launcher-invocation`
 - `2026-10-20-target-decided-by-state`
 - `2026-10-20-preview-then-owner-run-write`
+
+Accepted 2026-10-21:
+
+- `2026-10-21-reference-index-format`
+- `2026-10-21-installer-runs-document-checks`

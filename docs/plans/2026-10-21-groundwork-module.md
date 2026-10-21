@@ -574,3 +574,8 @@ against the code and fixed with a regression test that fails on the earlier code
   change. The hand run and the second-layout fixture are listed as not done.
 - Left for the owner: accept the two `Proposed` decisions, run the hand run, push, and mark this
   plan `Completed` (Completion criterion 9 holds with the records `Proposed`).
+
+### Decisions accepted
+
+- The owner accepted `2026-10-21-reference-index-format` and
+  `2026-10-21-installer-runs-document-checks` on 2026-10-21; their status lines read `Accepted`.

@@ -1,6 +1,6 @@
 # The installer runs the document checks, for a project that has the module
 
-Status: Proposed
+Status: Accepted
 Date: 2026-10-21
 
 ## Context

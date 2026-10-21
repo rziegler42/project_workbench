@@ -1,6 +1,6 @@
 # The reference index is canonical JSON, and the index and README are not references
 
-Status: Proposed
+Status: Accepted
 Date: 2026-10-21
 
 ## Context
