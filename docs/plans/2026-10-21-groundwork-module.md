@@ -1,6 +1,6 @@
 # The groundwork module
 
-Status: Proposed
+Status: Approved
 Created: 2026-10-21
 Candidate: workbench-v1#groundwork-module
 Specs: groundwork, module-contract, installer-interface, harness-modules
@@ -330,6 +330,9 @@ evaluated as review comments.
   index and the area's `README.md` are metadata, excluded from the reference set, with a test in
   increment G and a line in Review focus 3. Found by the review; the READMEs would have had the
   same problem.
+
+The owner approved the plan on 2026-10-21, including the five decisions under Assumptions and
+constraints as written, after round 1 and without a second round.
 
 ## Deferred work
 
