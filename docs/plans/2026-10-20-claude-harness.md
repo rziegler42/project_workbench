@@ -404,26 +404,24 @@ constraints as written. Findings are untrusted input and were evaluated as revie
 - Supporting a `.git` that is a file (worktree, submodule). Attach refuses it in this plan:
   increment F's exclude primitive refuses it and increment H tests the refusal and its message.
 - opencode and Codex; harness swap; Windows.
-
-## Result
-
-- **A** (not yet committed): the Claude formats were checked against 2.1.305 from the official
-  documentation and a scratch project. Findings that change later increments: a `Write(path)` rule
-  is never consulted, so E renders `Edit(...)`; an absolute path needs `//` (a single `/` is
-  project-relative and silently matches nothing), so E renders `Edit(//…)` or `~/…`; a Bash deny
-  matched every tested form except a path-qualified `wb` and `bash -c`, as the documentation says.
-  The recorded evidence is in `harness-modules.md`. Committed as `17685ca`.
-- **B** (not yet committed): `workbench/neutral.py` and `tests/test_neutral.py` (36 tests; suite
-  1315, 1 skipped, `-W error`; `workflow-reviewer` found no High, and its two Medium and the
-  Low items on lookalikes and ordering are fixed). Choices the later increments rely on: the neutral tree is
-  `skills/<name>/SKILL.md` (+ bundled files), `agents/<name>.md`, `commands/<name>.md`, and any
-  other path is refused; a skill and a command may not share a name (Claude serves both as
-  `/<name>`); front-matter values are read literally, one line, printable, with no edge space or
-  block indicator, so D must quote them when it writes Claude's YAML; an agent with an empty
-  `tools` is refused, since an empty list could be read as "inherit everything"; `read_rules`
-  takes parsed data and limits a pattern to ASCII words, paths and `*`, with no bracket, quote,
-  colon, backslash or `..` segment, so E must re-check a pattern against Claude's syntax before it
-  renders one; the file that holds a rule list is not defined yet. Descriptions and args are
-  printable ASCII. `tools` and `needs` come back sorted. D must quote every value, since a name
-  such as `null` or `true` is valid here and would be read as non-text by unquoted YAML.
-  `modulefiles.py` still accepts the provisional `<kind>/<name>` layout and is not tightened here.
+- **C** (not yet committed): `workbench/layout.py` (`problems(layout)` returns every reason a
+  layout is refused), called from `modulefiles.verify_module` for a harness module as rule
+  `layout`, and `tests/test_layout.py` (29 tests; suite 1344, 1 skipped, `-W error`). The shape, which D, E and G build on:
+  `root` (`none` or `{file, import}`), `kinds.<kind>` (`path` as `<dir>/{name}.md` or, for a skill,
+  `<dir>/{name}/SKILL.md`; `fields`; for an agent `tools`, a map from a neutral tool to Claude tool
+  names), `local_settings` (`path`, `format: json`, `actions` as dotted `deny`/`ask` keys, `rules`
+  as one `Name({pattern})` or `Name({path})` template per tool class, `absolute` as `//` or `~/`),
+  `hooks`, `exclude` and `notes`. A layout whose written path (root file, a kind directory, the
+  settings file) is not covered by an `exclude` entry is refused, and so is any overlap between
+  written paths. The loader still checks only the keys, so tests that load odd layouts keep
+  working. `request.py` needed no change: a layout is verified before a request is rendered, and
+  the request already shows every leaf. `workflow-reviewer` found two Medium and seven Low; fixed: the deny and ask keys must end in
+  `deny` and `ask` and not nest (a deny could otherwise be written as an allow); an exclude entry
+  is compared by exact spelling and a `dir/` entry never covers a file of that name; an entry that
+  covers no written path is refused; `rules` must give `shell` and `write`, and a template named
+  `Write`, `NotebookEdit`, `Glob` or `MultiEdit` is refused as inert; a directory holding the
+  guarded store is refused; a root file may not import itself. Not done, on purpose: the layout is
+  not required to map agent `tools`, since a harness that cannot restrict an agent is valid and D
+  must then never install one. E and F must write each exclude entry anchored (`/<entry>`), since
+  git matches a slash-free entry at any depth. Three `test_request.py` tests that put arbitrary layouts through
+  full verification now render the loaded declaration instead, since verification refuses them.

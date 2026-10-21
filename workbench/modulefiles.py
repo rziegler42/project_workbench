@@ -26,7 +26,7 @@ file-level checks are made here.
 
 import collections
 
-from . import declarations, hashing, safefs
+from . import declarations, hashing, layout, safefs
 
 RESERVED_DIRS = ("harness", "templates", "files")
 MANIFEST = "manifest.json"
@@ -74,6 +74,9 @@ def verify_module(package_path, package_name, module):
     dirs = set(info.dirs)
     _accounted(module, files, bad)
     _declared_paths(module, files, dirs, bad)
+    if module.type == "harness":
+        for message in layout.problems(module.layout):
+            bad("layout", message)
     _harness_layout(module, files, dirs, info.contents, bad, warnings)
 
     if problems:

@@ -1,0 +1,273 @@
+import copy
+import json
+import os
+import unittest
+
+from workbench import layout, neutral
+from tests.test_modulefiles import Base
+
+CLAUDE = {
+    "root": {"file": "CLAUDE.md", "import": "AGENTS.md"},
+    "kinds": {
+        "skill": {"path": ".claude/skills/{name}/SKILL.md",
+                  "fields": {"name": "name", "description": "description"}},
+        "agent": {"path": ".claude/agents/{name}.md",
+                  "fields": {"name": "name", "description": "description", "tools": "tools",
+                             "model": "model"},
+                  "tools": {"read": ["Read"], "search": ["Grep", "Glob"],
+                            "edit": ["Edit", "Write"], "shell": ["Bash"]}},
+        "command": {"path": ".claude/commands/{name}.md",
+                    "fields": {"name": "name", "description": "description",
+                               "args": "argument-hint"}},
+    },
+    "local_settings": {
+        "path": ".claude/settings.local.json", "format": "json",
+        "actions": {"deny": "permissions.deny", "ask": "permissions.ask"},
+        "rules": {"shell": "Bash({pattern})", "read": "Read({path})", "write": "Edit({path})"},
+        "absolute": "//"},
+    "hooks": "none",
+    "exclude": ["CLAUDE.md", ".claude/"],
+    "notes": ["Restart the session to load the new settings."],
+}
+
+
+def edit(path, new, base=None):
+    value = copy.deepcopy(base or CLAUDE)
+    node = value
+    for key in path[:-1]:
+        node = node[key]
+    if new is None:
+        node.pop(path[-1], None)
+    else:
+        node[path[-1]] = new
+    return value
+
+
+class Accepted(unittest.TestCase):
+    def test_the_claude_layout_is_accepted(self):
+        self.assertEqual(layout.problems(CLAUDE), [])
+
+    def test_the_minimal_layouts_are_accepted(self):
+        self.assertEqual(layout.problems({}), [])
+        self.assertEqual(layout.problems({"root": "none", "local_settings": "none",
+                                          "hooks": "none"}), [])
+
+    def test_the_constants_follow_the_neutral_reader(self):
+        self.assertEqual(layout.TOOLS, neutral.TOOLS)
+        self.assertEqual(layout.RULE_TOOLS, neutral.RULE_TOOLS)
+        for kind, fields in layout.KIND_FIELDS.items():
+            self.assertEqual(set(fields), set(neutral.FIELDS[kind][0]) | (
+                set(neutral.FIELDS[kind][1]) - {"needs"}))
+
+
+class Refused(unittest.TestCase):
+    def bad(self, value, text=""):
+        found = layout.problems(value)
+        self.assertTrue(found, "accepted: %r" % (value,))
+        self.assertTrue(any(text in message for message in found), found)
+
+    def test_not_an_object(self):
+        for value in ([], "x", None, 3):
+            self.bad(value)
+
+    def test_root(self):
+        for root in ("CLAUDE.md", [], {"file": "CLAUDE.md"}, {"import": "AGENTS.md"},
+                     {"file": "a/b", "import": "AGENTS.md"}, {"file": "CLAUDE.md", "import": "../x"},
+                     {"file": "/abs", "import": "AGENTS.md"}, {"file": ".git", "import": "x"},
+                     {"file": 3, "import": "x"},
+                     {"file": "CLAUDE.md", "import": "AGENTS.md", "extra": 1}):
+            self.bad(edit(["root"], root), "layout.root")
+
+    def test_reserved_places_are_refused_by_their_own_guard(self):
+        self.bad(edit(["root", "file"], ".workbench"), "inside .workbench")
+        self.bad(edit(["root", "file"], ".WorkBench"), "inside .workbench")
+        for path in (".workbench/{name}/SKILL.md", ".Workbench/{name}/SKILL.md"):
+            self.bad(edit(["kinds", "skill", "path"], path), "inside .workbench")
+        for path in (".config/project-workbench/{name}/SKILL.md",
+                     ".Config/Project-Workbench/{name}/SKILL.md"):
+            self.bad(edit(["kinds", "skill", "path"], path), "guarded store")
+        self.bad(edit(["local_settings", "path"], ".config/project-workbench/x.json"),
+                 "guarded store")
+        self.bad(edit(["local_settings", "path"], ".workbench/x.json"), "inside .workbench")
+        self.bad(edit(["exclude"], CLAUDE["exclude"] + [".workbench/local/"]), "inside .workbench")
+        self.bad(edit(["exclude"], CLAUDE["exclude"] + [".config/project-workbench/"]),
+                 "guarded store")
+        self.bad(edit(["exclude"], CLAUDE["exclude"] + [".git/"]), "git metadata")
+
+    def test_kinds_keys_and_shape(self):
+        self.bad(edit(["kinds"], []), "kinds")
+        self.bad(edit(["kinds", "hook"], CLAUDE["kinds"]["skill"]), "hook")
+        self.bad(edit(["kinds", "skill"], {"path": ".claude/skills/{name}/SKILL.md"}), "fields")
+        self.bad(edit(["kinds", "skill", "extra"], 1), "extra")
+        self.bad(edit(["kinds", "skill", "tools"], {"read": ["Read"]}), "tools")
+
+    def test_kind_paths(self):
+        for path in (".claude/skills/{name}.md", ".claude/skills/x/SKILL.md", "{name}/SKILL.md",
+                     "/abs/{name}/SKILL.md", "../x/{name}/SKILL.md", ".git/{name}/SKILL.md",
+                     ".workbench/{name}/SKILL.md", ".config/project-workbench/{name}/SKILL.md",
+                     ".Config/Project-Workbench/{name}/SKILL.md", "a/{x}/{name}/SKILL.md",
+                     ".claude\\skills/{name}/SKILL.md", 5):
+            self.bad(edit(["kinds", "skill", "path"], path), "skill.path")
+        for path in (".claude/agents/{name}/SKILL.md", ".claude/agents/{name}",
+                     ".claude/agents/x.md"):
+            self.bad(edit(["kinds", "agent", "path"], path), "agent.path")
+
+    def test_two_kinds_may_not_share_a_directory(self):
+        self.bad(edit(["kinds", "command", "path"], ".claude/agents/{name}.md"), "overlaps")
+        self.bad(edit(["kinds", "command", "path"], ".claude/agents/sub/{name}.md"), "overlaps")
+        self.bad(edit(["kinds", "command", "path"], ".CLAUDE/Agents/{name}.md"), "overlaps")
+
+    def test_fields(self):
+        for fields in ({"name": "name"}, {"description": "description"}, [],
+                       {"name": "n", "description": "n"},
+                       {"name": "name", "description": "description", "args": "x"},
+                       {"name": "name", "description": "Description"},
+                       {"name": "name", "description": 3},
+                       {"name": "name", "description": "a b"}):
+            self.bad(edit(["kinds", "skill", "fields"], fields), "fields")
+
+    def test_tools(self):
+        for tools in ({"read": []}, {"read": "Read"}, {"delete": ["x"]}, {"read": ["a b"]},
+                      {"read": ["Read", "Read"]}, {"read": [3]}, [], {"read": ["x"] * 9}):
+            self.bad(edit(["kinds", "agent", "tools"], tools), "tools")
+
+    def test_local_settings(self):
+        base = ["local_settings"]
+        self.bad(edit(base, "settings.json"), "local_settings")
+        self.bad(edit(base + ["path"], "../x"), "path")
+        self.bad(edit(base + ["path"], ".git/info/x"), "path")
+        self.bad(edit(base + ["path"], ".workbench/x"), "path")
+        self.bad(edit(base + ["path"], ".config/project-workbench/x.json"), "guarded")
+        self.bad(edit(base + ["format"], "toml"), "format")
+        self.bad(edit(base + ["actions"], {"deny": "permissions.deny"}), "ask")
+        self.bad(edit(base + ["actions"], {"deny": "a.b", "ask": "a.b"}), "different")
+        self.bad(edit(base + ["actions"], {"deny": "a b.c", "ask": "a.d"}), "dotted")
+        self.bad(edit(base + ["actions"], {"deny": "permissions", "ask": "a.d"}), "dotted")
+        self.bad(edit(base + ["absolute"], "/"), "absolute")
+        self.bad(edit(base + ["absolute"], "~"), "absolute")
+        self.bad(edit(base + ["extra"], 1), "extra")
+        self.bad(edit(base + ["rules"], {"net": "Web({pattern})"}), "net")
+
+    def test_rule_templates(self):
+        base = ["local_settings", "rules"]
+        for tool, template in (("shell", "Bash({path})"), ("shell", "Bash(x)"),
+                               ("shell", "Bash({pattern}) && x"), ("shell", "{pattern}"),
+                               ("shell", "Bash({pattern}"), ("shell", "Bash({pattern},{path})"),
+                               ("shell", "Ba sh({pattern})"), ("shell", "Bash:{pattern}"),
+                               ("shell", "$(x)({pattern})"), ("read", "Read({pattern})"),
+                               ("write", "Write({pattern})"), ("write", 3), ("web", "")):
+            self.bad(edit(base + [tool], template), "must be Name")
+
+    def test_hooks(self):
+        self.bad(edit(["hooks"], {"settings_key": "a b"}), "hooks")
+        self.bad(edit(["hooks"], {"command": "x"}), "hooks")
+        self.bad(edit(["hooks"], "all"), "hooks")
+        self.assertEqual(layout.problems(edit(["hooks"], {"settings_key": "hooks"})), [])
+
+    def test_exclude_paths(self):
+        for entry in ("/abs", "../x", "a/../x", ".git", ".git/", ".GIT/info", ".workbench",
+                      ".workbench/local/", ".config/project-workbench/", "*.md", ".claude/*",
+                      "a b", "#x", "!x", "a\\b", "a[1]", "a?", "", 3, "x:y", ".claude//"):
+            self.bad(edit(["exclude"], CLAUDE["exclude"] + [entry]), "exclude")
+        self.bad(edit(["exclude"], "CLAUDE.md"), "exclude")
+        self.bad(edit(["exclude"], ["CLAUDE.md", ".claude/"] * 1 + ["CLAUDE.md"]), "twice")
+        self.bad(edit(["exclude"], ["CLAUDE.md"] + [".c%d/" % n for n in range(layout.MAX_EXCLUDE)]),
+                 "at most")
+
+    def test_every_written_path_must_be_excluded(self):
+        self.bad(edit(["exclude"], [".claude/"]), "root.file")
+        self.bad(edit(["exclude"], ["CLAUDE.md"]), "no exclude entry")
+        self.bad(edit(["exclude"], ["CLAUDE.md", ".claude/skills/"]), "kinds.agent")
+        self.bad(edit(["exclude"], ["CLAUDE.md", ".claude/settings.local.json"]), "kinds.agent")
+        # a file entry does not cover what is under a directory of that name
+        self.bad(edit(["exclude"], ["CLAUDE.md", ".claude"]), "no exclude entry")
+        # git compares exactly, so a differently-cased entry covers nothing
+        self.bad(edit(["exclude"], ["claude.md", ".Claude/"]), "no exclude entry")
+        self.bad(edit(["exclude"], ["claude.md", ".Claude/"]), "covers no path")
+        # a directory entry does not cover a file of that name
+        self.bad(edit(["exclude"], ["CLAUDE.md/", ".claude/"]), "layout.root.file")
+        self.bad(edit(["exclude"], ["CLAUDE.md", ".claude/skills/", ".claude/agents/",
+                                    ".claude/commands/"]), "local_settings.path")
+        self.bad(edit(["local_settings", "path"], ".claude/s.json",
+                      edit(["exclude"], ["CLAUDE.md", ".claude/skills/", ".claude/agents/",
+                                         ".claude/commands/", ".claude/s.json/"])),
+                 "local_settings.path")
+
+    def test_an_exclude_entry_must_cover_a_written_path(self):
+        self.bad(edit(["exclude"], CLAUDE["exclude"] + ["docs/"]), "covers no path")
+        self.bad(edit(["exclude"], CLAUDE["exclude"] + ["src"]), "covers no path")
+        self.assertEqual(layout.problems(edit(["exclude"], [
+            "CLAUDE.md", ".claude/skills/", ".claude/agents/", ".claude/commands/",
+            ".claude/settings.local.json"])), [])
+
+    def test_written_paths_may_not_overlap(self):
+        self.bad(edit(["local_settings", "path"], ".claude/agents/s.json"), "overlaps")
+        self.bad(edit(["local_settings", "path"], "CLAUDE.md"), "overlaps")
+
+    def test_the_permission_lists_cannot_be_an_allow_or_nested(self):
+        base = ["local_settings", "actions"]
+        for actions in ({"deny": "permissions.allow", "ask": "permissions.ask"},
+                        {"deny": "permissions.deny", "ask": "permissions.allow"},
+                        {"deny": "permissions.deny", "ask": "permissions.deny.ask"},
+                        {"deny": "permissions.deny.deny", "ask": "permissions.deny"}):
+            self.bad(edit(base, actions), "actions")
+        self.assertEqual(layout.problems(edit(base, {"deny": "a.b.deny", "ask": "a.b.ask"})), [])
+        value = edit(["hooks"], {"settings_key": "permissions"})
+        self.bad(value, "top-level key")
+
+    def test_inert_template_names_and_missing_rules(self):
+        base = ["local_settings", "rules"]
+        for tool, template in (("write", "Write({path})"), ("read", "NotebookEdit({path})"),
+                               ("read", "Glob({path})"), ("shell", "Glob({pattern})")):
+            self.bad(edit(base + [tool], template), "never consults")
+        self.bad(edit(base, {}), "missing key")
+        self.bad(edit(base, {"read": "Read({path})", "shell": "Bash({pattern})"}), "write")
+
+    def test_an_agent_field_may_not_borrow_the_tools_name(self):
+        self.bad(edit(["kinds", "agent", "fields", "model"], "tools"), "may not map")
+
+    def test_a_directory_that_contains_the_guarded_store_is_refused(self):
+        self.bad(edit(["kinds", "skill", "path"], ".config/{name}/SKILL.md"), "guarded store")
+
+    def test_a_root_file_may_not_import_itself(self):
+        self.bad(edit(["root", "import"], "CLAUDE.md"), "itself")
+
+    def test_notes(self):
+        for notes in ("x", ["a\nb"], [""], [3], ["x" * (layout.MAX_NOTE_CHARS + 1)],
+                      ["n"] * (layout.MAX_NOTES + 1)):
+            self.bad(edit(["notes"], notes), "notes")
+
+    def test_all_problems_are_reported_together(self):
+        value = edit(["exclude"], [])
+        value["root"] = "x"
+        self.assertGreaterEqual(len(layout.problems(value)), 3)
+
+
+class Verification(Base):
+    def set_layout(self, value):
+        self.edit_module("sample-harness", layout=value)
+
+    def test_a_good_layout_verifies_and_changes_nothing_else(self):
+        self.set_layout(CLAUDE)
+        result = self.check("sample-harness")
+        self.assertEqual(result.problems, [], [str(p) for p in result.problems])
+
+    def test_a_bad_layout_refuses_the_module_before_any_approval(self):
+        self.set_layout(edit(["exclude"], []))
+        result = self.refused("layout", "sample-harness")
+        self.assertIn("no exclude entry", str(result.problems[0]))
+
+    def test_every_problem_is_a_layout_problem(self):
+        self.set_layout({"root": "x", "kinds": [], "notes": "n"})
+        result = self.check("sample-harness")
+        self.assertGreaterEqual(len(result.problems), 3)
+        self.assertEqual({p.rule for p in result.problems}, {"layout"})
+
+    def test_the_fixture_layout_is_unchanged_and_valid(self):
+        path = os.path.join(self.path, "sample-harness", "module.json")
+        with open(path) as handle:
+            self.assertEqual(layout.problems(json.load(handle)["layout"]), [])
+
+
+if __name__ == "__main__":
+    unittest.main()
