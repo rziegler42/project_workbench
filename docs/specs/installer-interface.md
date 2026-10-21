@@ -506,8 +506,9 @@ the rules above are named so a later plan can change them; this plan changes non
   `--module` it approves every module and records the package too; with `--source` it
   downloads over the network into the cache first. Agent may not run it (harness deny rule).
   Differences: it has no `--dir`; the decision above gives it one.
-- **`pin <project-id> <name> <helper> --root <dir>`** Owner-run, terminal only. Pins a helper
-  file inside the project root by its content hash. `--root` names the project directory and
+- **`pin <project-id> <name> <helper> --root <dir> [--kit N]`** Owner-run, terminal only. Pins a
+  helper file inside the project root by its content hash; `--kit N` also records that it runs through
+  the kit runner with kit API number N. `--root` names the project directory and
   stays *(owner)*.
 - **`launch <project-id> <name> --root <dir> -- <args>`** Runs a pinned helper if its bytes
   still match the pin, from a private copy that is removed afterwards. The arguments follow the

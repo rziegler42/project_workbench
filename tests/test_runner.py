@@ -4,6 +4,7 @@ The helpers here are small Python files that report what they see. The runner is
 runs it, `python3 -I workbench/runner.py <kit number> <helper> <arguments...>`, from a directory that
 holds hostile files, so what is imported is what the test says."""
 
+import io
 import json
 import os
 import shutil
@@ -320,11 +321,12 @@ class Launched(unittest.TestCase):
         patch.start()
         self.addCleanup(patch.stop)
 
-    def pin(self, text):
+    def pin(self, text, kit=API):
         path = os.path.join(self.root, "tools", "helper.py")
         with open(path, "w") as handle:
             handle.write(text)
-        pins.set_pin(self.store, PROJECT, "check", "tools/helper.py", pins.hash_bytes(text.encode()), "owner")
+        pins.set_pin(self.store, PROJECT, "check", "tools/helper.py", pins.hash_bytes(text.encode()), "owner",
+                     kit=kit)
 
     def go(self, *args, kit=API):
         with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
@@ -342,7 +344,8 @@ class Launched(unittest.TestCase):
         self.assertEqual(os.path.join(self.store.root, "bin", "run"), os.path.dirname(os.path.dirname(seen["argv"][0])))
         self.assertEqual(API, seen["api"])
 
-    def test_a_different_number_runs_nothing_and_prints_the_refusal(self):
+    def test_a_number_the_runner_does_not_have_runs_nothing_and_prints_the_refusal(self):
+        self.pin(REPORT, kit=API + 1)
         code, out, err = self.go(kit=API + 1)
         self.assertEqual((1, ""), (code, out))
         self.assertTrue(err.startswith("refused: this helper needs kit API"), err)
@@ -355,9 +358,31 @@ class Launched(unittest.TestCase):
         self.assertFalse(os.path.exists(self.mark))
 
     def test_with_no_kit_the_helper_runs_as_before_and_gets_nothing(self):
-        self.pin("#!/bin/sh\necho \"n:$#\"\n")
+        self.pin("#!/bin/sh\necho \"n:$#\"\n", kit=None)
         code, out, err = self.go("x", kit=None)
         self.assertEqual((0, "n:1\n"), (code, out), err)
+
+    def test_the_pin_decides_how_it_runs_not_the_caller(self):
+        """`wb launch` passes no kit; a pin that records one still runs through the runner."""
+        code, out, err = self.go(kit=None)
+        self.assertEqual(0, code, err)
+        self.assertEqual(API, json.loads(out)["api"])
+
+    def test_a_caller_that_expects_another_way_than_the_pin_runs_nothing(self):
+        for pinned, asked in ((API, API + 1), (None, API)):
+            with self.subTest(pinned=pinned, asked=asked):
+                self.pin(REPORT, kit=pinned)
+                with self.assertRaisesRegex(launch.LaunchError, "pinned to run"):
+                    self.go(kit=asked)
+                self.assertFalse(os.path.exists(self.mark))
+
+    def test_the_launch_command_runs_a_kit_pinned_helper_through_the_runner(self):
+        err = io.StringIO()
+        done = unittest.mock.Mock(returncode=0)
+        with unittest.mock.patch.object(launch.subprocess, "run", return_value=done) as spy:
+            code = launch.run(self.store, PROJECT, "check", self.root, [], err)
+        self.assertEqual(0, code, err.getvalue())
+        self.assertEqual([sys.executable, "-I", launch.RUNNER, str(API)], spy.call_args.args[0][:4])
 
     def test_the_exit_code_of_the_helper_reaches_the_caller(self):
         self.pin("import sys\nsys.exit(3)\n")

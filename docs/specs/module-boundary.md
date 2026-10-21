@@ -193,6 +193,14 @@ another module's helper or a file the owner pinned for something else, is refuse
 same rule applies to a check. The launcher still verifies the bytes against the pin; this rule makes the
 pin answer the question "is this the declared helper", which the hash alone does not.
 
+**The pin also records how the helper runs.** The project holds both the manifest and each `module.json`, so
+a pulled commit can edit a declaration and recompute its hash in the manifest; the two then agree. The pin
+lives in the guarded store, so it records the `kit` number the owner pinned the helper with (`pin ... --kit N`;
+none for an `exec` helper). The launcher takes the kit from the pin, never from its caller, so `launch` and
+`wb run` run a pinned helper the same way, and `wb run` also refuses unless the pin equals the declaration's. What a project can
+still change is the `arguments` list: it filters mistakes and is not a security boundary, so a helper must
+validate its own arguments.
+
 The installer knows no command by name. The `code-work` entry in the agent-safe list, `dispatch.py`
 and the `code-work` branch in `cli.py` are replaced by this.
 

@@ -29,7 +29,7 @@ ambiguous blank.
 | Setup | not applicable (standard library only; nothing to install) |
 | Run locally | `python3 -m workbench verify [<package> \| --dir <path>] [--select <module> ...] [--no-harness-required]` |
 | Owner-run: approve a package or one module (terminal only) | `python3 -m workbench approve (<package> \| --source <url> [--ref <ref>]) [--module <name>]` |
-| Owner-run: pin a helper's content (terminal only) | `python3 -m workbench pin <project-id> <name> <helper> --root <project-dir>` |
+| Owner-run: pin a helper's content (terminal only) | `python3 -m workbench pin <project-id> <name> <helper> --root <project-dir> [--kit N]` |
 | Preview an install (read-only) | `python3 -m workbench preview install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Owner-run: install a new project (terminal only) | `python3 -m workbench install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Owner-run: accept changes made to a project (terminal only) | `python3 -m workbench acknowledge [<target> \| --dir <path>]` |
@@ -394,7 +394,9 @@ owner pins it, and the launcher runs it only while its bytes still match the pin
 it is not run until the owner pins it again.
 
 - **Pin** (owner-run, from a terminal, like `approve`):
-  `python3 -m workbench pin <project-id> <name> <helper> --root <project-dir>`. The project id
+  `python3 -m workbench pin <project-id> <name> <helper> --root <project-dir> [--kit N]`. `--kit N`
+  records that the helper runs through the kit runner with kit API number N; without it the helper
+  runs directly. A module command is refused unless this equals what its declaration says. The project id
   is 64 lowercase hex digits (the hash of the project's seed, once projects exist). The helper
   must be a regular file inside the root; a symbolic link, a directory, a FIFO or a path
   outside the root is refused. The command shows the path, size, SHA-256 and the start of the

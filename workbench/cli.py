@@ -17,7 +17,7 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "[--select <module> ...] [--no-harness-required]\n"
          "       python3 -m workbench approve (<package> | --source <url> [--ref <ref>]) [--module <name>]\n"
          "                                                    (owner-run, terminal only)\n"
-         "       python3 -m workbench pin <project-id> <name> <helper> --root <dir>   (owner-run, terminal only)\n"
+         "       python3 -m workbench pin <project-id> <name> <helper> --root <dir> [--kit N]   (owner-run, terminal only)\n"
          "       python3 -m workbench launch <project-id> <name> --root <dir> -- <args>\n"
          "       python3 -m workbench code-work check|plans|report   (read-only)\n"
          "       python3 -m workbench release-approvals\n"
@@ -74,6 +74,8 @@ def _parser():
     pin.add_argument("name", help="the helper's name")
     pin.add_argument("helper", help="the helper file, inside the project root")
     pin.add_argument("--root", required=True, metavar="DIR", help="the project directory")
+    pin.add_argument("--kit", type=int, metavar="N", help="run the helper through the kit runner "
+                                                         "with this kit API number")
     run_cmd = commands.add_parser("launch", allow_abbrev=False,
                                   help="run a pinned helper if it still matches its pin")
     run_cmd.add_argument("project_id", help="the project id (64 hex digits)")
@@ -330,7 +332,7 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         for note in notes:
             err.write("warning: %s\n" % _clean(note))
         return pins.run(guarded, args.project_id, args.name, args.helper, args.root,
-                        stdin if stdin is not None else sys.stdin, out, err)
+                        stdin if stdin is not None else sys.stdin, out, err, kit=args.kit)
     if args.command == "release-approvals":
         return _release(distribution, out, err)
     if args.command == "approve":

@@ -65,7 +65,7 @@ gone, and the `code-work` module offers its helper as a command. The `code-work`
    argument. It refuses, running nothing, for: an undeclared first argument, an unpinned helper, a helper
    whose bytes changed, a pin under the command's name that records another path, a path outside a project,
    a module the manifest does not record, an installed `module.json` that no longer matches the manifest's
-   declaration hash, and a command that two modules declare.
+   declaration hash, and a pin that records another `kit` than the declaration (or none where one is declared, or the reverse), and a command that two modules declare.
 3. `wb run` is agent-safe and `wb code-work` is gone: the installer names no `code-work` command, helper or
    entry; the module declares `commands.code-work` and its skill says `wb run code-work check`.
 4. The `code-work` module's tests are under `packages/workbench/code-work/tests/` and run through
@@ -135,8 +135,17 @@ Affected areas: new `workbench/commands.py`; a generic project fixture in the sh
    arguments and the `kit` number (or `None` for `exec`).
 3. The function reads only; it does not call the launcher.
 
-Verification: `test_commands.py`, then the full suite. Evidence: each refusal is a test that runs nothing
-(a recording helper proves it).
+4. Added after the increment's security review, on the owner's instruction (2026-10-21): the pin records how
+   the helper runs. A pin gains an optional `kit` (an integer of at least 1, absent for `exec`);
+   `pins.set_pin` and the owner-run `pin` command take `--kit N`, show it in the confirmation, and record it.
+   `resolve` refuses unless the pin's `kit` equals the declaration's (`None` for `exec`), because the manifest
+   and `module.json` are both in the project and a pulled commit can edit both and recompute the declaration
+   hash. `arguments` stays a filter against mistakes; the spec says so and says the helper validates its own.
+   Affected areas grow by `workbench/pins.py`, `workbench/cli.py` (the `pin` options and usage),
+   `tests/test_pins.py`, `tests/test_cli.py` and `module-boundary.md`.
+
+Verification: `test_commands.py`, `test_pins.py`, then the full suite. Evidence: each refusal is a test that
+runs nothing (a recording helper proves it).
 
 ### Increment D — `wb run`
 
@@ -294,3 +303,56 @@ Verification: four new tests in `tests/test_verify.py` failed before the rule an
 `python3 -B -W error tests/run_all.py`: 2158 tests in 2 roots, OK (2155 before). No first-party module
 changed, so no approval changed. Not reviewed independently; the change is one loop mirroring the slot-owner
 check.
+
+### Increment C
+
+`workbench/commands.py` adds `resolve(guarded, start, name, args)`, which returns
+`Request(root, project_id, name, arguments, kit)` or raises `CommandError`. It reads only: the kit's finder
+and ID reader, the manifest through the strict parser, then the installed `module.json` of every module whose
+file the manifest lists, each through the no-follow reader and refused unless its declaration hash equals the
+manifest's. It then picks the command, applies the arguments rules, looks up the pin under the command's name,
+and requires the pin's path to equal `.workbench/<package>/<module>/<helper>`. Decisions the plan left open:
+- A module is "installed" when the manifest's file list names its `module.json`. A harness module writes
+  nothing into the project, so it declares no command here; a listed file that is missing, a link,
+  unreadable, not JSON or changed refuses the whole lookup (fail closed), not only that module.
+- The declaration is parsed with `first_party=True`: that flag only gates which capabilities a module may
+  provide, the declaration was approved at install and its hash was just compared, and only `commands` is read.
+- The pin store already refuses a pin path with a `.` segment, so there is no dot-segment case for the
+  path comparison.
+- Two modules declaring one command cannot be installed (increment B); the resolver still refuses it, tested
+  by patching `_declared`.
+`tests/support_project.py` is the generic fixture (a harness module and a synthetic `tool` module installed
+by the existing install path, with a `pin` helper); `tests/test_commands.py` has 21 tests, with `launch.launch`
+and `subprocess.run` patched to fail so a test proves nothing was started.
+Verification: `python3 -B -W error tests/run_all.py`: 2179 tests in 2 roots, OK (2158 before). No first-party
+module changed, so no approval changed. Not yet reviewed independently; the security pass is G.
+Review (increment C): one `security-reviewer` pass, no Critical or High finding; it found no way to make the
+resolver start a program or run a helper no pin names. Fixed: the manifest was read twice (the ID by the kit's
+loose reader, the modules by the strict one), so a rename between the reads could pair one manifest's ID with
+another's modules; it is now read once and the ID derived from the parsed seed (test added). Open, for the
+owner (Medium): the manifest and `module.json` are both in the project, so a pulled commit that edits both and
+recomputes the declaration hash makes them agree. The pin binds the helper's name, path and bytes, not how it
+runs, so such a commit can change `runtime` and `kit` (a pinned Python helper declared with a kit could be
+run directly as `exec`, without the isolated interpreter and the runner's kit-number check) and widen
+`arguments`, which is a filter against mistakes, not a security boundary. Options: record `runtime` and `kit`
+in the pin and refuse a mismatch, or check the installed declaration hash against an owner-approved one;
+either way the spec should say `arguments` is not a boundary and the helper must validate its own. Also noted
+for D: the resolver returns a root path that `launch` reopens, and D must catch `CommandError` and `LaunchError`.
+Resolution of the Medium finding (owner chose recording the kit in the pin, 2026-10-21): a pin may record
+`kit` (`pins.py`, optional field, a whole number 1 to 999999; absent means direct); `pin --kit N` records it
+and the confirmation says how the helper will run; `commands.resolve` refuses unless the pin's `kit` equals
+the declaration's, and tells the owner the `pin ... --kit N` command to run. Five tests in `test_commands.py`
+(including a hostile commit that rewrites the declaration and the manifest from `python` to `exec`) and seven
+in `test_pins.py`. `module-boundary.md`, `trust-and-approval.md`, `installer-interface.md` and `development.md`
+describe it, and say `arguments` is not a boundary. The fix is new attack surface and has not been
+re-reviewed; G's second pass should try to bypass it. Consequence for E: the owner pins `code-work` without
+`--kit`, since it is `exec`.
+Verification: `python3 -B -W error tests/run_all.py`: 2189 tests in 2 roots, OK (2158 before C). No
+first-party module changed, so no approval changed.
+Second security pass on that fix (`security-reviewer`): the kit comparison, the pins parse, `pin --kit`
+argument handling and the error text held; two findings. Medium, fixed: `wb launch` passed no kit, so a
+helper pinned with a kit ran directly. `launch.launch` now takes the kit from the pin and refuses a caller
+that expects another way (`None` accepts the pin's); tests in `test_runner.py` (the pin decides, a mismatch
+runs nothing, `launch.run` builds the runner command). Four existing runner tests now pin with a kit.
+Low, fixed: a declared `kit` above 999999 could never be pinned; the declaration is now bounded by the same
+`MAX_KIT`. The fix to `launch` has not been re-reviewed; G's pass covers it.

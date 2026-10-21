@@ -422,10 +422,11 @@ A package is brought into `cache/<id>/` as data only: the files under `package/`
   lowercase hex digits. A helper name is letters, digits and `._+-`, at most 64 characters, starting
   with a letter or digit. The path is relative to the project root and passes the path validator, so
   clones at different locations share a pin. Reading fails closed.
-- **`pin <id> <name> <helper> --root <dir>`** is owner-run with the same terminal test as `approve`.
+- **`pin <id> <name> <helper> --root <dir> [--kit N]`** is owner-run with the same terminal test as `approve`.
   It refuses a helper outside the root, a symbolic link, or a file that is not regular; shows the
   path, size, hash and the start of the file, and says if it replaces a pin; and records only when the
-  first 12 characters of the SHA-256 are typed, after checking the file again.
+  first 12 characters of the SHA-256 are typed, after checking the file again. With `--kit N` the pin also
+  records the kit API number the helper runs with (see `module-boundary.md`, "Module commands").
 - **`launch <id> <name> --root <dir> -- <args>`** takes the helper's location only from the pin,
   reads it through the safe reader, compares the hash, writes those exact bytes to a new private file
   under `bin/run/` and runs that copy with no shell, then removes it. A missing pin, damaged pins

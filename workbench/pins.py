@@ -12,6 +12,11 @@ The file is strict JSON::
     {"format": 1, "pins": {"<name>": {"path": "<relative>", "pinned_by": "<user>",
                                       "sha256": "<64 hex>", "time": "<UTC>"}}}
 
+A Python helper that runs through the kit runner also records ``"kit": <API number>``; a pin
+without it runs the helper directly. The project's own files cannot choose how a pinned helper
+runs: the launcher takes the kit from the pin, and a module command is refused unless the pin's
+``kit`` equals the declaration's.
+
 Reading fails closed: a missing file means no pins, and anything unreadable, malformed or not
 a regular file raises ``PinError``. The project id is the hash of the project's seed
 (``repository-boundary.md``): 64 lowercase hex digits, which also makes it safe as a
@@ -40,8 +45,9 @@ _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}\Z")
 _HEX = re.compile(r"^[0-9a-f]{64}\Z")
 _TIME = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\Z")
 _FIELDS = ("path", "pinned_by", "sha256", "time")
+MAX_KIT = declarations.MAX_KIT
 
-Pin = collections.namedtuple("Pin", "name path sha256 pinned_by time")
+Pin = collections.namedtuple("Pin", "name path sha256 pinned_by time kit", defaults=(None,))
 
 
 class PinError(Exception):
@@ -84,7 +90,7 @@ def parse(data):
     pins = {}
     for name, entry in document["pins"].items():
         check_name(name)
-        if not isinstance(entry, dict) or set(entry) != set(_FIELDS):
+        if not isinstance(entry, dict) or set(entry) not in (set(_FIELDS), set(_FIELDS) | {"kit"}):
             raise PinError("pin %s has the wrong fields" % display.ascii_text(name)[:80])
         path = entry["path"]
         if not isinstance(path, str) or not safefs.relpath_ok(path):
@@ -96,14 +102,28 @@ def parse(data):
             raise PinError("pin %s has a bad pinned_by" % display.ascii_text(name)[:80])
         if not isinstance(entry["time"], str) or not _TIME.match(entry["time"]):
             raise PinError("pin %s has a bad time" % display.ascii_text(name)[:80])
-        pins[name] = Pin(name, path, entry["sha256"], who, entry["time"])
+        kit = entry.get("kit")
+        if "kit" in entry:
+            check_kit(kit)
+        pins[name] = Pin(name, path, entry["sha256"], who, entry["time"], kit)
     return pins
 
 
+def check_kit(kit):
+    if type(kit) is not int or not 1 <= kit <= MAX_KIT:
+        raise PinError("a kit API number is a whole number from 1 to %d" % MAX_KIT)
+    return kit
+
+
+def _entry(pin):
+    entry = {"path": pin.path, "pinned_by": pin.pinned_by, "sha256": pin.sha256, "time": pin.time}
+    if pin.kit is not None:
+        entry["kit"] = pin.kit
+    return entry
+
+
 def serialize(pins):
-    document = {"format": FORMAT, "pins": {
-        name: {"path": pin.path, "pinned_by": pin.pinned_by, "sha256": pin.sha256, "time": pin.time}
-        for name, pin in sorted(pins.items())}}
+    document = {"format": FORMAT, "pins": {name: _entry(pin) for name, pin in sorted(pins.items())}}
     return (json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n").encode("ascii")
 
 
@@ -129,11 +149,13 @@ def lookup(store, project_id, name):
     return pins[name]
 
 
-def set_pin(store, project_id, name, path, sha256, pinned_by, time=None):
+def set_pin(store, project_id, name, path, sha256, pinned_by, time=None, kit=None):
     """Record or replace one pin, keeping the others. Refuses to touch a damaged file."""
     check_name(name)
     pins = load(store, project_id)
-    pins[name] = Pin(name, path, sha256, pinned_by, time or approvals.utc_now())
+    if kit is not None:
+        check_kit(kit)
+    pins[name] = Pin(name, path, sha256, pinned_by, time or approvals.utc_now(), kit)
     data = serialize(pins)
     parse(data)   # nothing is written that a read would refuse
     try:
@@ -180,14 +202,17 @@ def _preview(data):
     return "\n".join(shown + ([more] if more else []))
 
 
-def run(store, project_id, name, helper, root, stdin, stdout, err):
-    """Pin `helper` (a file inside `root`) under `name`. Returns the exit code."""
+def run(store, project_id, name, helper, root, stdin, stdout, err, kit=None):
+    """Pin `helper` (a file inside `root`) under `name`; with `kit`, to run through the kit runner.
+    Returns the exit code."""
     if not (approve.is_terminal(stdin) and approve.is_terminal(stdout)):
         return _refuse(err, "pinning is owner-run: standard input and output must both be "
                             "terminals. Run this command yourself, from your own terminal.")
     try:
         check_id(project_id)
         check_name(name)
+        if kit is not None:
+            check_kit(kit)
         root_abs, rel = _relative_inside(root, helper)
         data = _read_helper(root_abs, rel)
         existing = load(store, project_id).get(name)
@@ -198,6 +223,8 @@ def run(store, project_id, name, helper, root, stdin, stdout, err):
     stdout.write("pin helper %s for project %s\n" % (display.ascii_text(name), project_id))
     stdout.write("  path in the project: %s\n" % display.ascii_text(rel))
     stdout.write("  size:   %d bytes\n  sha256: %s\n" % (len(data), digest))
+    stdout.write("  it %s\n" % ("runs through the kit runner, kit API %d" % kit if kit is not None
+                                 else "runs directly, as a program"))
     if existing is not None:
         stdout.write("  this REPLACES the pin %s (hash %s, pinned %s)\n" % (
             display.ascii_text(existing.path), existing.sha256, existing.time))
@@ -212,7 +239,7 @@ def run(store, project_id, name, helper, root, stdin, stdout, err):
     try:
         if hash_bytes(_read_helper(root_abs, rel)) != digest:
             return _refuse(err, "the helper changed while it was shown; nothing was recorded")
-        pin = set_pin(store, project_id, name, rel, digest, approve.approver_name())
+        pin = set_pin(store, project_id, name, rel, digest, approve.approver_name(), kit=kit)
     except PinError as exc:
         return _refuse(err, str(exc))
     stdout.write("pinned %s -> %s (sha256 %s)\n" % (display.ascii_text(pin.name),

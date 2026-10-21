@@ -11,9 +11,10 @@ the pin (``pins.py``), never from the caller:
    no shell. What runs is what was hashed, so a file swapped after the check changes nothing.
 4. It removes the copy afterwards, also when the run fails or is interrupted.
 
-A Python helper that declared a kit API number is run through the fixed runner (``runner.py``) in
+A Python helper whose pin records a kit API number is run through the fixed runner (``runner.py``) in
 an isolated interpreter instead of being run directly; the runner checks the number and loads the kit
-(``docs/specs/module-boundary.md``). Without a number the copy is run as it is.
+(``docs/specs/module-boundary.md``). Without a number the copy is run as it is. The number comes
+from the pin, which the owner set, never from the caller or the project.
 
 A missing pin, a missing or unreadable helper, a symbolic link, a non-regular file, a path
 outside the root or a hash difference runs nothing and exits 1 with a reason beginning
@@ -111,14 +112,21 @@ def _command(path, args, kit):
 def launch(guarded, project_id, name, root, args, *, stdin=None, stdout=None, stderr=None, kit=None):
     """Run the pinned helper. Returns its exit code. Raises LaunchError if it was not run.
 
-    With `kit` (an integer) the helper is a Python helper and runs through the runner, which refuses
-    unless `kit` equals the workbench's kit API; with None it runs as it is."""
+    How it runs is the pin's: a pin that records a kit API number runs the helper through the runner,
+    which refuses unless that number equals the workbench's kit API; a pin without one runs it as it
+    is. `kit` is what the caller expects, and a caller that expects another way is refused; None
+    accepts whatever the pin records."""
     if kit is not None and (type(kit) is not int or kit < 1 or not sys.executable):
         raise LaunchError("the kit API number or the Python interpreter is not usable; nothing was run")
     try:
         pin = pins.lookup(guarded, project_id, name)
     except pins.PinError as exc:
         raise LaunchError(str(exc))
+    if kit != pin.kit and kit is not None:
+        raise LaunchError("the helper %s is pinned to run %s, not as asked; nothing was run" % (
+            display.ascii_text(name)[:64],
+            "through kit API %d" % pin.kit if pin.kit is not None else "directly"))
+    kit = pin.kit
     try:
         with safefs.Root(root, "project root") as project:
             data = project.read_file(pin.path)

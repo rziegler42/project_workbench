@@ -52,6 +52,22 @@ class PinFileTest(Base):
                 '      "pinned_by": "owner",\n      "sha256": "%s",\n'
                 '      "time": "2026-10-20T08:00:00Z"\n    }\n  }\n}\n' % SHA))
 
+    def test_a_pin_may_record_the_kit_it_runs_with(self):
+        pins.set_pin(self.store, PROJECT, "py", "tools/helper.py", SHA, "owner",
+                     "2026-10-20T08:00:00Z", kit=1)
+        got = pins.lookup(self.store, PROJECT, "py")
+        self.assertEqual(1, got.kit)
+        self.assertIsNone(pins.Pin("x", "a", SHA, "owner", "t").kit)
+        with open(self.pins_path()) as handle:
+            self.assertIn('"kit": 1,\n      "path": "tools/helper.py"', handle.read())
+
+    def test_a_kit_that_is_not_a_positive_integer_cannot_be_written(self):
+        for kit in (0, -1, True, 1.5, "1", 10 ** 6):
+            with self.subTest(kit=kit):
+                with self.assertRaises(pins.PinError):
+                    pins.set_pin(self.store, PROJECT, "one", "a/one.sh", SHA, "owner", kit=kit)
+        self.assertFalse(os.path.exists(self.pins_path()))
+
     def test_pins_for_other_helpers_and_projects_are_kept_and_separate(self):
         pins.set_pin(self.store, PROJECT, "one", "a/one.sh", SHA, "owner")
         pins.set_pin(self.store, PROJECT, "two", "a/two.sh", "d" * 64, "owner")
@@ -97,6 +113,8 @@ class PinFileTest(Base):
                self.good(sha256="C" * 64), self.good(sha256="c" * 63), self.good(sha256=5),
                self.good(pinned_by=""), self.good(pinned_by="x" * 65), self.good(pinned_by="a\nb"),
                self.good(time="yesterday"), self.good(time=5), self.good(extra=1),
+               self.good(kit=0), self.good(kit=True), self.good(kit=None), self.good(kit="1"),
+               self.good(kit=1.5), self.good(kit=10 ** 6),
                {"format": 1, "pins": {"bad name": self.good()["pins"]["one"]}},
                {"format": 1, "pins": {"": self.good()["pins"]["one"]}},
                {"format": 1, "pins": {"one": {"path": "a"}}},
@@ -185,6 +203,28 @@ class PinCommandTest(Base):
         self.assertEqual((pin.path, pin.sha256), ("tools/helper.sh", self.digest()))
         self.assertEqual(pin.pinned_by, approve.approver_name())
         self.assertIn("pinned commit -> tools/helper.sh", output)
+
+    def test_kit_is_recorded_and_shown_when_given(self):
+        code, output, error = self.drive([PROJECT, "py", self.helper, "--root", self.root,
+                                          "--kit", "1"], answer=self.digest()[:12])
+        self.assertEqual((code, error), (0, ""), output)
+        self.assertEqual(1, pins.lookup(self.store, PROJECT, "py").kit)
+        self.assertIn("kit API 1", output)
+
+    def test_without_kit_the_pin_records_none_and_says_it_runs_directly(self):
+        code, output, error = self.drive([PROJECT, "commit", self.helper, "--root", self.root],
+                                         answer=self.digest()[:12])
+        self.assertEqual((code, error), (0, ""), output)
+        self.assertIsNone(pins.lookup(self.store, PROJECT, "commit").kit)
+        self.assertIn("runs directly", output)
+
+    def test_a_kit_that_is_not_a_positive_integer_is_a_usage_error(self):
+        for kit in ("0", "-1", "x", "1.5", ""):
+            with self.subTest(kit=kit):
+                code, output, error = self.drive([PROJECT, "py", self.helper, "--root", self.root,
+                                                  "--kit", kit])
+                self.assertNotEqual(0, code)
+                self.assertIsNone(pins.load(self.store, PROJECT).get("py"))
 
     def test_the_owner_is_shown_the_path_hash_and_start_of_the_file(self):
         _, output, _ = self.drive([PROJECT, "commit", self.helper, "--root", self.root], answer="no")

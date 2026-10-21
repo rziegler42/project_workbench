@@ -73,6 +73,7 @@ _ARGUMENT = re.compile(r"^[a-z][a-z0-9-]*\Z")
 MAX_COMMANDS = 16
 MAX_ARGUMENTS = 16
 MAX_ARGUMENT_CHARS = 32
+MAX_KIT = 999999
 RUNTIMES = ("python", "exec")
 
 Package = collections.namedtuple("Package", "name version contract modules declaration")
@@ -320,9 +321,9 @@ def _commands(check, value, ships):
                        % (name, _shown(runtime), ", ".join(RUNTIMES)))
         kit = entry.get("kit")
         if runtime == "python":
-            if type(kit) is not int or kit < 1:
+            if type(kit) is not int or not 1 <= kit <= MAX_KIT:
                 check.fail("commands", "command %s: a python command needs 'kit', an integer "
-                                       "from 1" % name)
+                                       "from 1 to %d" % (name, MAX_KIT))
         elif "kit" in entry:
             check.fail("commands", "command %s: 'kit' goes only with runtime 'python'" % name)
         arguments = entry.get("arguments", [])

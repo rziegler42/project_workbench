@@ -366,6 +366,8 @@ class ModuleTest(unittest.TestCase):
             "python without a kit": {"a": {"helper": "scripts/check.sh", "runtime": "python"}},
             "kit with exec": {"a": {"helper": "scripts/check.sh", "kit": 1}},
             "kit zero": {"a": {"helper": "scripts/check.sh", "runtime": "python", "kit": 0}},
+            "kit above the pin limit": {"a": {"helper": "scripts/check.sh", "runtime": "python",
+                                              "kit": 1000000}},
             "kit a string": {"a": {"helper": "scripts/check.sh", "runtime": "python", "kit": "1"}},
             "kit true": {"a": {"helper": "scripts/check.sh", "runtime": "python", "kit": True}},
             "arguments not a list": {"a": {"helper": "scripts/check.sh", "arguments": "check"}},
