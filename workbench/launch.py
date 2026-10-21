@@ -11,6 +11,10 @@ the pin (``pins.py``), never from the caller:
    no shell. What runs is what was hashed, so a file swapped after the check changes nothing.
 4. It removes the copy afterwards, also when the run fails or is interrupted.
 
+A Python helper that declared a kit API number is run through the fixed runner (``runner.py``) in
+an isolated interpreter instead of being run directly; the runner checks the number and loads the kit
+(``docs/specs/module-boundary.md``). Without a number the copy is run as it is.
+
 A missing pin, a missing or unreadable helper, a symbolic link, a non-regular file, a path
 outside the root or a hash difference runs nothing and exits 1 with a reason beginning
 ``refused:``. A helper that does run returns its own exit code, so a helper that exits 1 looks
@@ -31,6 +35,7 @@ store is initialized (see the end of this module).
 import os
 import shutil
 import subprocess
+import sys
 import uuid
 
 from . import pins, store
@@ -40,6 +45,7 @@ from .wbkit import display, safefs
 _after_hash = None
 
 WRAPPER_NAME = "wb"
+RUNNER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runner.py")
 
 
 class LaunchError(Exception):
@@ -93,8 +99,22 @@ def _make_copy(guarded, name, data):
             os.close(fd)
 
 
-def launch(guarded, project_id, name, root, args, *, stdin=None, stdout=None, stderr=None):
-    """Run the pinned helper. Returns its exit code. Raises LaunchError if it was not run."""
+def _command(path, args, kit):
+    """The command line: the private copy itself, or, for a Python helper that declared a kit API
+    number, the fixed runner (isolated interpreter) that checks the number and runs the copy."""
+    rest = [str(a) for a in args]
+    if kit is None:
+        return [path] + rest
+    return [sys.executable, "-I", RUNNER, str(kit), path] + rest
+
+
+def launch(guarded, project_id, name, root, args, *, stdin=None, stdout=None, stderr=None, kit=None):
+    """Run the pinned helper. Returns its exit code. Raises LaunchError if it was not run.
+
+    With `kit` (an integer) the helper is a Python helper and runs through the runner, which refuses
+    unless `kit` equals the workbench's kit API; with None it runs as it is."""
+    if kit is not None and (type(kit) is not int or kit < 1 or not sys.executable):
+        raise LaunchError("the kit API number or the Python interpreter is not usable; nothing was run")
     try:
         pin = pins.lookup(guarded, project_id, name)
     except pins.PinError as exc:
@@ -115,7 +135,7 @@ def launch(guarded, project_id, name, root, args, *, stdin=None, stdout=None, st
     path, directory = _make_copy(guarded, name, data)
     try:
         try:
-            done = subprocess.run([path] + [str(a) for a in args], stdin=stdin, stdout=stdout,
+            done = subprocess.run(_command(path, args, kit), stdin=stdin, stdout=stdout,
                                   stderr=stderr)
         except (OSError, ValueError) as exc:
             # ValueError: an argument holds a NUL byte, which no process can be given.

@@ -372,3 +372,36 @@ kit uses `re.fullmatch` with the pattern string, and `KIT_STDLIB` in `tests/test
 `json` and `re`.
 Verification: `python3 -B -W error -m unittest discover -s tests`: 2076 tests, OK, skipped=108. The independent review found nothing material; its Low suggestions (raw invalid UTF-8, non-ASCII digits in the seed, comparing refusal messages) were added as tests. A search for
 `dispatch.find_root`, `dispatch.project_id` and `dispatch.MAX_DEPTH` finds no remaining use.
+
+### Increment D
+
+`workbench/runner.py` is the fixed runner: `python3 -I <runner> <kit> <copy> <arguments>`. It parses the kit
+number (ASCII digits, at least 1), loads `wbkit/__init__.py` from beside itself as the module `wbkit` with
+the kit directory as the package location and registers it in `sys.modules`, refuses unless `wbkit.API` is an
+`int` equal to the number, sets `sys.argv` to the copy and the arguments, and calls
+`runpy.run_path(copy, run_name="__main__")` without catching anything. A missing kit, a kit that raises when
+loaded, a bad or missing number, a non-integer `API` (a string, a float, `True`, `None`, absent) and a
+mismatch each print a `refused:` line and exit 1 before the helper is read. `launch.launch` has a `kit=None`
+parameter: `None` runs the copy as before; an integer (not a bool, at least 1) runs the runner with
+`sys.executable -I`; anything else raises `LaunchError` before a copy is written. `tests/test_launch.py` is
+unchanged. `module-boundary.md` ("How a helper reaches the kit", the acceptance criterion) and `terms.md`
+(runner) now describe the file-location load and say that no directory is added to the search path.
+`trust-and-approval.md` does not cite the launch command line, so it is unchanged.
+New `tests/test_runner.py` (31 tests): arguments, `__main__`, the kit as the module the installer uses, the
+search path equal to a bare `-I` interpreter's, exit codes 0, 1, 2, 3 and 77, death by `SIGKILL`, a text
+`SystemExit`, a traceback, standard input; planted `wbkit.py`, `json.py`, `sitecustomize.py` and
+`usercustomize.py` in the current directory, beside the helper and on `PYTHONPATH` (and `PYTHONHOME`,
+`PYTHONSTARTUP`, `PYTHONUSERBASE`) never imported; each refusal leaves a marker file the helper would write on
+import absent; and `launch.launch(..., kit=n)` end to end. A mutation check outside the suite confirmed the
+hostile files do load when the same runner is started without `-I`, so those tests can fail.
+Verification: `python3 -B -W error -m unittest discover -s tests`: 2107 tests, OK, skipped=108.
+Review: an adversarial pass by the `security-reviewer` agent (20 mutants of the runner and launcher, planted
+files, odd environments, symlinked and relative runner paths) found no Critical or High issue. Fixed after it:
+(Medium) nothing checked that the launcher passes `-I`; a launcher-level test now plants hostile files and a
+hostile `PYTHONPATH` and also asserts the command line, and fails with `-I` removed. (Low) `runpy.run_path`
+would run a zip archive's `__main__.py`, or compiled bytecode, and put the copy on the search path; the
+runner now refuses a helper that is a zip archive (also with a script prepended) or starts with the
+bytecode magic number. (Low) leading zeros in the kit number are refused. The final security pass in G
+repeats the runner's review.
+Known limit: the runner's and the helper's `__pycache__` are not controlled: the kit's bytecode is written
+under `workbench/wbkit/` like any installer module's; nothing is written under `packages/`.

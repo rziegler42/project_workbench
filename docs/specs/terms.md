@@ -101,8 +101,8 @@ path or field.
   module, carries an integer API version, and is never pinned per project (`module-boundary.md`).
 
 **runner**
-: The fixed workbench file the launcher uses to start a Python helper: it adds the kit, checks the kit
-  version the module declared and runs the helper as `__main__`.
+: The fixed workbench file the launcher uses to start a Python helper: it loads the kit from beside
+  itself, checks the kit version the module declared and runs the helper as `__main__`.
 
 **module command**
 : A pinned shipped helper that a module declares in `commands`, together with the first arguments it

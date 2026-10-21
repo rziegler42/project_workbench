@@ -79,20 +79,25 @@ Rules for the kit:
 ### How a helper reaches the kit
 
 A helper that declares itself a Python helper (below) is run by the launcher through a fixed runner:
-the isolated interpreter (`python3 -I`, so the project's directory and `PYTHONPATH` are not on the search
-path), with the kit's directory added by hand. After the version check below, the runner executes the
-private copy of the pinned helper as `__main__`, with `runpy.run_path(<copy>, run_name="__main__")`, and
-`sys.argv` set to the copy's path followed by the arguments, as for any script. The runner does not catch
-`SystemExit` or any other exception from the helper: the helper's exit code, and a traceback if it
-fails, reach the caller as they would from the helper run alone. The helper does `import wbkit`. A helper
-of any other kind is run as it is today and gets nothing.
+the isolated interpreter (`python3 -I <runner> <kit> <copy> <arguments>`, so neither the project's
+directory, nor the helper's, nor `PYTHONPATH` is on the search path). The runner loads the kit by file
+location: it executes `wbkit/__init__.py`, found beside the runner, as the module `wbkit`, with the kit's
+directory as the package's location, and registers it in `sys.modules`. No directory is added to the search
+path, so the rest of the workbench cannot be imported by name and a `wbkit.py` anywhere else is never read.
+After the version check below, the runner executes the private copy of the pinned helper as `__main__`,
+with `runpy.run_path(<copy>, run_name="__main__")`, and `sys.argv` set to the copy's path followed by the
+arguments, as for any script. The runner does not catch `SystemExit` or any other exception from the
+helper: the helper's exit code, and a traceback if it fails, reach the caller as they would from the helper
+run alone. A helper that is a zip archive or compiled bytecode is refused, since `runpy` would run it as
+something other than a script. The helper does `import wbkit` (and `import wbkit.safefs`). A helper of any other kind is run as
+it is today and gets nothing.
 
-**The kit comes only from the workbench.** The kit's directory is the one inside the workbench
-distribution that holds the launcher's own code, found from the runner's own location and never from the
-current directory, the project, the environment or the guarded store's project data. The runner is a
-fixed file of the workbench too, not a module's. If the runner cannot establish that location, or the kit
-is not there, it runs nothing and refuses with a `refused:` line and exit 1. A module cannot ship, name
-or shadow the kit, and the kit directory is the only entry the runner adds to the search path.
+**The kit comes only from the workbench.** The kit is the `wbkit` directory inside the workbench
+distribution that holds the launcher's own code, found from the runner's own file location and never from
+the current directory, the project, the environment or the guarded store's project data. The runner is a
+fixed file of the workbench too, not a module's. If the kit is not there, or cannot be loaded, the runner
+runs nothing and refuses with a `refused:` line and exit 1. A module cannot ship, name or shadow the kit,
+and the runner adds nothing to the search path.
 
 **The runner enforces the version.** The launcher passes the declaration's `kit` number to the runner.
 Before it imports the helper's code, the runner compares that number with `wbkit.API`. If they differ, it
@@ -300,7 +305,8 @@ installer from there.
   release-mechanism exception.
 - A Python helper run by the launcher gets `sys.argv` as above, its exit code reaches the caller
   unchanged, and a helper that raises is not hidden by the runner. A `wbkit.py` in the project, in the
-  current directory or on `PYTHONPATH` is never imported in place of the workbench's kit.
+  current directory, beside the helper or on `PYTHONPATH` is never imported in place of the workbench's
+  kit, and no directory is added to the search path.
 - The kit imports only the standard library and itself, names no module, and exposes `wbkit.API`. A
   Python helper whose declared `kit` differs from it, or has none, is refused by the runner with exit 1
   and the `refused:` line, and the helper's code is not imported.
