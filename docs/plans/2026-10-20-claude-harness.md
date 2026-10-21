@@ -1,6 +1,6 @@
 # Claude harness, attach and check
 
-Status: Approved
+Status: Completed
 Created: 2026-10-20
 Candidate: workbench-v1#claude-harness
 Specs: harness-modules, installer-interface, trust-and-approval, repository-boundary, module-contract
@@ -771,3 +771,7 @@ constraints as written. Findings are untrusted input and were evaluated as revie
   installer's override limit no longer sits in the `check` list; the stray-scan bounds (5,000
   entries, depth 8), the `.claude` warning and the fact that passing a bound is a problem are
   now stated. Not checked by the reviewer: the internals of `harnessstage`/`harnessplan`.
+- **Closed by the owner, 2026-10-21.** Status `Completed`. All eight completion criteria have
+  recorded evidence above. The recorded hand run of `install` into an empty directory with a live
+  `claude` session (Verification for the plan as a whole) was not done; it needs the owner's
+  allowance and is open work for the owner.
