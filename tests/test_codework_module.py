@@ -11,10 +11,13 @@ import json
 import os
 import re
 import shutil
+import tempfile
 import unittest
 
 from tests import test_install
-from workbench import (cli, firstparty, harnessplan, install, manifest, neutral, sources, verify)
+from workbench import (cli, commands, firstparty, harnessplan, install, manifest, neutral, pins, sources,
+                       verify)
+from workbench.wbkit import project
 
 ROOT = test_install.ROOT
 PACKAGE = os.path.join(ROOT, "packages", "workbench")
@@ -190,8 +193,8 @@ class Skill(unittest.TestCase):
         commands = [line for line in skill_text().splitlines() if "wb " in line]
         self.assertEqual(2, len(commands), commands)
         for line in commands:
-            self.assertIn("`wb code-work check`", line)
-        self.assertNotIn("wb ", skill_text().replace("`wb code-work check`", ""))
+            self.assertIn("`wb run code-work check`", line)
+        self.assertNotIn("wb ", skill_text().replace("`wb run code-work check`", ""))
 
     def test_front_matter_holds_only_a_name_and_a_description(self):
         head = skill_text().split("---\n")[1].splitlines()
@@ -330,6 +333,30 @@ class Install(test_install.InstallBase):
         self.assertEqual((0, ""), (code, err.getvalue()), out.getvalue())
         self.assertIn("conflict AGENTS.md block workbench/code-work slot:policy", out.getvalue())
         self.assertEqual(mine, self.read(path))
+
+    def test_the_installed_command_runs_through_wb_run_once_its_owner_pins_the_helper(self):
+        """The real path: install, refuse while unpinned, pin as the owner would, run the helper."""
+        place = self.place()
+        self.assertEqual(0, self.install(place)[0])
+        errors = io.StringIO()
+        self.assertEqual(1, commands.run(self.guarded, ["code-work", "check"], errors, cwd=place))
+        self.assertIn("not pinned", errors.getvalue())
+        ident = project.read_id(place)
+        rel = ".workbench/workbench/code-work/" + HELPER
+        pins.set_pin(self.guarded, ident, "code-work", rel,
+                     pins.hash_bytes(self.read(os.path.join(place, *rel.split("/")))), "owner")
+        errors = io.StringIO()
+        # The helper finds the project from its own working directory, as it does when a person runs it.
+        before = os.getcwd()
+        self.addCleanup(os.chdir, before)
+        os.chdir(place)
+        with tempfile.TemporaryFile() as out:
+            code = commands.run(self.guarded, ["code-work", "check"], errors, cwd=place, stdout=out)
+            out.seek(0)
+            shown = out.read().decode()
+        self.assertEqual("", errors.getvalue())
+        self.assertEqual(0, code, shown)
+        self.assertEqual(1, commands.run(self.guarded, ["code-work", "commit"], io.StringIO(), cwd=place))
 
 
 if __name__ == "__main__":

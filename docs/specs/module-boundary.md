@@ -202,7 +202,7 @@ still change is the `arguments` list: it filters mistakes and is not a security 
 validate its own arguments.
 
 The installer knows no command by name. The `code-work` entry in the agent-safe list, `dispatch.py`
-and the `code-work` branch in `cli.py` are replaced by this.
+and the `code-work` branch in `cli.py` were replaced by this, and `code-work` declares its own command.
 
 ## Module checks
 

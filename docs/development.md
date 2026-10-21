@@ -42,6 +42,7 @@ ambiguous blank.
 | Owner-run: add a module (terminal only) | `python3 -m workbench add [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Run a pinned helper | `python3 -m workbench launch <project-id> <name> --root <project-dir> -- <args>` |
 | Run a module command | `python3 -m workbench run <command> [<argument> ...]` from anywhere in the project (agent-safe; the command must be installed and pinned; the arguments after the first reach the helper unchanged) |
+| Check, list or report the plans | `python3 -m workbench run code-work check\|plans\|report` (the `code-work` module's command; its owner pins the helper first) |
 | Release time: write the approvals shipped with first-party packages | `python3 -m workbench release-approvals` |
 | Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
 | One focused test file | `python3 -m unittest discover -s tests -p 'test_approvals.py'` (a test module that imports `support` only loads under `discover -s tests`); for a module's own tests, `python3 -B -m unittest discover -s packages/<package>/<module>/tests -t packages/<package>/<module>/tests` from the repository root |

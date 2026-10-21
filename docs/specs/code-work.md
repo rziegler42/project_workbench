@@ -239,15 +239,15 @@ module adds none of its own.
 - The agent commits through the commit helper, never by composing raw git commands.
   A commit is local, is made after a passing review, and lists exact paths.
 - The helper ships with this module, in `.workbench/<package>/code-work/`, so every
-  teammate has the same one. It is run as `wb code-work commit` (and `wb code-work
+  teammate has the same one. It is run as `wb run code-work commit` (and `wb run code-work
   remove` for an approved deletion of project files). `wb` is a small launcher kept
   in the guarded store, on the owner's `PATH`, that verifies the helper's hash
   against its pin before running it, so a pulled edit to the helper is not run until
   acknowledged. The owner's personal allowance targets `wb`.
-- The same helper holds the read-only subcommands: `wb code-work check` (the plan
+- The same helper holds the read-only subcommands: `wb run code-work check` (the plan
   check: one `Candidate:` line, the sections of the hashed region, required fields),
-  `wb code-work plans` (the active plans, derived by listing plans by status) and
-  `wb code-work report` (candidate completion, derived from work records). They change
+  `wb run code-work plans` (the active plans, derived by listing plans by status) and
+  `wb run code-work report` (candidate completion, derived from work records). They change
   nothing.
 - A commit never authorizes a push.
 
@@ -340,7 +340,7 @@ installer's and is replaced on upgrade only while unedited.
 
 ## Decided points that were open
 
-- The commit helper is run as `wb code-work commit`, through the `wb` launcher in the
+- The commit helper is run as `wb run code-work commit`, through the `wb` launcher in the
   guarded store; the helper's files are committed under
   `.workbench/<package>/code-work/`.
 - The loop cap defaults are the values above.

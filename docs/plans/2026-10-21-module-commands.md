@@ -369,3 +369,19 @@ proving it did not run, unpinned, unknown command, bad argument, outside a proje
 command line), and `test_permissions.py` shows no spelling of `run` is denied or asked.
 Verification: `python3 -B -W error tests/run_all.py`: 2212 tests in 2 roots, OK (2192 before). No first-party
 module changed, so no approval changed. Not reviewed independently; the security pass is G.
+
+### Increment E
+
+`packages/workbench/code-work/module.json` declares `commands.code-work` (helper `helper/code-work`, runtime
+`exec`, arguments `check`, `plans`, `report`), so its owner pins it without `--kit`. The `draft-plan` skill says
+`wb run code-work check`. `workbench/dispatch.py`, `tests/test_dispatch.py`, the `code-work` branch and usage
+line in `cli.py`, and `"code-work"` in `AGENT_SAFE` are gone (removed with `claude-workflow remove`). A test in
+`tests/test_run.py` fails if any installer source names `code-work` (the plan name `code-work-module` aside).
+The owner ran `release-approvals` (two new records) and approved removing the two stale shipped records
+(`1813e02d8908`, `402db98b6ada`). `docs/development.md`, `docs/specs/code-work.md` and
+`docs/specs/module-boundary.md` say `wb run code-work ...`.
+End to end: a test in `tests/test_codework_module.py` installs the real module into a scratch project,
+shows `wb run code-work check` refused while unpinned, pins the shipped helper, and runs it (exit 0, nothing on
+standard error); `commit`, which the declaration does not list, is refused.
+Verification: `python3 -B -W error tests/run_all.py`: 2189 tests in 2 roots, OK; only the three macOS
+filesystem skips remain, so no stale-approval skip. Not reviewed independently; the security pass is G.

@@ -5,6 +5,7 @@ that expects a refusal can show that nothing ran."""
 
 import io
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -192,6 +193,25 @@ class Classified(unittest.TestCase):
     def test_run_is_agent_safe_and_not_owner_run(self):
         self.assertIn("run", rules.AGENT_SAFE)
         self.assertNotIn("run", rules.OWNER_RUN)
+
+
+class TheInstallerNamesNoModuleCommand(unittest.TestCase):
+    """The installer knows no command by name. This is the check for `code-work` only; the whole
+    boundary test belongs to plan `module-harness-paths`."""
+
+    def test_no_installer_source_names_the_code_work_command(self):
+        root = os.path.dirname(os.path.abspath(cli.__file__))
+        named = []
+        for folder, dirs, files in os.walk(root):
+            dirs[:] = [d for d in dirs if d not in ("shipped_approvals", "__pycache__")]
+            for name in files:
+                if name.endswith(".py"):
+                    path = os.path.join(folder, name)
+                    with open(path, encoding="utf-8") as handle:
+                        # `code-work-module` is the name of a plan, not of the command.
+                        if re.search(r"code-work(?!-module)", handle.read()):
+                            named.append(os.path.relpath(path, root))
+        self.assertEqual([], named)
 
 
 if __name__ == "__main__":

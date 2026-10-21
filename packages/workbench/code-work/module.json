@@ -17,6 +17,16 @@
   "ships": [
     "helper/code-work"
   ],
+  "commands": {
+    "code-work": {
+      "helper": "helper/code-work",
+      "arguments": [
+        "check",
+        "plans",
+        "report"
+      ]
+    }
+  },
   "fills": [
     {
       "slot": "slot:docs-index",

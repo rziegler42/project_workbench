@@ -1,6 +1,6 @@
 """The kit's project finder and project ID (plan `2026-10-21-module-boundary-kit`, increment C).
 
-The finder's cases are the ones `tests/test_dispatch.py` pins through `wb code-work`; here they run
+The finder's cases are the ones `tests/test_run.py` pins through `wb run`; here they run
 against the kit directly, on plain directories."""
 
 import hashlib

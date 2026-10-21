@@ -8,7 +8,7 @@ import argparse
 import os
 import sys
 
-from . import (acknowledge, approve, attach, check, dispatch, firstparty, install, launch, pins, preview,
+from . import (acknowledge, approve, attach, check, firstparty, install, launch, pins, preview,
                recover, settings, sources, store, target, upgrade, verify)
 from . import commands as module_commands
 from .wbkit import display, safefs
@@ -20,7 +20,6 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "                                                    (owner-run, terminal only)\n"
          "       python3 -m workbench pin <project-id> <name> <helper> --root <dir> [--kit N]   (owner-run, terminal only)\n"
          "       python3 -m workbench launch <project-id> <name> --root <dir> -- <args>\n"
-         "       python3 -m workbench code-work check|plans|report   (read-only)\n"
          "       python3 -m workbench run <command> [<argument> ...]\n"
          "       python3 -m workbench release-approvals\n"
          "       python3 -m workbench preview install [<target> | --dir <path>] --package <source> [--ref <ref>] ...\n"
@@ -251,19 +250,6 @@ def _check(tokens, out, err, store_root, distribution):
     return check.run(guarded, command, out, err)
 
 
-def _code_work(tokens, out, err, store_root, distribution):
-    """``code-work``: the arguments are the helper's and are never parsed as options here."""
-    if not dispatch.accepted(tokens):
-        err.write(dispatch.USAGE)
-        return 2
-    opened = _open_store(store_root, err)
-    if opened is None:
-        return 1
-    # Only the wrapper is checked; nothing else is printed, so the helper's streams stay clean.
-    launch.install_wrapper(opened[0], distribution or firstparty.default_distribution())
-    return dispatch.run(opened[0], tokens, err)
-
-
 def _run(tokens, out, err, store_root, distribution):
     """``run``: the arguments are the helper's and are never parsed as options here."""
     if not tokens or not tokens[0] or tokens[0].startswith("-"):
@@ -294,8 +280,6 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         argv, passthrough = argv[:split], argv[split + 1:]
     if argv and argv[0] == "run":
         return _run(argv[1:], out, err, store_root, distribution)
-    if argv and argv[0] == "code-work":
-        return _code_work(argv[1:], out, err, store_root, distribution)
     if argv and argv[0] == "preview":
         return _preview(argv, out, err, store_root, distribution, home)
     if argv and argv[0] == "acknowledge":
