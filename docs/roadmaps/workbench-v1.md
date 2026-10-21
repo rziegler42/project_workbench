@@ -128,7 +128,8 @@ meet here and the order matters.
 `approve-specs`, `adopt-conventions`, `installer-core-verifier`, `module-approvals`,
 `installer-interface`, `base-and-manifests`,
 `ownership-and-upgrade`, `claude-harness`, `verify-opencode`, `opencode-harness`,
-`groundwork-module`, `researcher-fetch-tool`, `code-work-plans`, `code-work-commit`,
+`groundwork-module`, `researcher-fetch-tool`, `code-work-plans`, `module-boundary-kit`,
+`module-commands`, `module-checks`, `module-harness-paths`, `code-work-commit`,
 `code-work-approval`, `remote-runner-module`, `peer-review-provider`, `knowledge-base-package`,
 `global-config-migration`, `self-hosting`, `remaining-modules-rename`.
 
@@ -298,6 +299,53 @@ launching and reading untrusted plans.
 caps, checkpoint or push rule. Until `code-work-approval`, approval is the owner's
 explicit statement in session and the policy block says so.
 **Promotion trigger:** `groundwork-module` complete.
+
+The next four candidates carry out `docs/specs/module-boundary.md` and the decision
+`2026-10-21-module-code-lives-in-modules`: module-specific code, tests and tooling leave the
+installer for the modules. The open `code-work-plans` plan is reconsidered after
+`module-commands`; its increments F to H assume the older design.
+
+### module-boundary-kit — The kit and the maintainer directories
+
+**Outcome:** the installer's reading code (`safefs`, `display`, project finding and the
+project ID) lives in a standard-library kit, `wbkit`, with an API version; the launcher can
+start a Python helper through a runner that enforces the version the module declared; a
+module may hold `tests/` and `tools/`, which are hashed and approved and never installed;
+one command runs the installer's tests and every module's.
+**Dependencies:** `code-work-plans` (increments A to E).
+**Boundary:** no new user-visible command and no module code moves except one module's
+tests, as proof. `commands`, `checks` and `wb run` are later candidates.
+**Promotion trigger:** the specification `module-boundary` is Current.
+
+### module-commands — Module commands and `wb run`
+
+**Outcome:** a module declares `commands`, the verifier checks them, and `wb run` runs the
+pinned helper by the rules of the specification, including the pin-path check; `dispatch.py`
+and the `code-work` entries in the installer are gone, and the `code-work` tests move into
+the module.
+**Dependencies:** `module-boundary-kit`.
+**Boundary:** commands only. Checks and harness paths are separate.
+**Promotion trigger:** `module-boundary-kit` complete.
+
+### module-checks — Module checks and the groundwork move
+
+**Outcome:** a module declares `checks`; `wb check` runs them and prints their bounded
+lines; the document checks (`doccheck`, `refcheck`, `refindex`) and their tests move into
+`groundwork` as check helpers over the kit.
+**Dependencies:** `module-commands`.
+**Boundary:** the rules a check reports do not change. A security pass is part of it,
+because the helpers read hostile repository content.
+**Promotion trigger:** `module-commands` complete.
+
+### module-harness-paths — Harness paths from the harness module
+
+**Outcome:** the harness table in `check.py` and the settings path in `layout.py` are read
+from the harness module's `layout`; a
+boundary test fails if the installer or its tests name a first-party module, helper,
+harness name or harness path.
+**Dependencies:** `module-checks`.
+**Boundary:** no new harness. `opencode` and `codex` entries with no module are removed.
+**Promotion trigger:** `module-checks` complete.
 
 ### code-work-commit — The commit helper
 
