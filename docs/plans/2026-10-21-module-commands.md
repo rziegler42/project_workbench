@@ -24,6 +24,7 @@ gone, and the `code-work` module offers its helper as a command. The `code-work`
 - Moving `tests/test_codework_*.py` and `tests/test_dispatch.py` into the module or rewriting them on
   synthetic modules.
 - A security pass on the resolver and `wb run` (they read a hostile project and start a program).
+- Showing a module's commands in the approval request (added as increment G).
 
 ## Non-goals
 
@@ -209,11 +210,34 @@ Verification: `python3 -B -W error tests/run_all.py` reports three roots and the
 tests as before (record the before and after counts). Evidence: the counts, and the package still verifies
 with no `__pycache__` in it.
 
-### Increment G — Security pass, specification and result
+### Increment G — The approval request lists a module's commands
+
+Added on 2026-10-21 at the owner's direction (the gap was recorded in the Result for A). The declaration is
+already inside the approved hashes; this increment makes it readable before the owner approves.
+Outcome: `request.render_module` shows each command the module declares, so the owner sees what the module
+offers to run before approving it.
+Dependencies: F.
+Affected areas: `workbench/request.py`, `tests/test_request.py` (or the file that tests `render_module`),
+`docs/specs/module-boundary.md` if it describes the request.
+
+1. Add a section "commands it offers" after "ships code or executables": one line per command with its name,
+   helper, runtime, kit when present and allowed first arguments (or "no argument"). Every string passes
+   `_shown`, so a hostile name or path is cleaned. Add the command count to the `size:` line only if no test
+   or record depends on its text; otherwise leave that line alone.
+2. Tests: a module with commands lists each one; a module without lists no such section; a hostile command
+   name and argument are cleaned; a `python` command shows its kit; the approval record and hashes are
+   unchanged (the request text is not hashed).
+3. If the request text of a shipped module changes, check whether `release-approvals` output changes; it should
+   not, because records hold hashes only.
+
+Verification: the full suite; `git diff --check`. Evidence: the rendered request for the real `code-work`
+module, pasted into the Result.
+
+### Increment H — Security pass, specification and result
 
 Outcome: the resolver and `wb run` are reviewed adversarially, the specifications describe what is built, and
 the plan's result is recorded.
-Dependencies: F.
+Dependencies: G.
 Affected areas: `docs/specs/module-boundary.md`, `docs/specs/module-contract.md`, `docs/development.md`, this
 plan's review record and result.
 
@@ -240,7 +264,7 @@ After every increment: `python3 -B -W error tests/run_all.py`, `git diff --check
 
 - **A command starts a program from a hostile project.** The command comes only from a module the manifest
   records, whose installed declaration matches the recorded hash; the helper must match an owner-set pin and
-  the pin must name the declared path. The security pass in G is aimed at these.
+  the pin must name the declared path. The security pass in H is aimed at these.
 - **A sensitive action for the owner:** `release-approvals` after E and F (it writes first-party approval
   records), and `pin` for the project's own use, which stays owner-run.
 - **A broken `wb run` leaves the `code-work` skill without its checker.** Increment D keeps the old route
@@ -260,6 +284,9 @@ Codex review (`ask-codex review-plan`, model gpt-5.6-luna, medium effort), round
   Recorded with `ask-codex decide R1-F1 applied` on the owner's instruction; no decision is pending.
 
 Approved by the owner on 2026-10-21, after the one Codex round; no further round was run.
+
+Amended on 2026-10-21 at the owner's direction: new increment G (commands in the approval request); the
+security pass, specifications and result are now H. No other increment changed.
 
 ## Deferred work
 
@@ -325,7 +352,7 @@ and requires the pin's path to equal `.workbench/<package>/<module>/<helper>`. D
 by the existing install path, with a `pin` helper); `tests/test_commands.py` has 21 tests, with `launch.launch`
 and `subprocess.run` patched to fail so a test proves nothing was started.
 Verification: `python3 -B -W error tests/run_all.py`: 2179 tests in 2 roots, OK (2158 before). No first-party
-module changed, so no approval changed. Not yet reviewed independently; the security pass is G.
+module changed, so no approval changed. Not yet reviewed independently; the security pass is H.
 Review (increment C): one `security-reviewer` pass, no Critical or High finding; it found no way to make the
 resolver start a program or run a helper no pin names. Fixed: the manifest was read twice (the ID by the kit's
 loose reader, the modules by the strict one), so a rename between the reads could pair one manifest's ID with
@@ -345,7 +372,7 @@ the declaration's, and tells the owner the `pin ... --kit N` command to run. Fiv
 (including a hostile commit that rewrites the declaration and the manifest from `python` to `exec`) and seven
 in `test_pins.py`. `module-boundary.md`, `trust-and-approval.md`, `installer-interface.md` and `development.md`
 describe it, and say `arguments` is not a boundary. The fix is new attack surface and has not been
-re-reviewed; G's second pass should try to bypass it. Consequence for E: the owner pins `code-work` without
+re-reviewed; H's second pass should try to bypass it. Consequence for E: the owner pins `code-work` without
 `--kit`, since it is `exec`.
 Verification: `python3 -B -W error tests/run_all.py`: 2189 tests in 2 roots, OK (2158 before C). No
 first-party module changed, so no approval changed.
@@ -355,7 +382,7 @@ helper pinned with a kit ran directly. `launch.launch` now takes the kit from th
 that expects another way (`None` accepts the pin's); tests in `test_runner.py` (the pin decides, a mismatch
 runs nothing, `launch.run` builds the runner command). Four existing runner tests now pin with a kit.
 Low, fixed: a declared `kit` above 999999 could never be pinned; the declaration is now bounded by the same
-`MAX_KIT`. The fix to `launch` has not been re-reviewed; G's pass covers it.
+`MAX_KIT`. The fix to `launch` has not been re-reviewed; H's pass covers it.
 
 ### Increment D
 
@@ -368,7 +395,7 @@ subdirectory, a python command started with the kit number, a changed helper ref
 proving it did not run, unpinned, unknown command, bad argument, outside a project, usage errors, the
 command line), and `test_permissions.py` shows no spelling of `run` is denied or asked.
 Verification: `python3 -B -W error tests/run_all.py`: 2212 tests in 2 roots, OK (2192 before). No first-party
-module changed, so no approval changed. Not reviewed independently; the security pass is G.
+module changed, so no approval changed. Not reviewed independently; the security pass is H.
 
 ### Increment E
 
@@ -384,7 +411,7 @@ End to end: a test in `tests/test_codework_module.py` installs the real module i
 shows `wb run code-work check` refused while unpinned, pins the shipped helper, and runs it (exit 0, nothing on
 standard error); `commit`, which the declaration does not list, is refused.
 Verification: `python3 -B -W error tests/run_all.py`: 2189 tests in 2 roots, OK; only the three macOS
-filesystem skips remain, so no stale-approval skip. Not reviewed independently; the security pass is G.
+filesystem skips remain, so no stale-approval skip. Not reviewed independently; the security pass is H.
 
 ### Increment F
 
@@ -400,4 +427,4 @@ use the code-work fixture, so it is unchanged.
 Verification: `python3 -B -W error tests/run_all.py`: 2189 tests in 3 roots (2035, 18 and 136), the same total
 as before the move (the 136 `code-work` tests were 136 in `tests/`); no `__pycache__` under `packages/`. The owner
 then ran `release-approvals` (two new records) and approved removing the two stale ones (`1c51e4df0acd`,
-`ec112778f781`); with them gone only the three macOS filesystem skips remain. Not reviewed independently; G does.
+`ec112778f781`); with them gone only the three macOS filesystem skips remain. Not reviewed independently; H does.
