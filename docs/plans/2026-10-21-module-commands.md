@@ -1,6 +1,6 @@
 # Module commands and `wb run`
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-21
 
 Candidate: workbench-v1#module-commands
@@ -443,3 +443,33 @@ The real module renders as: `commands it offers: code-work runs helper/code-work
 check, plans, report`.
 Verification: `python3 -B -W error tests/run_all.py`: 2194 tests in 3 roots, OK (2189 before); no `__pycache__`
 under `packages/`. Not reviewed independently; H covers it.
+
+### Increment H
+
+The `security-reviewer` agent attacked `commands.py`, `wb run`, the pin-path check, the kit-from-pin change in
+`launch` and the request section, with real experiments (a recording helper shows whether anything ran). Result:
+no Critical, High or Medium finding, so no code fix and no second bypass pass was needed. Verified by test:
+- a hand-written or edited `module.json`, including bytes equal to another module's and a command moved to a
+  module holding a byte-identical helper, is refused (hash, name and pin-path checks);
+- a symlinked `.workbench/<package>`, module directory, helper or `module.json` is refused;
+- case, fullwidth, NFD, trailing-dot and trailing-space variants of the pinned path are refused by the exact
+  comparison;
+- a first argument that is not exactly listed (NUL, case, spaces, near matches, empty) is refused, and later
+  arguments (option-like, empty, newline, 1 MB) reach the helper unchanged; a NUL later gives a clean refusal;
+- command names that are prefixes, case variants, paths or hostile text run nothing; a repeated module or
+  package in the manifest is rejected by the parser; two modules with one command name are ambiguous;
+- a helper swapped or turned into a symlink after the hash cannot change what runs, since launch spawns a
+  private copy of the hashed bytes;
+- a wrong-typed, missing or mismatching pin `kit`, or a caller kit that differs, is refused; `-I` keeps
+  planted `json.py`, `sitecustomize.py`, `PYTHONPATH`, `PYTHONSTARTUP` and the like out;
+- hostile command text in the approval request is shown as escaped ASCII and cannot forge a line.
+Accepted, not fixed: **Low-1**, `arguments` is a mistake filter and whoever can write the project can rewrite a
+declaration with its hash, so the owner pinning a helper approves its handling of any first argument. This is by
+design; `module-boundary.md` now says so. **Low-2**, a same-account race on the private copy between `fsync` and
+`exec` (that account can already do what the helper can); a killed run can leave clutter under `bin/run/`.
+Not exercised: that race, a case-insensitive alias of `.workbench`, a hostile `#!` in an owner-pinned exec
+helper, E2BIG above about 1 MB, Linux, Windows.
+Specifications: `module-contract.md` marks `commands` built; the `module-boundary.md` inventory marks the dispatch
+and test moves done; `docs/development.md` already lists `wb run`.
+Plan result: all of A to H are committed; the `commands` field, the resolver, `wb run`, the `code-work` command,
+the tests in the module and the approval request section are built. Next on the roadmap: `module-checks`.

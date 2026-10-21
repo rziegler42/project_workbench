@@ -199,7 +199,8 @@ lives in the guarded store, so it records the `kit` number the owner pinned the 
 none for an `exec` helper). The launcher takes the kit from the pin, never from its caller, so `launch` and
 `wb run` run a pinned helper the same way, and `wb run` also refuses unless the pin equals the declaration's. What a project can
 still change is the `arguments` list: it filters mistakes and is not a security boundary, so a helper must
-validate its own arguments.
+validate its own arguments. Whoever can write the project can rewrite a declaration together with its recorded
+hash, so the owner who pins a command's helper approves how it handles any first argument, not a closed set.
 
 The installer knows no command by name. The `code-work` entry in the agent-safe list, `dispatch.py`
 and the `code-work` branch in `cli.py` were replaced by this, and `code-work` declares its own command.
@@ -294,9 +295,9 @@ This is the inventory the move plans start from.
 | now | goes to |
 |---|---|
 | `workbench/doccheck.py`, `refcheck.py`, `refindex.py` | `groundwork` as check helpers over the kit |
-| `workbench/dispatch.py`, the `code-work` branch in `cli.py`, `"code-work"` in the agent-safe list | the generic `wb run`, driven by `code-work`'s `commands` |
+| `workbench/dispatch.py`, the `code-work` branch in `cli.py`, `"code-work"` in the agent-safe list | *(done)* the generic `wb run`, driven by `code-work`'s `commands` |
 | `HARNESSES` in `check.py`, `SETTINGS_PATHS` in `layout.py` | read from the `claude` module's `layout` |
-| `tests/test_codework_*.py`, `test_dispatch.py` | `packages/workbench/code-work/tests/` (installer-side routing tests are rewritten on synthetic modules) |
+| `tests/test_codework_*.py`, `test_dispatch.py` | *(done)* `packages/workbench/code-work/tests/` (installer-side routing tests are rewritten on synthetic modules) |
 | `tests/test_groundwork_*.py`, `test_doccheck.py`, `test_refcheck.py`, `test_refindex.py` | `packages/workbench/groundwork/tests/` |
 | `tests/test_claude_module.py` | `packages/workbench/claude/tests/` |
 

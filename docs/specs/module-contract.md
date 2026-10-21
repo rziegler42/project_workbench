@@ -7,8 +7,8 @@ specification; where the table descriptions and "Concrete schema" differ in prec
 "Concrete schema" is the one the code enforces.
 
 Terms are defined in `terms.md`. The fields `commands` and `checks` and the pin-name rule are specified by
-`module-boundary.md` and added here on 2026-10-21; each is marked "not built yet" until the plan that builds
-it lands, and the verifier accepts none of them until then. The maintainer directories `tests/` and
+`module-boundary.md` and added here on 2026-10-21; `commands` is built, and the others are marked "not built yet"
+until the plan that builds them lands, and the verifier accepts none of those until then. The maintainer directories `tests/` and
 `tools/`, specified there too, are built.
 
 ## Purpose and scope
@@ -74,7 +74,7 @@ Each module has one declaration file, `module.json`, at the root of its director
 | `fills` | Blocks the module contributes: the slot, and the source file. |
 | `writes` | The project paths the module writes, beyond its own namespace. |
 | `ships` | Executable or code-bearing items it ships, such as hooks or helper scripts. |
-| `commands` | Commands it offers, each a pinned helper it ships and the first arguments it accepts, run with `wb run`. *(the field is verified; `wb run` is not built yet)* |
+| `commands` | Commands it offers, each a pinned helper it ships and the first arguments it accepts, run with `wb run`. *(built: verified, and run with `wb run`)* |
 | `checks` | Pinned Python helpers it contributes to `wb check`. *(specified by `module-boundary.md`; not built yet)* |
 | `layout` | Harness modules only: the layout description (see `harness-modules.md`). It is part of the declaration and its hash. |
 
@@ -286,7 +286,7 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   file and directory.
 - `ships`: each item is a file, or a directory that holds at least one file. An empty
   directory is refused because the content hash does not cover it.
-- `commands` *(verified; `wb run` is not built yet)* and `checks` *(specified by `module-boundary.md`; not built yet)*: the exact shapes,
+- `commands` *(built)* and `checks` *(specified by `module-boundary.md`; not built yet)*: the exact shapes,
   limits and refusals are in `module-boundary.md`, "Declaration schema". The verifier also requires a
   command's helper to be a regular file of the module. In short, each names a helper that is an item of `ships` (or a file below one),
   a Python helper declares the kit API number it needs in `kit`, and an unknown field is refused as
