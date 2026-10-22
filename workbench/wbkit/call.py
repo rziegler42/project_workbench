@@ -7,8 +7,8 @@ unchanged and (with `provides`) provided by its module is refused there and noth
 
 What this module does:
 
-* finds ``wb`` only in a ``PATH`` entry that is absolute and outside the project, and does not accept a
-  file that resolves into the project;
+* finds ``wb`` only in a ``PATH`` entry that is absolute and outside the project (and outside any
+  repository the project is inside), and does not accept a file that resolves into either;
 * gives it an environment built here from a short list of the caller's variables and that ``PATH``, so
   no ``GIT_*`` variable, token or ``LD_*`` variable of the caller reaches the command;
 * passes the command and every argument as one literal argument, with no shell;
@@ -46,9 +46,32 @@ class CallError(Exception):
 
 
 def is_inside(path, boundary):
-    """Whether `path`, with links resolved, is `boundary` or below it."""
-    path, boundary = os.path.realpath(path), os.path.realpath(boundary)
-    return path == boundary or path.startswith(boundary.rstrip(os.sep) + os.sep)
+    """Whether `path`, with links resolved, is `boundary` or below it, whatever case it is spelled in."""
+    try:
+        current = os.path.realpath(path)
+        while True:
+            if os.path.samefile(current, boundary):
+                return True
+            parent = os.path.dirname(current)
+            if parent == current:
+                return False
+            current = parent
+    except OSError:
+        return False
+
+
+def outermost_boundary(start):
+    """The outermost ancestor of `start` that holds a `.git` entry, else `start`: a repository embedded in
+    another cannot make the outer one look like a trusted place."""
+    current = os.path.realpath(start)
+    found = None
+    while True:
+        if os.path.lexists(os.path.join(current, ".git")):
+            found = current
+        parent = os.path.dirname(current)
+        if parent == current:
+            return found or os.path.realpath(start)
+        current = parent
 
 
 def trusted_entries(boundary):
@@ -117,14 +140,15 @@ def run_command(root, command, arguments=(), *, stdin=b"", limit, timeout, provi
     started: a bad argument, or no ``wb`` outside `root`."""
     _check(root, command, arguments, stdin, limit, timeout, provides)
     arguments = list(arguments)
-    wb = trusted_which("wb", root)
+    boundary = outermost_boundary(root)
+    wb = trusted_which("wb", boundary)
     if wb is None:
         raise CallError("the `wb` launcher was not found in an absolute PATH entry outside the project; "
                         "nothing was run")
     argv = [wb, "run"] + (["--provides", provides] if provides is not None else []) + [command] + arguments
     try:
         process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE, cwd=cwd or root, env=environment(root),
+                                   stderr=subprocess.PIPE, cwd=cwd or root, env=environment(boundary),
                                    start_new_session=True)
     except (OSError, ValueError) as exc:
         raise CallError("the launcher could not be started: %s" % (getattr(exc, "strerror", None) or exc))

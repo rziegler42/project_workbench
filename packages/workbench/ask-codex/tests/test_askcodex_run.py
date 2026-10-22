@@ -3,8 +3,12 @@
 
 import json
 import os
+import signal
+import subprocess
+import sys
 import time
 import unittest
+import unittest.mock
 
 import support_codex
 
@@ -379,3 +383,79 @@ class Tree(support_codex.Bridge):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Reviewed(support_codex.Bridge):
+    """What the independent reviews found, each pinned."""
+
+    def test_the_scratch_directory_is_never_made_when_the_temporary_directory_is_in_the_project(self):
+        self.path([self.outside], TMPDIR=os.path.join(self.root, "docs"))
+        with unittest.mock.patch.object(self.helper.tempfile, "mkdtemp", side_effect=AssertionError("made")):
+            self.refused(contains="temporary directory")
+
+    def test_a_root_inside_git_or_the_workbench_directory_is_refused(self):
+        os.makedirs(os.path.join(self.root, "docs", ".git", "x"))
+        for root in (".git", ".workbench", "docs/.git", "docs/.git/x"):
+            self.refused("--root", root, contains="--root")
+        self.assertEqual("codex", self.document("--root", "docs")["vendor"])
+
+    def test_a_root_the_program_cannot_enter_is_refused(self):
+        folder = os.path.join(self.root, "docs", "locked")
+        os.mkdir(folder)
+        os.chmod(folder, 0)
+        self.addCleanup(os.chmod, folder, 0o755)
+        if os.access(folder, os.X_OK):
+            self.skipTest("the permissions are not enforced for this user")
+        self.refused("--root", "docs/locked", contains="--root")
+
+    def test_a_count_beyond_any_real_usage_is_null(self):
+        self.control(reply="r", events=[{"usage": {"input_tokens": 10 ** 30, "output_tokens": 10 ** 12,
+                                                    "total_tokens": 10 ** 12 + 1}}])
+        self.assertEqual({"input_tokens": None, "output_tokens": 10 ** 12, "total_tokens": None},
+                         self.document()["usage"])
+
+    def test_the_number_401_in_a_path_is_not_a_sign_in_problem(self):
+        self.control(code=2, stderr="error: /tmp/build401/x failed\n")
+        self.assertEqual("bad_exit", self.document()["detail"])
+        self.control(code=2, stderr="status: 401\n")
+        self.assertEqual("not_signed_in", self.document()["error"])
+
+    def test_stdout_past_the_bound_is_reported_though_standard_error_speaks_in_the_same_moment(self):
+        self.control(stdout_bytes=self.helper.MAX_OUTPUT + 5000, stderr_bytes=10, reply="r")
+        self.assertEqual("reply_too_large", self.document()["detail"])
+
+    def test_a_terminate_signal_stops_the_program_and_removes_the_scratch_directory(self):
+        self.control(hang=True)
+        helper = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "helper", "ask-codex")
+        workbench = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__)))))), "workbench")
+        env = {"PATH": self.outside, "TMPDIR": self.temp, "HOME": self.base, "PYTHONPATH": workbench}
+        process = subprocess.Popen([sys.executable, "-B", helper, "ask"], cwd=self.root, env=dict(env),
+                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.addCleanup(process.kill)
+        process.stdin.write(b"hello\n")
+        process.stdin.close()
+        pids = os.path.join(self.outside, "pids")
+        for _ in range(100):
+            if os.path.exists(pids) and self.calls():
+                break
+            time.sleep(0.1)
+        else:
+            self.fail("the program did not start")
+        time.sleep(0.2)
+        with open(pids) as handle:
+            child = int(handle.read())
+        self.addCleanup(Timeout.reap, child)
+        process.send_signal(signal.SIGTERM)
+        process.wait(timeout=20)
+        process.stdout.close()
+        process.stderr.close()
+        for _ in range(50):
+            try:
+                os.kill(child, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.1)
+        else:
+            self.fail("the program's child is still running")
+        self.assertFalse(os.path.exists(self.calls()[0]["scratch"]))

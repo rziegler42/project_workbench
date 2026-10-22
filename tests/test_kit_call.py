@@ -195,6 +195,27 @@ class FindsWbOutsideTheProject(Call):
         self.assertFalse(os.path.exists(self.inside_log))
         self.assertFalse(os.path.exists(self.log))
 
+    def test_a_wb_in_a_repository_the_project_is_inside_is_not_used(self):
+        outer = os.path.join(self.base, "outer")
+        inner = os.path.join(outer, "inner")
+        for folder in (os.path.join(outer, ".git"), os.path.join(outer, "bin"), inner):
+            os.makedirs(folder)
+        self.fake(os.path.join(outer, "bin"), self.inside_log, "outer")
+        self.path([os.path.join(outer, "bin")])
+        with self.assertRaises(call.CallError):
+            call.run_command(inner, "echo", limit=1 << 20, timeout=20)
+        self.assertFalse(os.path.exists(self.inside_log))
+        self.path([os.path.join(outer, "bin"), self.outside])
+        call.run_command(inner, "echo", limit=1 << 20, timeout=20)
+        self.assertEqual("outside", self.records()[-1]["me"])
+
+    def test_a_path_entry_spelled_in_another_case_does_not_get_past_the_check(self):
+        self.fake(os.path.join(self.root, "bin"), self.inside_log, "inside")
+        self.path([os.path.join(self.root, "bin").upper()])
+        with self.assertRaises(call.CallError):
+            self.run_it()
+        self.assertFalse(os.path.exists(self.inside_log))
+
     def test_a_non_executable_wb_is_skipped(self):
         os.chmod(os.path.join(self.outside, "wb"), 0o644)
         with self.assertRaises(call.CallError):

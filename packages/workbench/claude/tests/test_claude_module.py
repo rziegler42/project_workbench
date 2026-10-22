@@ -56,14 +56,14 @@ class Shipped(unittest.TestCase):
         result = verify.verify_package(PACKAGE, select=["claude"],
                                        first_party=firstparty.is_first_party(PACKAGE))
         self.assertTrue(result.accepted, [str(p) for p in result.problems])
-        self.assertEqual([m.name for m in result.modules], ["claude", "code-work", "groundwork", "safe-git"])
+        self.assertEqual([m.name for m in result.modules], ["ask-codex", "claude", "code-work", "groundwork", "safe-git"])
 
     def test_the_shipped_records_match_the_current_hashes(self):
         support.require_release(self)
         result = verify.verify_package(PACKAGE, first_party=True)
         self.assertTrue(result.accepted, [str(p) for p in result.problems])
         tree = firstparty.shipped_tree(firstparty.default_distribution())
-        module = result.modules[0]
+        module = next(m for m in result.modules if m.name == "claude")
         got = approvals.check_module(tree, "workbench/claude", module.declaration_hash,
                                      module.tree_hash)
         self.assertTrue(got.approved, got.reason)

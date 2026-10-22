@@ -253,6 +253,36 @@ was reached, so that fix has not been reviewed.
 
 The review is not an approval. The owner approved the plan on 2026-10-22, including the roadmap split in increment E.
 
+Increment D reviews of increments A to C (commits `08d9d62`, `3969ddf`, `1d0db6c`), run on the owner's "start next
+increment" on 2026-10-22: one round each, by a `security-reviewer` (with scratch experiments against fake programs)
+and a `workflow-reviewer` (read-only). No Critical or High finding from either. Their findings are untrusted input
+and were each checked against the code.
+
+- S-L1 and W-2 (applied): the kit's search for `wb` used the project root as its boundary and string prefixes, so a
+  project inside another repository, or a PATH entry spelled in another case, could be accepted. `call.py` now uses
+  the outermost-`.git` boundary and the same-file walk that the bridge uses. A home directory that is itself a
+  repository would make the guarded store look untrusted; nothing here has one, and the failure is a refusal.
+- S-L2 (applied, stricter than the contract): `--root` inside `.git` or `.workbench` is refused.
+- S-L3 and W-3 (applied): the temporary directory is checked before the scratch directory is made.
+- W-4 (applied): a stdout past the bound is no longer forgotten when stderr speaks in the same moment.
+- W-5 (applied): a `--root` the program cannot enter is refused, instead of reporting `program_not_found`.
+- W-6 (applied): "401" counts as a sign-in problem only beside "status", "error" or "code", not in a path.
+- S-I2 (applied): a count over 10^12 is null.
+- W-1 (partly applied): the bridge now stops the program on SIGTERM. An outer SIGKILL of the caller's process group
+  still leaves the program running, because the program is in its own session. S-I1 (a grandchild that starts its
+  own session survives the group kill) is the same kind of limit. Both are to be written into "As built, and its
+  limits" in increment E, with the rule that an engine's time limit exceeds the bridge's `--timeout`.
+- Left for increment E as spec corrections: `--model` starts with a letter or digit; the schema is passed as a copy in
+  the scratch directory; `--ignore-rules` is in the argument list; the trusted-path boundary is the outermost
+  repository; the prompt may not be blank; the stale sentence that the launcher does not yet pass standard input.
+- Left for the owner (W-7, S, not testable here): the Codex flags and error texts were checked against a fake only.
+  The hand run should first run `codex exec --help`. Codex may also read the repository's own instruction files.
+- Not acted on: S-I3 (no depth limit across `wb run`: every link is an approved pinned command, and the time limit
+  ends a loop).
+
+Regression tests for each applied finding are in `packages/workbench/ask-codex/tests/test_askcodex_run.py` (class
+`Reviewed`) and `tests/test_kit_call.py`. The fixes have not been reviewed again, because the owner has not asked.
+
 ## Deferred work
 
 - The review engine and the action-review engine, their settings files, and where the review state lives.
@@ -263,4 +293,11 @@ The review is not an approval. The owner approved the plan on 2026-10-22, includ
 
 ## Result
 
-Empty until work starts.
+Increment D (2026-10-22): the reviews and their findings are in the Review record. After the fixes,
+`python3 -B -W error tests/run_all.py` passes with 2785 tests in 6 roots (the ask-codex root has 90 tests). The owner
+ran `python3 -m workbench release-approvals` on "Run it for me": it wrote 6 approvals for the first-party package, 5 of
+them new directories under `workbench/shipped_approvals/packages/`, and reported 4 records that are no longer part of
+the release; the owner then said "remove them" and those 4 directories were removed after a preview. Three tests in
+the claude root that took the first module of the package for `claude` now pick it by name.
+
+Increment E remains.

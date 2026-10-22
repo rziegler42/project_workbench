@@ -47,7 +47,8 @@ _KEPT = ("HOME", "XDG_CONFIG_HOME", "USER", "LOGNAME", "LANG", "TZ", "TERM", "TM
 # What the program's own words are taken to mean. The first pattern that matches wins; text that matches
 # none of them is `bad_exit`. Only the class reaches the caller, never the text.
 _SIGN_IN = (r"not (logged|signed) in|(log|sign) ?in required|please (log|sign) ?in|codex login|unauthori[sz]ed"
-            r"|\b401\b|authentication (failed|required)|invalid (api key|token)|no (api key|credentials)")
+            r"|(status|error|code)\W{0,3}401\b|authentication (failed|required)|invalid (api key|token)"
+            r"|no (api key|credentials)")
 _QUOTA = r"usage limit|rate.?limit|quota|\b429\b|too many requests|credits"
 _EFFORT = (r"(reasoning|effort).{0,80}(unsupported|not supported|invalid|unknown)"
            r"|(unsupported|not supported|invalid|unknown).{0,80}(reasoning|effort)")
@@ -187,8 +188,10 @@ def inside_path(base, value, what):
 
 def working_root(base, value):
     path = base if value is None else inside_path(base, value, "--root")
-    if not os.path.isdir(path):
-        raise Refused("--root is not a directory")
+    if not os.path.isdir(path) or not os.access(path, os.R_OK | os.X_OK):
+        raise Refused("--root is not a directory the program can enter")
+    if any(part in (".git", ".workbench") for part in os.path.relpath(path, base).split(os.sep)):
+        raise Refused("--root may not be inside .git or .workbench")
     return path
 
 
@@ -277,7 +280,7 @@ def run_program(argv, cwd, env, stdin, timeout):
                         pipes.unregister(key.fileobj)
                     else:
                         key.data.extend(chunk)
-                        over = len(key.data) > MAX_OUTPUT
+                        over = over or len(key.data) > MAX_OUTPUT
         if not timed_out and not over:
             try:
                 process.wait(timeout=max(0.0, deadline - time.monotonic()))
@@ -303,7 +306,7 @@ def run_program(argv, cwd, env, stdin, timeout):
 
 def count(value):
     """`value` when it is a non-negative whole number the program reported, else ``None``."""
-    return value if type(value) is int and value >= 0 else None
+    return value if type(value) is int and 0 <= value <= 10 ** 12 else None
 
 
 def read_events(stdout):
@@ -423,7 +426,10 @@ def ask(args, stdin, cwd, out):
     program = trusted_which(PROGRAM, entries, boundary)
     if program is None:
         return emit(out, failure("program_not_found"))
-    scratch = tempfile.mkdtemp(prefix="ask-codex-", dir=os.environ.get("TMPDIR") or None)
+    temp = os.environ.get("TMPDIR") or tempfile.gettempdir()
+    if is_inside(temp, base):
+        raise Refused("the temporary directory is inside the project; set TMPDIR outside it")
+    scratch = tempfile.mkdtemp(prefix="ask-codex-", dir=temp)
     try:
         if is_inside(scratch, base):
             raise Refused("the temporary directory is inside the project; set TMPDIR outside it")
@@ -467,4 +473,5 @@ def main(argv, stdin, out, err, cwd):
 
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))  # so the program is stopped and the scratch removed
     sys.exit(main(sys.argv[1:], sys.stdin.buffer, sys.stdout, sys.stderr, os.getcwd()))

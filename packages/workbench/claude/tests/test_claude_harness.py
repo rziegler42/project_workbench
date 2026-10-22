@@ -117,7 +117,7 @@ class Attached(Project):
         document = self.planned()
         self.assertEqual(("claude", "0.1.0", "local:workbench"),
                          (document["harness"], document["module_version"], document["source"]))
-        verified = verify.verify_package(PACKAGE, first_party=True).modules[0]
+        verified = next(m for m in verify.verify_package(PACKAGE, first_party=True).modules if m.name == "claude")
         self.assertEqual(verified.tree_hash, document["tree"])
 
     def test_the_tolerated_file_is_not_written(self):
