@@ -256,4 +256,19 @@ Nothing is left for the owner. The review is not an approval; the plan stays `Pr
 
 ## Result
 
-Not started.
+### Increment A — done
+
+- `packages/workbench/safe-git/` added: `module.json`, `helper/safe-git`, `tests/` (the git, commit and remove
+  tests as `test_safegit_*.py`, `support_git.py`, and a new `test_safegit_module.py` of 16 tests), and the
+  package lists it after `groundwork`. `code-work` is untouched.
+- A diff of the moved region (lines 676 to 1720 of the original) shows only four edits: `SETTING` and three
+  usage or docstring strings that said `code-work`.
+- Verification: the new root runs 222 tests, OK; the full suite runs 2860 tests in 5 roots, OK.
+- Differences from the plan, all small:
+  - The helper is mode 0644, like the other helpers, not 0755.
+  - `find_root` is not copied, because the git code never calls it; the copy needs `Refused`, `shown` and `_DIR`.
+  - Three tests in other modules listed the package's modules and now include `safe-git`
+    (`test_claude_module.py`, `test_codework_module.py`, `test_groundwork_module.py`).
+- The shipped-approval tests passed, so the release in increment D is still needed for the real shipped
+  records but nothing fails before it.
+- Next: increment B.

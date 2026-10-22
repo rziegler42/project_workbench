@@ -5,6 +5,7 @@
   "modules": [
     "claude",
     "code-work",
-    "groundwork"
+    "groundwork",
+    "safe-git"
   ]
 }
