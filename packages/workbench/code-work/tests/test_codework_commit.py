@@ -137,6 +137,11 @@ class Arguments(Commit):
                 self.assertRefused(self.simple("S", "a.txt", expected=value))
         self.assertUntouched()
 
+    def test_none_is_refused_where_the_branch_has_a_commit(self):
+        self.write("a.txt", "two\n")
+        self.assertRefused(self.simple("S", "a.txt", expected="none"), "no commit")
+        self.assertUntouched()
+
     def test_more_paths_than_the_limit_are_refused(self):
         self.assertRefused(self.simple("S", *["f%d" % n for n in range(H.MAX_PATHS + 1)]), "more than")
 
@@ -464,6 +469,355 @@ class Races(Commit):
         self.assertIn("HEAD moved", err)
         self.assertIn("left as it is", err)
         self.assertEqual("a.txt\n", git(self.repo, "diff", "--cached", "--name-only").stdout)
+
+
+class Unborn(Commit):
+    """A repository whose branch has no commit yet: `--expected-head none` (increment C)."""
+
+    def setUp(self):
+        super().setUp()
+        self.repo = os.path.join(self.scratch, "fresh")
+        os.mkdir(self.repo)
+        git(self.repo, "init", "-q", "-b", "main")
+        self.first = "none"
+        self.write("a.txt", "one\n")
+
+    def head(self):
+        return git(self.repo, "rev-parse", "--verify", "-q", "HEAD", check=False).stdout.strip() or "none"
+
+    def staged(self):
+        return git(self.repo, "diff", "--cached", "--name-only").stdout
+
+    def mover(self, on, also=""):
+        """A `git` that makes the first commit just before it runs the subcommand `on` (with `also` among its
+        arguments, when given)."""
+        script = os.path.join(self.outside, "git")
+        with open(script, "w") as handle:
+            handle.write("#!/bin/sh\nif [ \"$1\" = '%s' ] && case \" $* \" in *' %s'*) true;; *) false;; esac; then\n"
+                         "  export GIT_AUTHOR_NAME=x GIT_AUTHOR_EMAIL=x@e"
+                         " GIT_COMMITTER_NAME=x GIT_COMMITTER_EMAIL=x@e\n"
+                         "  tree=$('%s' hash-object -t tree -w /dev/null)\n  new=$('%s' commit-tree -m moved \"$tree\")\n"
+                         "  '%s' update-ref HEAD \"$new\"\nfi\n"
+                         "exec '%s' \"$@\"\n" % (on, also, REAL_GIT, REAL_GIT, REAL_GIT, REAL_GIT))
+        os.chmod(script, 0o755)
+        return self.outside + os.pathsep + STANDARD
+
+    def never_staged(self):
+        self.assertEqual([], [arguments for arguments, _ in self.runs() if arguments[0] in ("add", "commit")])
+
+    def test_the_first_commit_holds_the_named_paths_and_has_no_parent(self):
+        self.write("b.txt", "two\n")
+        code, out, err = self.simple("First", "a.txt", body="Why.", trailers=["Plan: x#A"])
+        self.assertEqual((0, ""), (code, err))
+        report = json.loads(out)
+        self.assertEqual(self.head(), report["committed"])
+        self.assertEqual(("First", ["a.txt"]), (report["subject"], report["paths"]))
+        self.assertEqual("", git(self.repo, "rev-parse", "HEAD^@").stdout)
+        self.assertEqual("First\n\nWhy.\n\nPlan: x#A", git(self.repo, "log", "-1", "--format=%B").stdout.strip())
+        self.assertEqual(["a.txt"], git(self.repo, "show", "--name-only", "--format=", "HEAD").stdout.split())
+        self.assertEqual("a.txt\n", git(self.repo, "ls-files").stdout)
+        self.assertEqual("", self.staged())
+
+    def test_other_staged_work_stays_staged_with_the_option(self):
+        self.write("other.txt", "o\n")
+        git(self.repo, "add", "other.txt")
+        self.assertEqual(0, self.simple("Only a", "a.txt", leave=True)[0])
+        self.assertEqual("other.txt\n", self.staged())
+        self.assertEqual(["a.txt"], git(self.repo, "show", "--name-only", "--format=", "HEAD").stdout.split())
+        self.assertEqual("a.txt\nother.txt\n", git(self.repo, "ls-files").stdout)
+
+    def test_staged_work_is_refused_without_the_option(self):
+        self.write("other.txt", "o\n")
+        git(self.repo, "add", "other.txt")
+        index = self.index()
+        self.assertRefused(self.simple("S", "a.txt"), "already holds staged")
+        self.assertUntouched(index)
+
+    def test_a_named_path_that_is_already_staged_is_refused(self):
+        git(self.repo, "add", "a.txt")
+        index = self.index()
+        self.assertRefused(self.simple("S", "a.txt", leave=True), "already staged")
+        self.assertUntouched(index)
+
+    def test_a_path_that_is_not_there_is_refused(self):
+        self.assertRefused(self.simple("S", "nothing.txt"), "not tracked")
+        self.assertUntouched()
+
+    def test_a_hash_is_refused_where_there_is_no_commit(self):
+        for value in ("0" * 40, "a" * 40):
+            with self.subTest(value=value):
+                self.assertRefused(self.simple("S", "a.txt", expected=value), "HEAD moved")
+                self.assertUntouched()
+
+    def test_a_failed_first_commit_unstages_the_named_paths(self):
+        bare = os.path.join(self.scratch, "nohome")
+        os.mkdir(bare)
+        self.config("user.useConfigOnly", "true")
+        self.assertRefused(self.simple("S", "a.txt", home=bare), "unstaged")
+        self.assertUntouched()
+        self.assertEqual("", self.staged())
+
+    def test_whitespace_errors_are_refused_and_nothing_is_staged(self):
+        self.write("a.txt", "trailing   \n")
+        self.assertRefused(self.simple("S", "a.txt"), "whitespace")
+        self.assertUntouched()
+
+    def test_a_head_that_is_not_a_branch_without_commits_is_not_none(self):
+        self.recording_git()
+        path = self.outside + os.pathsep + STANDARD
+        head_file = os.path.join(self.repo, ".git", "HEAD")
+        for text in ("ref: refs/tags/t\n", "ref: refs/heads/-x\n", "ref: refs/heads/a..b\n", "ref: refs/remotes/o/m\n",
+                     "ref: HEAD\n", "garbage\n", "", "ref: refs/heads/main extra\n", "ref: refs/heads/" + "x" * 300 + "\n"):
+            with self.subTest(text=text):
+                with open(head_file, "w") as handle:
+                    handle.write(text)
+                self.assertRefused(self.simple("S", "a.txt", path=path))
+        with open(head_file, "w") as handle:
+            handle.write("ref: refs/heads/main\n")
+        self.assertEqual("", self.index())
+        self.never_staged()
+
+    def test_a_branch_that_exists_but_cannot_be_read_is_not_unborn(self):
+        self.recording_git()
+        path = self.outside + os.pathsep + STANDARD
+        ref = os.path.join(self.repo, ".git", "refs", "heads", "main")
+        for text in ("0123456789abcdef0123456789abcdef01234567\n", "garbage\n", ""):
+            with self.subTest(text=text):
+                with open(ref, "w") as handle:
+                    handle.write(text)
+                self.assertRefused(self.simple("S", "a.txt", path=path), "HEAD")
+                self.assertEqual("", self.index())
+        self.never_staged()
+
+    def test_a_branch_name_this_helper_does_not_read_is_not_none(self):
+        self.recording_git()
+        path = self.outside + os.pathsep + STANDARD
+        git(self.repo, "symbolic-ref", "HEAD", "refs/heads/\u00fcn\u00ef")
+        self.assertRefused(self.simple("S", "a.txt", path=path), "ASCII")
+        self.never_staged()
+
+    def test_a_branch_name_git_would_reject_is_not_none_and_nothing_is_left_staged(self):
+        self.recording_git()
+        path = self.outside + os.pathsep + STANDARD
+        head_file = os.path.join(self.repo, ".git", "HEAD")
+        for name in (".x", "a/.b", "a.lock/b", "a/b.lock/c"):
+            with self.subTest(name=name):
+                with open(head_file, "w") as handle:
+                    handle.write("ref: refs/heads/%s\n" % name)
+                self.assertRefused(self.simple("S", "a.txt", path=path))
+                self.assertEqual("", self.staged())
+        self.never_staged()
+
+    def test_a_packed_branch_that_cannot_be_read_is_not_unborn(self):
+        self.recording_git()
+        path = self.outside + os.pathsep + STANDARD
+        with open(os.path.join(self.repo, ".git", "packed-refs"), "w") as handle:
+            handle.write("# pack-refs with: peeled fully-peeled sorted \n"
+                         "0123456789abcdef0123456789abcdef01234567 refs/heads/main\n")
+        self.assertRefused(self.simple("S", "a.txt", path=path))
+        self.never_staged()
+
+    def test_a_head_that_is_a_link_is_not_unborn(self):
+        self.recording_git()
+        path = self.outside + os.pathsep + STANDARD
+        head_file = os.path.join(self.repo, ".git", "HEAD")
+        target = os.path.join(self.scratch, "head-target")
+        with open(target, "w") as handle:
+            handle.write("ref: refs/heads/main\n")
+        os.unlink(head_file)
+        os.symlink(target, head_file)
+        self.assertRefused(self.simple("S", "a.txt", path=path))
+        self.never_staged()
+
+    def test_another_branch_name_is_unborn_too(self):
+        git(self.repo, "switch", "-q", "-c", "feature/x")
+        self.assertEqual(0, self.simple("S", "a.txt")[0])
+        self.assertEqual("feature/x", git(self.repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip())
+
+    def test_a_first_commit_made_by_someone_else_during_the_run_is_reported_as_failed(self):
+        code, out, err = self.simple("S", "a.txt", path=self.mover("commit"))
+        self.assertEqual((1, ""), (code, out))
+        self.assertIn("HEAD moved during the commit", err)
+        self.assertIn("nothing was undone", err)
+
+    def test_a_first_commit_made_by_someone_else_before_the_commit_is_refused(self):
+        code, out, err = self.simple("S", "a.txt", path=self.mover("diff", "--cached --check --no-ext-diff"))
+        self.assertEqual((1, ""), (code, out))
+        self.assertIn("HEAD moved just before the commit", err)
+        self.assertIn("no commit", err)
+        self.assertEqual("moved", git(self.repo, "log", "-1", "--format=%s").stdout.strip())
+
+    def test_a_first_commit_made_by_someone_else_before_the_first_check_is_refused_by_it(self):
+        code, out, err = self.simple("S", "a.txt", path=self.mover("config"))
+        self.assertEqual((1, ""), (code, out))
+        self.assertIn("HEAD moved before the commit was started", err)
+
+    def test_only_the_listed_git_commands_run_on_every_path_of_an_unborn_branch(self):
+        self.recording_git()
+        path = self.outside + os.pathsep + STANDARD
+        self.simple("S", "a.txt", expected="0" * 40, path=path)
+        self.write("a.txt", "trailing   \n")
+        self.simple("S", "a.txt", path=path)
+        self.write("a.txt", "one\n")
+        self.config("user.useConfigOnly", "true")
+        self.simple("S", "a.txt", home=os.path.join(self.scratch, "nohome"), path=path)
+        self.config("user.useConfigOnly", "false")
+        self.assertEqual(0, self.simple("S", "a.txt", path=path)[0])
+        seen = {arguments[0] for arguments, _ in self.runs()}
+        self.assertLessEqual(seen, ALLOWED)
+        self.assertFalse(seen & FORBIDDEN)
+        resets = [arguments for arguments, _ in self.runs() if arguments[0] == "reset"]
+        self.assertEqual([["reset", "-q", "--", "a.txt"]] * 2, resets)
+
+
+class OddStates(Commit):
+    def test_a_detached_head_takes_the_commit_on_the_detached_head(self):
+        git(self.repo, "switch", "-q", "--detach")
+        self.write("a.txt", "two\n")
+        self.assertEqual(0, self.simple("S", "a.txt")[0])
+        self.assertEqual([self.first], git(self.repo, "rev-parse", "HEAD^@").stdout.split())
+        self.assertEqual("HEAD", git(self.repo, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip())
+
+    def test_a_shallow_clone_takes_the_commit(self):
+        shallow = os.path.join(self.scratch, "shallow")
+        git(self.scratch, "clone", "-q", "--depth", "1", "file://" + self.repo, shallow)
+        self.repo = shallow
+        self.first = self.head()
+        self.write("a.txt", "two\n")
+        self.assertEqual(0, self.simple("S", "a.txt")[0])
+        self.assertEqual([self.first], git(self.repo, "rev-parse", "HEAD^@").stdout.split())
+
+    def test_a_linked_work_tree_is_refused(self):
+        linked = os.path.join(self.scratch, "linked")
+        git(self.repo, "worktree", "add", "-q", linked)
+        self.repo = linked
+        self.first = self.head()
+        self.write("a.txt", "two\n")
+        self.assertRefused(self.simple("S", "a.txt"), ".git")
+        self.assertUntouched()
+
+    def test_a_path_marked_assume_unchanged_is_not_committed_silently(self):
+        git(self.repo, "update-index", "--assume-unchanged", "a.txt")
+        self.write("a.txt", "two\n")
+        self.assertRefused(self.simple("S", "a.txt"))
+        self.assertUntouched()
+
+    def test_a_skip_worktree_path_is_not_committed_silently(self):
+        git(self.repo, "update-index", "--skip-worktree", "a.txt")
+        self.write("a.txt", "two\n")
+        self.assertRefused(self.simple("S", "a.txt"))
+        self.assertUntouched()
+
+    def test_a_path_outside_a_sparse_checkout_is_refused(self):
+        self.write("sub/c.txt", "c\n")
+        self.write("dir/d.txt", "d\n")
+        git(self.repo, "add", "sub/c.txt", "dir/d.txt")
+        git(self.repo, "commit", "-q", "-m", "sub")
+        git(self.repo, "sparse-checkout", "set", "--cone", "sub")
+        self.first = self.head()
+        self.assertFalse(os.path.exists(os.path.join(self.repo, "dir", "d.txt")))
+        self.assertRefused(self.simple("S", "dir/d.txt"))
+        self.assertUntouched()
+
+
+ATTRIBUTION = ["Co-Authored-By: Claude <noreply@anthropic.com>"]
+SETTING = ".workbench/code-work.json"
+ALLOW = b'{"format": 1, "attribution": "allow"}'
+
+
+class Setting(Commit):
+    def attempt(self, subject="S", trailers=ATTRIBUTION, **more):
+        self.write("a.txt", "two\n")
+        return self.simple(subject, "a.txt", trailers=trailers, **more)
+
+    def test_absent_means_attribution_is_refused(self):
+        self.assertRefused(self.attempt(), "attribution")
+        self.assertUntouched()
+
+    def test_refuse_means_attribution_is_refused(self):
+        self.write(SETTING, b'{"format": 1, "attribution": "refuse"}')
+        self.assertRefused(self.attempt(), "attribution")
+        self.assertUntouched()
+
+    def test_allow_lets_the_message_carry_attribution(self):
+        self.write(SETTING, ALLOW)
+        code, out, err = self.attempt()
+        self.assertEqual((0, ""), (code, err))
+        self.assertIn(ATTRIBUTION[0], git(self.repo, "log", "-1", "--format=%B").stdout)
+
+    def test_allow_does_not_loosen_the_other_checks(self):
+        self.write(SETTING, ALLOW)
+        self.write("a.txt", "two\n")
+        self.assertRefused(self.simple("one\ntwo", "a.txt"), "subject")
+        self.assertRefused(self.simple("S", "a.txt", trailers=["not a trailer"]), "trailer")
+        self.assertUntouched()
+
+    def test_allow_commits_text_the_attribution_check_would_refuse_as_unreadable(self):
+        self.write(SETTING, ALLOW)
+        code, out, err = self.attempt(subject="Fix e\u0301 handling", trailers=())
+        self.assertEqual((0, ""), (code, err))
+
+    def test_a_plain_message_commits_with_or_without_the_file(self):
+        self.write(SETTING, b'{"format": 1, "attribution": "refuse"}')
+        self.assertEqual(0, self.attempt(trailers=())[0])
+
+    def test_the_file_is_read_at_the_repository_root_not_the_current_directory(self):
+        self.write("sub/c.txt", "c\n")
+        self.write("sub/" + SETTING, ALLOW)
+        self.assertRefused(self.simple("S", "sub/c.txt", trailers=ATTRIBUTION, cwd=os.path.join(self.repo, "sub")),
+                           "attribution")
+        self.write(SETTING, ALLOW)
+        self.assertEqual(0, self.simple("S", "sub/c.txt", trailers=ATTRIBUTION,
+                                        cwd=os.path.join(self.repo, "sub"))[0])
+
+    def test_a_file_that_is_not_exactly_the_setting_refuses_every_commit(self):
+        pad = b"x" * (2 * 1024 * 1024)
+        for data in (b"", b" ", b"{}", b"not json", b"[]", b'{"format": 1}', b'{"attribution": "allow"}',
+                     b'{"format": 2, "attribution": "allow"}', b'{"format": "1", "attribution": "allow"}',
+                     b'{"format": true, "attribution": "allow"}', b'{"format": 1.0, "attribution": "allow"}',
+                     b'{"format": 1, "attribution": "ALLOW"}', b'{"format": 1, "attribution": "Allow"}',
+                     b'{"format": 1, "attribution": true}', b'{"format": 1, "attribution": ["allow"]}',
+                     b'{"format": 1, "attribution": "allow", "extra": 1}',
+                     b'{"format": 1, "attribution": "refuse", "attribution": "allow"}',
+                     b'{"format": 1, "format": 1, "attribution": "allow"}',
+                     b'{"format": 1, "attribution": NaN}', b'\xef\xbb\xbf' + ALLOW, b'\xff', ALLOW + b" x",
+                     ALLOW[:-1], b'{"format": 1, "attribution": "allow", "pad": "' + pad + b'"}', b" " * 5000 + ALLOW):
+            with self.subTest(data=data[:60]):
+                self.write(SETTING, data)
+                self.assertRefused(self.attempt(trailers=()), SETTING)
+                self.assertUntouched()
+                self.assertRefused(self.attempt(), SETTING)
+
+    def test_a_link_a_directory_a_hard_link_or_a_pipe_at_the_path_refuses(self):
+        outside = os.path.join(self.outside, "elsewhere.json")
+        with open(outside, "wb") as handle:
+            handle.write(ALLOW)
+        full = os.path.join(self.repo, ".workbench")
+        os.mkdir(full)
+        target = os.path.join(full, "code-work.json")
+        os.symlink(outside, target)
+        self.assertRefused(self.attempt(), SETTING)
+        os.unlink(target)
+        os.mkdir(target)
+        self.assertRefused(self.attempt(), SETTING)
+        os.rmdir(target)
+        os.link(outside, target)
+        self.assertRefused(self.attempt(), SETTING)
+        os.unlink(target)
+        os.mkfifo(target)
+        self.assertRefused(self.attempt(), SETTING)
+        os.unlink(target)
+        os.rmdir(full)
+        os.mkdir(os.path.join(self.outside, "wb"))
+        with open(os.path.join(self.outside, "wb", "code-work.json"), "wb") as handle:
+            handle.write(ALLOW)
+        os.symlink(os.path.join(self.outside, "wb"), full)
+        self.assertRefused(self.attempt(), SETTING)
+        os.unlink(full)
+        with open(full, "wb") as handle:
+            handle.write(ALLOW)
+        self.assertRefused(self.attempt(), SETTING)
+        self.assertUntouched()
 
 
 class Runs(Commit):

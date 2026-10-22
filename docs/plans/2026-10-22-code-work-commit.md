@@ -442,6 +442,8 @@ in "Decided by me" as written.
 - Writing baselines for paths outside the first tier, when such paths have baselines.
 - Carrying the approver and permission rules into the modules (`global-config-migration`).
 - Plan approval, the delegation helper, review, caps and push (`code-work-approval`).
+- Keeping the attribution setting in the owner's config outside the repository, so an agent cannot write it
+  (`global-config-migration`).
 
 ## Result
 
@@ -589,3 +591,69 @@ dispatches it.
     than read; a path through a case-variant or NFC-versus-NFD directory link passes the helper's own check
     and is stopped by `git add` ("beyond a symbolic link"), after which the paths are unstaged; case
     variants were tried on case-insensitive APFS only.
+
+### Increment C — the first commit and the attribution setting (2026-10-22)
+
+`code-work commit` now makes the first commit of a branch and reads the attribution setting. The module's
+`arguments` still do not list `commit` (increment E).
+
+- **`--expected-head none`:** `validate_expected` returns `None` for it. `tip` resolves HEAD with
+  `rev-parse --verify HEAD`; when that fails, HEAD must be the plain text `ref: refs/heads/<name>` (read
+  with `O_NOFOLLOW`, the name passing `_branch_ref`, so ASCII letters, digits and `. _ - /`), no loose file
+  may hold that ref, and `rev-parse --verify -q <ref>` must exit 1 with no output. Anything else is refused,
+  never taken for an unborn branch. Every HEAD check compares against `None` the same way; the
+  after-commit check requires no parent and lists the commit with `diff-tree --root`. `reset -q --`
+  unstages on an unborn branch too. No new git subcommand or shape.
+- **Attribution setting:** `attribution_allowed` reads `.workbench/code-work.json` at the repository root
+  with `safefs.read_if_present` (no link at any component, regular file, one hard link, 4096 bytes) and
+  `jsonstrict.parse_object`. It must be exactly `{"format": 1, "attribution": "refuse"|"allow"}`; absent
+  means refuse; anything else, a link, a directory, a pipe or a file in the way stops every commit with a
+  reason. With `allow` the attribution check, including its refusal of odd characters, is skipped; every
+  other check stays. The check now runs after the repository is found.
+- **A fix found on the way:** git on macOS precomposes its arguments, so a message in decomposed form was
+  stored in composed form and the after-commit message check reported a failure for a good commit. Both
+  sides are compared in canonical (NFC) form. This was unreachable before, because the attribution check
+  refused such messages.
+- **Review focus 7 tested at commit level:** detached HEAD and a shallow clone commit normally; a linked
+  work tree (`.git` is a file) is refused; assume-unchanged, skip-worktree and out-of-cone sparse paths are
+  refused with nothing changed.
+- **Tests:** 40 added to `test_codework_commit.py` (86 in all): the unborn flow (first commit, other
+  staged work kept, a hash refused, `none` refused where a commit exists, odd and unreadable HEADs, a
+  dangling and a packed ref, a non-ASCII branch, a moved HEAD at three points, a failed commit unstaged, the
+  recording `git`), the odd states, and the setting (absent, refuse, allow, 24 malformed files, a link, a
+  directory, a hard link, a pipe, a linked `.workbench`, the root versus the current directory). Full suite:
+  2556 tests in 4 roots, passing with `-W error` (the 11 `claude` tests that need the shipped approvals are
+  still skipped until F).
+- **Mutation checks, each failing a named test:** treating every unreadable HEAD as unborn, the HEAD-file
+  shape, the loose-ref check, the `diff-tree --root` flag, the parent comparison, allow ignored, absent
+  read as allow, the format, key-set and value checks, the size limit, the read-error handler, the
+  attribution-before-setting order, the NFC comparison.
+- **Surviving mutants, recorded:** the `O_NOFOLLOW` open of HEAD and the quiet-exit test of
+  `rev-parse --verify -q` are not pinned by a test, because git itself rejects the cases they guard (a HEAD
+  link outside `.git`; a ref to a missing object, where `git commit` fails and the paths are unstaged).
+  They stay as defence in depth.
+- **Limits for the owner:** the setting is read from the work tree, so a process that can write there can
+  switch it to `allow` before committing; it stops a mistake and is not a boundary, and a pulled edit shows
+  in `wb acknowledge`. A legitimate unborn branch with a non-ASCII name is refused, with the reason. No
+  security review of C has been asked for yet.
+- **Review (security-reviewer, 2026-10-22): no Critical or High; one Medium for the owner, one Low fixed.** It
+  found no way to get `none` accepted where the branch has a commit (a packed ref, a dangling ref, a
+  directory at the ref, CRLF, an extra line and a link at HEAD were each tested), and no wrong-parent,
+  wrong-path or wrong-message success; `--leave-other-staged` with `--only` on an initial commit commits
+  only the named path; the setting file's duplicate keys by escape, `1.0`, `1e0`, a BOM, 4 KiB and larger,
+  a linked `.workbench` or file, a hard link and a pipe were each refused with no read outside the
+  repository.
+  - **Low, fixed:** `_branch_ref` let through a branch name git rejects (`.x`, `a/.b`, `a.lock/b`): the
+    helper staged, `git commit` failed, and the paths stayed staged because the unstage could not resolve
+    HEAD. A name with a component that starts with `.` or ends with `.lock`, or holds `@{`, is now not a
+    branch name for the helper. A regression test and a mutation check cover it.
+  - **Medium, for the owner (not changed):** `attribution: allow` is read from the work tree, so a process
+    that can write the file (an untracked file is enough) can turn the filter off and commit with
+    attribution. This is the limit recorded above; Choice 4 approved reading the file with `safefs`. The
+    reviewer's smallest fix is to take the setting from HEAD (`allow` counts only when the file is tracked
+    and the work tree and index copies equal HEAD), which means the owner commits the setting, or to keep
+    it in the owner's config outside the repository. Either changes Choice 4, so it waits for the owner.
+    **Owner's decision (2026-10-22): keep Choice 4 as approved.** The filter is best-effort and not a
+    boundary, so the file read from the work tree adds no way that an agent does not already have. A real
+    boundary would be a setting in the owner's config outside the repository; that belongs to
+    `global-config-migration` and is noted under Deferred work.

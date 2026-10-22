@@ -30,7 +30,7 @@ import stat
 import sys
 import unicodedata
 
-from wbkit import display, safefs
+from wbkit import display, jsonstrict, safefs
 
 MAX_FILES = 2000
 MAX_BYTES = 4 * 1024 * 1024
@@ -757,7 +757,8 @@ def git_environment(entries, extra=None):
 
 def _branch_ref(ref):
     return (isinstance(ref, str) and len(ref) <= MAX_REF + 11 and _BRANCH.match(ref) is not None
-            and ".." not in ref and "//" not in ref and not ref.endswith(("/", ".lock", ".")))
+            and ".." not in ref and "//" not in ref and not ref.endswith(("/", ".")) and "@{" not in ref
+            and all(not part.startswith(".") and not part.endswith(".lock") for part in ref.split("/")))
 
 
 def _paths_ok(paths):
@@ -948,6 +949,8 @@ MAX_BODY = 100000
 MAX_TRAILERS = 50
 MAX_TRAILER = 1000
 MAX_PATHS = 2000
+SETTING = ".workbench/code-work.json"
+MAX_SETTING = 4096
 _HEX40 = re.compile(r"\A[0-9a-f]{40}\Z")
 _TRAILER = re.compile(r"\A[A-Za-z][A-Za-z0-9-]{0,63}:[ ]+\S[^\0\r\n]*\Z")
 _TOOL = r"(?:the\s+|an?\s+)?(?:ai\s+)?[\W_]{0,4}(claude|anthropic)\b"
@@ -1034,8 +1037,13 @@ def parse_commit(argv):
 
 
 def validate_expected(value):
+    """The commit the caller expects HEAD to be: its full lower-case hash, or None for ``none`` (a branch
+    that has no commit yet)."""
+    if value == "none":
+        return None
     if _HEX40.match(value) is None:
-        raise Refused("--expected-head must be the full 40-digit lower-case hash of HEAD")
+        raise Refused("--expected-head must be the full 40-digit lower-case hash of HEAD, or none")
+    return value
 
 
 def validate_message(request):
@@ -1188,16 +1196,55 @@ def refuse_operation_in_progress(root):
                           % name.replace("_HEAD", "").replace("-", " ").lower())
 
 
+def _short(commit):
+    return "no commit" if commit is None else commit[:12]
+
+
+def _unborn_branch(root):
+    """The branch ref HEAD names when that branch has no commit, else None. HEAD must be the plain text
+    ``ref: refs/heads/<name>`` (not a link), no file may hold that ref, and git must say, quietly, that it
+    names nothing: a branch that exists but cannot be read is not an unborn one."""
+    directory = run(["git", "rev-parse", "--absolute-git-dir"], root).stdout.strip()
+    try:
+        fd = os.open(os.path.join(directory, "HEAD"), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            text = os.read(fd, 1024).decode("utf-8")
+        finally:
+            os.close(fd)
+    except (OSError, UnicodeDecodeError):
+        return None
+    found = re.fullmatch(r"ref: (refs/heads/[^\n]+)\n?", text)
+    if found is None or not _branch_ref(found.group(1)):
+        return None
+    ref = found.group(1)
+    if os.path.lexists(os.path.join(directory, *ref.split("/"))):
+        return None
+    probe = run(["git", "rev-parse", "--verify", "-q", ref], root, check=False)
+    return ref if probe.returncode == 1 and not probe.stdout.strip() else None
+
+
+def tip(root):
+    """The commit HEAD names, or None on a branch that has no commit yet. A HEAD git cannot resolve that is
+    not such a branch is refused, never taken for one."""
+    found = run(["git", "rev-parse", "--verify", "HEAD"], root, check=False)
+    if found.returncode == 0:
+        return found.stdout.strip()
+    if _unborn_branch(root) is None:
+        raise Refused("HEAD names neither a commit nor a branch without commits whose name this helper reads "
+                      "(ASCII letters, digits and . _ - /); refusing to act")
+    return None
+
+
 def _expect_head(root, expected, when):
-    now = head(root)
+    now = tip(root)
     if now != expected:
-        raise Refused("HEAD moved %s: expected %s, found %s" % (when, expected[:12], now[:12]))
+        raise Refused("HEAD moved %s: expected %s, found %s" % (when, _short(expected), _short(now)))
 
 
 def _unstage(root, paths, expected):
     """Take the named paths out of the index again, but only while HEAD is still where it was expected."""
     try:
-        if head(root) != expected:
+        if tip(root) != expected:
             return "HEAD moved, so the index was left as it is"
         run(["git", "reset", "-q", "--"] + paths, root)
     except Refused as exc:
@@ -1205,12 +1252,34 @@ def _unstage(root, paths, expected):
     return "the named paths were unstaged"
 
 
+def attribution_allowed(root):
+    """Whether `.workbench/code-work.json` says ``allow``. No file means refuse; a file that is not exactly
+    ``{"format": 1, "attribution": "refuse" | "allow"}``, and a link or other non-file at that path, stop
+    the commit rather than read as either."""
+    try:
+        with safefs.Root(root, "repository") as tree:
+            data = tree.read_if_present(SETTING, MAX_SETTING)
+    except safefs.SafeFsError as exc:
+        raise Refused("%s cannot be read: %s" % (SETTING, display.ascii_text(str(exc))[:200]))
+    if data is None:
+        return False
+    try:
+        value = jsonstrict.parse_object(data, MAX_SETTING)
+    except ValueError as exc:
+        raise Refused("%s is not valid: %s" % (SETTING, display.ascii_text(str(exc))[:100]))
+    if set(value) != {"format", "attribution"} or type(value["format"]) is not int or value["format"] != 1 \
+            or value["attribution"] not in ("refuse", "allow"):
+        raise Refused('%s must be {"format": 1, "attribution": "refuse" or "allow"}' % SETTING)
+    return value["attribution"] == "allow"
+
+
 def command_commit(argv, cwd, out, err):
     request = parse_commit(argv)
-    validate_expected(request.expected)
+    request.expected = validate_expected(request.expected)
     validate_message(request)
-    refuse_attribution(request)
     root = git_root(cwd)
+    if not attribution_allowed(root):
+        refuse_attribution(request)
     found = repo_program_findings(root)
     if found:
         raise Refused("this repository would make git run a program (%s); commit by hand"
@@ -1264,14 +1333,17 @@ def verify_commit(root, request, named, before, out):
     made = head(root)
     try:
         parents = run(["git", "rev-parse", "HEAD^@"], root).stdout.split()
-        if parents != [request.expected]:
+        if parents != ([] if request.expected is None else [request.expected]):
             raise Refused("HEAD moved during the commit; the commit %s was made on %s"
                           % (made[:12], ", ".join(p[:12] for p in parents) or "no parent"))
-        expected_message = _cleaned("\n\n".join(message_paragraphs(request)))
-        if _cleaned(run(["git", "show", "-s", "--format=%B", "HEAD"], root).stdout) != expected_message:
+        # Git on macOS precomposes its arguments, so the stored text may be the canonical form of the given.
+        expected_message = unicodedata.normalize("NFC", _cleaned("\n\n".join(message_paragraphs(request))))
+        stored = _cleaned(run(["git", "show", "-s", "--format=%B", "HEAD"], root).stdout)
+        if unicodedata.normalize("NFC", stored) != expected_message:
             raise Refused("the commit %s has a message other than the one asked for" % made[:12])
-        changed = {item for item in run(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "-z",
-                                         "HEAD"], root).stdout.split("\0") if item}
+        listing = ["git", "diff-tree"] + (["--root"] if request.expected is None else []) \
+            + ["--no-commit-id", "--name-only", "-r", "-z", "HEAD"]
+        changed = {item for item in run(listing, root).stdout.split("\0") if item}
         if changed != named:
             raise Refused("the commit %s holds %s, not the named paths" % (made[:12], shown(", ".join(sorted(changed)), 120)))
         _, after = indexed(root)
