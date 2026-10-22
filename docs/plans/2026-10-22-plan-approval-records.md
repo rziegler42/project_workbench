@@ -425,7 +425,8 @@ Done. Increments A to F are implemented. The plan's status is the owner's to cha
   `increment-loop-and-review-skills`, `push-checkpoint`, `compaction-guidance` and `delegated-approval` with the
   dependents repointed (the gate itself is in `checkpoint-settings-and-caps`), and the decision's Verification
   lists what is built. The document checks pass.
-  - Not done, and the owner's: accepting the Proposed decision; the unreviewed round 3 plan fix; a hand run in a
+  - Not done, and the owner's: the unreviewed round 3 plan fix; a hand run in a
     live installed project; approving this repository's own plans with the command (needs `self-hosting`).
   - Older plans and accepted decisions still name `code-work-approval`; they are history and were not edited.
-- **Next:** the owner's call: accept the decision, push, and choose the next candidate.
+- The owner accepted the decision on 2026-10-22, after F.
+- **Next:** the owner's call: set the plan's status, push, and choose the next candidate.

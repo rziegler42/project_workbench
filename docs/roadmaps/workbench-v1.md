@@ -138,7 +138,7 @@ meet here and the order matters.
   `Candidate: none`, so its completion is not derived). The installer records an owner-made approval per project
   (`wb approve-plan`, `wb plan-status`); the process module declares an `approval` command and the `code-work` helper's
   `region` subcommand computes the plan's hashed region. The decision
-  `2026-10-22-installer-records-plan-approval-module-computes-region` is still Proposed. The candidate
+  `2026-10-22-installer-records-plan-approval-module-computes-region` was accepted on 2026-10-22. The candidate
   `code-work-approval` was too large for one plan and is split into `checkpoint-settings-and-caps`,
   `increment-loop-and-review-skills`, `push-checkpoint`, `compaction-guidance` and `delegated-approval`; the older
   plans, specs and decisions that name `code-work-approval` mean this group. Security and workflow reviews found

@@ -1,6 +1,6 @@
 # The installer records and gates plan approval; the process module's pinned helper computes the hashed region
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-22
 Date: 2026-10-22
 
 ## Context
@@ -61,8 +61,8 @@ The formats are in `docs/specs/trust-and-approval.md`, "Plan approval records".
 
 ## Verification
 
-Built and tested by plan `2026-10-22-plan-approval-records` (increments A to E); the decision stays `Proposed`
-until the owner accepts it.
+Built and tested by plan `2026-10-22-plan-approval-records` (increments A to F). Accepted by the owner on
+2026-10-22 with this evidence and these limits.
 
 - A synthetic process module's `approval` field verifies and is refused on any other type or for a command or
   argument it does not declare (`tests/test_declarations.py`).
