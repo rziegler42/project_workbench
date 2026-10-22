@@ -364,6 +364,17 @@ class Install(support_install.InstallBase):
         self.assertEqual(1, commands.run(self.guarded, ["code-work", "check"], errors, cwd=place))
         self.assertIn("has changed since it was pinned", errors.getvalue())
 
+    def test_the_installer_pins_the_helper_with_the_kit_and_wb_run_refuses_a_pin_without_it(self):
+        place = self.place()
+        self.assertEqual(0, self.install(place)[0])
+        ident = project.read_id(place)
+        pin = pins.lookup(self.guarded, ident, "code-work")
+        self.assertEqual(1, pin.kit)
+        pins.set_pin(self.guarded, ident, "code-work", pin.path, pin.sha256, "owner")
+        errors = io.StringIO()
+        self.assertEqual(1, commands.run(self.guarded, ["code-work", "check"], errors, cwd=place))
+        self.assertIn("kit", errors.getvalue())
+
     def code_work(self, place, command):
         """``(code, standard output, standard error)`` of `wb run code-work <command>` in `place`."""
         errors = io.StringIO()

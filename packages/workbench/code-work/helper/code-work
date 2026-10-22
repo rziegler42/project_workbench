@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """The code-work helper: reads a project's plans and says what is wrong with them.
 
-It is one file that imports only the standard library, because the launcher runs a private copy of
-it with nothing beside it. It changes nothing, takes no lock, runs no program and follows no link.
+It is one file that imports the standard library and the workbench kit (``wbkit``); the launcher runs a
+private copy of it through the kit runner with nothing beside it. The three subcommands above the line
+"running git" below change nothing, take no lock, run no program and follow no link. The code below that
+line is what the subcommands that change a repository use; it starts one program, ``git``.
 
     code-work check      report problems with the plans in docs/plans/ (exit 1 if there is one)
     code-work plans      list the plans that are Proposed, Approved or In Progress
@@ -24,6 +26,8 @@ import os
 import re
 import stat
 import sys
+
+from wbkit import display
 
 MAX_FILES = 2000
 MAX_BYTES = 4 * 1024 * 1024
@@ -655,6 +659,282 @@ def command_report(root, out, err):
         for line in lost:
             out.write(line + "\n")
     return _finish(problems, out, err)
+
+
+# --- running git ---------------------------------------------------------------------------------
+# Everything above this line is the read-only part of the helper: it opens nothing for writing and runs
+# no program. The code below is what the subcommands that change a repository use. It starts one
+# program, `git`, found on a PATH entry outside the repository, with an environment built here, and
+# only in one of the shapes listed in `git_shape_ok`. The repository is untrusted: its configuration and
+# hooks are read for the names of anything that would make git run a program, and a commit is refused
+# when there is one. The owner's own global and system Git configuration is trusted.
+
+FALLBACK_PATH = ["/usr/bin", "/bin"]
+GIT_TIMEOUT = 120
+MAX_REF = 200
+MAX_GITLINK_FINDINGS = 5
+_KEPT = ("HOME", "XDG_CONFIG_HOME", "USER", "LOGNAME", "LANG", "TZ", "TERM", "TMPDIR")
+_BRANCH = re.compile(r"\Arefs/heads/[A-Za-z0-9._][A-Za-z0-9._/-]*\Z")
+_DIFF_FLAGS = ("--cached", "--name-only", "-z", "--check", "--no-ext-diff", "--no-textconv")
+# Repository settings shaped like "a program or command to run": the shape decides and not a list of
+# names, because a list kept missing keys. A key is lower-cased before it is matched.
+EXEC_KEY = re.compile(
+    r".*\.(program|command|driver|cmd|clean|smudge|process|textconv|external|defaultkeycommand)"
+    r"|core\.(hookspath|fsmonitor|sshcommand)")
+
+
+def is_inside(path, boundary):
+    """True when `path` is `boundary` or below it, whatever links and case spellings lead there."""
+    try:
+        current = os.path.realpath(path)
+        while True:
+            if os.path.samefile(current, boundary):
+                return True
+            parent = os.path.dirname(current)
+            if parent == current:
+                return False
+            current = parent
+    except OSError:
+        return False
+
+
+def repository_boundary(start):
+    """The nearest ancestor of `start` that holds a `.git` entry, found without running git."""
+    current = os.path.realpath(start)
+    while True:
+        if os.path.lexists(os.path.join(current, ".git")):
+            return current
+        parent = os.path.dirname(current)
+        if parent == current:
+            return os.path.realpath(start)
+        current = parent
+
+
+def outermost_boundary(start):
+    """The outermost ancestor of `start` that holds a `.git` entry. A PATH entry is trusted only when it is
+    outside this one, so a repository embedded in another cannot make the outer one look outside."""
+    current = os.path.realpath(start)
+    found = None
+    while True:
+        if os.path.lexists(os.path.join(current, ".git")):
+            found = current
+        parent = os.path.dirname(current)
+        if parent == current:
+            return found or os.path.realpath(start)
+        current = parent
+
+
+def trusted_path_entries(boundary):
+    """The PATH entries that are absolute and outside the repository: never "", "." or a relative one."""
+    return [entry for entry in os.environ.get("PATH", "").split(os.pathsep)
+            if entry and os.path.isabs(entry) and not is_inside(entry, boundary)]
+
+
+def trusted_which(name, boundary, entries=None):
+    """The first executable `name` in a trusted entry that does not resolve into the repository."""
+    for entry in trusted_path_entries(boundary) if entries is None else entries:
+        candidate = os.path.join(entry, name)
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK) \
+                and not is_inside(candidate, boundary):
+            return candidate
+    return None
+
+
+def git_environment(entries, extra=None):
+    """The environment git runs in: a short list of the caller's variables, the trusted PATH and the
+    few Git variables set here. No variable of the caller that starts with GIT_ is passed."""
+    env = {name: os.environ[name] for name in _KEPT if name in os.environ}
+    env.update({name: value for name, value in os.environ.items() if name.startswith("LC_")})
+    env["PATH"] = os.pathsep.join(entries)
+    env.update({"GIT_NO_REPLACE_OBJECTS": "1", "GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true",
+                "GIT_PAGER": "cat", "GIT_LITERAL_PATHSPECS": "1"})
+    env.update(extra or {})
+    return env
+
+
+def _branch_ref(ref):
+    return (isinstance(ref, str) and len(ref) <= MAX_REF + 11 and _BRANCH.match(ref) is not None
+            and ".." not in ref and "//" not in ref and not ref.endswith(("/", ".lock", ".")))
+
+
+def _paths_ok(paths):
+    """True for one or more repository-relative paths: none empty, absolute or naming a `..` component, so
+    a path cannot leave the repository (git treats two paths outside the work tree as ``--no-index``)."""
+    return bool(paths) and all(item and not item.startswith("/") and ".." not in item.split("/")
+                               for item in paths)
+
+
+def _after_dashes(rest, start):
+    """True when `rest` has `--` at `start` and, after it, one or more paths that stay in the repository."""
+    return rest[start:start + 1] == ["--"] and _paths_ok(rest[start + 1:])
+
+
+def _diff_shape(rest):
+    flags = []
+    for index, item in enumerate(rest):
+        if item == "--":
+            return len(set(flags)) == len(flags) and _after_dashes(rest, index)
+        if item not in _DIFF_FLAGS:
+            return False
+        flags.append(item)
+    return len(set(flags)) == len(flags) and bool(flags)
+
+
+def _commit_shape(rest):
+    index = 0
+    while rest[index:index + 1] == ["-m"] and index + 1 < len(rest):
+        index += 2
+    if index == 0:
+        return False
+    tail = rest[index:]
+    return tail == [] or (tail[:2] == ["--only", "--"] and _paths_ok(tail[2:]))
+
+
+_SHAPES = {
+    "rev-parse": lambda rest: rest in (["--show-toplevel"], ["--absolute-git-dir"], ["--git-common-dir"],
+                                       ["HEAD"], ["--verify", "HEAD"], ["HEAD^@"])
+    or (len(rest) == 3 and rest[:2] == ["--verify", "-q"] and _branch_ref(rest[2])),
+    "diff": _diff_shape,
+    "ls-files": lambda rest: (rest[:2] == ["--error-unmatch", "--"] and _paths_ok(rest[2:]))
+    or rest == ["-s", "-z"] or (rest[:3] == ["-s", "-z", "--"] and _paths_ok(rest[3:])),
+    "add": lambda rest: _after_dashes(rest, 0),
+    "commit": _commit_shape,
+    "reset": lambda rest: rest[:1] == ["-q"] and _after_dashes(rest, 1),
+    "show": lambda rest: rest in (["-s", "--format=%s", "HEAD"], ["-s", "--format=%B", "HEAD"]),
+    "diff-tree": lambda rest: rest in (
+        ["--no-commit-id", "--name-only", "-r", "-z", "HEAD"],
+        ["--root", "--no-commit-id", "--name-only", "-r", "-z", "HEAD"]),
+    "config": lambda rest: rest == ["--list", "-z"],
+    "status": lambda rest: rest == ["--porcelain=v1", "-z", "--untracked-files=all"],
+}
+
+
+def git_shape_ok(argv):
+    """Whether `argv` is `git` and one of the few commands in the shapes this helper runs. Anything
+    else, a global option before the subcommand included, is not run."""
+    if not isinstance(argv, list) or len(argv) < 2 or argv[0] != "git" \
+            or not all(type(item) is str and "\0" not in item for item in argv):
+        return False
+    shape = _SHAPES.get(argv[1])
+    return shape is not None and bool(shape(argv[2:]))
+
+
+def run(argv, cwd, check=True, timeout=GIT_TIMEOUT, env_extra=None):
+    """Run `argv` (``git`` and a command in an allowed shape) in `cwd`; return the finished process.
+    Raises ``Refused`` for a shape that is not allowed, a missing git, a timeout, or (with `check`) a
+    nonzero exit."""
+    import subprocess   # the one program this helper starts; imported here, below the read-only part
+    if not git_shape_ok(argv):
+        raise Refused("this helper does not run that git command: %s"
+                      % display.ascii_text(" ".join(str(item)[:60] for item in argv[:3]))[:200])
+    boundary = outermost_boundary(cwd)
+    entries = trusted_path_entries(boundary) or FALLBACK_PATH
+    found = trusted_which("git", boundary, entries)
+    if found is None:
+        raise Refused("git was not found in an absolute PATH entry outside the repository")
+    try:
+        result = subprocess.run([found] + argv[1:], cwd=cwd, capture_output=True, text=True,
+                                encoding="utf-8", errors="surrogateescape", check=False,
+                                env=git_environment(entries, env_extra), timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise Refused("git %s did not finish within %d seconds" % (argv[1], timeout))
+    except OSError as exc:
+        raise Refused("git %s could not be started (%s)" % (argv[1], display.ascii_text(exc.strerror or "error")))
+    if check and result.returncode:
+        detail = (result.stderr or result.stdout or "no message").strip()[-300:]
+        raise Refused("git %s failed (%d): %s" % (argv[1], result.returncode, display.ascii_text(detail)))
+    return result
+
+
+def git_root(path):
+    """The root of the repository that holds `path`, after refusing a work tree or git directory that is
+    not the repository's own `.git`: a `core.worktree` redirect, an embedded or separate repository, and a
+    `.git` that is a link."""
+    path = os.path.realpath(path)
+    top = os.path.realpath(run(["git", "rev-parse", "--show-toplevel"], path).stdout.strip())
+    holder = repository_boundary(path)
+    try:
+        same = os.path.samefile(top, holder)
+    except OSError:
+        same = False
+    if not same:
+        raise Refused("git reports a work tree that is not the repository holding its metadata "
+                      "(a core.worktree redirect?); refusing to act")
+    marker = os.path.join(top, ".git")
+    if os.path.islink(marker):
+        raise Refused("the repository's .git is a link; refusing to act")
+    if os.path.isdir(marker):
+        gitdir = run(["git", "rev-parse", "--absolute-git-dir"], path).stdout.strip()
+        if os.path.realpath(gitdir) != os.path.realpath(marker):
+            raise Refused("git is using a git directory that is not the repository's own .git "
+                          "(an embedded or bare repository?); refusing to act")
+    else:
+        raise Refused("the repository's .git is not a directory (a separate git directory or a work tree "
+                      "of another repository?); refusing to act")
+    if os.path.commonpath([path, top]) != top:
+        raise Refused("the working directory is outside the repository root git reports; refusing to act")
+    return top
+
+
+def head(root):
+    return run(["git", "rev-parse", "HEAD"], root).stdout.strip()
+
+
+def names(root, cached=False):
+    """The paths git reports as changed in the work tree, or (with `cached`) staged."""
+    command = ["git", "diff"] + (["--cached"] if cached else []) + ["--name-only", "-z"]
+    return {item for item in run(command, root).stdout.split("\0") if item}
+
+
+def git_bool_is_true(has_value, value):
+    """A Git boolean as Git reads it: a key with no value is true, an integer is true unless zero, and
+    only the empty string, false, no, off and 0 are false. Anything unrecognised is true, the cautious
+    reading."""
+    if not has_value:
+        return True
+    text = value.strip().lower()
+    if text in ("", "false", "no", "off"):
+        return False
+    try:
+        return int(text, 0) != 0
+    except ValueError:
+        return True
+
+
+def repo_program_findings(root):
+    """The names, never the values, of repository settings and hooks that make a commit run a program."""
+    findings = []
+    quiet = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+    listing = run(["git", "config", "--list", "-z"], root, check=False, env_extra=quiet)
+    if listing.returncode:
+        return ["config:unreadable"]
+    for entry in listing.stdout.split("\0"):
+        key, separator, value = entry.partition("\n")
+        lowered = key.lower()
+        if EXEC_KEY.fullmatch(lowered) or (lowered == "commit.gpgsign"
+                                           and git_bool_is_true(bool(separator), value)):
+            findings.append(display.ascii_text(key)[:80])
+    for flag in ("--absolute-git-dir", "--git-common-dir"):
+        directory = run(["git", "rev-parse", flag], root).stdout.strip()
+        hooks = os.path.join(directory if os.path.isabs(directory) else os.path.join(root, directory), "hooks")
+        try:
+            listed = sorted(os.listdir(hooks))
+        except OSError:
+            continue
+        for name in listed:
+            path = os.path.join(hooks, name)
+            if not name.endswith(".sample") and os.path.isfile(path) and os.access(path, os.X_OK):
+                findings.append("hook:" + display.ascii_text(name)[:60])
+    listing = run(["git", "ls-files", "-s", "-z"], root, check=False)
+    if listing.returncode:
+        findings.append("index:unreadable")
+    else:
+        # A committed gitlink is a nested repository: git starts a child in it for `diff`, `status` and
+        # `commit`, and that child reads the nested repository's own configuration, which is not read above.
+        links = [entry.partition("\t")[2] for entry in listing.stdout.split("\0")
+                 if entry.startswith("160000 ")]
+        findings.extend("submodule:" + display.ascii_text(path)[:60] for path in links[:MAX_GITLINK_FINDINGS])
+    return sorted(set(findings))
 
 
 COMMANDS = {"check": command_check, "plans": command_plans, "report": command_report}

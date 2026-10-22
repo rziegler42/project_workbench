@@ -1,6 +1,6 @@
 # The code-work module: the commit helper
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-22
 Candidate: workbench-v1#code-work-commit
 Specs: code-work, trust-and-approval, module-contract
@@ -445,4 +445,63 @@ in "Decided by me" as written.
 
 ## Result
 
-Not started.
+### Increment A — the git runner and the repository checks (2026-10-22)
+
+The helper can run `git` safely and refuses a repository that selects programs. No subcommand uses it yet.
+
+- **The command moved onto the kit** (`module.json`: `runtime: python`, `kit: 1`); the helper imports
+  `wbkit.display` and nothing else new. A module test pins that the installer's pin records kit 1 and that
+  `wb run` refuses a pin without it. The read-only subcommands are unchanged and still run no program.
+- **The runner** (below the line `# --- running git ---` in the helper): `trusted_path_entries`,
+  `trusted_which`, `git_environment`, `run`, `git_root`, `head`, `names`, `git_bool_is_true` and
+  `repo_program_findings`, ported from the contract. `run` takes only the shapes in `git_shape_ok`, one per
+  subcommand of criterion 7 (`rev-parse`, `diff`, `ls-files`, `add`, `commit`, `reset`, `show`, `diff-tree`,
+  `config`, `status`); a global option before the subcommand, an unlisted subcommand, and the wrong shape of a
+  listed one (a `commit` with `--amend`, a `reset` that is not `-q -- <paths>`, an `add` with no `--`, a
+  `diff --ext-diff`) are refused before any program starts.
+- **Tests:** `test_codework_git.py` (35, against real git) and `support_git.py` (real repositories, a
+  recording `git`). Mutation checks: with the inside-the-repository PATH test, the `GIT_` scrub, the shape of
+  `reset`, the hooks scan, the link refusal, the allowlist or the global-configuration exclusion removed, a
+  named test fails each time. Existing tests changed: the helper is loaded through `support_helpers` (the kit
+  must be importable), the import check allows `wbkit` and `subprocess`, the no-program text scan covers
+  only the part above the line, and the lookalike-module test runs the helper through the runner. Full suite:
+  2458 tests in 4 roots, passing with `-W error` (the 11 `claude` tests that need the shipped approvals are
+  skipped: they are stale until increment F).
+- **Departures from the plan's text, for the owner:**
+  1. A repository whose `.git` is a file or a link is refused. The old helper allowed a `.git` file (a linked
+     worktree or a submodule); here that is the redirect an attacker would write, so a linked worktree cannot
+     be committed to through the helper until the owner says otherwise.
+  2. The shapes are stricter than the plan's list of subcommands: each is allowed in one argument shape, and
+     `GIT_LITERAL_PATHSPECS=1` is set for every run and not only for `commit`.
+  3. `rev-parse --verify -q refs/heads/<name>` and `rev-parse HEAD^@` are allowed for the unborn-branch and
+     parent checks of increments B and C; no `symbolic-ref` is needed.
+- **Known limits, for the security pass:** git's output is read whole into memory, with no size bound (only a
+  timeout of 120 seconds); a repository whose configuration names a program by a key the shape does not
+  match is not found; `HOME` and `XDG_CONFIG_HOME` of the caller choose the global configuration that is
+  trusted.
+- **Review (security-reviewer, two rounds, 2026-10-22; round 1 found one High and two Low, round 2 found no
+  bypass).** The reviewer ran real git against real repositories.
+  - **High, fixed (F1):** a committed gitlink whose nested repository sets `core.fsmonitor` made `diff`,
+    `status` and `commit` start that program, and `repo_program_findings` read only the top repository.
+    It now lists the index and reports `submodule:<path>` for any mode-160000 entry (any stage, flagged or
+    not; at most 5 names), so a commit is refused. A test shows the nested program does run when the
+    finding is ignored, and that an untracked nested repository runs nothing and is not a finding.
+  - **Low, fixed (F2):** the PATH boundary was the nearest `.git` ancestor, so an embedded repository made
+    the outer one look outside. `run` now uses `outermost_boundary`; `git_root` keeps the nearest for its
+    own check.
+  - **Low, fixed (F3):** `diff` with two absolute paths switched git to `--no-index` and read outside the
+    repository; every path-taking shape now rejects an empty, absolute or `..`-component path
+    (`_paths_ok`), and the refusal message is truncated. Increment B's `validate_paths` still has to reject
+    `.` (the whole tree), which the shape accepts.
+  - **Mutation checks:** removing the gitlink scan, the outermost boundary, the path check or the message
+    bound fails a named test each time.
+  - **Recorded as limits:** (1) the gitlink check reads the index only, so one that exists in `HEAD` but not
+    in the index is not seen; (2) an ancestor `.git` (a dotfiles repository in `$HOME`) makes every PATH
+    entry under it untrusted, which fails closed; (3) a repository may select the owner's own programs by
+    attributes (`filter=lfs`, `diff=pdf`) that the trusted global configuration defines (informational);
+    (4) a gitlink added by a concurrent writer after the check is outside the threat model (Choice 7);
+    (5) git's output is unbounded in memory; (6) `git_environment` does not set `GIT_CONFIG_GLOBAL` or
+    `GIT_CONFIG_NOSYSTEM` for ordinary runs, unlike the plan's wording, because the owner's global
+    configuration supplies the commit identity; only the configuration scan excludes it.
+  - **Not covered:** the unit tests of the fixes, TOCTOU between the PATH search and the start, and the
+    bind-mount and case-folding PATH cases beyond `samefile`.

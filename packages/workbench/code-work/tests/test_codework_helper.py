@@ -5,8 +5,6 @@ private copy, so it is loaded here by its path and run in process, and once as a
 directory that holds files named like standard modules."""
 
 import ast
-import importlib.machinery
-import importlib.util
 import io
 import os
 import shutil
@@ -21,15 +19,7 @@ ROOT = support_install.ROOT
 HELPER = os.path.join(ROOT, "packages", "workbench", "code-work", "helper", "code-work")
 
 
-def load():
-    loader = importlib.machinery.SourceFileLoader("code_work_helper", HELPER)
-    spec = importlib.util.spec_from_loader("code_work_helper", loader)
-    module = importlib.util.module_from_spec(spec)
-    loader.exec_module(module)
-    return module
-
-
-helper = load()
+helper = support_helpers.load("code-work")
 doccheck = support_helpers.load("doccheck")
 
 GOOD = """# A plan
@@ -107,7 +97,7 @@ class Project(unittest.TestCase):
 
 
 class Source(unittest.TestCase):
-    def test_the_helper_imports_only_the_standard_library(self):
+    def test_the_helper_imports_only_the_standard_library_and_the_kit(self):
         with open(HELPER, encoding="utf-8") as handle:
             tree = ast.parse(handle.read())
         names = set()
@@ -116,12 +106,27 @@ class Source(unittest.TestCase):
                 names.update(alias.name.split(".")[0] for alias in node.names)
             elif isinstance(node, ast.ImportFrom):
                 names.add((node.module or "").split(".")[0])
-        self.assertEqual({"datetime", "html", "io", "itertools", "os", "re", "stat", "sys"}, names)
-        self.assertTrue(names <= set(sys.stdlib_module_names))
+        self.assertEqual({"datetime", "html", "io", "itertools", "os", "re", "stat", "subprocess", "sys",
+                          "wbkit"}, names)
+        self.assertEqual({"wbkit"}, names - set(sys.stdlib_module_names))
 
-    def test_it_opens_nothing_for_writing_and_runs_no_program(self):
+    def test_the_only_import_of_subprocess_is_below_the_read_only_part(self):
+        read_only, marker, below = self.split_text()
+        self.assertNotIn("subprocess", read_only)
+        self.assertIn("import subprocess", below)
+
+    @staticmethod
+    def split_text():
+        """The helper's text above and below the line that begins the code that runs git."""
         with open(HELPER, encoding="utf-8") as handle:
             text = handle.read()
+        marker = "# --- running git "
+        above, found, below = text.partition(marker)
+        assert found, "the helper has no line that begins the git code"
+        return above, found, below
+
+    def test_the_read_only_part_opens_nothing_for_writing_and_runs_no_program(self):
+        text, _, _ = self.split_text()
         for word in ("subprocess", "os.system", "os.exec", "os.popen", "O_WRONLY", "O_RDWR",
                      "O_CREAT", "O_APPEND", "os.write", "os.rename", "os.unlink", "os.remove",
                      "os.mkdir", "os.rmdir", "os.chmod", "os.utime", "os.symlink", "os.link", "O_TRUNC",
@@ -510,7 +515,8 @@ class Dispatch(Project):
         self.addCleanup(copy.cleanup)
         private = os.path.join(copy.name, "code-work")
         shutil.copyfile(HELPER, private)
-        result = subprocess.run([sys.executable, "-B", private, "check"], cwd=self.place,
+        runner = os.path.join(ROOT, "workbench", "runner.py")
+        result = subprocess.run([sys.executable, "-I", "-B", runner, "1", private, "check"], cwd=self.place,
                                 capture_output=True, text=True, timeout=60)
         self.assertEqual((0, ""), (result.returncode, result.stderr))
         self.assertEqual("checked 1 plan\ncheck found no problems\n", result.stdout)

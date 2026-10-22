@@ -20,6 +20,8 @@
   "commands": {
     "code-work": {
       "helper": "helper/code-work",
+      "runtime": "python",
+      "kit": 1,
       "arguments": [
         "check",
         "plans",
