@@ -290,3 +290,18 @@ Nothing is left for the owner. The review is not an approval; the plan stays `Pr
 - Verification: the full suite runs 2650 tests in 5 roots, OK (2860 before; the difference is the deleted
   copies of the moved tests).
 - Next: increment C.
+
+### Increment C — done
+
+- `packages/workbench/safe-git/harness/neutral/skills/commit-changes/SKILL.md` added, written new from the
+  owner's commit rules. It names no tool but `wb run safe-git commit` and `wb run safe-git remove`, tells the
+  agent to stop for the owner before a deletion (preview, then `--confirm` only after approval), never to
+  push, and to stop and report a refusal.
+- Tests in `test_safegit_module.py`: a `Skill` class of 6 tests (the reader accepts it, front matter, Claude
+  receives it, names no tool and runs only the two commands, states the commit rules, makes the owner approve
+  a deletion), one install test showing `.claude/skills/commit-changes/SKILL.md`, and the module's file-list
+  test now includes the skill.
+- Differences from the plan: the Claude harness rewrites the skill's front matter (it quotes the name), so the
+  Claude test compares the body only.
+- Verification: the full suite runs 2657 tests in 5 roots, OK (the new root has 229).
+- Next: increment D.
