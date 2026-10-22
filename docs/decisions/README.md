@@ -76,3 +76,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-22-commit-helper-leaves-baselines-to-the-owner](2026-10-22-commit-helper-leaves-baselines-to-the-owner.md) | The commit helper leaves the acknowledgement baselines to the owner | Accepted |
 | [2026-10-22-git-work-in-its-own-module](2026-10-22-git-work-in-its-own-module.md) | Git work (`commit`, `remove`) lives in its own module, not in `code-work` or `groundwork` | Accepted |
 | [2026-10-22-model-calls-go-through-vendor-bridges](2026-10-22-model-calls-go-through-vendor-bridges.md) | Model calls go through thin vendor bridges; review and action review are separate engines | Accepted |
+| [2026-10-22-installer-records-plan-approval-module-computes-region](2026-10-22-installer-records-plan-approval-module-computes-region.md) | The installer records and gates plan approval; the process module's pinned helper computes the hashed region | Proposed |

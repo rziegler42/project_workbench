@@ -36,7 +36,7 @@ Non-goals:
 | blocks | nothing beyond the one-process rule of the type |
 | fills | the policy slot in `AGENTS.md`; the `docs-index` slot |
 | writes | `docs/plans/` and its README |
-| ships | one helper (code-bearing, shown at approval) with the subcommands `check`, `plans` and `report`; the `wb` launcher is a workbench component and not shipped by this module |
+| ships | one helper (code-bearing, shown at approval) with the subcommands `check`, `plans` and `report` (and `region`, proposed); the `wb` launcher is a workbench component and not shipped by this module |
 
 It also ships neutral items: skills for drafting a plan, running the increment loop,
 and reviewing; and a read-only reviewer agent. Templates stay in the module; no
@@ -138,6 +138,16 @@ are implemented with this module, because the sections that are excluded from th
 hashed region (the status line, the review record and the result) are named by this
 module's plan format. `trust-and-approval.md` defines the rule; this module supplies
 the section names and the plan check.
+
+*(Proposed by plan `2026-10-22-plan-approval-records`; not built.)* The module's helper gains a read-only subcommand, `region <plan>`, over the
+reader that `check` already uses, and the module declares `approval: {"command": "code-work", "argument":
+"region"}`. `region` prints the hash of the plan's hashed region and the names of the unhashed sections as
+`trust-and-approval.md`, "Plan approval records", states. The region is the whole plan except the status line, the
+review record and the result, with line endings, trailing whitespace and the final newline normalized. A heading
+inside a fence or a quotation, an indented one or one in another case does not start or end a section; a plan
+with a duplicated excluded heading, or with no status line before its first heading, is refused rather than
+guessed. The owner approves with `wb approve-plan <plan>`; an agent reads `wb plan-status <plan>`; the delegated
+record waits for a `peer-review` provider.
 
 ### Completion
 

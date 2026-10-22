@@ -76,6 +76,7 @@ Each module has one declaration file, `module.json`, at the root of its director
 | `ships` | Executable or code-bearing items it ships, such as hooks or helper scripts. |
 | `commands` | Commands it offers, each a helper it ships and the first arguments it accepts, run with `wb run`. The installer pins the helper when the owner confirms the install; nothing in the name of the shipped file declares a command. *(built: verified, and run with `wb run`)* |
 | `checks` | Pinned Python helpers it contributes to `wb check`. *(built: verified, listed in the approval request, and run by `wb check`)* |
+| `approval` | Process modules only: the command of its own that computes the hashed region of a plan. *(proposed by plan `2026-10-22-plan-approval-records`; not built)* |
 | `layout` | Harness modules only: the layout description (see `harness-modules.md`). It is part of the declaration and its hash. |
 
 `provides`, `requires` and `blocks` are lists of capability names. A module that
@@ -267,7 +268,7 @@ is listed twice, and no directory holding a `module.json` is left unlisted.
 
 **Module fields.** `name`, `version` and `description` are required. Optional:
 `type` (default `module`), `provides`, `requires`, `blocks`, `helpers`, `slots`,
-`fills`, `writes`, `ships` (default empty), `commands`, `checks` and `layout`. The list entry in `package.json`,
+`fills`, `writes`, `ships` (default empty), `commands`, `checks`, `approval` and `layout`. The list entry in `package.json`,
 the directory name and `name` in `module.json` must be equal. No list holds a duplicate.
 
 - `requires` entries are a capability, or `{"capability": "<capability>", "soft": true}`.
@@ -291,6 +292,12 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   command's helper to be a regular file of the module. In short, each names a helper that is an item of `ships` (or a file below one),
   a Python helper declares the kit API number it needs in `kit`, and an unknown field is refused as
   everywhere else.
+
+- `approval` *(proposed)*: an object with exactly the fields `command` (the key of one of this module's `commands`)
+  and `argument` (one of that command's `arguments`), and refused on any module type but `process`. It names the
+  pinned command the installer runs to learn a plan's hashed region (`trust-and-approval.md`, "Plan approval
+  records"). An unknown field, a wrong type, a command the module does not declare or an argument the command
+  does not list is refused, naming the module and the field.
 
 **Module files.** Every file is `module.json`, a file below `harness/`, `templates/`,
 `files/`, `tests/` or `tools/` (exact case; a file of that name at the module root does not count), a
@@ -372,3 +379,5 @@ result is a refusal and carries no hashes and no order.
 - A `commands` entry with an unknown field, a helper that is not in
   `ships`, or a missing or misplaced `kit` is refused, naming the module and the field. The same holds for a `checks` entry
   (it has no `runtime` and no `arguments`), and for a pin name already used by another entry.
+- An `approval` field *(proposed)* on a module that is not a `process` module, or naming a command or an
+  argument the module does not declare, is refused, naming the module and the field.

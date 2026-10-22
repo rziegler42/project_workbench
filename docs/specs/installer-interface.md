@@ -166,6 +166,8 @@ says so.
 | `pin` | package | a project id, a name, a helper, `--root` | the guarded store: a pin (the installer pins declared helpers itself; this is for any other) | yes | built |
 | `launch` | package | a project id, a name, `--root`, arguments after `--` | a private copy of the pinned helper under `bin/run/` while it runs, removed afterwards | no | built |
 | `release-approvals` | package | nothing | the shipped first-party records in the workbench distribution | no | built |
+| `approve-plan` | project | a plan path | the guarded store: a plan approval record | yes, owner-run | proposed |
+| `plan-status` | project | a plan path | nothing | no | proposed |
 
 - `verify --no-harness-required` turns off the rule that a selection needs a harness module
   (`module-contract.md`). It is a check option and installs nothing, so it does not weaken a
@@ -490,6 +492,15 @@ publishes, and none edits a living or historical document** (`repository-boundar
 - **Limits.** The marker is unlinked by name after the second examination, so a marker swapped in
   that window is removed instead of the one shown. A forged record can make `recover` remove empty
   directories the owner made; they are listed before the digest is typed.
+
+### `approve-plan` and `plan-status` (proposed by plan `2026-10-22-plan-approval-records`; not built)
+
+`wb approve-plan <plan>` and `wb plan-status <plan>` take exactly one argument and no option, and run from
+anywhere inside a project. They do not take the target options: the root and the ID come from the finder that `wb run`
+uses, with the same refusals. The behaviour, the path rules, the record, the output and the exit codes are in
+`trust-and-approval.md`, "Plan approval records". `approve-plan` is owner-run and terminal-only and a harness
+denies it to the agent; `plan-status` is read-only and agent-safe. Neither commits, pushes or edits a plan, and
+neither reads a plan itself: the process module's declared, pinned command does.
 
 ## The existing commands
 

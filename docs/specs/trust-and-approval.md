@@ -135,6 +135,9 @@ while the current hashes of its subject match.
   by a pull needs approving again.
 - The agent acts on a plan only while its current hash matches a recorded approval.
   A `Status: Approved` line in a committed file is never an approval.
+- The installer reads no plan and holds no list of section names. The process module declares a pinned command
+  that computes the hashed region and reports its hash; the installer runs that command, records what it
+  reports and compares it later ("Plan approval records", below; proposed by plan `2026-10-22-plan-approval-records`).
 
 ## Checkpoints, delegation and hard stops
 
@@ -205,7 +208,7 @@ Rules:
 - A rule is rendered into local, uncommitted harness configuration only.
 - A harness that provides `permissions` renders a `deny` for each owner-run command, so an
   agent cannot run it: `wb install`, `wb upgrade`, `wb add`, `wb attach`, `wb acknowledge`,
-  `wb recover`, `wb approve`, `wb pin` and `wb release-approvals`, in the `wb` spelling and
+  `wb recover`, `wb approve`, `wb pin`, `wb release-approvals` and `wb approve-plan` *(proposed)*, in the `wb` spelling and
   the four interpreter spellings of `-m workbench` (`rules.SPELLINGS`). The read-only `wb preview` is not denied. The commands
   are listed in `installer-interface.md`. *(Rendered by the Claude harness module, built by
   `claude-harness`; the opencode module is `opencode-harness`.)* The deny is best effort: it
@@ -351,6 +354,50 @@ prose above and this section differ in precision, this section is what the code 
   the first record, with its commit or absence of one, is kept.
 - **Approver.** The account name from the operating system's user database, not from an
   environment variable. It is text and grants nothing.
+
+### Plan approval records
+
+*(Proposed by plan `2026-10-22-plan-approval-records`; not built. The names and shapes are proposals until the code exists.)*
+
+- **The region command.** A `process` module declares `approval: {"command", "argument"}` (`module-contract.md`).
+  The installer resolves exactly one process module that declares it, from the committed manifest, and runs the
+  command as `wb run` does: the module installed and approved, its declaration and tree hash equal to the
+  manifest's, the helper pinned for that command and unchanged. It runs `<command> <argument> <plan>` with the
+  plan's path relative to the project root, with standard input closed, and accepts, within 4,096 bytes of
+  standard output, one JSON object and a newline and nothing else:
+  `{"format": 1, "region_hash": "<64 lowercase hex>", "unhashed": ["<name>", ...]}`, with at most 16 names of at
+  most 64 printable characters. Anything else, a non-zero exit, a timeout or a `refused:` line is no approval. The
+  module's helper reads the plan (bounded, no link followed) and decides what is in the region; the output is
+  data and is validated, never followed.
+- **The record.** `projects/<id>/plan-approvals` in the guarded store, strict JSON,
+  `{"format": 1, "approvals": [{"plan", "region_hash", "declaration_hash", "helper_sha256", "approver", "time",
+  "workbench_version"}, ...]}` with at most 2,000 entries. `plan` is the path relative to the project root, and
+  passes the path validator. `declaration_hash` is the process module's declaration hash and `helper_sha256` is the
+  SHA-256 of the helper as pinned. The file is replaced whole and atomically. An approval that equals an entry in
+  all four of plan, region hash, declaration hash and helper hash is not added again (the first record is kept);
+  one that differs adds an entry, and the older entries stay as history. Reading fails closed.
+- **The check.** For a plan the installer computes the four values now. If an entry equals all four, the plan is
+  `approved`. If some entry names the same plan, the newest such entry says what differs and the plan is `changed
+  since approval` (the region, the process declaration or the helper). Otherwise it is `not approved`. A project
+  with no process module that declares `approval`, with more than one, or a command that cannot run, is a
+  refusal and not a status.
+- **`approve-plan <plan>`** (owner-run; terminal on both standard input and standard output). One argument and no
+  option, run from anywhere inside the project, with the root and the ID found as `wb run` finds them. `<plan>` is
+  read relative to the current directory (or absolute) and converted to a path relative to the root; it is
+  refused if it is outside the root, empty, holds a NUL or a `..`, or has a link in any component, the last one
+  included, or is not a regular file. It shows the root, the plan, the process module, the first 12 characters of
+  the declaration and helper hashes, the `unhashed` names and the region hash, and says if an older entry for
+  the plan exists. It records only when the first 12 characters of the region hash are typed back, after running
+  the command again and finding the two reports equal. Exit codes: 0 recorded or already recorded, 1 refused or
+  cancelled with nothing written, 2 usage error, 130 interrupted. The typed text is friction, not authentication;
+  the barrier is the harness's deny rule.
+- **`plan-status <plan>`** (read-only, agent-safe). The same argument and path rules. It writes nothing and prints
+  one line on standard output, `approved: <plan>`, `changed since approval: <plan> (<what differs>)` or `not
+  approved: <plan>`; a refusal prints a `refused:` line on standard error and nothing on standard output. Exit
+  codes: 0 approved, 1 anything else, 2 usage error.
+- **Limits.** The gate is a command and a rule. Nothing stops an agent that does not ask it. The helper is the
+  authority on what the region is, as far as its owner-approved bytes go, and a helper that misreports it defeats
+  the approval; the record binds the helper's hash so that an edit of it is a change.
 
 ### The `approve` command
 
@@ -571,8 +618,9 @@ instead of retrying. No dollar ceiling is required.
 - **Image handling.** Which tools open image files, and how location metadata is
   stripped from tracked copies, are decided in the `researcher-fetch-tool` candidate.
 - **Formats still proposals.** The formats in "Concrete formats" are fixed by the code at `format: 1`.
-  The formats of plan approvals and delegated-approval records, and the setting names for
-  checkpoints, remain proposals (the baselines format is built) until the way of working that uses them is built.
+  The format of plan approvals is proposed in "Plan approval records" and awaits its code; the formats of
+  delegated-approval records and the setting names for
+  checkpoints remain proposals (the baselines format is built) until the way of working that uses them is built.
 - **Added hard stops.** A module may add hard stops, and the function that combines stops accepts
   additions, but a module declaration has no field to declare one and no module supplies any. The owner
   decides the field (a `module-contract` change) or defers it.
@@ -599,6 +647,10 @@ instead of retrying. No dollar ceiling is required.
   installed, declared and pinned, or whose module lacks the capability asked for, is refused and nothing
   runs; a `wb` inside the project is never run; the caller's environment is not passed on.
 - A reviewer that returns no verdict produces no approval.
+- *(Proposed; not built.)* A plan with no record is `not approved` whatever its `Status:` line says; a record of
+  an earlier region, process declaration or helper makes it `changed since approval`; a status, review-record or
+  result edit leaves it `approved`; `approve-plan` writes nothing unless the command's two reports are equal and
+  the typed prefix matches; the installer's text names no plan section.
 - The neutral rule list is rejected if it contains an `allow` entry.
 - A module that tries to remove a floor entry is refused.
 - The researcher cannot run a shell command or write outside the references area;
