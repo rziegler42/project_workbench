@@ -534,6 +534,9 @@ package's modules (`test_claude_module`, `test_groundwork_module`) now expect `c
 
 ### Increment E — `wb code-work` (2026-10-21)
 
+> Superseded 2026-10-22: `workbench/dispatch.py` and `tests/test_dispatch.py` were removed by
+> `module-commands`. The command is now `wb run code-work`, declared in `module.json`. See the Amendment.
+
 `workbench/dispatch.py` (new) and a route in `workbench/cli.py` add `wb code-work <subcommand>
 [arguments]`. `tests/test_dispatch.py` has 25 tests. `rules.AGENT_SAFE` now lists `code-work`, which
 `test_permissions` requires of any routed command. Full suite: 2038 tests, 108 skipped, passing with
