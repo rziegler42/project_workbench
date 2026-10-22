@@ -1,6 +1,6 @@
 # The safe-git module: git work moves out of code-work
 
-Status: Approved
+Status: Completed
 Created: 2026-10-22
 Candidate: none — carries out the accepted decision `2026-10-22-git-work-in-its-own-module`; the roadmap has no candidate for it
 Specs: code-work, safe-git, module-boundary, module-contract, trust-and-approval
@@ -353,4 +353,4 @@ Nothing is left for the owner. The review is not an approval; the plan stays `Pr
   records.
 - Verification: `doccheck` and `refcheck` print no problems, `git diff --check` is clean, and the full suite
   runs 2658 tests in 5 roots, OK.
-- The plan is complete: all five increments are done. Its status stays `Approved` until the owner archives it.
+- The plan is complete: all five increments are done. The owner archived it on 2026-10-22 by setting the status to `Completed`.
