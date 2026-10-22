@@ -44,7 +44,7 @@ meet here and the order matters.
   writes nothing into a project; it verifies declarations. `module-approvals` comes
   before `base-and-manifests`, so the first time the installer writes a project, the
   approval check is already in place. Plan approval and the delegation helper are
-  built with `code-work-plans` and `code-work-approval`, because the plan format names the
+  built with `code-work-plans` and plan `2026-10-22-plan-approval-records`, because the plan format names the
   sections they depend on.
 - **The installer is not run on its own repository** until `self-hosting` has shown,
   by a test, that its output agrees with the hand-maintained files.
@@ -109,7 +109,7 @@ meet here and the order matters.
   the manifest), which reads `.git/index` itself and runs no git. An adversarial security pass found
   nothing above Low unresolved. The hand run in a live `claude` session was not done. The plan's Result
   and `harness-modules.md` ("As built, and its limits") list the limits. Compact Instructions waits
-  for `code-work-approval`.
+  for `compaction-guidance`.
 - `groundwork-module` is implemented (plan `2026-10-21-groundwork-module`, increments A to I; its
   completion is derived from that plan): the first-party module `groundwork` in
   `packages/workbench/` with the four READMEs, the `docs-index` and policy blocks and three skills
@@ -134,6 +134,15 @@ meet here and the order matters.
   command `ask-codex ask`; it passes the conformance checklist against a fake `codex` program, and no test starts a
   real one. Security and workflow reviews found no Critical or High finding. The review engine and the
   action-review engine (candidates below), a second vendor and the hand run against a real Codex are still to do.
+- Plan approval is a recorded approval (plan `2026-10-22-plan-approval-records`, increments A to F; it had
+  `Candidate: none`, so its completion is not derived). The installer records an owner-made approval per project
+  (`wb approve-plan`, `wb plan-status`); the process module declares an `approval` command and the `code-work` helper's
+  `region` subcommand computes the plan's hashed region. The decision
+  `2026-10-22-installer-records-plan-approval-module-computes-region` is still Proposed. The candidate
+  `code-work-approval` was too large for one plan and is split into `checkpoint-settings-and-caps`,
+  `increment-loop-and-review-skills`, `push-checkpoint`, `compaction-guidance` and `delegated-approval`; the older
+  plans, specs and decisions that name `code-work-approval` mean this group. Security and workflow reviews found
+  nothing above Medium unresolved; the hand run in a live project is still to do.
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.
 
@@ -144,7 +153,8 @@ meet here and the order matters.
 `ownership-and-upgrade`, `claude-harness`, `verify-opencode`, `opencode-harness`,
 `groundwork-module`, `researcher-fetch-tool`, `code-work-plans`, `module-boundary-kit`,
 `module-commands`, `module-checks`, `module-harness-paths`, `code-work-commit`,
-`code-work-approval`, `remote-runner-module`, `review-engine`, `action-review-engine`,
+`checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint`, `compaction-guidance`,
+`remote-runner-module`, `review-engine`, `delegated-approval`, `action-review-engine`,
 `knowledge-base-package`, `port-superpowers`, `global-config-migration`, `self-hosting`, `remaining-modules-rename`.
 
 ## Candidates
@@ -311,7 +321,7 @@ proves the path every later helper subcommand uses: shipping, pinning, launching
 plans.
 **Dependencies:** `module-approvals`, `claude-harness`, `groundwork-module`.
 **Boundary:** reading only. No commit or remove, no approval record, no review loop,
-caps, checkpoint or push rule. Until `code-work-approval`, approval is the owner's
+caps, checkpoint or push rule. Until plan `2026-10-22-plan-approval-records`, approval was the owner's
 explicit statement in session and the policy block says so.
 **Promotion trigger:** `groundwork-module` complete.
 
@@ -375,27 +385,51 @@ owner, so a change made through it is listed by the next `wb acknowledge`. The h
 reads a repository the project controls, so a security pass is part of it.
 **Promotion trigger:** `code-work-plans` complete.
 
-### code-work-approval — Plan approval, review, caps and push
+### checkpoint-settings-and-caps — The checkpoint settings, the loop caps and the gate
 
-**Outcome:** a plan approval bound to the plan's hashed region, recorded per project and
-made by the owner, and the delegation helper; the gate that stops an agent from starting
-an increment without a valid approval; the checkpoint settings; the increment-loop and
-review skills and the reviewer agent; the review record, loop caps and the shared-branch
-push checkpoint; the compaction guidance and the Claude "Compact Instructions" section;
-and the policy block updated to say approval is a record.
-**Dependencies:** `code-work-commit`.
-**Boundary:** programming only. Remote jobs and the review engines are separate.
-It may itself need two plans; decide when it is promoted.
-**Promotion trigger:** `code-work-commit` complete.
+**Outcome:** the checkpoint settings (which actions stop for the owner), the loop caps (review rounds and
+increment attempts), and an enforcement point that refuses work on a plan whose record does not read `approved`
+(a hook or a deny rule the module renders; the record and the `plan-status` command exist already).
+**Dependencies:** `code-work-commit`; plan `2026-10-22-plan-approval-records` (built).
+**Boundary:** programming only. Settings and the enforcement point; no skills, no reviewer agent, no push rule.
+The Claude module has `hooks: none`, so the enforcement point may need a hook rendering first; decide when it is
+promoted.
+**Promotion trigger:** the owner chooses to begin it.
+
+### increment-loop-and-review-skills — The increment loop, the review skills and the reviewer agent
+
+**Outcome:** the neutral skills for one increment (implement, verify, record, stop for the owner), the review
+skills (what to ask a reviewer, how to evaluate findings, the review record), and the reviewer agent.
+**Dependencies:** `checkpoint-settings-and-caps`.
+**Boundary:** skills and one agent definition, in the owner's words and the project's own locations. No review
+engine and no vendor.
+**Promotion trigger:** `checkpoint-settings-and-caps` complete.
+
+### push-checkpoint — The shared-branch push checkpoint
+
+**Outcome:** a push to a shared branch is a checkpoint the owner decides, with the credential scan before it,
+rendered as a rule the harness enforces.
+**Dependencies:** `checkpoint-settings-and-caps`.
+**Boundary:** the checkpoint and its rule. The commit helper and `remove` stay in `safe-git`.
+**Promotion trigger:** `checkpoint-settings-and-caps` complete.
+
+### compaction-guidance — The compaction guidance
+
+**Outcome:** the neutral preservation guidance for compaction and the Claude "Compact Instructions" section it
+renders.
+**Dependencies:** `claude-harness`.
+**Boundary:** the guidance text and its rendering. No hook and no wrapper that triggers compaction from outside a
+session.
+**Promotion trigger:** the owner chooses to begin it.
 
 ### remote-runner-module — `remote-runner` as a generic module
 
 **Outcome:** the remote-runner configuration moves under `.workbench/`, and fetching
 remote job output follows the checkpoint and hard-stop rules.
-**Dependencies:** `claude-harness`, `code-work-approval`.
+**Dependencies:** `claude-harness`, `checkpoint-settings-and-caps`.
 **Boundary:** the module and its configuration. The `remote-runner` tool itself must
 learn the new path, which is a change outside this repository.
-**Promotion trigger:** `code-work-approval` complete.
+**Promotion trigger:** `checkpoint-settings-and-caps` complete.
 
 ### review-engine — The review engine
 
@@ -404,11 +438,22 @@ the rounds, the sealed review state, the findings schema (blocker, major, minor,
 owner-only `extend`, `reset`, `archive` and `prune`; it reads its bridge, model and effort from its own project
 setting `.workbench/<module>.json` and runs a bridge only through `wb run --provides model-bridge`. It replaces the
 owner's personal review tool for a project.
-**Dependencies:** `code-work-approval`; the `ask-codex` bridge (plan `2026-10-22-ask-codex-bridge`).
+**Dependencies:** `checkpoint-settings-and-caps` (the loop caps); the `ask-codex` bridge (plan
+`2026-10-22-ask-codex-bridge`).
 **Boundary:** one engine that knows no vendor. Where the sealed state lives is decided in its plan (the owner's
 tool keeps it in untracked scratch, which a module must not depend on). The bridges are separate modules, one
 per vendor.
-**Promotion trigger:** `code-work-approval` complete.
+**Promotion trigger:** `checkpoint-settings-and-caps` complete.
+
+### delegated-approval — Delegated plan approval
+
+**Outcome:** a plan approval made by a delegate under the owner's standing authorization, as the delegation
+helper and a record that names its delegate and its review, bound to the same hashed region.
+**Dependencies:** `review-engine` (it needs the `peer-review` capability); plan
+`2026-10-22-plan-approval-records` (built).
+**Boundary:** the delegation helper, its record fields and its verdict rule
+(`trust-and-approval.md`, "Plan approval"). The owner's own approval stays as built.
+**Promotion trigger:** `review-engine` complete.
 
 ### action-review-engine — The action-review engine
 
@@ -416,11 +461,11 @@ per vendor.
 `model-bridge`, takes facts about an action and returns a verdict with reasons as data, from a rubric and rules.
 It writes no `allow` rule and no setting, and its verdict authorizes nothing by itself
 (`2026-10-22-model-calls-go-through-vendor-bridges`, decisions 6 and 7).
-**Dependencies:** `code-work-approval`; the `ask-codex` bridge; a way for the module that owns an action to give
+**Dependencies:** `checkpoint-settings-and-caps`; the `ask-codex` bridge; a way for the module that owns an action to give
 the facts before the action is made (open in the accepted record).
 **Boundary:** a rubric and rules engine, not a reviewer of documents; the enforcement point that uses its verdict
 stays in the owner's own configuration. It is separate from `review-engine`, and a project may install either.
-**Promotion trigger:** `code-work-approval` complete and the facts interface decided.
+**Promotion trigger:** `checkpoint-settings-and-caps` complete and the facts interface decided.
 
 ### knowledge-base-package — The knowledge base as a package
 
@@ -440,7 +485,7 @@ to; and the first ports as neutral skills, written in the workbench's own words,
 own locations (`docs/specs/`, `docs/plans/`), with no harness named. Brainstorming is expected to
 go to `groundwork` as a step before `draft-spec`; the rest to `code-work` or `safe-git`, unless
 the inventory shows a practice that every process shares, which would argue for a module of its own.
-**Dependencies:** `claude-harness`, `groundwork-module`, `code-work-approval` (which owns the
+**Dependencies:** `claude-harness`, `groundwork-module`, `increment-loop-and-review-skills` (which owns the
 increment loop, review and reviewer-agent skills).
 **Boundary:** the inventory, the placement decisions, and the skills the inventory selects first. The
 git-specific slice was taken by `2026-10-22-safe-git-module`: the `commit-changes` skill is written, and
@@ -449,7 +494,7 @@ git-specific slice was taken by `2026-10-22-safe-git-module`: the `commit-change
 Each further port is its own candidate. Whether the superpowers wording may be reused is checked
 against its licence before any text is copied, and the default is to write new text. Removing
 superpowers from the owner's `~/.claude` belongs to `global-config-migration`.
-**Promotion trigger:** `code-work-approval` complete.
+**Promotion trigger:** `increment-loop-and-review-skills` complete.
 
 ### global-config-migration — Move the owner's global Claude configuration into modules
 
@@ -459,7 +504,8 @@ the policy text, the commit helper, the review wiring and the compaction guidanc
 What stays global, and why, is a written list: the owner's own `allow` rules (the
 workbench never writes `allow`), machine-level settings such as authentication, model
 choice and remote hosts, and anything the owner wants in a project that has no workbench.
-**Dependencies:** `code-work-approval`, `remote-runner-module`, `review-engine`, `action-review-engine`, and
+**Dependencies:** `checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint`,
+`compaction-guidance`, `remote-runner-module`, `review-engine`, `action-review-engine`, and
 `groundwork-module`; hooks rendering for Claude, which the Claude module does not yet
 provide (`hooks: none`).
 **Boundary:** one global item at a time, each moved only after a test or a recorded run
@@ -469,7 +515,8 @@ approver is ever absent in between. The `claude_global_config` mirror is kept in
 whether the settings file's own path is denied for edits (`harness-modules.md`, "As built,
 and its limits"). It does not move the owner's `allow` rules and does not change what
 the installer writes.
-**Promotion trigger:** `code-work-approval`, `remote-runner-module`, `review-engine` and
+**Promotion trigger:** `checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint`,
+`compaction-guidance`, `remote-runner-module`, `review-engine` and
 `action-review-engine` complete, and the owner chooses to begin removing items from `~/.claude`. Each of those
 earlier plans lists the global items it replaces, so this candidate starts from that list.
 
@@ -480,11 +527,12 @@ generate, and the old template is retired. The document conventions were already
 adopted by `adopt-conventions`, so this candidate is only the proof of agreement and the
 retirement.
 **Dependencies:** `ownership-and-upgrade`, `claude-harness`, `groundwork-module`,
-`code-work-approval`.
+`checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint`, `compaction-guidance`.
 **Boundary:** agreement between hand-maintained files and generated output, and the
-retirement of the old template. The installer does not rewrite its own repository until
-that agreement is tested.
-**Promotion trigger:** `code-work-approval` complete.
+retirement of the old template, and approving this repository's own plans with `wb approve-plan`. The installer
+does not rewrite its own repository until that agreement is tested.
+**Promotion trigger:** `checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint` and
+`compaction-guidance` complete.
 
 ### remaining-modules-rename — Remaining modules and the rename pass
 

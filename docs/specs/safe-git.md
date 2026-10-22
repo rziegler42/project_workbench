@@ -94,7 +94,7 @@ looked at here:
 
 - `using-git-worktrees`: not ported. A worktree needs git subcommands this helper deliberately does not run.
 - `finishing-a-development-branch`: not ported. Merging, pushing and cleanup are outside the agent or are a
-  push checkpoint that `code-work-approval` builds.
+  push checkpoint that `push-checkpoint` builds.
 - The commit rules (exact paths, no attribution, one commit per request) were already the owner's own and
   are written new in `commit-changes`; no superpowers text is copied.
 

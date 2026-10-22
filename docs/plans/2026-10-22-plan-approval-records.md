@@ -365,7 +365,7 @@ Both reviewers were read-only subagents of this session; their findings are untr
 
 ## Result
 
-In progress. Increments A, B, C and D are done.
+Done. Increments A to F are implemented. The plan's status is the owner's to change.
 
 - **A** (`aad363f`): the specs and the Proposed decision `2026-10-22-installer-records-plan-approval-module-computes-region`.
 - **B**: the `approval` declaration field (`workbench/declarations.py`; `Module.approval`, refused on any
@@ -405,7 +405,7 @@ In progress. Increments A, B, C and D are done.
     policy test now allows exactly `wb approve-plan` and `wb plan-status`, and the skill names the approve-plan
     command without the `wb` prefix.
   - The module's tree hash changed, so the shipped approval of the package is stale until increment E.
-- **E (in progress, not committed):** the two reviews are done and recorded in the Review record. Fixed: SR-F1 and
+- **E** (`517d322`): the two reviews are done and recorded in the Review record. Fixed: SR-F1 and
   SR-F2 in the `code-work` helper (`_starts_section` now works on the plan's own lines and ignores fence, comment
   and quote state; `_STATUS_BOUND` of 200 characters), with regression tests in `test_codework_region.py`
   (now 44 tests), then BP-F1 after the bypass attempt (the helper's `_WRAPPED_START`). Suites: the first full run found three failures, all from this plan's own Review record text
@@ -419,5 +419,13 @@ In progress. Increments A, B, C and D are done.
     `b213e71ca761`) were removed with `claude-workflow remove`.
   - Suite after the last change: 2904 tests in 6 roots, OK (tests 2186, ask-codex 90, claude 30, code-work 190,
     groundwork 178, safe-git 230).
-  - Open: the commit.
-- **Next:** finish increment E, then F.
+- **F:** the specs say what exists (`code-work.md`, `trust-and-approval.md`, `module-contract.md`, with the
+  "proposed" and "not built" markers removed where the code now exists; `safe-git.md` and `harness-modules.md`
+  name the new candidates), the roadmap splits `code-work-approval` into `checkpoint-settings-and-caps`,
+  `increment-loop-and-review-skills`, `push-checkpoint`, `compaction-guidance` and `delegated-approval` with the
+  dependents repointed (the gate itself is in `checkpoint-settings-and-caps`), and the decision's Verification
+  lists what is built. The document checks pass.
+  - Not done, and the owner's: accepting the Proposed decision; the unreviewed round 3 plan fix; a hand run in a
+    live installed project; approving this repository's own plans with the command (needs `self-hosting`).
+  - Older plans and accepted decisions still name `code-work-approval`; they are history and were not edited.
+- **Next:** the owner's call: accept the decision, push, and choose the next candidate.

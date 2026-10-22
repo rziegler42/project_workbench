@@ -3,8 +3,8 @@
 Status: Current. Approved by the owner on 2026-10-19. The guarded store, the personal settings, approval
 records, first-party shipped approvals, the approval request and gate, the owner-run `approve` and `pin`
 commands, the inert download and the launcher are built (`module-approvals`), and "Concrete formats" records what
-the code does. Acknowledgement (the baseline check and `wb acknowledge`) is built (`ownership-and-upgrade`). The rendering into the Claude harness is built (`claude-harness`). Plan approval,
-delegation and the opencode rendering are not built yet, and their record formats and setting names
+the code does. Acknowledgement (the baseline check and `wb acknowledge`) is built (`ownership-and-upgrade`). The rendering into the Claude harness is built (`claude-harness`). Plan approval records (`2026-10-22-plan-approval-records`) are built. Delegation
+and the opencode rendering are not built yet, and their record formats and setting names
 remain proposals. The rules are the substance.
 
 Terms are defined in `terms.md`. Places and manifests are defined in
@@ -137,7 +137,7 @@ while the current hashes of its subject match.
   A `Status: Approved` line in a committed file is never an approval.
 - The installer reads no plan and holds no list of section names. The process module declares a pinned command
   that computes the hashed region and reports its hash; the installer runs that command, records what it
-  reports and compares it later ("Plan approval records", below; proposed by plan `2026-10-22-plan-approval-records`).
+  reports and compares it later ("Plan approval records", below; built by plan `2026-10-22-plan-approval-records`).
 
 ## Checkpoints, delegation and hard stops
 
@@ -208,7 +208,7 @@ Rules:
 - A rule is rendered into local, uncommitted harness configuration only.
 - A harness that provides `permissions` renders a `deny` for each owner-run command, so an
   agent cannot run it: `wb install`, `wb upgrade`, `wb add`, `wb attach`, `wb acknowledge`,
-  `wb recover`, `wb approve`, `wb pin`, `wb release-approvals` and `wb approve-plan` *(proposed)*, in the `wb` spelling and
+  `wb recover`, `wb approve`, `wb pin`, `wb release-approvals` and `wb approve-plan`, in the `wb` spelling and
   the four interpreter spellings of `-m workbench` (`rules.SPELLINGS`). The read-only `wb preview` is not denied. The commands
   are listed in `installer-interface.md`. *(Rendered by the Claude harness module, built by
   `claude-harness`; the opencode module is `opencode-harness`.)* The deny is best effort: it
@@ -357,7 +357,7 @@ prose above and this section differ in precision, this section is what the code 
 
 ### Plan approval records
 
-*(Proposed by plan `2026-10-22-plan-approval-records`; not built. The names and shapes are proposals until the code exists.)*
+*(Built by plan `2026-10-22-plan-approval-records`, at `format: 1`.)*
 
 - **The region command.** A `process` module declares `approval: {"command", "argument"}` (`module-contract.md`).
   The installer resolves exactly one process module that declares it, from the committed manifest, and runs the
@@ -619,7 +619,7 @@ instead of retrying. No dollar ceiling is required.
 - **Image handling.** Which tools open image files, and how location metadata is
   stripped from tracked copies, are decided in the `researcher-fetch-tool` candidate.
 - **Formats still proposals.** The formats in "Concrete formats" are fixed by the code at `format: 1`.
-  The format of plan approvals is proposed in "Plan approval records" and awaits its code; the formats of
+  The format of plan approvals is built ("Plan approval records"); the formats of
   delegated-approval records and the setting names for
   checkpoints remain proposals (the baselines format is built) until the way of working that uses them is built.
 - **Added hard stops.** A module may add hard stops, and the function that combines stops accepts
@@ -648,7 +648,7 @@ instead of retrying. No dollar ceiling is required.
   installed, declared and pinned, or whose module lacks the capability asked for, is refused and nothing
   runs; a `wb` inside the project is never run; the caller's environment is not passed on.
 - A reviewer that returns no verdict produces no approval.
-- *(Proposed; not built.)* A plan with no record is `not approved` whatever its `Status:` line says; a record of
+- A plan with no record is `not approved` whatever its `Status:` line says; a record of
   an earlier region, process declaration or helper makes it `changed since approval`; a status, review-record or
   result edit leaves it `approved`; `approve-plan` writes nothing unless the command's two reports are equal and
   the typed prefix matches; the installer's text names no plan section.

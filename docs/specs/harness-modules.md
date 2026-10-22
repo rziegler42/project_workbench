@@ -129,12 +129,12 @@ does not receive them.
 Built as the first-party module `claude` in `packages/workbench/`, declared as data (`layout`
 in `module.json`) and rendered by the installer. It provides five capabilities:
 `instructions`, `skills`, `agents`, `commands` and `permissions`. It declares `hooks: none`;
-the sixth, `hooks`, is added when `code-work-approval` ships a hook. Layout, verified against
+the sixth, `hooks`, is added when a module ships a hook (`checkpoint-settings-and-caps` may be the first). Layout, verified against
 Claude Code 2.1.305 (see "Evidence" below):
 
 | kind or file | path |
 |---|---|
-| root file | `CLAUDE.md`: an `@AGENTS.md` pointer only. The generated "Compact Instructions" section is added once a module supplies the neutral preservation guidance (`code-work-approval`) |
+| root file | `CLAUDE.md`: an `@AGENTS.md` pointer only. The generated "Compact Instructions" section is added once a module supplies the neutral preservation guidance (`compaction-guidance`) |
 | skill | `.claude/skills/<name>/SKILL.md`; bundled files beside it |
 | agent | `.claude/agents/<name>.md` (`name`, `description`, `tools` as an allowlist, optional `model`) |
 | command | `.claude/commands/<name>.md` (`description`, `argument-hint`; `$ARGUMENTS`) |
@@ -286,7 +286,7 @@ area, therefore does not get a shell. It is given a **dedicated tool**.
 2. **Verifying formats and tool exposure.** The Claude formats were verified on
    2026-10-20 against 2.1.305 (see "Evidence"). Still open: the opencode formats
    (`verify-opencode`), and whether either harness can hand a specific tool to a
-   specific agent (`code-work-approval`, `researcher-fetch-tool`).
+   specific agent (`increment-loop-and-review-skills`, `researcher-fetch-tool`).
 
 ## Deferred
 

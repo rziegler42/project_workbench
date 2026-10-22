@@ -61,10 +61,23 @@ The formats are in `docs/specs/trust-and-approval.md`, "Plan approval records".
 
 ## Verification
 
-None yet. Plan `2026-10-22-plan-approval-records` would show a synthetic process module's `approval` field
-verifying, the installer resolving and running the command bounded, `approve-plan` and `plan-status` through each
-refusal and status, a spoofed heading unable to hide a hashed section, and the boundary test passing with the
-installer naming no plan section.
+Built and tested by plan `2026-10-22-plan-approval-records` (increments A to E); the decision stays `Proposed`
+until the owner accepts it.
+
+- A synthetic process module's `approval` field verifies and is refused on any other type or for a command or
+  argument it does not declare (`tests/test_declarations.py`).
+- The installer resolves exactly one declaring module, runs the command bounded (stdin closed, 4,096 bytes,
+  30 s) and accepts exactly one report line (`tests/test_approvalcmd.py`).
+- `approve-plan` and `plan-status` go through each refusal and status, the two-run check against a swapped plan,
+  and the typed prefix (`tests/test_planapprovals.py`); the commands are in `OWNER_RUN` and `AGENT_SAFE` and the
+  Claude module renders the `deny` for `approve-plan`.
+- The `code-work` helper's `region` subcommand, with spoofed headings, fences, comments, quotations, list items
+  and HTML headings unable to hide a hashed section, and an installed-project run of `approve-plan` then
+  `plan-status` (`packages/workbench/code-work/tests/`).
+- The boundary test passes with the installer naming no plan section.
+- A security review and a bypass attempt found two Medium region gaps, now fixed, and a workflow review found
+  no Critical or High finding; the plan's Review record lists them. Not done: a hand run in a live installed
+  project, and approving this repository's own plans with the command (needs `self-hosting`).
 
 ## Related files and decisions
 

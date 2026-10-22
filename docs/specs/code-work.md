@@ -1,7 +1,7 @@
 # code-work
 
-Status: Current. Approved by the owner on 2026-10-19. The plan format, the three read subcommands and the
-commit rules are built; the approval, review, caps and push parts are not (see "As built"). Paths, field
+Status: Current. Approved by the owner on 2026-10-19. The plan format, the read subcommands, the
+plan approval record and the commit rules are built; the delegation, review, caps and push parts are not (see "As built"). Paths, field
 names and file formats not yet built are proposals; the rules are the substance. Open items are listed at
 the end.
 
@@ -36,7 +36,7 @@ Non-goals:
 | blocks | nothing beyond the one-process rule of the type |
 | fills | the policy slot in `AGENTS.md`; the `docs-index` slot |
 | writes | `docs/plans/` and its README |
-| ships | one helper (code-bearing, shown at approval) with the subcommands `check`, `plans` and `report` (and `region`, proposed); the `wb` launcher is a workbench component and not shipped by this module |
+| ships | one helper (code-bearing, shown at approval) with the subcommands `check`, `plans`, `report` and `region`; the `wb` launcher is a workbench component and not shipped by this module |
 
 It also ships neutral items: skills for drafting a plan, running the increment loop,
 and reviewing; and a read-only reviewer agent. Templates stay in the module; no
@@ -139,7 +139,7 @@ hashed region (the status line, the review record and the result) are named by t
 module's plan format. `trust-and-approval.md` defines the rule; this module supplies
 the section names and the plan check.
 
-*(Proposed by plan `2026-10-22-plan-approval-records`; not built.)* The module's helper gains a read-only subcommand, `region <plan>`, over the
+*(Built by plan `2026-10-22-plan-approval-records`.)* The module's helper has a read-only subcommand, `region <plan>`, over the
 reader that `check` already uses, and the module declares `approval: {"command": "code-work", "argument":
 "region"}`. `region` prints the hash of the plan's hashed region and the names of the unhashed sections as
 `trust-and-approval.md`, "Plan approval records", states. The region is the whole plan except the status line, the
@@ -381,10 +381,19 @@ installer's and is replaced on upgrade only while unedited.
 - Built: `code-work-plans` (the module, the plan format, the README, the `draft-plan` skill, the policy and
   docs-index blocks, and the helper with `check`, `plans` and `report`) and, from `code-work-commit`, the
   commit rules, which moved to `safe-git` with `2026-10-22-safe-git-module`.
-- Not built: plan approval as a recorded approval, the gate, the checkpoint settings, the increment-loop and
-  review skills and the reviewer agent, the review record's enforcement, the loop caps, the push checkpoint,
-  and the compaction guidance. These are `code-work-approval`. Until then approval is the owner's explicit
-  statement in session, and the policy block says so.
+- Built, from plan `2026-10-22-plan-approval-records`: the helper's `region` subcommand, the `approval`
+  declaration, and the policy block's rule that approval is a record (the installer's `wb approve-plan` and
+  `wb plan-status`). The hashed region is the whole plan except the status line, the review record and the
+  result, with the stricter ending rule above; text a reader could take for another section is hashed. Limits:
+  the left-out sections and up to 200 characters after the status word are not hashed, an HTML block that holds
+  a left-out heading hides what follows from a reader, and quoting shell comments in a result after approval
+  makes the approval stale. A `Status: Approved` line is informational; the gate is a command and a rule, and
+  nothing stops an agent that does not ask `plan-status`.
+- Not built: the enforcement point that refuses work on an unapproved plan, the checkpoint settings, the loop
+  caps (`checkpoint-settings-and-caps`), the increment-loop and review skills and the reviewer agent
+  (`increment-loop-and-review-skills`), the push checkpoint (`push-checkpoint`), the compaction guidance
+  (`compaction-guidance`) and the delegated approval (`delegated-approval`). These came from the roadmap candidate
+  `code-work-approval`, which is split into them.
 - The helper reads untrusted plans and is bounded; the limits are in the plan `2026-10-21-code-work-plans`.
 
 ## Open items
@@ -393,4 +402,5 @@ installer's and is replaced on upgrade only while unedited.
   known (`verify-opencode`).
 - Paths, field names and file formats remain proposals until the candidate that builds
   each item writes the real schema: `code-work-plans` has written the plan format and its helper;
-  `code-work-commit` wrote the commit rules, now in `safe-git.md`, and `code-work-approval` writes the rest.
+  `code-work-commit` wrote the commit rules, now in `safe-git.md`, `2026-10-22-plan-approval-records` wrote the
+  approval record, and the candidates named under "As built" write the rest.
