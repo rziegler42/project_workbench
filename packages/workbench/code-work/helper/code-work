@@ -11,6 +11,7 @@ line is what the subcommands that change a repository use; it starts one program
     code-work report     list the roadmap candidates a Completed plan names, and the plans whose
                          Candidate: names a roadmap or candidate that is not there
     code-work commit     make one local commit of exactly the named files (see `parse_commit`)
+    code-work remove     preview, and with --confirm delete, exact paths of the repository
 
 The rules are in ``docs/specs/code-work.md`` and in the README the module writes into
 ``docs/plans/``. Everything read is untrusted repository content: the number of files, the bytes in
@@ -1363,8 +1364,318 @@ def _others(listing, named):
     return sorted(entry for entry in listing.split("\0") if entry and entry.partition("\t")[2] not in named)
 
 
+# --- remove --------------------------------------------------------------------------------------
+# `remove` deletes exact paths of the repository. Its guarantee is confinement, not identity: every
+# directory is opened relative to the descriptor of its already-opened parent without following a link,
+# and every entry is deleted relative to the descriptor of its own parent, so an entry swapped for a link
+# while the walk runs loses the link and nothing it pointed to. Nothing promises that what is deleted is
+# what was previewed; the preview and `--confirm` are two runs that each validate everything from scratch.
+
+MAX_REMOVE_ENTRIES = 100000
+MAX_REMOVE_DEPTH = 100
+HOOK = None   # tests only: HOOK(stage, path) runs between the steps of a removal, so a test can swap an entry
+_REMOVE_OPTIONS = ("--recursive", "--confirm")
+
+
+class Stopped(Exception):
+    """A removal that stopped part way; the message says why."""
+
+
+class Target:
+    """One validated path to remove: its parts, its kind and what was seen of it."""
+
+    def __init__(self, path, parts, kind, info, entries):
+        self.path, self.parts, self.kind, self.info, self.entries = path, parts, kind, info, entries
+
+
+def _event(stage, path):
+    if HOOK is not None:
+        HOOK(stage, path)
+
+
+def _device(info):
+    return info.st_dev
+
+
+def _same(first, second):
+    return (first.st_dev, first.st_ino) == (second.st_dev, second.st_ino)
+
+
+def _kind(mode):
+    return "directory" if stat.S_ISDIR(mode) else "symlink" if stat.S_ISLNK(mode) \
+        else "file" if stat.S_ISREG(mode) else "other"
+
+
+def _git_name(name):
+    """True when `name` is spelled like Git metadata: ``.git`` in any case, with trailing dots or spaces,
+    with invisible characters, or as the Windows short name ``git~1``."""
+    plain = "".join(c for c in unicodedata.normalize("NFKC", name) if unicodedata.category(c) != "Cf")
+    plain = plain.rstrip(" .").casefold()
+    return plain == ".git" or (plain.startswith("git~") and plain[4:].isascii() and plain[4:].isdigit())
+
+
+def _entries(fd):
+    """``[(name, lstat)]`` of the directory `fd`, sorted, nothing followed."""
+    found = []
+    with os.scandir(fd) as scanning:
+        for entry in scanning:
+            if len(found) >= MAX_REMOVE_ENTRIES:
+                raise Refused("a directory holds more than %d entries" % MAX_REMOVE_ENTRIES)
+            found.append((entry.name, entry.stat(follow_symlinks=False)))
+    return sorted(found, key=lambda item: item[0])
+
+
+def _holds_repository(listing):
+    """What in `listing` is Git metadata (a ``.git`` entry of any kind or spelling, or the HEAD, objects and
+    refs of a bare or separate git directory), or None."""
+    for name, _ in listing:
+        if _git_name(name):
+            return "a .git entry"
+    present = {name.casefold() for name, _ in listing}
+    # Whatever their type: git reads a HEAD, objects and refs that are links as a git directory too.
+    if {"head", "objects", "refs"} <= present or {"head", "commondir"} <= present:
+        return "a git directory"
+    return None
+
+
+def parse_remove(argv):
+    """``[--recursive] [--confirm] -- <path>...``, read by hand like `commit`'s."""
+    recursive = confirm = False
+    index = 0
+    while index < len(argv) and argv[index] != "--":
+        option = argv[index]
+        if option not in _REMOVE_OPTIONS:
+            raise Refused("unknown option: %s" % shown(option, 40))
+        if (recursive if option == "--recursive" else confirm):
+            raise Refused("%s was given more than once" % option)
+        recursive, confirm = recursive or option == "--recursive", confirm or option == "--confirm"
+        index += 1
+    if index >= len(argv):
+        raise Refused("usage: code-work remove [--recursive] [--confirm] -- <path>...")
+    paths = argv[index + 1:]
+    if not paths:
+        raise Refused("name at least one path after --")
+    if len(paths) > MAX_PATHS:
+        raise Refused("more than %d paths" % MAX_PATHS)
+    return recursive, confirm, paths
+
+
+def _parent_of(root_fd, parts, device, seen):
+    """A descriptor for the directory that holds the last of `parts`. Each step is opened relative to the one
+    before without following a link, stays on the repository's filesystem, and may not be inside a nested
+    repository. `seen` holds the directories of this phase already listed, so a directory is listed once
+    however many targets lie below it. The caller closes it."""
+    fd = os.dup(root_fd)
+    try:
+        for part in parts[:-1]:
+            try:
+                step = os.open(part, _DIR, dir_fd=fd)
+            except FileNotFoundError:
+                raise Refused("a directory on the way does not exist: %s" % shown(part, 60))
+            except OSError:
+                raise Refused("the path goes through a link or something that is not a directory: %s"
+                              % shown(part, 60))
+            os.close(fd)
+            fd = step
+            if _device(os.fstat(fd)) != device:
+                raise Refused("the path crosses into another filesystem at %s" % shown(part, 60))
+            info = os.fstat(fd)
+            if (info.st_dev, info.st_ino) not in seen:
+                if _holds_repository(_entries(fd)):
+                    raise Refused("the path lies inside a nested Git repository (%s)" % shown(part, 60))
+                seen.add((info.st_dev, info.st_ino))
+        taken, fd = fd, -1
+        return taken
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
+def _scan(fd, device, depth, counter):
+    """Check a directory tree before it is deleted: no nested repository, no other filesystem, bounded."""
+    if depth > MAX_REMOVE_DEPTH:
+        raise Refused("the directory is nested deeper than %d levels" % MAX_REMOVE_DEPTH)
+    listing = _entries(fd)
+    found = _holds_repository(listing)
+    if found:
+        raise Refused("the directory holds a nested repository (%s)" % found)
+    counter[0] += len(listing)
+    if counter[0] > MAX_REMOVE_ENTRIES:
+        raise Refused("the directory tree holds more than %d entries" % MAX_REMOVE_ENTRIES)
+    for name, info in listing:
+        if stat.S_ISDIR(info.st_mode):
+            if _device(info) != device:
+                raise Refused("the directory holds another filesystem (%s)" % shown(name, 60))
+            _event("scanning", name)
+            try:
+                child = os.open(name, _DIR, dir_fd=fd)
+            except OSError:
+                raise Refused("a directory changed while it was being checked: %s" % shown(name, 60))
+            try:
+                opened = os.fstat(child)
+                if not _same(opened, info):
+                    raise Refused("a directory changed while it was being checked: %s" % shown(name, 60))
+                _scan(child, device, depth + 1, counter)
+            finally:
+                os.close(child)
+
+
+def plan_removal(root_fd, paths, recursive):
+    """Validate every path from scratch; return the `Target`s or refuse, with nothing touched."""
+    root_info = os.fstat(root_fd)
+    device = _device(root_info)
+    targets, keys, seen = [], [], set()
+    for path in paths:
+        label = shown(path, 80)
+        try:
+            parts = safefs.validate_relpath(path)
+        except safefs.SafeFsError as exc:
+            raise Refused("path refused: %s" % display.ascii_text(str(exc))[:200])
+        if path.startswith("-") or any(c in path for c in "*?[]"):
+            raise Refused("path refused (a glob or an option): %s" % label)
+        if any(_git_name(part) for part in parts):
+            raise Refused("refusing to remove Git metadata: %s" % label)
+        key = tuple(unicodedata.normalize("NFC", part.casefold()) for part in parts)
+        if any(key[:len(other)] == other or other[:len(key)] == key for other in keys):
+            raise Refused("overlapping removal targets are not allowed: %s" % label)
+        try:
+            parent = _parent_of(root_fd, parts, device, seen)
+        except Refused as exc:
+            raise Refused("%s: %s" % (exc, label))
+        try:
+            try:
+                info = os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)
+            except FileNotFoundError:
+                raise Refused("removal target does not exist: %s" % label)
+            kind = _kind(info.st_mode)
+            entries = 0
+            if kind == "directory":
+                if not recursive:
+                    raise Refused("directory removal requires --recursive: %s" % label)
+                if _same(info, root_info):
+                    raise Refused("refusing to remove the repository root")
+                if _device(info) != device:
+                    raise Refused("the directory is another filesystem: %s" % label)
+                _event("planning", path)
+                try:
+                    child = os.open(parts[-1], _DIR, dir_fd=parent)
+                except OSError:
+                    raise Refused("the directory changed while it was being checked: %s" % label)
+                try:
+                    if not _same(os.fstat(child), info):
+                        raise Refused("the directory changed while it was being checked: %s" % label)
+                    counter = [0]
+                    try:
+                        _scan(child, device, 1, counter)
+                    except Refused as exc:
+                        raise Refused("%s: %s" % (exc, label))
+                    entries = counter[0]
+                finally:
+                    os.close(child)
+        finally:
+            os.close(parent)
+        keys.append(key)
+        targets.append(Target(path, parts, kind, info, entries))
+    return targets
+
+
+def _remove_entry(parent_fd, name, rel, listed, device, depth):
+    """Delete `name` below `parent_fd`, which was listed as `listed`. A directory is emptied bottom-up,
+    each entry relative to its own parent's descriptor. Anything that is not as it was listed stops it."""
+    _event("entry", rel)
+    try:
+        now = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except OSError as exc:
+        raise Stopped("%s could not be examined (%s)" % (shown(rel, 80), exc.strerror or "error"))
+    if stat.S_IFMT(now.st_mode) != stat.S_IFMT(listed.st_mode):
+        raise Stopped("%s changed type while it was being removed" % shown(rel, 80))
+    _event("checked", rel)
+    if not stat.S_ISDIR(now.st_mode):
+        try:
+            os.unlink(name, dir_fd=parent_fd)
+        except OSError as exc:
+            raise Stopped("%s could not be removed (%s)" % (shown(rel, 80), exc.strerror or "error"))
+        return
+    if depth > MAX_REMOVE_DEPTH:
+        raise Stopped("%s is nested deeper than %d levels" % (shown(rel, 80), MAX_REMOVE_DEPTH))
+    try:
+        fd = os.open(name, _DIR, dir_fd=parent_fd)
+    except OSError:
+        raise Stopped("%s is no longer a directory" % shown(rel, 80))
+    try:
+        opened = os.fstat(fd)
+        if not _same(opened, listed):
+            raise Stopped("%s was replaced while it was being removed" % shown(rel, 80))
+        if _device(opened) != device:
+            raise Stopped("%s is another filesystem" % shown(rel, 80))
+        listing = _entries(fd)
+        found = _holds_repository(listing)
+        if found:
+            raise Stopped("%s holds %s" % (shown(rel, 80), found))
+        _event("listed", rel)
+        for child, info in listing:
+            _remove_entry(fd, child, rel + "/" + child, info, device, depth + 1)
+        try:
+            os.rmdir(name, dir_fd=parent_fd)
+        except OSError as exc:
+            found = _holds_repository(_entries(fd))
+            raise Stopped("%s was not removed: %s" % (
+                shown(rel, 80), "%s appeared in it" % found if found else exc.strerror or "error"))
+    finally:
+        os.close(fd)
+
+
+def _remove_target(root_fd, target, device, seen):
+    try:
+        parent = _parent_of(root_fd, target.parts, device, seen)
+    except Refused as exc:
+        raise Stopped(str(exc))
+    try:
+        _remove_entry(parent, target.parts[-1], target.path, target.info, device, 1)
+    finally:
+        os.close(parent)
+
+
+def command_remove(argv, cwd, out, err):
+    recursive, confirm, paths = parse_remove(argv)
+    root = git_root(cwd)
+    try:
+        root_fd = safefs.open_root(root, "repository")
+    except safefs.SafeFsError as exc:
+        raise Refused("the repository cannot be read safely: %s" % display.ascii_text(str(exc))[:200])
+    try:
+        targets = plan_removal(root_fd, paths, recursive)
+        listed = [{"path": t.path, "kind": t.kind} for t in targets]
+        for item, target in zip(listed, targets):
+            if target.kind == "directory":
+                item["entries"] = target.entries
+        if not confirm:
+            out.write(json.dumps({"status": "preview", "targets": listed,
+                                  "next_action": "rerun the identical command with --confirm after user approval"},
+                                 ensure_ascii=True) + "\n")
+            return 0
+        device = _device(os.fstat(root_fd))
+        done, seen = [], set()
+        for index, target in enumerate(targets):
+            try:
+                _remove_target(root_fd, target, device, seen)
+            except (Stopped, Refused, OSError) as exc:
+                reason = str(exc) if isinstance(exc, (Stopped, Refused)) else exc.strerror or "error"
+                out.write(json.dumps({"status": "stopped", "reason": reason, "removed": done,
+                                      "stopped_in": target.path,
+                                      "not_removed": [t.path for t in targets[index + 1:]]},
+                                     ensure_ascii=True) + "\n")
+                err.write("stopped: %s\n" % shown(reason, 300))
+                return 1
+            done.append(target.path)
+        out.write(json.dumps({"status": "removed", "targets": listed}, ensure_ascii=True) + "\n")
+        return 0
+    finally:
+        os.close(root_fd)
+
+
 COMMANDS = {"check": command_check, "plans": command_plans, "report": command_report}
-CHANGING = {"commit": command_commit}
+CHANGING = {"commit": command_commit, "remove": command_remove}
 
 
 def main(argv, out, err, cwd):

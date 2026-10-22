@@ -657,3 +657,61 @@ dispatches it.
     boundary, so the file read from the work tree adds no way that an agent does not already have. A real
     boundary would be a setting in the owner's config outside the repository; that belongs to
     `global-config-migration` and is noted under Deferred work.
+
+### Increment D — `remove` (2026-10-22)
+
+`code-work remove [--recursive] [--confirm] -- <path>...` previews and removes exact paths. The module's
+`arguments` still do not list it (increment E). No new git subcommand or shape: the only git run is
+`rev-parse` through `git_root`, so a repository that selects a program (`core.fsmonitor`) may still have files
+removed, and the test shows the program does not run.
+
+- **Validation, from scratch on every run** (preview and `--confirm` share it): `safefs.validate_relpath`
+  (so no empty, `.`, `..`, absolute, backslash, colon or non-printable name), no glob character, no leading
+  `-`, no part spelled like Git metadata (`.git` in any case, with trailing dots or spaces, with invisible
+  characters or compatibility forms, `git~N`), no overlap (compared by NFC and case-folded parts, either
+  direction), every parent opened relative to the one before with `O_NOFOLLOW` on the repository's
+  filesystem and not inside a nested repository, the target examined with `lstat`. A directory needs
+  `--recursive` (a file does not mind it), may not be the repository root by identity or another filesystem,
+  and its tree is scanned without following anything: a `.git` entry of any kind or spelling, a bare or
+  separate git directory (HEAD, objects, refs), another filesystem, more than `MAX_REMOVE_ENTRIES` entries in
+  all or in one directory, or more than `MAX_REMOVE_DEPTH` levels refuses everything.
+- **The walk:** each target's parents are opened again; each entry is `lstat`ed, compared by type with how it
+  was listed, and deleted with `unlink` or `rmdir` relative to its own parent's descriptor; a directory is
+  opened with `O_NOFOLLOW`, compared by device and inode with the listing, listed, checked again for
+  repository metadata and emptied bottom-up. A swap for a link removes the link or stops; a swap for a
+  directory is refused by `unlink`; a new `.git` or any new entry makes `rmdir` fail and stops the walk,
+  saying which. A stop prints `{"status":"stopped","reason","removed","stopped_in","not_removed"}` on
+  standard output, `stopped: <reason>` on standard error and exits 1. Nothing is undone.
+- **Output:** a preview is `{"status":"preview","targets":[{"path","kind"[,"entries"]}],"next_action"}`
+  and a removal `{"status":"removed","targets":[...]}`; kinds are `file`, `directory`, `symlink`, `other`.
+- **My calls, not in the approved choices:** the command line takes `--` before the paths like `commit`
+  (the old helper did not); a name with `:` or a backslash cannot be removed (the kit's path rule); the hook
+  `HOOK(stage, path)` is a module variable for tests only.
+- **Tests:** 54 in `test_codework_remove.py` (real repositories; races use the hook at `entry`, `checked`,
+  `listed`, `planning` and `scanning`; the preview-to-confirm swaps are separate runs). Full suite: 2611
+  tests in 4 roots, passing with `-W error` (the same 11 `claude` tests skip until F).
+- **Mutation checks, each failing a named test (39 variants):** the link-following parent open, the Git-name
+  predicate and each of its four normalisations, the ancestor, scan and walk repository checks, the bare
+  repository test, overlap (both directions, case, NFC), glob, leading dash, the Git-metadata part check,
+  `--recursive`, the root identity, the device check at four places, both depth checks, both entry bounds, the
+  type-change check, the walk's no-follow open, the identity checks at three places, links followed by the
+  listing, preview that removes, no re-resolve of the parent, a stop that exits 0, validating only the first
+  path, and the kit's path rule. Nine first survived (tests used paths that failed for another reason, or
+  reached no hook); each got a test and was rerun.
+- **Limits:** the confinement is by descriptor, not identity (criterion 6); two hard links to one file are
+  two targets; a case-sensitive filesystem with `A` and `a` is treated as one (conservative). No security
+  review of D is recorded below.
+- **Review (security-reviewer, 2026-10-22): no Critical or High; one Medium and one Low, both fixed.** It
+  found no way to delete outside the repository, the repository's own `.git` or the root, or to follow a
+  link; unreadable directories at every level, FIFOs, odd and over-long names and a surrogate in an argument
+  each fail closed with no escaping exception (tested).
+  - **Medium, fixed:** a nested bare git directory whose `objects` or `refs` is a link (or whose `HEAD` is)
+    was not recognised, because the test looked at file types, and was deleted. `_holds_repository` now
+    needs only the names `HEAD`, `objects` and `refs`, whatever their type, or `HEAD` and `commondir` (a
+    linked work tree's git directory). Tests on the target and below it, a test for `commondir`, and
+    mutation checks cover it.
+  - **Low, fixed:** each target listed and `lstat`ed every ancestor directory, so 2000 targets under a large
+    directory took minutes. A directory is now listed once per phase (plan, removal), keyed by device and
+    inode; a test counts the listings. The cost is that a `.git` created in an ancestor between two targets
+    of the same phase is seen only in the next phase, which does not affect the target's own walk.
+  - No second bypass round has been run on these two fixes.
