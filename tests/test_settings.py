@@ -4,7 +4,7 @@ import tempfile
 import unittest
 
 import support
-from workbench import floor, settings, store
+from workbench import declarations, floor, settings, store
 from workbench.wbkit import safefs
 
 
@@ -161,6 +161,102 @@ class CheckpointTest(SettingsBase):
         self.assertIn("cannot be read", loaded.problems[0])
 
 
+class CapsTest(SettingsBase):
+    CAPS = (declarations.Cap("review-rounds", 3, 5), declarations.Cap("same-failure-retries", 1, 2))
+
+    def effective(self, document=None, checkpoints=("approve-plan",)):
+        if document is not None:
+            self.put(document)
+        loaded = settings.load(self.store)
+        return loaded, settings.effective(loaded, checkpoints, self.CAPS)
+
+    def test_with_no_caps_every_default_applies(self):
+        for document in (None, {"version": 1}, {"version": 1, "caps": {}}):
+            with self.subTest(document=document):
+                loaded, got = self.effective(document)
+                self.assertEqual({"review-rounds": 3, "same-failure-retries": 1}, got.caps)
+                self.assertEqual([], loaded.problems + got.notes)
+
+    def test_a_version_1_file_without_caps_still_loads(self):
+        self.put({"version": 1, "checkpoints": {"a": "delegate"}, "floor": []})
+        loaded = settings.load(self.store)
+        self.assertEqual("delegate", loaded.checkpoint("a"))
+        self.assertEqual(({}, []), (dict(loaded.caps), loaded.problems))
+
+    def test_a_valid_owner_value_is_effective(self):
+        _, got = self.effective({"version": 1, "caps": {"review-rounds": 5, "same-failure-retries": 1}})
+        self.assertEqual({"review-rounds": 5, "same-failure-retries": 1}, got.caps)
+        self.assertEqual([], got.notes)
+        _, got = self.effective({"version": 1, "caps": {"review-rounds": 1}})
+        self.assertEqual(1, got.caps["review-rounds"])
+
+    def test_a_value_out_of_range_uses_the_default_with_a_note(self):
+        for value in (0, -1, 6, 2 ** 70):
+            with self.subTest(value=value):
+                loaded, got = self.effective({"version": 1, "caps": {"review-rounds": value}})
+                self.assertEqual(3, got.caps["review-rounds"])
+                self.assertEqual(1, len(got.notes))
+                self.assertIn("review-rounds", got.notes[0])
+                self.assertEqual([], loaded.problems)
+
+    def test_a_value_of_the_wrong_type_uses_the_default_with_one_note(self):
+        for value in (True, False, "3", None, [3], {"n": 3}):
+            with self.subTest(value=value):
+                loaded, got = self.effective({"version": 1, "caps": {"review-rounds": value}})
+                self.assertEqual(3, got.caps["review-rounds"])
+                self.assertEqual(1, len(loaded.problems + got.notes))
+                self.assertIn("review-rounds", (loaded.problems + got.notes)[0])
+
+    def test_a_fraction_makes_the_file_damaged_so_every_default_applies(self):
+        loaded, got = self.effective(b'{"version": 1, "caps": {"review-rounds": 3.0}}')
+        self.assertEqual({"review-rounds": 3, "same-failure-retries": 1}, got.caps)
+        self.assertIn("damaged", loaded.problems[0])
+
+    def test_an_undeclared_cap_is_ignored_with_a_note(self):
+        loaded, got = self.effective({"version": 1, "caps": {"nonsense": 4, "review-rounds": 2}})
+        self.assertEqual({"review-rounds": 2, "same-failure-retries": 1}, got.caps)
+        self.assertEqual(1, len(got.notes))
+        self.assertIn("nonsense", got.notes[0])
+
+    def test_an_invalid_cap_name_is_reported_escaped_and_ignored(self):
+        loaded, got = self.effective({"version": 1, "caps": {"Bad Name\x1b[31m": 2, "x" * 65: 2}})
+        self.assertEqual(2, len(loaded.problems))
+        self.assertTrue(all("\x1b" not in text for text in loaded.problems))
+        self.assertEqual({"review-rounds": 3, "same-failure-retries": 1}, got.caps)
+
+    def test_caps_that_are_not_an_object_use_every_default(self):
+        for value in ([], "3", 3, None):
+            with self.subTest(value=value):
+                loaded, got = self.effective({"version": 1, "caps": value})
+                self.assertEqual({"review-rounds": 3, "same-failure-retries": 1}, got.caps)
+                self.assertEqual(1, len(loaded.problems))
+
+    def test_a_damaged_file_uses_every_default_and_the_existing_note(self):
+        for data in (b"{", b"[]", {"version": 2, "caps": {"review-rounds": 4}}):
+            with self.subTest(data=data):
+                loaded, got = self.effective(data)
+                self.assertEqual({"review-rounds": 3, "same-failure-retries": 1}, got.caps)
+                self.assertEqual("stop", got.checkpoints["approve-plan"])
+                self.assertTrue(loaded.problems)
+
+    def test_a_checkpoint_is_delegate_only_when_declared_and_set_exactly(self):
+        document = {"version": 1, "checkpoints": {"approve-plan": "delegate", "other": "delegate"}}
+        _, got = self.effective(document, checkpoints=("approve-plan", "push-shared-branch"))
+        self.assertEqual({"approve-plan": "delegate", "push-shared-branch": "stop"}, got.checkpoints)
+        self.assertEqual(1, len(got.notes))
+        self.assertIn("other", got.notes[0])
+
+    def test_a_stop_for_an_undeclared_checkpoint_is_noted_too(self):
+        _, got = self.effective({"version": 1, "checkpoints": {"other": "stop"}})
+        self.assertEqual({"approve-plan": "stop"}, got.checkpoints)
+        self.assertEqual(1, len(got.notes))
+
+    def test_the_seed_is_unchanged(self):
+        settings.seed(self.store)
+        self.assertEqual({"checkpoints": {}, "floor": [stop.id for stop in floor.FLOOR], "version": 1},
+                         json.loads(self.raw()))
+
+
 class FloorIsNotInTheFileTest(SettingsBase):
     # Structural, not behavioural: effective_stops takes nothing from the file, which
     # test_floor checks by its imports. These tests keep that true if a caller is added,
@@ -168,7 +264,7 @@ class FloorIsNotInTheFileTest(SettingsBase):
     def test_the_loaded_settings_expose_no_stops(self):
         settings.initialize(self.store)
         loaded = settings.load(self.store)
-        self.assertEqual(set(loaded._fields), {"checkpoints", "problems"})
+        self.assertEqual(set(loaded._fields), {"checkpoints", "problems", "caps"})
         self.assertFalse(any("stop" in name.lower() and name != "checkpoint"
                              for name in dir(loaded) if not name.startswith("_")))
         self.assertNotIn("floor", loaded.checkpoints)

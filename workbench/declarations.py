@@ -33,14 +33,22 @@ checks      a list of at most ``MAX_CHECKS`` objects ``{"helper", "kit"}``, both
             helper is an item of ``ships`` or a file below one, and its last path segment, the
             check's pin name, is in the helper-name form (``module-boundary.md``).
 approval    process modules only: ``{"command", "argument"}``, the key of one of the module's
-            ``commands`` and one of that command's ``arguments``. It names the command the
-            installer runs to learn a plan's hashed region (``trust-and-approval.md``).
+            ``commands`` and one of that command's ``arguments``, and optionally ``active``,
+            another of that command's arguments. It names the command the installer runs to
+            learn a plan's hashed region and, with ``active``, the plans under way
+            (``trust-and-approval.md``).
+checkpoints process modules only: a list of at most ``MAX_CHECKPOINTS`` checkpoint names, each
+            lowercase kebab-case of at most 64 characters, none repeated.
+caps        process modules only: a list of at most ``MAX_CAPS`` objects ``{"name", "default",
+            "ceiling"}``; the name as for a checkpoint, none repeated, the numbers JSON
+            integers with ``1 <= default <= ceiling <= MAX_CEILING``.
 layout      present exactly for a harness module: an object whose keys come from
             ``LAYOUT_KEYS``. Its values are not checked beyond being JSON data;
             that belongs to the harness specification.
 
 Optional fields (``type``, ``provides``, ``requires``, ``blocks``, ``helpers``,
-``slots``, ``fills``, ``writes``, ``ships``, ``commands``, ``checks``, ``approval``) default to ``module`` and empty. The
+``slots``, ``fills``, ``writes``, ``ships``, ``commands``, ``checks``, ``approval``, ``checkpoints``,
+``caps``) default to ``module`` and empty. The
 declaration hash covers the declaration as written, never the defaults.
 
 A ``writes`` path may not name the guarded store and may not enter ``.workbench/``
@@ -67,7 +75,8 @@ LAYOUT_KEYS = ("root", "kinds", "local_settings", "hooks", "exclude", "tolerated
 
 PACKAGE_FIELDS = ("name", "version", "contract", "modules")
 MODULE_FIELDS = ("name", "version", "type", "description", "provides", "requires", "blocks",
-                 "helpers", "slots", "fills", "writes", "ships", "commands", "checks", "approval", "layout")
+                 "helpers", "slots", "fills", "writes", "ships", "commands", "checks", "approval", "checkpoints",
+                 "caps", "layout")
 
 _NAME = re.compile(r"^[a-z][a-z0-9-]*\Z")
 _VERSION = re.compile(r"^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){0,3}\Z")
@@ -78,6 +87,9 @@ _ARGUMENT = re.compile(r"^[a-z][a-z0-9-]*\Z")
 MAX_COMMANDS = 16
 MAX_CHECKS = 16
 MAX_ARGUMENTS = 16
+MAX_CHECKPOINTS = 16
+MAX_CAPS = 16
+MAX_CEILING = 100
 MAX_ARGUMENT_CHARS = 32
 MAX_KIT = 999999
 RUNTIMES = ("python", "exec")
@@ -85,8 +97,10 @@ RUNTIMES = ("python", "exec")
 Package = collections.namedtuple("Package", "name version contract modules declaration")
 Module = collections.namedtuple(
     "Module", "name version type description provides requires blocks helpers slots fills "
-              "writes ships commands checks layout declaration approval", defaults=(None,))
+              "writes ships commands checks layout declaration approval checkpoints caps",
+    defaults=(None, (), ()))
 Command = collections.namedtuple("Command", "name helper runtime kit arguments")
+Cap = collections.namedtuple("Cap", "name default ceiling")
 
 
 class Check(collections.namedtuple("Check", "helper kit")):
@@ -340,7 +354,7 @@ def _approval(check, value, mtype, commands):
     """The ``approval`` field as ``{"command", "argument"}``, or a refusal naming the field."""
     if mtype != "process":
         check.fail("approval", "only a process module declares an approval command")
-    check.exact_keys(value, "approval", ("command", "argument"))
+    check.exact_keys(value, "approval", ("command", "argument"), ("active",))
     command, argument = value["command"], value["argument"]
     if not isinstance(command, str) or not isinstance(argument, str):
         check.fail("approval", "'command' and 'argument' must be strings")
@@ -349,7 +363,61 @@ def _approval(check, value, mtype, commands):
         check.fail("approval", "the command %s is not one of this module's commands" % _shown(command))
     if argument not in found.arguments:
         check.fail("approval", "%s is not an argument of the command %s" % (_shown(argument), _shown(command)))
-    return {"command": command, "argument": argument}
+    approval = {"command": command, "argument": argument}
+    if "active" in value:
+        active = value["active"]
+        if not isinstance(active, str):
+            check.fail("approval", "'active' must be a string")
+        if active not in found.arguments:
+            check.fail("approval", "%s is not an argument of the command %s" % (_shown(active), _shown(command)))
+        if active == argument:
+            check.fail("approval", "'active' must differ from 'argument'")
+        approval["active"] = active
+    return approval
+
+
+def _owned_name(check, value, field, what):
+    """A checkpoint or cap name: the form the personal settings accept."""
+    if not isinstance(value, str) or len(value) > MAX_NAME_CHARS or not _NAME.match(value):
+        check.fail(field, "%s %s must be lowercase kebab-case, starting with a letter, at most %d "
+                          "characters" % (what, _shown(value), MAX_NAME_CHARS))
+    return value
+
+
+def _checkpoints(check, value, mtype):
+    """The ``checkpoints`` field as a tuple of names, or a refusal naming the field."""
+    if mtype != "process":
+        check.fail("checkpoints", "only a process module declares checkpoints")
+    if not isinstance(value, list):
+        check.fail("checkpoints", "must be a list")
+    if len(value) > MAX_CHECKPOINTS:
+        check.fail("checkpoints", "at most %d checkpoints, not %d" % (MAX_CHECKPOINTS, len(value)))
+    for name in value:
+        _owned_name(check, name, "checkpoints", "checkpoint name")
+    check.unique(value, "checkpoints")
+    return tuple(value)
+
+
+def _caps(check, value, mtype):
+    """The ``caps`` field as a tuple of ``Cap``, or a refusal naming the field."""
+    if mtype != "process":
+        check.fail("caps", "only a process module declares caps")
+    if not isinstance(value, list):
+        check.fail("caps", "must be a list")
+    if len(value) > MAX_CAPS:
+        check.fail("caps", "at most %d caps, not %d" % (MAX_CAPS, len(value)))
+    caps = []
+    for entry in value:
+        check.exact_keys(entry, "caps", ("name", "default", "ceiling"))
+        name = _owned_name(check, entry["name"], "caps", "cap name")
+        default, ceiling = entry["default"], entry["ceiling"]
+        if type(default) is not int or type(ceiling) is not int:
+            check.fail("caps", "cap %s: 'default' and 'ceiling' must be integers" % name)
+        if not 1 <= default <= ceiling <= MAX_CEILING:
+            check.fail("caps", "cap %s: need 1 <= default <= ceiling <= %d" % (name, MAX_CEILING))
+        caps.append(Cap(name, default, ceiling))
+    check.unique([cap.name for cap in caps], "caps")
+    return tuple(caps)
 
 
 def parse_module(data, package_name, expected_name, first_party=False):
@@ -465,6 +533,8 @@ def parse_module(data, package_name, expected_name, first_party=False):
     commands = _commands(check, declaration.get("commands", {}), ships)
     checks = _checks(check, declaration.get("checks", []), ships, commands)
     approval = _approval(check, declaration["approval"], mtype, commands) if "approval" in declaration else None
+    checkpoints = _checkpoints(check, declaration["checkpoints"], mtype) if "checkpoints" in declaration else ()
+    caps = _caps(check, declaration["caps"], mtype) if "caps" in declaration else ()
 
     layout = declaration.get("layout")
     if mtype == "harness":
@@ -481,7 +551,7 @@ def parse_module(data, package_name, expected_name, first_party=False):
 
     return Module(name, version, mtype, description, tuple(provides), tuple(requires),
                   tuple(blocks), tuple(helpers), tuple(slots), tuple(fills), tuple(writes),
-                  tuple(ships), commands, checks, layout, declaration, approval)
+                  tuple(ships), commands, checks, layout, declaration, approval, checkpoints, caps)
 
 
 # --- from a directory ------------------------------------------------------------------------

@@ -412,8 +412,9 @@ prose above and this section differ in precision, this section is what the code 
   `caps` is empty.
 - **Effective values.** A checkpoint is `delegate` only when the owner set exactly `delegate` for a name the
   module declares, and `stop` otherwise; `delegate` has no effect until `delegated-approval` reads it. A cap is the
-  owner's value when that is a JSON integer from 1 to the module's ceiling (a boolean, a float, zero, a negative
-  number or a larger number is not), and the module's default otherwise. A checkpoint or cap entry for a name the
+  owner's value when that is a JSON integer from 1 to the module's ceiling (a boolean, zero, a negative
+  number or a larger number is not; a number with a fraction or an exponent makes the strict loader treat the
+  whole file as damaged), and the module's default otherwise. A checkpoint or cap entry for a name the
   module does not declare is ignored. Each ignored or replaced value is reported as a `settings:` note. A damaged
   settings file gives every default, every checkpoint `stop`, and the existing damage note, and is not
   overwritten.

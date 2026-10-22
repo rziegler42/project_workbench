@@ -2,11 +2,15 @@
 
 The document is strict JSON::
 
-    {"checkpoints": {"<name>": "stop" | "delegate"}, "floor": ["<id>", ...], "version": 1}
+    {"caps": {"<name>": <integer>}, "checkpoints": {"<name>": "stop" | "delegate"},
+     "floor": ["<id>", ...], "version": 1}
 
 * ``checkpoints`` names the checkpoints the owner has set. A checkpoint that is missing,
   malformed or set to anything but ``delegate`` reads as ``stop``, so with no settings
   every checkpoint stops. Checkpoint names are defined by a way of working, not here.
+* ``caps`` is optional. It holds the owner's value for each loop cap a process module declares.
+  The loader keeps a valid name with an integer value; ``effective`` judges the value against
+  the module's ceiling and falls back to the module's default with a note.
 * ``floor`` is a copy of the compiled floor's ids, written at seeding so the owner and a
   harness can read it. It is informational: nothing reads it to decide what applies,
   and deleting or emptying it changes nothing (see ``floor.py``).
@@ -29,7 +33,8 @@ SETTINGS = "settings"
 VERSION = 1
 STOP, DELEGATE = "stop", "delegate"
 
-_Settings = collections.namedtuple("_Settings", "checkpoints problems")
+_Settings = collections.namedtuple("_Settings", "checkpoints problems caps")
+Effective = collections.namedtuple("Effective", "checkpoints caps notes")
 
 
 class Settings(_Settings):
@@ -54,7 +59,7 @@ def seed(store):
 
 
 def _default(problem):
-    return Settings({}, [problem])
+    return Settings({}, [problem], {})
 
 
 def load(store):
@@ -62,7 +67,7 @@ def load(store):
     try:
         kind = store.kind(SETTINGS)
         if kind is None:
-            return Settings({}, [])
+            return Settings({}, [], {})
         if kind != "file":
             return _default("settings are not a regular file (%s); every checkpoint stops" % kind)
         data = store.read(SETTINGS)
@@ -77,7 +82,7 @@ def load(store):
     if document.get("version") != VERSION or isinstance(document.get("version"), bool):
         return _default("settings have an unsupported version; every checkpoint stops")
     for key in sorted(document):
-        if key not in ("checkpoints", "floor", "version"):
+        if key not in ("caps", "checkpoints", "floor", "version"):
             problems.append("settings have an unknown entry %s, which is ignored"
                             % declarations._shown(key))
     checkpoints = {}
@@ -94,7 +99,53 @@ def load(store):
             problems.append("settings checkpoint %r must be 'stop' or 'delegate'; it stops" % name)
         else:
             checkpoints[name] = value
-    return Settings(checkpoints, problems)
+    caps = {}
+    given = document.get("caps", {})
+    if not isinstance(given, dict):
+        problems.append("settings 'caps' is not an object; every cap uses its default")
+        given = {}
+    for name in sorted(given):
+        value = given[name]
+        if not declarations.NAME_RE.match(name) or len(name) > 64:
+            problems.append("settings name a cap that is not valid: %s" % declarations._shown(name))
+        elif type(value) is not int:
+            problems.append("settings cap %s must be an integer; its default applies" % name)
+        else:
+            caps[name] = value
+    return Settings(checkpoints, problems, caps)
+
+
+def effective(loaded, checkpoints, caps):
+    """The values that apply to a process module that declares ``checkpoints`` (names) and ``caps``.
+
+    A checkpoint is ``delegate`` only when declared and set to exactly that. A cap is the owner's
+    value when it is an integer from 1 to the ceiling, otherwise the default. Each ignored or
+    replaced entry adds a note; the loader's own problems are not repeated here.
+    """
+    notes = []
+    declared = set(checkpoints)
+    for name in sorted(loaded.checkpoints):
+        if name not in declared:
+            notes.append("settings set a checkpoint the process module does not declare: %s; it is ignored"
+                         % declarations._shown(name))
+    values = {name: loaded.checkpoint(name) for name in checkpoints}
+    known = {cap.name for cap in caps}
+    for name in sorted(loaded.caps):
+        if name not in known:
+            notes.append("settings set a cap the process module does not declare: %s; it is ignored"
+                         % declarations._shown(name))
+    numbers = {}
+    for cap in caps:
+        given = loaded.caps.get(cap.name)
+        if given is None:
+            numbers[cap.name] = cap.default
+        elif 1 <= given <= cap.ceiling:
+            numbers[cap.name] = given
+        else:
+            numbers[cap.name] = cap.default
+            notes.append("settings cap %s is %s; it must be from 1 to %d, so the default %d applies"
+                         % (cap.name, given if abs(given) < 10 ** 12 else "out of range", cap.ceiling, cap.default))
+    return Effective(values, numbers, notes)
 
 
 def initialize(store):

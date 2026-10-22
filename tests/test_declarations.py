@@ -525,6 +525,117 @@ class ModuleTest(unittest.TestCase):
         declared = module(**self.process(approval={"command": "run-it", "argument": "region"}))
         self.assertNotEqual(hashing.declaration_hash(plain), hashing.declaration_hash(declared))
 
+    def declared(self, **changes):
+        """A process module whose approval lists `region` and `active`, with the new fields."""
+        fields = self.process(
+            commands={"run-it": {"helper": "scripts/check.sh", "arguments": ["region", "active", "check"]}},
+            approval={"command": "run-it", "argument": "region", "active": "active"},
+            checkpoints=["approve-plan", "push-shared-branch"],
+            caps=[{"name": "review-rounds", "default": 3, "ceiling": 5}])
+        fields.update(changes)
+        return fields
+
+    def test_checkpoints_caps_and_the_active_argument_verify(self):
+        got = self.parse(module(**self.declared()))
+        self.assertEqual(("approve-plan", "push-shared-branch"), got.checkpoints)
+        self.assertEqual((d.Cap("review-rounds", 3, 5),), got.caps)
+        self.assertEqual({"command": "run-it", "argument": "region", "active": "active"}, got.approval)
+
+    def test_a_module_without_them_has_none(self):
+        got = self.parse(module(**self.process()))
+        self.assertEqual(((), ()), (got.checkpoints, got.caps))
+        got = self.parse(module(**self.process(approval={"command": "run-it", "argument": "region"})))
+        self.assertNotIn("active", got.approval)
+
+    def test_the_active_argument_refusals(self):
+        base = {"command": "run-it", "argument": "region"}
+        cases = {
+            "an argument the command does not list": dict(base, active="evil"),
+            "the same as the region argument": dict(base, active="region"),
+            "not a string": dict(base, active=1),
+            "null": dict(base, active=None),
+            "empty": dict(base, active=""),
+            "differing in case": dict(base, active="Active"),
+        }
+        for label, approval in cases.items():
+            with self.subTest(label):
+                self.refused("approval", **self.declared(approval=approval))
+
+    def test_checkpoint_refusals(self):
+        cases = {
+            "not a list": "approve-plan",
+            "an object": {"approve-plan": "stop"},
+            "null": None,
+            "an entry that is not a string": [1],
+            "a repeated name": ["a", "a"],
+            "an upper-case name": ["Approve"],
+            "a name with a space": ["approve plan"],
+            "a name starting with a digit": ["1a"],
+            "an empty name": [""],
+            "a 65-character name": ["a" * 65],
+            "more than 16 names": ["c%d" % n for n in range(17)],
+        }
+        for label, checkpoints in cases.items():
+            with self.subTest(label):
+                self.refused("checkpoints", **self.declared(checkpoints=checkpoints))
+        self.parse(module(**self.declared(checkpoints=["a" * 64])))
+        self.parse(module(**self.declared(checkpoints=["c%d" % n for n in range(16)])))
+        self.parse(module(**self.declared(checkpoints=[])))
+
+    def test_cap_refusals(self):
+        def cap(**changes):
+            return [dict({"name": "review-rounds", "default": 3, "ceiling": 5}, **changes)]
+        cases = {
+            "not a list": {"name": "review-rounds", "default": 3, "ceiling": 5},
+            "an entry that is not an object": ["review-rounds"],
+            "no ceiling": [{"name": "a", "default": 1}],
+            "no default": [{"name": "a", "ceiling": 1}],
+            "no name": [{"default": 1, "ceiling": 1}],
+            "an unknown key": cap(extra=1),
+            "a repeated name": cap() + cap(),
+            "a malformed name": cap(name="Review Rounds"),
+            "a default of zero": cap(default=0),
+            "a negative default": cap(default=-1),
+            "a default above the ceiling": cap(default=6),
+            "a ceiling of zero": cap(default=0, ceiling=0),
+            "a ceiling over 100": cap(default=3, ceiling=101),
+            "a boolean default": cap(default=True),
+            "a string default": cap(default="3"),
+            "a boolean ceiling": cap(default=1, ceiling=True),
+            "a null ceiling": cap(ceiling=None),
+            "more than 16 caps": [{"name": "c%d" % n, "default": 1, "ceiling": 1} for n in range(17)],
+        }
+        for label, caps in cases.items():
+            with self.subTest(label):
+                self.refused("caps", **self.declared(caps=caps))
+        with self.assertRaises(d.DeclarationError):
+            self.parse(module(**self.declared(caps=cap(default=3.0))))
+        self.parse(module(**self.declared(caps=cap(default=100, ceiling=100))))
+        self.parse(module(**self.declared(caps=cap(default=1, ceiling=1))))
+
+    def test_the_new_fields_are_refused_on_any_other_module_type(self):
+        for field, value in (("checkpoints", ["approve-plan"]),
+                             ("caps", [{"name": "a", "default": 1, "ceiling": 1}])):
+            with self.subTest(field):
+                self.refused(field, **{field: value})
+                other = "caps" if field == "checkpoints" else "checkpoints"
+                self.refused(field, **self.declared(type="module", approval=DELETE, **{field: value, other: DELETE}))
+                decl = copy.deepcopy(HARNESS)
+                decl[field] = value
+                with self.assertRaises(d.DeclarationError) as ctx:
+                    self.parse(decl)
+                self.assertEqual(field, ctx.exception.rule)
+
+    def test_the_new_fields_are_part_of_the_declaration_hash(self):
+        base = hashing.declaration_hash(module(**self.declared()))
+        for label, changes in (
+                ("a checkpoint", dict(checkpoints=["approve-plan"])),
+                ("a cap default", dict(caps=[{"name": "review-rounds", "default": 2, "ceiling": 5}])),
+                ("a cap ceiling", dict(caps=[{"name": "review-rounds", "default": 3, "ceiling": 4}])),
+                ("the active argument", dict(approval={"command": "run-it", "argument": "region"}))):
+            with self.subTest(label):
+                self.assertNotEqual(base, hashing.declaration_hash(module(**self.declared(**changes))))
+
     def test_writes_path_rules(self):
         bad = ["/etc/passwd", "../x", "a/../../x", "a\\b", "C:/x", ".git/config", ".GIT/config",
                ".git./config", "GIT~1/config", "a/.git/x", "link/../x", ".config/project-workbench/s",
