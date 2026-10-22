@@ -1,6 +1,6 @@
 # The commit helper leaves the acknowledgement baselines to the owner
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-22
 Date: 2026-10-22
 
 Refined 2026-10-22: the helper, its tests and its setting follow the move to the `safe-git` module
@@ -49,6 +49,8 @@ to stop.
 - `packages/workbench/safe-git/tests/`: `test_safegit_git.py`, `test_safegit_commit.py`,
   `test_safegit_remove.py` and `test_safegit_module.py`. None touches a store.
 - Security pass, three rounds, in plan `2026-10-22-code-work-commit`, increment F.
+- Accepted on 2026-10-22 on this evidence. The code moved to `safe-git` unchanged, apart from the setting
+  path and three strings (plan `2026-10-22-safe-git-module`), and still never touches the store.
 
 ## Related files and decisions
 

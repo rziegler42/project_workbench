@@ -1,6 +1,6 @@
 # The plan check lives in the helper the `code-work` module ships
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-22
 Date: 2026-10-22
 
 ## Context
@@ -40,6 +40,9 @@ in step. The installer knows nothing of plans.
 - `packages/workbench/code-work/tests/` (the helper, the reports, the module and the end-to-end path); the
   parity of the fence and quotation handling with `doccheck` is `test_codework_helper.py`, class `Agreement`.
 - Plan `2026-10-21-code-work-plans`, increments B, C, D, E and G.
+- Accepted on 2026-10-22 on this evidence. The helper now holds only `check`, `plans` and `report`, imports
+  only the standard library, and a test fails if git code returns (plan `2026-10-22-safe-git-module`,
+  increment B).
 
 ## Related files and decisions
 

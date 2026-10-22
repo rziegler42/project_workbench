@@ -1,6 +1,6 @@
 # The installer pins the helpers a confirmed plan declares
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-22
 Date: 2026-10-22
 
 ## Context
@@ -52,7 +52,11 @@ information, and it is one command per helper after every release and every acce
   `test_recover_pins.py`, `test_commands.py`, `test_checks.py`, `test_pins.py`.
 - `packages/workbench/code-work/tests/test_codework_module.py`: the install, the refusal after an edit and
   the acknowledgement, with no typed pin.
+- `packages/workbench/safe-git/tests/test_safegit_module.py`: the pin made by install for `safe-git`, an
+  edited helper refused, and a pin that lets no other command run.
 - Security pass, two rounds, in plan `2026-10-21-code-work-plans`, increment G.
+- Accepted on 2026-10-22 on this evidence: two first-party modules now run through it, and the full suite
+  runs 2658 tests in 5 roots, OK.
 
 ## Related files and decisions
 

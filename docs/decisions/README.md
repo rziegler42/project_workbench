@@ -71,7 +71,7 @@ List every record, including rejected and superseded ones.
 | [2026-10-21-installer-runs-document-checks](2026-10-21-installer-runs-document-checks.md) | The installer runs the document checks, for a project that has the module | Superseded by 2026-10-21-module-code-lives-in-modules |
 | [2026-10-21-reference-index-format](2026-10-21-reference-index-format.md) | The reference index is canonical JSON, and the index and README are not references | Accepted |
 | [2026-10-21-harness-facts-from-layouts](2026-10-21-harness-facts-from-layouts.md) | The installer reads a harness's paths from that harness module's layout | Proposed |
-| [2026-10-22-plan-check-in-the-shipped-helper](2026-10-22-plan-check-in-the-shipped-helper.md) | The plan check lives in the helper the `code-work` module ships | Proposed |
-| [2026-10-22-installer-pins-declared-helpers](2026-10-22-installer-pins-declared-helpers.md) | The installer pins the helpers a confirmed plan declares | Proposed |
-| [2026-10-22-commit-helper-leaves-baselines-to-the-owner](2026-10-22-commit-helper-leaves-baselines-to-the-owner.md) | The commit helper leaves the acknowledgement baselines to the owner | Proposed |
+| [2026-10-22-plan-check-in-the-shipped-helper](2026-10-22-plan-check-in-the-shipped-helper.md) | The plan check lives in the helper the `code-work` module ships | Accepted |
+| [2026-10-22-installer-pins-declared-helpers](2026-10-22-installer-pins-declared-helpers.md) | The installer pins the helpers a confirmed plan declares | Accepted |
+| [2026-10-22-commit-helper-leaves-baselines-to-the-owner](2026-10-22-commit-helper-leaves-baselines-to-the-owner.md) | The commit helper leaves the acknowledgement baselines to the owner | Accepted |
 | [2026-10-22-git-work-in-its-own-module](2026-10-22-git-work-in-its-own-module.md) | Git work (`commit`, `remove`) lives in its own module, not in `code-work` or `groundwork` | Accepted |
