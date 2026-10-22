@@ -1,6 +1,6 @@
 # Plan approval as a recorded approval, and the gate that reads it
 
-Status: Approved
+Status: Completed
 Created: 2026-10-22
 Candidate: none — the first slice of the roadmap candidate `code-work-approval`, which is too large for one plan; the roadmap split is increment F, so completion is not derived
 Specs: code-work, trust-and-approval, module-contract, installer-interface
