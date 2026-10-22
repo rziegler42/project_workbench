@@ -33,7 +33,8 @@ class Clone(Base):
         env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
         env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
         done = subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.test",
-                               "-c", "commit.gpgsign=false"] + list(args), cwd=self.place,
+                               "-c", "commit.gpgsign=false", "-c", "gc.auto=0",
+                               "-c", "maintenance.auto=false"] + list(args), cwd=self.place,
                               env=env, input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.assertEqual(0, done.returncode, done.stderr)
         return done.stdout

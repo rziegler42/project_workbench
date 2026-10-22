@@ -380,7 +380,8 @@ class Repository(Region):
         with open(os.path.join(folder, name), encoding="utf-8") as handle:
             real = handle.read()
         first = self.hash_of(real, name)
-        self.assertEqual(first, self.hash_of(real.replace("Status: Approved", "Status: In Progress", 1), name))
+        status = re.search(r"^Status:.*$", real, re.M).group(0)
+        self.assertEqual(first, self.hash_of(real.replace(status, "Status: In Progress", 1), name))
         self.assertNotEqual(first, self.hash_of(real.replace("## Goal", "## Goal\n\nextra", 1), name))
 
 
