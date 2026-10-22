@@ -1,6 +1,6 @@
 # The code-work module: the commit helper
 
-Status: Proposed
+Status: Approved
 Created: 2026-10-22
 Candidate: workbench-v1#code-work-commit
 Specs: code-work, trust-and-approval, module-contract
@@ -433,7 +433,8 @@ Before the commit the author re-read the plan for contradictions and fixed five 
 defined, the environment rule in criterion 4 matched to increment A, the list of settings that are refused
 versus made unreachable, the editor and pager variables the helper sets, and the nested-repository refusal in
 increment B. No choice changed. Round 3 of the bound is unused.
-The plan stays `Proposed`; the review does not approve it.
+The review did not approve the plan. The owner approved it in session on 2026-10-22, with the eight choices
+in "Decided by me" as written.
 
 ## Deferred work
 
