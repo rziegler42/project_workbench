@@ -19,6 +19,8 @@ from workbench import (cli, commands, firstparty, harnessplan, install, manifest
                        verify)
 from workbench.wbkit import project
 
+import support_git
+
 ROOT = support_install.ROOT
 PACKAGE = os.path.join(ROOT, "packages", "workbench")
 MODULE = os.path.join(PACKAGE, "code-work")
@@ -69,6 +71,11 @@ class Declaration(unittest.TestCase):
         self.assertEqual([HELPER], document["ships"])
         for field in ("helpers", "blocks", "slots", "layout", "helper"):
             self.assertNotIn(field, document)
+
+    def test_the_command_takes_the_three_reads_and_the_two_changes_as_its_first_argument(self):
+        command = declaration()["commands"]["code-work"]
+        self.assertEqual(["check", "plans", "report", "commit", "remove"], command["arguments"])
+        self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
 
     def test_every_file_is_the_declaration_the_helper_a_block_the_readme_or_the_skill(self):
         found = []
@@ -124,8 +131,14 @@ class Blocks(unittest.TestCase):
 
     def test_the_policy_block_names_no_checkpoint_the_module_cannot_yet_enforce(self):
         text = block("policy")
-        for word in ("recorded approval", "checkpoint", "loop cap", "push", "compact", "attribution"):
+        for word in ("recorded approval", "checkpoint", "loop cap", "push", "compact"):
             self.assertNotIn(word, text.lower())
+
+    def test_the_policy_block_says_a_commit_goes_through_the_helper_and_carries_no_attribution_by_default(self):
+        text = " ".join(block("policy").split())
+        self.assertIn("Make a commit through the code-work helper", text)
+        self.assertIn("names the commit it expects and the exact paths", text)
+        self.assertIn("carries no attribution unless the project allows it", text)
 
     def test_the_policy_block_is_short_and_names_no_tool(self):
         text = block("policy")
@@ -357,7 +370,7 @@ class Install(support_install.InstallBase):
             shown = out.read().decode()
         self.assertEqual("", errors.getvalue())
         self.assertEqual(0, code, shown)
-        self.assertEqual(1, commands.run(self.guarded, ["code-work", "commit"], io.StringIO(), cwd=place))
+        self.assertEqual(1, commands.run(self.guarded, ["code-work", "push"], io.StringIO(), cwd=place))
         with open(os.path.join(place, *rel.split("/")), "ab") as handle:
             handle.write(b"\n# edited\n")
         errors = io.StringIO()
@@ -386,6 +399,125 @@ class Install(support_install.InstallBase):
             out.seek(0)
             shown = out.read().decode()
         return code, shown, errors.getvalue()
+
+    def run_helper(self, place, *arguments):
+        """``(code, standard output, standard error)`` of `wb run code-work <arguments>` in `place`."""
+        errors = io.StringIO()
+        before = os.getcwd()
+        self.addCleanup(os.chdir, before)
+        os.chdir(place)
+        with tempfile.TemporaryFile() as out:
+            code = commands.run(self.guarded, ["code-work", *arguments], errors, cwd=place, stdout=out)
+            out.seek(0)
+            shown = out.read().decode()
+        return code, shown, errors.getvalue()
+
+    def project_with_identity(self):
+        place = self.place()
+        self.assertEqual(0, self.install(place)[0])
+        support_git.git(place, "config", "user.name", "Tester")
+        support_git.git(place, "config", "user.email", "tester@example.invalid")
+        return place
+
+    def write_in(self, place, rel, text):
+        full = os.path.join(place, *rel.split("/"))
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "w", encoding="utf-8") as handle:
+            handle.write(text)
+
+    def test_the_first_commit_and_the_next_one_are_made_through_the_launcher(self):
+        place = self.project_with_identity()
+        self.write_in(place, "docs/plans/2026-10-22-mine.md", "# Mine\n")
+        code, shown, err = self.run_helper(place, "commit", "--expected-head", "none", "--subject",
+                                           "Add a plan", "--", "docs/plans/2026-10-22-mine.md")
+        self.assertEqual(("", 0), (err, code), shown)
+        first = json.loads(shown)["committed"]
+        self.assertEqual(first, support_git.git(place, "rev-parse", "HEAD").stdout.strip())
+        self.assertEqual("Add a plan", support_git.git(place, "log", "-1", "--format=%s").stdout.strip())
+        self.write_in(place, "docs/plans/2026-10-22-next.md", "# Next\n")
+        code, shown, err = self.run_helper(place, "commit", "--expected-head", first, "--subject",
+                                           "Add the next plan", "--", "docs/plans/2026-10-22-next.md")
+        self.assertEqual(("", 0), (err, code), shown)
+        self.assertEqual(first, support_git.git(place, "rev-parse", "HEAD~1").stdout.strip())
+
+    def test_a_commit_that_claims_a_branch_without_commits_is_refused_through_the_launcher(self):
+        place = self.project_with_identity()
+        self.write_in(place, "docs/plans/2026-10-22-mine.md", "# Mine\n")
+        code, shown, err = self.run_helper(place, "commit", "--expected-head", "none", "--subject",
+                                           "Add a plan", "--", "docs/plans/2026-10-22-mine.md")
+        self.assertEqual(0, code, err)
+        self.write_in(place, "docs/plans/2026-10-22-next.md", "# Next\n")
+        code, shown, err = self.run_helper(place, "commit", "--expected-head", "none", "--subject",
+                                           "Add the next plan", "--", "docs/plans/2026-10-22-next.md")
+        self.assertEqual(1, code)
+        self.assertEqual("Add a plan", support_git.git(place, "log", "-1", "--format=%s").stdout.strip())
+
+    def test_a_commit_message_that_names_a_tool_is_refused_through_the_launcher_by_default(self):
+        place = self.project_with_identity()
+        self.write_in(place, "docs/plans/2026-10-22-mine.md", "# Mine\n")
+        code, shown, err = self.run_helper(place, "commit", "--expected-head", "none", "--subject",
+                                           "Add a plan", "--body", "Co-Authored-By: Claude <noreply@anthropic.com>",
+                                           "--", "docs/plans/2026-10-22-mine.md")
+        self.assertEqual(1, code)
+        self.assertNotIn("is not an argument", err)
+        self.assertEqual(128, support_git.git(place, "rev-parse", "HEAD", check=False).returncode)
+
+    def test_remove_previews_and_then_removes_through_the_launcher(self):
+        place = self.project_with_identity()
+        self.write_in(place, "scratch/old.txt", "old\n")
+        code, shown, err = self.run_helper(place, "remove", "--", "scratch/old.txt")
+        self.assertEqual(("", 0), (err, code), shown)
+        self.assertEqual("preview", json.loads(shown)["status"])
+        self.assertTrue(os.path.exists(os.path.join(place, "scratch", "old.txt")))
+        code, shown, err = self.run_helper(place, "remove", "--confirm", "--", "scratch/old.txt")
+        self.assertEqual(("", 0), (err, code), shown)
+        self.assertEqual("removed", json.loads(shown)["status"])
+        self.assertFalse(os.path.exists(os.path.join(place, "scratch", "old.txt")))
+
+    def test_the_read_commands_still_take_no_further_argument_and_another_name_is_refused(self):
+        place = self.project_with_identity()
+        code, shown, err = self.run_helper(place, "check", "extra")
+        self.assertEqual((1, ""), (code, err))
+        code, shown, err = self.run_helper(place, "push")
+        self.assertEqual(1, code)
+        self.assertIn("is not an argument of the command", err)
+
+    def test_an_edited_helper_is_refused_for_a_commit_and_nothing_is_committed(self):
+        place = self.project_with_identity()
+        self.write_in(place, "docs/plans/2026-10-22-mine.md", "# Mine\n")
+        with open(os.path.join(place, ".workbench", "workbench", "code-work", *HELPER.split("/")), "ab") as handle:
+            handle.write(b"\n# edited\n")
+        code, shown, err = self.run_helper(place, "commit", "--expected-head", "none", "--subject",
+                                           "Add a plan", "--", "docs/plans/2026-10-22-mine.md")
+        self.assertEqual(1, code)
+        self.assertIn("has changed since it was pinned", err)
+        self.assertEqual(128, support_git.git(place, "rev-parse", "HEAD", check=False).returncode)
+
+    def test_an_upgrade_that_changes_the_arguments_moves_the_pin_with_the_declaration(self):
+        place = self.project_with_identity()
+        ident = project.read_id(place)
+        before = pins.lookup(self.guarded, ident, "code-work")
+        path = os.path.join(self.package_path, "code-work", "module.json")
+        with open(path, encoding="utf-8") as handle:
+            document = json.load(handle)
+        document["version"] = "0.1.1"
+        document["commands"]["code-work"]["arguments"].append("version")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(document, handle)
+        firstparty.release_approvals(self.dist)
+        out, err = io.StringIO(), io.StringIO()
+        code = cli.main(["upgrade", place, "--package", self.package_path], out, err,
+                        store_root=self.store_root, distribution=self.dist,
+                        stdin=support_install.Typist(out, support_install.correct), home=self.home)
+        self.assertEqual((0, ""), (code, err.getvalue()), out.getvalue())
+        after = pins.lookup(self.guarded, ident, "code-work")
+        self.assertNotEqual(before.declaration, after.declaration)
+        self.assertEqual((before.path, before.kit), (after.path, after.kit))
+        self.assertEqual("workbench upgrade", after.pinned_by)
+        code, shown, err = self.run_helper(place, "check")
+        self.assertEqual(("", 0), (err, code), shown)
+        code, shown, err = self.run_helper(place, "version")
+        self.assertEqual((1, ""), (code, err))
 
     def wb_check(self, place):
         out, err = io.StringIO(), io.StringIO()

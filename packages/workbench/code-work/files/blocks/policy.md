@@ -7,5 +7,7 @@
   status, review record and result, needs a new approval.
 - Draft a plan from the template of the plan-drafting skill, and run the plan check before
   asking for approval.
+- Make a commit through the code-work helper: it names the commit it expects and the exact
+  paths, and the message carries no attribution unless the project allows it.
 - Report an increment as done only with the verification that was actually run. Stop when
   something is wrong; do not widen the plan to get past it.

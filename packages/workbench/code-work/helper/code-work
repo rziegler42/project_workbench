@@ -1684,7 +1684,8 @@ def main(argv, out, err, cwd):
         if argv and argv[0] in CHANGING:
             return CHANGING[argv[0]](argv[1:], cwd, out, err)
         if len(argv) != 1 or argv[0] not in COMMANDS:
-            raise Refused("usage: code-work %s (no arguments)" % "|".join(sorted(COMMANDS)))
+            raise Refused("usage: code-work %s (no arguments), or commit or remove with their options"
+                          % "|".join(sorted(COMMANDS)))
         return COMMANDS[argv[0]](find_root(cwd), out, err)
     except Refused as exc:
         err.write("refused: %s\n" % exc)

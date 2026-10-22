@@ -505,6 +505,7 @@ class Dispatch(Project):
             code = helper.main(args, out, err, self.place)
             self.assertEqual((1, ""), (code, out.getvalue()), args)
             self.assertTrue(err.getvalue().startswith("refused: usage: code-work check"), args)
+            self.assertIn("commit or remove", err.getvalue())
 
     def test_run_as_a_program_from_a_directory_of_lookalike_modules(self):
         """The working directory holds `json.py`, `os.py` and `re.py` that would fail if imported."""

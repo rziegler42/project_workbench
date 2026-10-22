@@ -25,7 +25,9 @@
       "arguments": [
         "check",
         "plans",
-        "report"
+        "report",
+        "commit",
+        "remove"
       ]
     }
   },

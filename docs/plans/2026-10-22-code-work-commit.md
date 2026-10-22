@@ -715,3 +715,25 @@ removed, and the test shows the program does not run.
     inode; a test counts the listings. The cost is that a `.git` created in an ancestor between two targets
     of the same phase is seen only in the next phase, which does not affect the target's own walk.
   - No second bypass round has been run on these two fixes.
+
+### Increment E — wiring through the module and the launcher (2026-10-22)
+
+- `module.json`: the arguments of `code-work` are now `check`, `plans`, `report`, `commit`, `remove`. The
+  helper's `main` already dispatched `commit` and `remove` (increments B to D), so the helper changed only
+  in its usage line, which now says `commit` and `remove` take options.
+- The policy block gained one rule (a commit goes through the helper, names the commit it expects and the
+  exact paths, and carries no attribution unless the project allows it), and the README of `docs/plans/`
+  gained a short "Committing an increment" section. Both are in behavior terms and name no tool. The policy
+  test that forbade the word "attribution" now forbids the other checkpoint words only, and a new test pins
+  the rule's text; the block is 14 lines, at its limit.
+- New tests in `test_codework_module.py` (red first, then green), all through `commands.run` in a project
+  installed from a released copy: the declaration lists the five arguments; the first commit (`--expected-head
+  none`) and a second commit work; a second `none` on a branch with a commit is refused and HEAD is unchanged;
+  a message naming a tool is refused and nothing is committed; `remove` previews and then removes; a read
+  command given an extra argument and an unlisted name are refused; an edited helper is refused for `commit`;
+  an upgrade that adds an argument moves the installer-made pin's declaration and keeps its path and kit.
+- Verification: `test_codework_module` and its neighbours (148 tests, OK); the full suite, 2623 tests in
+  4 roots, OK.
+- Limit: the helper's own standard error is not captured by `commands.run`, so the end-to-end tests assert
+  exit codes and repository state for helper refusals; the refusal texts are covered in the helper tests.
+- The shipped approvals for `code-work` stay stale until F.
