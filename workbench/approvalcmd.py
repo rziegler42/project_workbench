@@ -44,24 +44,35 @@ def _shown(value, limit=120):
     return display.ascii_text(str(value))[:limit]
 
 
-def resolve(guarded, start):
-    """The ``Resolved`` approval command of the project that holds the directory `start`, or ``ApprovalError``.
-    Nothing is started."""
+Installed = collections.namedtuple("Installed", "root project_id package module declaration")
+
+
+def installed_modules(start):
+    """``(root, project_id, [Installed, ...])`` for the project that holds the directory `start`: every module
+    the committed manifest records as installed, each read after its declaration hash equals the manifest's.
+    ``ApprovalError`` when the project or any installed declaration cannot be used. Nothing is started and
+    nothing is written."""
     try:
         root = project.find_root(start)
         with safefs.Root(root, "project root") as held:
             document = manifest.parse(held.read_file(project.MANIFEST))
             ident = manifest.project_id(document["seed"])
-            declaring = []
+            found = []
             for package in document["packages"]:
                 for item in package["modules"]:
-                    if not commands.is_installed(document, package, item):
-                        continue
-                    module = commands.installed_module(held, package, item)
-                    if module.approval is not None:
-                        declaring.append((package["name"], module, item["declaration"]))
+                    if commands.is_installed(document, package, item):
+                        found.append(Installed(root, ident, package["name"],
+                                               commands.installed_module(held, package, item), item["declaration"]))
     except (project.ProjectError, safefs.SafeFsError, manifest.ManifestError, commands.CommandError) as exc:
         raise ApprovalError(display.clean(str(exc))[:300])
+    return root, ident, found
+
+
+def resolve(guarded, start):
+    """The ``Resolved`` approval command of the project that holds the directory `start`, or ``ApprovalError``.
+    Nothing is started."""
+    root, ident, found = installed_modules(start)
+    declaring = [(item.package, item.module, item.declaration) for item in found if item.module.approval is not None]
     if not declaring:
         raise ApprovalError("no installed module declares an approval command; nothing was run")
     if len(declaring) > 1:
