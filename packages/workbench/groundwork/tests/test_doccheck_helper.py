@@ -9,12 +9,12 @@ import os
 import unittest
 import unittest.mock
 
-from tests import support_doccheck
+from tests import support_helpers
 from tests import support_docs
 from tests.support_docs import DECISION, ROADMAP, SPEC
 from workbench.wbkit import safefs
 
-doccheck = support_doccheck.load("doccheck")
+doccheck = support_helpers.load("doccheck")
 
 
 class Base(support_docs.Base):

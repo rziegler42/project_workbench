@@ -8,7 +8,7 @@ module is verified (``modulefiles.verify_module``).
 Keys, all optional (an absent key means ``none`` or empty):
 
 ``root``
-    ``"none"``, or ``{"file": "CLAUDE.md", "import": "AGENTS.md"}``: a one-segment file name that
+    ``"none"``, or ``{"file": "HARNESS.md", "import": "AGENTS.md"}``: a one-segment file name that
     holds an ``@<import>`` line, and the one-segment file it imports.
 ``kinds``
     For each of ``skill``, ``agent`` and ``command``: ``{"path": ..., "fields": {...}}``. A
@@ -71,12 +71,13 @@ _DOTTED = re.compile(r"^[A-Za-z][A-Za-z0-9]{0,31}(\.[A-Za-z][A-Za-z0-9]{0,31})+\
 _WORD = re.compile(r"^[A-Za-z][A-Za-z0-9]{0,31}\Z")
 _TEMPLATE = re.compile(r"^([A-Za-z][A-Za-z0-9]{0,31})\((\{pattern\}|\{path\})\)\Z")
 _NO_EXCLUDE_CHARS = set("*?[]!# \\")
-# Claude accepts a path rule under these names and never consults it (checked on 2.1.305).
+# A harness accepts a path rule under these names and never consults it (checked on the first
+# harness, at version 2.1.305).
 INERT_TEMPLATE_NAMES = ("Write", "NotebookEdit", "Glob", "MultiEdit")
 REQUIRED_RULE_TOOLS = ("shell", "write")
 # The one rule name each tool class may use, so a deny cannot be written under a name that does
-# not stop its tool (a store-write deny as `Read(...)`). Checked on Claude Code 2.1.305; another
-# harness adds its own names here when its formats are verified.
+# not stop its tool (a store-write deny as `Read(...)`). Checked on the first harness, at
+# version 2.1.305; another harness adds its own names here when its formats are verified.
 RULE_NAMES = {"shell": ("Bash",), "read": ("Read",), "write": ("Edit",), "web": ("WebFetch",)}
 SETTINGS_KEYS = ("permissions",)
 AGENT_TOOLS_FIELD = "tools"

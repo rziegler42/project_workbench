@@ -2,9 +2,9 @@ import copy
 import json
 import unittest
 
-from tests import support_doccheck
+from tests import support_helpers
 
-refindex = support_doccheck.load("refcheck")
+refindex = support_helpers.load("refcheck")
 RefIndexError = refindex.RefIndexError
 
 HASH = "a" * 64

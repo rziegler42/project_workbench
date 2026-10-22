@@ -11,7 +11,7 @@ Layout below ``harness/neutral/``:
 * ``commands/<name>.md``.
 
 Any other path is refused, so a file cannot sit where a later step would not look at it.
-A skill and a command may not share a name, because Claude serves both as ``/<name>``.
+A skill and a command may not share a name, because a harness may serve both as ``/<name>``.
 
 Front matter is a fence line ``---``, single-line ``key: value`` lines and a closing ``---``.
 A value is read literally: no quoting, no continuation lines, no block indicator. It is

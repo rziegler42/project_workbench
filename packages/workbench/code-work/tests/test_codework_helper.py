@@ -15,7 +15,7 @@ import sys
 import tempfile
 import unittest
 
-from tests import support_doccheck, support_install
+from tests import support_helpers, support_install
 
 ROOT = support_install.ROOT
 HELPER = os.path.join(ROOT, "packages", "workbench", "code-work", "helper", "code-work")
@@ -30,7 +30,7 @@ def load():
 
 
 helper = load()
-doccheck = support_doccheck.load("doccheck")
+doccheck = support_helpers.load("doccheck")
 
 GOOD = """# A plan
 

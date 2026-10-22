@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import unittest
 
-from tests import support_doccheck, support_install
+from tests import support_helpers, support_install
 from workbench import (cli, firstparty, harnessplan, install, manifest, neutral, pins, sources,
                        store, verify)
 
@@ -420,7 +420,7 @@ class Install(support_install.InstallBase):
 
     def references(self, place, data=PDF):
         """One reference file and an index for it, as the module's reader writes them."""
-        refs = support_doccheck.load("refcheck")
+        refs = support_helpers.load("refcheck")
         entry = {"file": "docs/references/a.pdf", "license": "CC-BY-4.0", "notes": "n",
                  "retrieved": "2026-10-21", "sha256": hashlib.sha256(data).hexdigest(),
                  "title": "Datasheet", "url": "https://example.com/a.pdf", "version": "1"}

@@ -126,7 +126,7 @@ def render_root(harness_layout):
     """The root file of the layout as a ``Planned``, or None when it has none.
 
     It holds the one import line of the layout and nothing else: guidance generated into a root
-    file waits for a module that supplies it (``code-work-module``).
+    file waits for a module that supplies it.
     """
     found = layout.problems(harness_layout)
     if found:

@@ -9,11 +9,11 @@ import os
 import unittest
 import unittest.mock
 
-from tests import support_doccheck
+from tests import support_helpers
 from tests.support_docs import Base
 from workbench.wbkit import gitindex, safefs
 
-refcheck = refindex = support_doccheck.load("refcheck")
+refcheck = refindex = support_helpers.load("refcheck")
 
 PDF = b"%PDF-1.4 datasheet\n"
 PNG = b"\x89PNG image bytes\n"

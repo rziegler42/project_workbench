@@ -8,7 +8,7 @@ and reports only what a reader or an agent would follow:
 * an inline link or image, ``[text](target)``;
 * a reference definition, ``[id]: target``;
 * an HTML ``href`` or ``src``;
-* an import, ``@path`` (the form ``CLAUDE.md`` uses), where the path has a ``/`` or an extension.
+* an import, ``@path`` (the form a harness root file uses), where the path has a ``/`` or an extension.
 
 The text is untrusted. Every pattern is linear, and the number of references taken from one
 document is bounded.

@@ -17,7 +17,7 @@ must hold ``harness/neutral/`` or at least one ``harness/<name>/`` directory.
 A file directly under ``harness/`` is refused. ``manifest.json`` in a
 ``harness/<name>/`` may hold ``{"exclude": [{"item": "<kind>/<name>", "reason": "..."}]}``.
 
-Item naming (ASSUMED, to be fixed by ``claude-harness``): an item is
+Item naming (ASSUMED, to be fixed with the first harness module): an item is
 ``<kind>/<name>``, found at ``harness/neutral/<kind>/<name>`` or
 ``harness/<harness>/<kind>/<name>``. ``<name>`` is the second path segment, with a
 trailing ``.md`` removed when that segment is a single file, so ``skills/x.md`` and

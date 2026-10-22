@@ -10,7 +10,7 @@ The report, from ``repository-boundary.md`` and ``installer-interface.md``:
   link or import into untracked content, tracked files that differ from the committed manifest in a
   way their owner class does not allow, and whether the manifest is committed;
 * after those, what the installed modules' own checks report (``checks``), such as the form of the
-  specs, roadmaps and decisions and the reference index from the ``groundwork`` module.
+  specs, roadmaps and decisions and the reference index from a module that offers such a check.
 
 Everything is read through the no-follow reader and nothing is written. The local manifest is
 scratch (``repository-boundary.md``): its hashes say a file is the one attach wrote, not that it is
