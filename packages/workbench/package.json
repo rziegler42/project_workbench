@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "contract": 1,
   "modules": [
+    "ask-codex",
     "claude",
     "code-work",
     "groundwork",

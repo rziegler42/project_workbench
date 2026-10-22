@@ -23,8 +23,8 @@ def find(name):
 
 def load(name):
     sys.modules.setdefault("wbkit", wbkit)
-    for each in ("display", "safefs", "gitindex", "jsonstrict"):
-        sys.modules.setdefault("wbkit." + each, getattr(wbkit, each))
+    for each in ("display", "safefs", "gitindex", "jsonstrict", "project"):
+        sys.modules.setdefault("wbkit." + each, importlib.import_module("workbench.wbkit." + each))
     loader = importlib.machinery.SourceFileLoader("helper_" + name, find(name))
     spec = importlib.util.spec_from_loader("helper_" + name, loader)
     module = importlib.util.module_from_spec(spec)

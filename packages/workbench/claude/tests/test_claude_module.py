@@ -46,7 +46,7 @@ def declaration():
 def loaded_module():
     result = declarations.load_package(PACKAGE, first_party=True)
     assert not result.problems, result.problems
-    return result.modules[0]
+    return next(m for m in result.modules if m.name == "claude")
 
 
 class Shipped(unittest.TestCase):
@@ -71,7 +71,7 @@ class Shipped(unittest.TestCase):
 
     def test_the_package_is_the_claude_code_work_and_groundwork_modules(self):
         self.assertEqual(sorted(os.listdir(PACKAGE)),
-                         ["claude", "code-work", "groundwork", "package.json", "safe-git"])
+                         ["ask-codex", "claude", "code-work", "groundwork", "package.json", "safe-git"])
         self.assertEqual(sorted(os.listdir(CLAUDE_DIR)), ["module.json", "tests"])
 
 
@@ -213,7 +213,7 @@ class Rendering(unittest.TestCase):
 class Request(unittest.TestCase):
     def test_the_approval_request_shows_the_layout_in_plain_terms(self):
         module = loaded_module()
-        hashes = verify.verify_package(PACKAGE, first_party=True).modules[0]
+        hashes = next(m for m in verify.verify_package(PACKAGE, first_party=True).modules if m.name == "claude")
         text = request.render_module("workbench", module, hashes)
         for line in ("HIGH RISK", "type: harness", "approval: needs an explicit approval of its own",
                      "provides:", "harness layout:", "local_settings.path = ",
