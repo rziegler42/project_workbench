@@ -151,6 +151,24 @@ Inputs the specs imply that the tests must pin, most likely to bite first:
 8. **An upgrade over edited files.** An edited README, an edited slot block, an edited helper (a
    conflict, and the pin is not moved until acknowledged).
 
+## Amendment (2026-10-22)
+
+The owner approved, in session, amending increments F to H in place and having the installer pin. After
+`module-boundary-kit`, `module-commands`, `module-checks` and `module-harness-paths`, part of this plan
+describes a design that no longer exists. A and the Result entries keep their text as a record. Where
+this section and an earlier part disagree, this section governs:
+
+- **Decisions 2 and 3 are superseded.** There is no `workbench/dispatch.py` and no `wb code-work`. The
+  helper is declared in `module.json` as the command `code-work`, and it runs as `wb run code-work
+  <check|plans|report>`. The shipped file is named by `ships` and `commands`, not by a naming
+  convention. Read "`wb code-work <subcommand>`" in Goal, Scope and criterion 2 as that command; the
+  Result of increment E describes the dispatch that was removed.
+- **Decision 4 is confirmed and widened.** The installer pins every declared command and check helper,
+  for the first-party package and for others, not the `code-work` helper alone, because `groundwork`'s
+  check helpers have the same gap. Increment F states the rules.
+- **Decision 1 stands.**
+- The amendment was not reviewed by Codex; the Review record above is of the plan before it.
+
 ## Increments
 
 ### Increment A — What the installer already does for a process module that ships code
@@ -239,49 +257,93 @@ with `template.md`), `packages/workbench/package.json`, tests.
 **Verification:** new tests, then the full suite.
 **Evidence:** commit with trailer `Plan: 2026-10-21-code-work-plans#E`.
 
-### Increment F — Pin on install, upgrade and add; pin again on acknowledge
+### Increment F — The installer pins the declared helpers (amended 2026-10-22)
 
-**Outcome:** the owner never types a pin for a first-party helper, and an unacknowledged edit stops it.
-**Dependencies:** A, D, E.
-**Affected areas:** `workbench/install.py`, `upgrade.py`, `acknowledge.py`, `pins.py`, tests.
+**Outcome:** after `install`, `add` or `upgrade`, every command and check helper of the modules the
+owner confirmed is pinned by the installer, with the declared path and kit, and `wb acknowledge` of a
+pulled edit to a helper moves its pin. The owner never types `pin` for a declared helper.
+**Dependencies:** A, D, E (done), and the module-commands and module-checks designs as built.
+**Affected areas:** a new `workbench/pinplan.py`, `install.py`, `upgrade.py`, `installplan.py`,
+`upgradeplan.py` (store writes, digest, render), `acknowledge.py`, `pins.py`, tests.
+**Rules:**
+- *Which pins.* For each module the plan installs or keeps that the manifest lists (a harness module
+  writes nothing and declares nothing here), each declared command is pinned under the command's name and
+  each declared check under the last segment of its helper path, as `commands.resolve` and the check
+  runner look them up. The pin's path is `.workbench/<package>/<module>/<helper>`, its hash is the hash
+  of the bytes the plan writes, and its `kit` is the declaration's for a Python helper and absent
+  otherwise. The same rule covers a third-party package: `2026-10-19-uniform-package-trust` gives no
+  first-party exception, and the owner has confirmed that package's digest too.
+- *Whose pin.* `pinned_by` names the command that made it (`workbench install`, `workbench add`,
+  `workbench upgrade`, `workbench acknowledge`), so a pin made by the installer is told from one the owner
+  typed.
+- *An existing pin of that name.* Absent: created. Equal in path, hash and kit: left alone. Anything
+  else, including a pin the owner typed: replaced only when the preview lists it as a replacement with the
+  old path, the first twelve characters of the old hash and who made it, so the digest the owner types
+  covers it. A pin for a name no module declares any more is left alone; it runs nothing.
+- *Upgrade.* A helper the upgrade does not write (unchanged, or a local edit left as a conflict) keeps its
+  pin. The pin follows the bytes the confirmed plan writes and never the bytes found on disk.
+- *Acknowledge.* A pulled edit to a declared helper moves the pin named for it when the pin's path is that
+  path and its hash is the hash last acknowledged for it, which is to say the pin was holding the accepted
+  bytes. A pin held at other bytes, or at another path, is not moved. The list the owner types the digest
+  of says "moves the pin `<name>`" for each, so accepting the edit and allowing it to run are one stated
+  act. The list shows hashes and not a line diff, as acknowledge does today; this is recorded as a limit.
+- *Writes.* The pins are one more atomic store write in the same stage as the baselines, so a stop between
+  the files and the store is covered by the unfinished-write recovery. No new command; `pin` stays for a
+  helper that no module declares.
 **Steps:**
-1. Failing tests: after install the pin names the shipped path and its hash; an upgrade that changes
-   the helper moves the pin only when the owner-confirmed plan includes it; a pulled edit leaves the pin
-   and `wb code-work` refuses; `wb acknowledge` of that path moves the pin; the pin file is strict and
-   a helper outside the module's namespace is never pinned.
-2. Implement. A pin made here records the installer as the pinner. The preview of each command lists
-   the pin it will make, so the digest the owner types covers it.
+1. Failing tests, each failing without its guard: a fresh install pins `code-work` and the three
+   `groundwork` checks with the declared path and kit and `pinned_by` of the command; the preview lists
+   each pin and a pin changes the digest; `wb run code-work check` and `wb check` work with no `pin`
+   typed; an upgrade that changes a helper moves its pin and one that does not leaves it; an upgrade that
+   leaves a locally edited helper as a conflict moves nothing; an owner-typed pin of the same name is a
+   listed replacement and changes the digest; a pin for another path or another module's helper is
+   replaced, never trusted; a pulled edit leaves the pin and `wb run` refuses; acknowledge moves a pin
+   that held the accepted bytes and not one held elsewhere; a hostile or damaged pins file refuses the
+   whole command and writes nothing; a stop between the files and the store is recovered with the pins
+   and the baselines in step; a harness module and a module with no helper add no pin.
+2. Implement `pinplan` (the pins a selection implies, the comparison with the pins that exist) and use it
+   from install, add, upgrade and acknowledge.
 **Verification:** new tests, then the full suite.
 **Evidence:** commit with trailer `Plan: 2026-10-21-code-work-plans#F`.
 
-### Increment G — Security pass, release and end-to-end
+### Increment G — Security pass, release and end-to-end (amended 2026-10-22)
 
 **Outcome:** the package is first-party again and the whole path is proven.
 **Dependencies:** B to F, and the security pass.
 **Affected areas:** `workbench/shipped_approvals/`, tests.
 **Steps:**
-1. An adversarial `security-reviewer` pass over the helper, the dispatch and the pinning; fix, add
-   regression tests, and have a second reviewer try to bypass each fix.
+1. An adversarial `security-reviewer` pass over the helper, `commands.resolve` and `wb run` with this
+   helper, the check runner with the `groundwork` helpers, and the installer's pinning (F); fix, add
+   regression tests, and have a second reviewer try to bypass each fix. It must try: a module that
+   declares a command named like a pin the owner holds; a package whose helper changes between the
+   preview and the write; a link swapped in for a helper before the pin is hashed; a declaration edited in
+   a pulled commit with the manifest hash recomputed; a third-party package that declares a command or
+   check; and an `acknowledge` that moves a pin for a helper the owner did not mean to allow.
 2. Ask the owner to run `release-approvals`, which re-records the shipped approvals. I do not run it.
-3. Tests: install `claude`, `groundwork` and `code-work` into an empty directory, attach, commit,
-   write plans by hand, run `wb code-work check`, `plans` and `report`; an upgrade changes no plan.
+3. Tests: install `claude`, `groundwork` and `code-work` into an empty directory, attach, commit, write
+   plans by hand, run `wb run code-work check`, `plans` and `report` and `wb check` with no `pin` typed;
+   edit the helper and see both refuse; acknowledge and see them run; an upgrade changes no plan.
 **Verification:** the full suite.
 **Evidence:** commit with trailer `Plan: 2026-10-21-code-work-plans#G`.
 
-### Increment H — Documentation and decisions
+### Increment H — Documentation and decisions (amended 2026-10-22)
 
 **Outcome:** the specs, the guide, the roadmap and the decision records match what was built.
 **Dependencies:** A to G.
-**Affected areas:** `docs/specs/code-work.md`, `module-contract.md` (the helper convention),
-`trust-and-approval.md`, `installer-interface.md`, `harness-modules.md`, `docs/development.md`,
-`docs/roadmaps/workbench-v1.md`, `AGENTS.md` (the Bootstrap reference to `code-work-module`),
-`workbench/harnessplan.py` (a comment that names it), `docs/decisions/` (two records, `Proposed`).
+**Affected areas:** `docs/specs/code-work.md`, `module-contract.md` (the helper is declared as a command;
+there is no pin-by-name convention), `trust-and-approval.md` ("Pinned helpers": the installer pins on the
+digest the owner confirmed), `module-boundary.md` and `installer-interface.md` (the lines that say the
+owner pins; the preview and acknowledge lists), `docs/development.md`, `docs/roadmaps/workbench-v1.md`,
+`AGENTS.md` (the Bootstrap reference to `code-work-module`), `workbench/harnessplan.py` (a comment that
+names it), `docs/decisions/` (two records, `Proposed`).
 **Steps:**
-1. Edit the documents; record every limit found. Replace remaining uses of `code-work-module` with
-   the candidate that now owns each item.
-2. Write `docs/decisions/2026-10-21-plan-check-in-the-shipped-helper.md` (Decision 1, with the
-   installer-check alternative) and `docs/decisions/2026-10-21-pinned-helper-by-convention.md`
-   (Decisions 2 to 4: dispatch, the shipped-helper convention and pinning by the installer).
+1. Edit the documents; record every limit found. Replace remaining uses of `code-work-module` with the
+   candidate that now owns each item. Search the Accepted decisions for a sentence that says the owner
+   pins a helper; if one does, the new record supersedes that part and says so.
+2. Write `docs/decisions/2026-10-22-plan-check-in-the-shipped-helper.md` (Decision 1, with the
+   installer-check alternative) and `docs/decisions/2026-10-22-installer-pins-declared-helpers.md` (the
+   installer pins a declared command or check helper on the digest the owner confirmed, with the
+   alternative of printing the `pin` lines; why a pull cannot use it; what acknowledge moves).
 **Verification:** `git diff --check`; every claim matched to a test or a run.
 **Evidence:** commit with trailer `Plan: 2026-10-21-code-work-plans#H`.
 
