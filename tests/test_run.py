@@ -153,6 +153,53 @@ class Refused(Run):
         self.assertEqual(1, err.count("\n"))
 
 
+class Provides(Run):
+    """``wb run --provides <capability> <command>``: the module that declares the command must provide the
+    capability, and the check is made by the launcher's side, before anything runs."""
+
+    def setUp(self):
+        Run.setUp(self)
+        fields, files = tool(helper=SCRIPT)
+        fields["provides"] = ["p:bridge"]
+        self.MODULES = {"h": (support_project.HARNESS, {}), "tool": (fields, files)}
+
+    def test_a_command_of_a_module_that_provides_the_capability_runs(self):
+        self.pinned()
+        code, out, err = self.go("--provides", "p:bridge", "tool", "check", "x")
+        self.assertEqual((0, ""), (code, err))
+        self.assertEqual(["n:2", "a:check", "a:x"], out.splitlines())
+
+    def test_a_module_that_does_not_provide_it_is_refused_and_nothing_runs(self):
+        self.pinned()
+        self.refused("--provides", "p:other", "tool", "check", contains="does not provide p:other")
+
+    def test_a_capability_that_is_not_a_name_is_refused(self):
+        self.pinned()
+        for bad in ("P:Bridge", "a b", "x" * 65, "-x"):
+            self.refused("--provides", bad, "tool", "check", contains="is not a capability name")
+
+    def test_an_unknown_command_is_still_refused(self):
+        self.pinned()
+        self.refused("--provides", "p:bridge", "nothing", "check", contains="no installed module declares")
+
+    def test_an_unpinned_command_is_still_refused(self):
+        self.ready()
+        self.unpin("tool")
+        self.refused("--provides", "p:bridge", "tool", "check", contains="is not pinned")
+
+    def test_the_option_is_only_read_before_the_command(self):
+        self.pinned()
+        code, out, err = self.go("tool", "check", "--provides", "p:other")
+        self.assertEqual((0, ""), (code, err))
+        self.assertEqual(["n:3", "a:check", "a:--provides", "a:p:other"], out.splitlines())
+
+    def test_a_missing_command_or_capability_is_a_usage_error(self):
+        self.ready()
+        for tokens in (("--provides",), ("--provides", "p:bridge"), ("--provides", "", "tool"),
+                       ("--provides", "p:bridge", "--help"), ("--provides", "p:bridge", "")):
+            self.assertEqual((2, "", commands.USAGE), self.go(*tokens), tokens)
+
+
 class Usage(Run):
     def setUp(self):
         Run.setUp(self)
@@ -188,7 +235,7 @@ class FromTheCommandLine(Run):
         self.assertTrue(err.startswith("refused: "), err)
 
     def test_the_usage_text_names_run(self):
-        self.assertIn("workbench run <command>", cli.USAGE)
+        self.assertIn("workbench run [--provides <capability>] <command>", cli.USAGE)
 
 
 class Classified(unittest.TestCase):

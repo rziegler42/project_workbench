@@ -20,7 +20,7 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "                                                    (owner-run, terminal only)\n"
          "       python3 -m workbench pin <project-id> <name> <helper> --root <dir> [--kit N]   (owner-run, terminal only)\n"
          "       python3 -m workbench launch <project-id> <name> --root <dir> -- <args>\n"
-         "       python3 -m workbench run <command> [<argument> ...]\n"
+         "       python3 -m workbench run [--provides <capability>] <command> [<argument> ...]\n"
          "       python3 -m workbench release-approvals\n"
          "       python3 -m workbench preview install [<target> | --dir <path>] --package <source> [--ref <ref>] ...\n"
          "                                            [--package ...] --select <module> ...   (read-only)\n"
@@ -252,7 +252,7 @@ def _check(tokens, out, err, store_root, distribution):
 
 def _run(tokens, out, err, store_root, distribution):
     """``run``: the arguments are the helper's and are never parsed as options here."""
-    if not tokens or not tokens[0] or tokens[0].startswith("-"):
+    if module_commands.split(tokens) is None:
         err.write(module_commands.USAGE)
         return 2
     opened = _open_store(store_root, err)

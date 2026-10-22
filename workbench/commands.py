@@ -10,16 +10,21 @@ declared first argument is required when the command lists any, and refused when
 ``resolve`` reads and decides; it starts no program and writes nothing. Every refusal is a
 ``CommandError`` whose message says why, and nothing has run when one is raised. ``run`` is the
 ``wb run`` command: it resolves, then hands the request to the launcher.
+
+``wb run --provides <capability> <command> ...`` also requires the module that declares the command to
+provide the capability. The check is made here, from the declaration whose hash was just compared, so a
+helper that runs another module's command (``wbkit.call``) does not make it for itself.
 """
 
 import collections
 import os
+import re
 
 from . import declarations, hashing, launch, manifest, pins
 from .wbkit import display, project, safefs
 
 Request = collections.namedtuple("Request", "root project_id name arguments kit")
-Declared = collections.namedtuple("Declared", "package module command declaration")
+Declared = collections.namedtuple("Declared", "package module command declaration provides")
 
 
 class CommandError(Exception):
@@ -73,7 +78,8 @@ def _declared(held, document):
                 continue
             module = installed_module(held, package, item)
             for command in module.commands:
-                found.append(Declared(package["name"], item["name"], command, item["declaration"]))
+                found.append(Declared(package["name"], item["name"], command, item["declaration"],
+                                      tuple(module.provides)))
     return found
 
 
@@ -91,11 +97,14 @@ def _arguments(command, args):
                            % (_shown(args[0]), _shown(command.name), ", ".join(allowed)))
 
 
-def resolve(guarded, start, name, args):
-    """The launch request for ``wb run <name> <args>`` run from `start`, or ``CommandError``."""
+def resolve(guarded, start, name, args, provides=None):
+    """The launch request for ``wb run <name> <args>`` run from `start`, or ``CommandError``. With
+    `provides`, the module that declares the command must provide that capability."""
     args = list(args)
     try:
         pins.check_name(name)
+        if provides is not None and not _CAPABILITY.match(provides):
+            raise CommandError("%s is not a capability name" % _shown(provides))
         root = project.find_root(start)
         with safefs.Root(root, "project root") as held:
             # One read: the ID and the modules come from the same bytes.
@@ -111,6 +120,9 @@ def resolve(guarded, start, name, args):
             _shown(name), ", ".join(sorted("%s/%s" % (d.package, d.module) for d in declared))))
     found = declared[0]
     command = found.command
+    if provides is not None and provides not in found.provides:
+        raise CommandError("the module %s/%s that declares the command %s does not provide %s; nothing was run"
+                           % (found.package, found.module, _shown(name), _shown(provides)))
     _arguments(command, args)
     try:
         pin = pins.lookup(guarded, ident, name)
@@ -137,21 +149,39 @@ def resolve(guarded, start, name, args):
     return Request(root, ident, name, args, kit)
 
 
-USAGE = "usage: wb run <command> [<argument> ...]\n"
+USAGE = "usage: wb run [--provides <capability>] <command> [<argument> ...]\n"
+
+_CAPABILITY = re.compile(r"[a-z0-9][a-z0-9:._-]{0,63}\Z")
+
+
+def split(tokens):
+    """``(capability or None, command and arguments)`` from the tokens after ``wb run``, or None when
+    they are not usable. Only ``--provides <capability>`` first is an option; everything after the
+    command is the helper's."""
+    tokens = list(tokens)
+    provides = None
+    if len(tokens) >= 2 and tokens[0] == "--provides":
+        provides, tokens = tokens[1], tokens[2:]
+    if not tokens or not tokens[0] or tokens[0].startswith("-") or (provides is not None and not provides):
+        return None
+    return provides, tokens
 
 
 def run(guarded, tokens, err, *, cwd=None, stdout=None):
-    """``wb run <command> [<argument> ...]``: returns the helper's exit code, 2 for a usage error, or
-    1 with one ``refused:`` line when nothing was run. It prints nothing of its own on success."""
-    if not tokens or not tokens[0] or tokens[0].startswith("-"):
+    """``wb run [--provides <capability>] <command> [<argument> ...]``: returns the helper's exit code,
+    2 for a usage error, or 1 with one ``refused:`` line when nothing was run. It prints nothing of its
+    own on success."""
+    parts = split(tokens)
+    if parts is None:
         err.write(USAGE)
         return 2
+    provides, tokens = parts
     try:
         try:
             start = cwd if cwd is not None else os.getcwd()
         except OSError as exc:
             raise CommandError("the working directory cannot be read: %s" % (exc.strerror or "unknown error"))
-        request = resolve(guarded, start, tokens[0], tokens[1:])
+        request = resolve(guarded, start, tokens[0], tokens[1:], provides)
         return launch.launch(guarded, request.project_id, request.name, request.root,
                              request.arguments, stdout=stdout, kit=request.kit)
     except (CommandError, launch.LaunchError) as exc:

@@ -63,6 +63,7 @@ needs in order to read untrusted repository content safely and to report:
   listing with the kind of each entry (`Root.list_dir`), a file below `.git` (`Root.git_bytes`), the
   paths git tracks read from `.git/index` (`wbkit/gitindex.py`) and strict JSON (`wbkit/jsonstrict.py`);
 - cleaning text for a terminal (`display.clean`) and decoding bytes with `replace`;
+- running another module's command through the launcher (`wbkit/call.py`, below);
 - the report form of a module check (below) and the exit-code convention.
 
 Rules for the kit:
@@ -177,7 +178,10 @@ Declaration, in `module.json` (a new field):
   accepts none and is run as `wb run <command>`.
 - `kit` is the kit API number, required when `runtime` is `python` and refused otherwise.
 
-Invocation: `wb run <command> [<argument> [more arguments]]` from anywhere inside a project. A command whose
+Invocation: `wb run [--provides <capability>] <command> [<argument> [more arguments]]` from anywhere inside a
+project. The one option, `--provides`, is read only before the command: it makes the installer refuse,
+running nothing, unless the module that declares the command provides that capability. The check uses the
+declaration whose hash was just compared with the manifest, and the installer names no capability. A command whose
 `arguments` list is empty accepts no argument at all: `wb run <command>` runs it and any argument is
 refused. A command whose list is not empty requires a first argument that is in the list; the arguments
 after it are passed to the helper unchanged. The installer
@@ -210,6 +214,35 @@ validate its own arguments. Whoever can write the project can rewrite a declarat
 hash, so the owner who pins a command's helper with `pin` approves how it handles any first argument, not a
 closed set. A pin the installer makes also records the declaration hash the owner confirmed, and `wb run` and
 `wb check` refuse when the manifest holds another, so a pull cannot widen `arguments` for it.
+
+### A helper that runs another module's command
+
+A helper may run a command that another installed module declares, and only through the kit's
+`wbkit/call.py`, whose `run_command` starts `wb run [--provides <capability>] <command> <arguments>` and
+nothing else. The kit decides nothing about whether the command may run; the launcher does, so each of
+these refuses and runs nothing: a command no installed module declares, a module that does not provide the
+capability asked for, a pin that is absent or names another helper, a helper or declaration that changed
+since it was pinned, and a first argument the declaration does not list. What the kit does:
+
+- It finds `wb` only in an absolute `PATH` entry outside the project, and rejects a file that resolves into
+  the project. If there is none it raises and runs nothing.
+- It builds the environment itself: `HOME`, `XDG_CONFIG_HOME`, `USER`, `LOGNAME`, `LANG`, `TZ`, `TERM`,
+  `TMPDIR`, any `LC_*`, and a `PATH` of the trusted entries. No `GIT_*`, `LD_*`, `DYLD_*` or other variable of
+  the caller is passed.
+- It passes the command and each argument as one literal argument with no shell: a command name is a plain
+  name, at most 64 arguments of at most 4,096 characters without a NUL.
+- It writes at most 1 MiB to standard input, reads standard output to a bound the caller sets and keeps the
+  last 4,096 bytes of standard error. The command runs in its own process group, and at the time limit, or
+  when the output passes the bound, the whole group is killed. The result says which happened.
+- It returns the exit code, the output and the error text as data. A refusal by the launcher is exit 1 and a
+  `refused:` line in the error text; the helper's own exit code is returned as it is.
+
+Output of another module's command is data to the caller: it is bounded, validated by the caller and never run
+or followed. The rule adds no authority. The caller's module being approved is not approval of the callee,
+which runs only because the owner confirmed its module and so its pin; and a pin check is not a sandbox, so the
+callee runs with the caller's privileges (`trust-and-approval.md`, "Pinned helpers"). There is no depth limit
+beyond each call's time limit; a module that calls a module that calls it is a design error the owner's
+approval of both is meant to catch.
 
 The installer knows no command by name. The `code-work` entry in the agent-safe list, `dispatch.py`
 and the `code-work` branch in `cli.py` were replaced by this, and `code-work` declares its own command.
@@ -356,6 +389,15 @@ installer from there.
 - `wb run` runs a declared command with a declared first argument; refuses an undeclared first argument,
   an unpinned helper, a helper with a changed hash, a path outside a project, and a command name two
   modules declare; and runs nothing in each of those cases.
+- `wb run --provides <capability> <command>` runs the command only when the module that declares it provides
+  the capability, and refuses, running nothing, for another module, an unknown command, a malformed
+  capability name, and (as without the option) an unpinned or changed helper. The option is read only before
+  the command.
+- `wbkit.call.run_command` runs a pinned command through the real launcher with standard input passed
+  through, and, with a fake launcher, shows: the literal argument list, the environment holding only the
+  listed variables, a `wb` inside the project (also through a link, a relative entry or an empty entry) never
+  run, output cut at the bound, a time limit that kills the command and its children, a command that never
+  reads its input not hanging the caller, and every malformed argument refused before anything starts.
 - `wb check` runs a module's checks, prints their cleaned and bounded lines, and reports an unpinned,
   edited, failing or malformed check as a problem while the other checks still run.
 - A pin recorded under a command's or check's name but for a different path is refused and nothing runs,

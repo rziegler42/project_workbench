@@ -285,6 +285,12 @@ silent replacement.
   a helper whose pin records a declaration and holds the bytes last acknowledged, the pin moves to the bytes
   accepted and keeps its declaration; the move is listed in the digest. A pin the owner typed with `pin`
   records no declaration and is never moved: acknowledging an edit is not permission to run it.
+- **One module's helper may run another's command, and only through the launcher.** A helper that calls a
+  command of another installed module does so with the kit's `call.run_command`, which starts `wb run`
+  (`module-boundary.md`, "A helper that runs another module's command"). The launcher applies the pin to the
+  callee exactly as it does for the agent: installed, declared, pinned on the declared helper, bytes and
+  declaration unchanged. The caller's approval is not the callee's, the callee's output is untrusted data to
+  the caller, and the callee runs with the caller's privileges, because a pin is not a sandbox.
 - The pin file, the launcher and the `wb` script are described under "Concrete formats".
 
 ## Concrete formats
@@ -589,6 +595,9 @@ instead of retrying. No dollar ceiling is required.
   stops the agent until the owner acknowledges it, unless the owner explicitly set
   that checkpoint to `delegate`.
 - A pulled edit to a pinned helper is not run until the change is acknowledged.
+- A helper that runs another module's command reaches it only through `wb run`: a command that is not
+  installed, declared and pinned, or whose module lacks the capability asked for, is refused and nothing
+  runs; a `wb` inside the project is never run; the caller's environment is not passed on.
 - A reviewer that returns no verdict produces no approval.
 - The neutral rule list is rejected if it contains an `allow` entry.
 - A module that tries to remove a floor entry is refused.
