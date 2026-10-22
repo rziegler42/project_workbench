@@ -101,6 +101,20 @@ class Known(Distribution):
             handle.write("x")
         self.assertEqual({}, harnesses.known(self.dist))
 
+    def test_a_package_that_changes_after_it_is_loaded_is_not_known(self):
+        root = self.package()
+        self.release()
+        real = declarations.load_package
+
+        def load_then_change(path, first_party=False):
+            loaded = real(path, first_party=first_party)
+            with open(os.path.join(root, "plain", "extra.txt"), "w") as handle:
+                handle.write("x")
+            return loaded
+
+        with unittest.mock.patch.object(declarations, "load_package", load_then_change):
+            self.assertEqual({}, harnesses.known(self.dist))
+
     def test_a_link_to_a_package_is_not_known_and_does_not_hide_the_real_one(self):
         root = self.package()
         self.release()

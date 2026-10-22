@@ -347,6 +347,16 @@ class Refused(unittest.TestCase):
     def test_a_directory_that_contains_the_guarded_store_is_refused(self):
         self.bad(edit(["kinds", "skill", "path"], ".config/{name}/SKILL.md"), "guarded store")
 
+    def test_a_root_file_and_its_import_are_plain_markdown_names(self):
+        for name in ("Rakefile", ".envrc", "Makefile", "conftest.py", ".hidden.md", "a b.md", "x.md.md",
+                     "x;id.md", "$(shell id).md", "x`id`.md", "AGENTS", "-x.md", ".md"):
+            self.bad(edit(["root", "file"], name), "layout.root.file")
+            self.bad(edit(["root", "import"], name), "layout.root.import")
+        for name in ("GEMINI.md", "Agents_2.md", "a-b.md"):
+            self.assertEqual([], [m for m in layout.problems(edit(["root", "file"], name))
+                                  if "plain Markdown" in m])
+            self.assertEqual([], layout.problems(edit(["root", "import"], name)))
+
     def test_a_root_file_may_not_import_itself(self):
         self.bad(edit(["root", "import"], "FIXTURE.md"), "itself")
 

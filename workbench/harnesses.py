@@ -32,7 +32,9 @@ def load(distribution=None):
         if not firstparty.is_first_party(path, distribution):
             continue
         loaded = declarations.load_package(path, first_party=True)
-        if loaded.problems:
+        # The layout is read after the package was hashed, so it is hashed again: a package that changed
+        # in between contributes nothing.
+        if loaded.problems or not firstparty.is_first_party(path, distribution):
             continue
         for module in loaded.modules:
             if module.type != "harness" or layout.problems(module.layout):

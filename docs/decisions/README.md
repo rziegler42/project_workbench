@@ -68,3 +68,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-20-acknowledge-before-upgrade](2026-10-20-acknowledge-before-upgrade.md) | Baselines gate every upgrade, and the owner accepts a change with `wb acknowledge` | Accepted |
 | [2026-10-20-upgrade-needs-no-git](2026-10-20-upgrade-needs-no-git.md) | An upgrade asks no git question; cleanliness is decided by file hashes | Accepted |
 | [2026-10-21-module-code-lives-in-modules](2026-10-21-module-code-lives-in-modules.md) | Module-specific code, tests and tooling live in the module, behind a shared kit | Accepted |
+| [2026-10-21-harness-facts-from-layouts](2026-10-21-harness-facts-from-layouts.md) | The installer reads a harness's paths from that harness module's layout | Proposed |

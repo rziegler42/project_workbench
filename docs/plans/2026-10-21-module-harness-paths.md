@@ -386,4 +386,45 @@ including the recommended option of Choice 3. The owner then approved the plan
 
 ## Result
 
-Not started.
+Increments A to J are done, one commit each; J is the commit that carries this section.
+
+- **Built.** The installer reads a harness's roots, generated directories and tolerated paths from the
+  `layout` of a first-party harness module (`workbench/harnesses.py`, `layout.facts`). `HARNESSES` and
+  `SETTINGS_PATHS` are gone. A layout may declare `tolerated` (at most 16 paths). The settings path rule names
+  no harness. No end-to-end `install` or `attach` with the real `claude` module remains in `tests/`: the
+  installer's tests attach a made-up harness (`tests/support_harness.py`), and the `claude` module is tested in
+  `packages/workbench/claude/tests/`.
+- **Beyond the plan.** H and I also created `tests/support_words.py` and `tests/fixtures/boundary-words.json`.
+  `support_doccheck` became `support_helpers` and `test_groundwork_fixture` became `test_docset_fixture`.
+- **Boundary test** (`tests/test_boundary.py`): derived words, matched case-folded in file contents, file names
+  and directory names. Mutation results: a line naming `claude`, `Claude`, `doccheck`, `.claude/skills` or
+  `opencode`, a file named `test_claude.py`, and a `claude` inside a nested `shipped_approvals` directory
+  each fail the scan. Known evasions: a name built at run time or split across lines, and words under three
+  characters.
+- **Run with `packages/` emptied** (scratch copy, `python3 -B -W error tests/run_all.py`): the first run found
+  three tests still tied to the shipped modules (`test_kit` read `package.json`, the boundary test's
+  non-empty guard, and `test_run`'s command pattern, empty and so matching everything). They were fixed; the
+  guard now compares against a walk for `module.json` files, so a broken glob still fails. The rerun: 2009
+  tests, OK, one skip (a macOS filesystem refusing an illegal byte sequence in a name), none for a missing
+  package.
+- **Security pass** (a `security-reviewer`, then a second to bypass the fixes). No Critical or High finding.
+  - *Fixed, with regression tests:* (1) Medium, older than this plan (`68c9f36`): `root.file` and `root.import`
+    were any one-segment name, so a third-party layout could make attach write `Rakefile`, `.envrc` or
+    `Makefile` containing `@x;system('id')`. Both must now be a plain Markdown name (`layout.ROOT_NAME`); the
+    second reviewer found no bypass. (2) Low: `harnesses.load` hashed a package and then read it, so a package is
+    hashed again after it is read and contributes nothing if either hash fails.
+  - *Accepted, not fixed:* the second hash narrows the hash-then-load gap and does not close it. A change that
+    is reverted between the two hashes gets a layout the owner did not approve into `wb check`'s roots and
+    tolerated paths; it needs write access to the distribution, which is the trust root, and gives no code
+    execution. Closing it means hashing the bytes that are parsed.
+  - *Deferred, not fixed (Low):* the settings rule is a shape and not an allowlist, so a layout can put its
+    settings file in `.github/`, `.vscode/` or similar and have the whole directory excluded by
+    `.git/info/exclude`; kind directories accept any prefix. Both need an owner-approved third-party module and
+    write inert content. The reviewer's correction (refuse an excluded directory that is not the harness's
+    own, or a list of tool directories) goes to the plan that lets `wb check` recognise a third-party harness.
+  - *Not run:* an end-to-end `attach` with a hostile third-party harness (it needs the approval flow), case-
+    insensitive filesystems, and `make`, `ruby` or `bash` on a rendered root file.
+- **Verification:** the full suite, 2354 tests in 4 roots (2350 before J; J added four), `git diff --check`
+  clean, no `__pycache__` under `packages/`. Shipped approvals unchanged by J, as no module changed.
+- **Decision:** `2026-10-21-harness-facts-from-layouts` is Proposed. Accepting it is the owner's act.
+- **Next:** `code-work-commit`, `code-work-approval`, and F to H of `2026-10-21-code-work-plans`.

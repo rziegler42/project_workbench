@@ -187,11 +187,18 @@ def problems(layout):
     return out.messages
 
 
+ROOT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*\.md")
+
+
 def _root(root, out):
     if not out.keys(root, "layout.root", ("file", "import"), ("file", "import")):
         return []
     folded = out.path(root["file"], "layout.root.file", one_segment=True)
     out.path(root["import"], "layout.root.import", one_segment=True)
+    for key in ("file", "import"):
+        if isinstance(root[key], str) and not ROOT_NAME.fullmatch(root[key]):
+            out.add("layout.root.%s" % key, "must be a plain Markdown file name (letters, digits, - and _, "
+                    "ending .md), because the file is a line the tool reads, not a script")
     if root["file"] == root["import"]:
         out.add("layout.root", "the file may not import itself")
     return [("layout.root.file", folded, tuple(root["file"].split("/")), False)] if folded else []

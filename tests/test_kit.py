@@ -1,5 +1,4 @@
 import ast
-import json
 import os
 import sys
 import unittest
@@ -11,7 +10,6 @@ from workbench.wbkit import display
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KIT = os.path.join(ROOT, "workbench", "wbkit")
-PACKAGE = os.path.join(ROOT, "packages", "workbench")
 
 # `sys.stdlib_module_names` needs Python 3.10; older interpreters get this list, which is every
 # module the kit uses and is extended deliberately with the kit.
@@ -93,9 +91,7 @@ class Boundary(unittest.TestCase):
             self.assertEqual(violations(ast.parse(text)), [], text)
 
     def test_the_kit_names_no_module_or_harness(self):
-        with open(os.path.join(PACKAGE, "package.json"), encoding="utf-8") as handle:
-            modules = json.load(handle)["modules"]
-        words = set(FORBIDDEN_WORDS) | set(modules)
+        words = set(FORBIDDEN_WORDS)
         for path in kit_sources():
             with open(path, encoding="utf-8") as handle:
                 text = handle.read().lower()

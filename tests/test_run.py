@@ -201,8 +201,10 @@ class TheInstallerNamesNoModuleCommand(unittest.TestCase):
 
     def test_no_installer_source_names_a_module_command(self):
         root = os.path.dirname(os.path.abspath(cli.__file__))
-        pattern = re.compile("|".join(re.escape(name) + "(?!-module)"
-                                      for name in support_words.command_names()))
+        names = support_words.command_names()
+        if not names:
+            return  # a distribution with no module declares no command, and an empty pattern matches all
+        pattern = re.compile("|".join(re.escape(name) + "(?!-module)" for name in names))
         named = []
         for folder, dirs, files in os.walk(root):
             dirs[:] = [d for d in dirs if d not in ("shipped_approvals", "__pycache__")]

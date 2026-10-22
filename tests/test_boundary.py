@@ -124,6 +124,21 @@ class Derivation(Synthetic):
         self.assertEqual(["spare"], support_words.words(os.path.join(self.root, "none"), self.fixture))
 
 
+class Guard(Synthetic):
+    def test_the_walk_finds_a_declaration_the_derivation_does_not_look_for(self):
+        self.assertEqual(2, len(declared(self.packages)))
+        self.assertEqual(2, len(list(support_words.declarations(self.packages))))
+        deeper = os.path.join(self.packages, "pkg", "group", "inner")
+        os.makedirs(deeper)
+        with open(os.path.join(deeper, "module.json"), "w", encoding="utf-8") as handle:
+            json.dump({"name": "inner"}, handle)
+        self.assertEqual(3, len(declared(self.packages)))
+        self.assertEqual(2, len(list(support_words.declarations(self.packages))))
+
+    def test_a_distribution_with_no_module_has_none_to_find(self):
+        self.assertEqual([], declared(os.path.join(self.root, "none")))
+
+
 class Scanning(Synthetic):
     def scanned(self):
         return scan(self.root, self.sources())
@@ -197,9 +212,18 @@ class Scanning(Synthetic):
         self.assertEqual(["tests/big.txt: larger than %d bytes, not scanned" % MAXIMUM], self.scanned())
 
 
+def declared(packages):
+    """The `module.json` files anywhere under `packages`, found by a walk and not by the derivation's glob."""
+    return [os.path.join(folder, name) for folder, _, files in os.walk(packages)
+            for name in files if name == "module.json"]
+
+
 class Repository(unittest.TestCase):
     def test_the_words_are_derived_from_the_real_modules(self):
-        """A guard against a rule that passes because it looks for nothing."""
+        """A guard against a rule that passes because it looks for nothing. A distribution with no module
+        declares no word, which is not the glob missing them: a walk must find none either."""
+        if not declared(support_words.PACKAGES):
+            return self.assertEqual([], support_words.module_names())
         self.assertTrue(support_words.module_names())
         self.assertTrue(support_words.harness_names())
         self.assertTrue(support_words.command_names())

@@ -289,11 +289,18 @@ one at install and may run a pinned one at use time through `wb run` and `wb che
 
 ## Harness paths come from the harness module
 
-The installer reads a harness's paths from that module's `layout` and from nowhere else. The table of
-harness names and paths in `check.py` and the settings path in `layout.py` are derived from the
-declarations of the harness modules the installer knows, and not written into the code. A harness no
-module describes (the `opencode` and `codex` entries today) is not recognised until a module for it
-exists; the table entries are removed rather than kept as data with no module.
+The installer reads a harness's paths from that module's `layout` and from nowhere else. The roots, the
+generated directories and the tolerated paths that `wb check` uses come from the layouts of the harness
+modules of the running workbench's distribution (`workbench/harnesses.py`, `layout.facts`), and the settings
+path is checked by a rule that names no harness: exactly two segments, a dot-directory then a name ending
+`.json`, covered by the layout's `exclude`. A harness no module describes (`opencode` and `codex` today) is
+not recognised until a module for it exists; its table entries were removed and not kept as data.
+
+One residual stays in the installer: the tool-name guards `RULE_NAMES`, `TOOL_NAMES` and
+`INERT_TEMPLATE_NAMES` in `layout.py` list the names of the harness's own tools (for example the names a
+rule may use). They are a guard on what a module may render, not a path, and the boundary test does not
+flag them. They move into the harness layout with the second harness (`opencode-harness`), when a second
+set of tool names makes the shape of that declaration known.
 
 ## Where the module-specific code goes
 
@@ -304,11 +311,11 @@ This is the inventory the move plans start from.
 | `workbench/doccheck.py` | *(done)* `groundwork`'s `helper/doccheck`, a check helper over the kit |
 | `workbench/refcheck.py`, `refindex.py` | *(done)* `groundwork`'s `helper/refcheck`, one check helper over the kit |
 | `workbench/dispatch.py`, the `code-work` branch in `cli.py`, `"code-work"` in the agent-safe list | *(done)* the generic `wb run`, driven by `code-work`'s `commands` |
-| `HARNESSES` in `check.py`, `SETTINGS_PATHS` in `layout.py` | read from the `claude` module's `layout` |
+| `HARNESSES` in `check.py`, `SETTINGS_PATHS` in `layout.py` | *(done)* read from the `claude` module's `layout`; the tool-name guards stay until `opencode-harness` |
 | `tests/test_codework_*.py`, `test_dispatch.py` | *(done)* `packages/workbench/code-work/tests/` (installer-side routing tests are rewritten on synthetic modules) |
-| `tests/test_groundwork_module.py`, `test_doccheck.py` | *(done)* `packages/workbench/groundwork/tests/` (`test_groundwork_fixture.py` stays: `support_install` imports it) |
+| `tests/test_groundwork_module.py`, `test_doccheck.py` | *(done)* `packages/workbench/groundwork/tests/` (`test_docset_fixture.py` stays: `support_install` imports it) |
 | `tests/test_refcheck.py`, `test_refindex.py` | *(done)* `packages/workbench/groundwork/tests/` |
-| `tests/test_claude_module.py` | `packages/workbench/claude/tests/` |
+| `tests/test_claude_module.py` | *(done)* `packages/workbench/claude/tests/` |
 
 `safefs`, `display`, project finding and manifest reading move into the kit and are imported by the
 installer from there.
@@ -320,9 +327,14 @@ installer from there.
 - `python3 -B -W error tests/run_all.py` runs the tests in `tests/` and in every `packages/*/*/tests/`,
   and a test in a package-local directory that records its own execution shows it ran. Two modules with a
   same-named test file both run. The package still verifies after the run, with no `__pycache__` in it.
-- A boundary test fails if any file of `workbench/` or `tests/` (outside `tests/fixtures`) names a
-  first-party module or its helpers, a harness name, or a harness path, other than the allowed
-  release-mechanism exception.
+- A boundary test (`tests/test_boundary.py`) fails if any file name, directory name or line of a file of
+  `workbench/` or `tests/` names a first-party module, a helper, a command, a harness name or a harness path.
+  The words are derived from the `module.json` files under `packages/` and a short list of harnesses that
+  have no module yet (`tests/fixtures/boundary-words.json`), so a new module widens the rule without editing
+  the test. It skips `tests/fixtures`, `workbench/shipped_approvals` and `__pycache__`, and fails on an
+  unreadable or oversized file and on a symlinked directory. It cannot see a name built at run time or split
+  across lines, and it ignores words of fewer than three characters.
+- With `packages/` emptied, the installer's own tests pass and none is skipped for want of a package.
 - A Python helper run by the launcher gets `sys.argv` as above, its exit code reaches the caller
   unchanged, and a helper that raises is not hidden by the runner. A `wbkit.py` in the project, in the
   current directory, beside the helper or on `PYTHONPATH` is never imported in place of the workbench's
