@@ -1,6 +1,6 @@
 # The model bridge: its contract, the module-to-module call, and the ask-codex bridge
 
-Status: Approved
+Status: Completed
 Created: 2026-10-22
 Candidate: none — carries out the first part of the accepted decision `2026-10-22-model-calls-go-through-vendor-bridges`; the roadmap candidate `peer-review-provider` is split by increment E, so completion is not derived
 Specs: model-bridge, module-boundary, trust-and-approval, terms, module-contract
@@ -300,4 +300,15 @@ them new directories under `workbench/shipped_approvals/packages/`, and reported
 the release; the owner then said "remove them" and those 4 directories were removed after a preview. Three tests in
 the claude root that took the first module of the package for `claude` now pick it by name.
 
-Increment E remains.
+Increment E (2026-10-22): `docs/specs/model-bridge.md` is `Current` and has "As built, and its limits" (the spec
+corrections, the SIGKILL and `setsid` limits, the rule that an engine's time limit exceeds `--timeout`, and the
+flags and error texts not yet checked against a real Codex). `module-boundary.md` names the outermost repository as
+the kit's boundary. `docs/development.md` has the `wb run --provides model-bridge ask-codex ask` row and a section on
+what a real call needs. The roadmap splits `peer-review-provider` into `review-engine` and `action-review-engine`,
+leaves the bridge out of the candidates, and records this plan's outcome in Current state. The decision's
+Verification lists what is built and what is not yet. A search finds `peer-review-provider` only in this plan and in
+the accepted decision's own words (its context, consequences and related files), which are not edited.
+
+Left for the owner and for later plans: the hand run of a real Codex call (start with `codex exec --help`), the review
+of the increment D fixes if wanted, the review engine, the action-review engine, a second vendor, and pushing the
+commits (none of this plan is pushed).

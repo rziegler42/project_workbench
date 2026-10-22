@@ -45,6 +45,7 @@ ambiguous blank.
 | Check, list or report the plans | `python3 -m workbench run code-work check\|plans\|report` (the `code-work` module's command; the installer pinned the helper when the install was confirmed) |
 | Commit exact paths (local) | `python3 -m workbench run safe-git commit --expected-head <full hash or none> --subject <text> [--body <text>] [--trailer 'Key: value'] [--leave-other-staged] -- <path> ...` (the `safe-git` module's command; needs git; see "The safe-git helper") |
 | Preview and remove exact project paths | `python3 -m workbench run safe-git remove [--recursive] -- <path> ...`, then the same with `--confirm` after the owner approves |
+| Ask a model one read-only question | `python3 -m workbench run --provides model-bridge ask-codex ask [--model <name>] [--effort low\|medium\|high] [--timeout <seconds>] [--root <path>] [--schema <path>]` with the prompt on standard input (the `ask-codex` module's command; needs a `codex` program and a sign-in; see "The ask-codex bridge") |
 | Release time: write the approvals shipped with first-party packages | `python3 -m workbench release-approvals` |
 | Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
 | One focused test file | `python3 -m unittest discover -s tests -p 'test_approvals.py'` (a test module that imports `support` only loads under `discover -s tests`); for a module's own tests, `python3 -B -m unittest discover -s packages/<package>/<module>/tests -t packages/<package>/<module>/tests` from the repository root |
@@ -72,6 +73,24 @@ configuration or hooks select a program is refused, so such a repository is comm
 - Recorded limits are in the plan `2026-10-22-code-work-commit` (Result, increment F): the caller's `HOME`
   and `PATH` are trusted, a `git` in an absolute `PATH` entry outside the repository is run, and the
   look-alike letters of the attribution check are a list that cannot be complete.
+
+## The ask-codex bridge
+
+`ask-codex ask` is a model bridge (`docs/specs/model-bridge.md`): it sends the prompt on standard input to the
+Codex command line program, read-only, and prints one JSON object (a reply, or one of six error classes). It keeps
+no state and writes nothing in the project.
+
+- **What a real call needs.** A `codex` program in an absolute `PATH` entry outside the repository, and a sign-in
+  that program already has under `HOME` (the bridge handles no credentials and reports `not_signed_in`). Installing
+  the module is the owner's consent to send project content to that vendor. The program reads the repository
+  itself, so keep secrets out of what it is pointed at.
+- **What the tests need.** Neither. They use a fake `codex` program, send nothing, and never sign in or reach a
+  network.
+- **Time.** The default `--timeout` is 600 seconds. A caller's own time limit should be longer, so the bridge can
+  report `timeout` and clean up.
+- **A first hand run** starts with `codex exec --help`, to check the flags the bridge passes against the installed
+  version; none has been run against a real Codex yet (`docs/specs/model-bridge.md`, "As built, and its limits").
+- **The launcher** passes standard input through to the helper, so `wb run` forwards the prompt.
 
 ## The verify command
 

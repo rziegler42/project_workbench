@@ -126,6 +126,14 @@ meet here and the order matters.
   `remove` and the neutral skill `commit-changes`. `code-work` keeps `check`, `plans` and `report` and
   requires `commit`. The code moved unchanged; the attribution setting is `.workbench/safe-git.json`.
   `docs/specs/safe-git.md` records it. The hand run of install and commit in a project is still to do.
+- Model calls go through thin vendor bridges (plan `2026-10-22-ask-codex-bridge`, increments A to E; it carries
+  out the first part of `2026-10-22-model-calls-go-through-vendor-bridges` and has no roadmap candidate, so its
+  completion is not derived). `docs/specs/model-bridge.md` is the contract (version 1). A helper may run another
+  installed module's pinned command through the kit's `wbkit/call.py` and `wb run --provides <capability>`
+  (`module-boundary.md`). The first-party module `ask-codex` provides the capability `model-bridge` and the
+  command `ask-codex ask`; it passes the conformance checklist against a fake `codex` program, and no test starts a
+  real one. Security and workflow reviews found no Critical or High finding. The review engine and the
+  action-review engine (candidates below), a second vendor and the hand run against a real Codex are still to do.
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.
 
@@ -136,8 +144,8 @@ meet here and the order matters.
 `ownership-and-upgrade`, `claude-harness`, `verify-opencode`, `opencode-harness`,
 `groundwork-module`, `researcher-fetch-tool`, `code-work-plans`, `module-boundary-kit`,
 `module-commands`, `module-checks`, `module-harness-paths`, `code-work-commit`,
-`code-work-approval`, `remote-runner-module`, `peer-review-provider`, `knowledge-base-package`,
-`port-superpowers`, `global-config-migration`, `self-hosting`, `remaining-modules-rename`.
+`code-work-approval`, `remote-runner-module`, `review-engine`, `action-review-engine`,
+`knowledge-base-package`, `port-superpowers`, `global-config-migration`, `self-hosting`, `remaining-modules-rename`.
 
 ## Candidates
 
@@ -376,7 +384,7 @@ review skills and the reviewer agent; the review record, loop caps and the share
 push checkpoint; the compaction guidance and the Claude "Compact Instructions" section;
 and the policy block updated to say approval is a record.
 **Dependencies:** `code-work-commit`.
-**Boundary:** programming only. Remote jobs and the peer-review provider are separate.
+**Boundary:** programming only. Remote jobs and the review engines are separate.
 It may itself need two plans; decide when it is promoted.
 **Promotion trigger:** `code-work-commit` complete.
 
@@ -389,13 +397,30 @@ remote job output follows the checkpoint and hard-stop rules.
 learn the new path, which is a change outside this repository.
 **Promotion trigger:** `code-work-approval` complete.
 
-### peer-review-provider — The peer-review provider module
+### review-engine — The review engine
 
-**Outcome:** the reviewer module, which takes a harness and a model setting and
-supplies the `peer-review` capability, replacing the old Codex tool module.
-**Dependencies:** `module-approvals`, `code-work-approval`.
-**Boundary:** one provider. Others can be added as separate modules.
+**Outcome:** the review module, which provides the `peer-review` capability and requires `model-bridge`. It holds
+the rounds, the sealed review state, the findings schema (blocker, major, minor, nit), `decide`, and the
+owner-only `extend`, `reset`, `archive` and `prune`; it reads its bridge, model and effort from its own project
+setting `.workbench/<module>.json` and runs a bridge only through `wb run --provides model-bridge`. It replaces the
+owner's personal review tool for a project.
+**Dependencies:** `code-work-approval`; the `ask-codex` bridge (plan `2026-10-22-ask-codex-bridge`).
+**Boundary:** one engine that knows no vendor. Where the sealed state lives is decided in its plan (the owner's
+tool keeps it in untracked scratch, which a module must not depend on). The bridges are separate modules, one
+per vendor.
 **Promotion trigger:** `code-work-approval` complete.
+
+### action-review-engine — The action-review engine
+
+**Outcome:** the action-review module (the capability name `action-review` is a proposal), which requires
+`model-bridge`, takes facts about an action and returns a verdict with reasons as data, from a rubric and rules.
+It writes no `allow` rule and no setting, and its verdict authorizes nothing by itself
+(`2026-10-22-model-calls-go-through-vendor-bridges`, decisions 6 and 7).
+**Dependencies:** `code-work-approval`; the `ask-codex` bridge; a way for the module that owns an action to give
+the facts before the action is made (open in the accepted record).
+**Boundary:** a rubric and rules engine, not a reviewer of documents; the enforcement point that uses its verdict
+stays in the owner's own configuration. It is separate from `review-engine`, and a project may install either.
+**Promotion trigger:** `code-work-approval` complete and the facts interface decided.
 
 ### knowledge-base-package — The knowledge base as a package
 
@@ -430,11 +455,11 @@ superpowers from the owner's `~/.claude` belongs to `global-config-migration`.
 
 **Outcome:** the owner's `~/.claude` returns to a mostly default state because what it
 carried for project work is now supplied by installed modules: agents, skills, commands,
-the policy text, the commit helper, the peer-review wiring and the compaction guidance.
+the policy text, the commit helper, the review wiring and the compaction guidance.
 What stays global, and why, is a written list: the owner's own `allow` rules (the
 workbench never writes `allow`), machine-level settings such as authentication, model
 choice and remote hosts, and anything the owner wants in a project that has no workbench.
-**Dependencies:** `code-work-approval`, `remote-runner-module`, `peer-review-provider`, and
+**Dependencies:** `code-work-approval`, `remote-runner-module`, `review-engine`, `action-review-engine`, and
 `groundwork-module`; hooks rendering for Claude, which the Claude module does not yet
 provide (`hooks: none`).
 **Boundary:** one global item at a time, each moved only after a test or a recorded run
@@ -444,8 +469,8 @@ approver is ever absent in between. The `claude_global_config` mirror is kept in
 whether the settings file's own path is denied for edits (`harness-modules.md`, "As built,
 and its limits"). It does not move the owner's `allow` rules and does not change what
 the installer writes.
-**Promotion trigger:** `code-work-approval`, `remote-runner-module` and `peer-review-provider`
-complete, and the owner chooses to begin removing items from `~/.claude`. Each of those
+**Promotion trigger:** `code-work-approval`, `remote-runner-module`, `review-engine` and
+`action-review-engine` complete, and the owner chooses to begin removing items from `~/.claude`. Each of those
 earlier plans lists the global items it replaces, so this candidate starts from that list.
 
 ### self-hosting — Self-hosting
@@ -513,3 +538,4 @@ Accepted 2026-10-21:
 Accepted 2026-10-22:
 
 - `2026-10-22-git-work-in-its-own-module`
+- `2026-10-22-model-calls-go-through-vendor-bridges`

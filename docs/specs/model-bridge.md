@@ -1,8 +1,9 @@
 # model-bridge
 
-Status: Draft. Contract version 1. Written by plan `2026-10-22-ask-codex-bridge` (increment A), before any
-bridge or engine exists, so that both are built against this text. The capability name `model-bridge` is a
-proposal until the owner accepts this spec.
+Status: Current. Contract version 1. Written by plan `2026-10-22-ask-codex-bridge` (increment A), before any
+bridge or engine existed, so that both are built against this text; the first bridge, `ask-codex`, was built and
+reviewed by the same plan, and "As built, and its limits" lists what exists. The capability name `model-bridge`
+is still a proposal (see "Open questions").
 
 Terms are defined in `terms.md`. The declaration it satisfies is defined in `module-contract.md`; the launcher,
 the kit, the pin and the rule for a helper that runs another module's command are in `module-boundary.md`; the
@@ -37,19 +38,19 @@ Non-goals:
 has no prefix, so only the first-party package may provide it (`module-contract.md`). A bridge is run as
 `wb run ask-<vendor> ask [options]`. The installer pins the helper when the owner confirms the install, so
 installing a bridge is the owner's consent to send content to that vendor. The command and the helper share
-one name, which is fine because pins are keyed by command. The prompt reaches the helper on standard input only
-once the launcher passes standard input through (`module-boundary.md`, plan `2026-10-22-ask-codex-bridge`
-increment B); this spec states the contract, and the checklist is not passed before that exists.
+one name, which is fine because pins are keyed by command. The prompt reaches the helper on standard input
+because the launcher passes the caller's standard input through to the helper it runs (`module-boundary.md`,
+"A helper that runs another module's command").
 
 ## Input
 
-- **Standard input** is the prompt: UTF-8 text of at most 262,144 bytes. Empty, not UTF-8 or larger is refused
-  (exit 1, `refused:` line, nothing run).
+- **Standard input** is the prompt: UTF-8 text of at most 262,144 bytes. Empty, blank (only whitespace), not UTF-8
+  or larger is refused (exit 1, `refused:` line, nothing run).
 - **Options**, each at most once, a value as the next argument, and nothing else accepted:
 
 | option | meaning | default |
 |---|---|---|
-| `--model <name>` | the vendor's model name, at most 64 characters of `A-Za-z0-9._:-` | the vendor's default |
+| `--model <name>` | the vendor's model name, at most 64 characters of `A-Za-z0-9._:-`, starting with a letter or digit (so it can never read as an option) | the vendor's default |
 | `--effort <level>` | one of `low`, `medium`, `high` | the vendor's default |
 | `--timeout <seconds>` | a whole number from 1 to 3600 for the whole call (the range and default are this spec's choice) | 600 |
 | `--root <path>` | the directory the vendor program works in | the project root |
@@ -60,8 +61,9 @@ the prompt.
 
 **Paths.** `--root` and `--schema` are resolved against the project root found as `wb run` finds it, and a
 relative path is read that way, not against the caller's directory. Every component of the path must be inside
-the project and none may be a link. `--root` must exist and be a directory; `--schema` must be a regular file.
-A path that breaks any rule is refused before anything runs.
+the project and none may be a link. `--root` must exist, be a directory the program can enter, and not lie inside
+`.git` or `.workbench`; `--schema` must be a regular file. A path that breaks any rule is refused before anything
+runs.
 
 ## What the vendor program can read
 
@@ -90,8 +92,8 @@ Success, exit 0:
 
 - `reply` is a string of at most 262,144 bytes, measured as UTF-8 before JSON escaping. A longer reply is an
   error (`vendor_error`, `reply_too_large`), not a cut.
-- `usage` has those three fields, each a non-negative whole number or `null` when the vendor did not report it.
-  The bridge does not derive one from the others.
+- `usage` has those three fields, each a non-negative whole number of at most 10^12, or `null` when the vendor
+  did not report it or reported anything else. The bridge does not derive one from the others.
 
 Failure, exit 1 (the object is still printed):
 
@@ -144,8 +146,10 @@ way that program supports. Then:
    trusted entries. The bridge adds no other variable. No `GIT_*` variable, token, `LD_*` or `DYLD_*` variable
    and no variable that selects a program or a configuration file is passed.
 3. **The program is found outside the repository.** `PATH` is searched only in entries that are absolute and
-   outside the project; a relative entry, an empty entry or an entry inside the project is skipped; the found
-   file is an executable regular file or a link to one. If none is found the error is `program_not_found`.
+   outside the outermost repository that holds the project (the outermost ancestor with a `.git` entry, or the
+   project root when there is none); a relative entry, an empty entry or an entry inside that repository is
+   skipped, however a link or a letter case spells it; the found file is an executable regular file or a link to
+   one that does not resolve into it. If none is found the error is `program_not_found`.
 4. **Nothing written in the project.** The vendor program's output goes to a private temporary directory outside
    the project, which the bridge removes. The bridge creates, changes and deletes no file in the project.
 5. **Bounded.** The prompt, the schema, the reply and the object are limited as above. The bridge reads the
@@ -197,6 +201,50 @@ standard input, shows each item. No item needs a real vendor, a sign-in or a net
     standard output, or, for a refusal, a `refused:` line on standard error and nothing on standard output.
     Whether the bridge opens a connection is not tested against a fake; guarantee 7 is shown by reading the
     helper for any network import.
+
+## As built, and its limits
+
+The first bridge is `ask-codex` (`packages/workbench/ask-codex/`, plan `2026-10-22-ask-codex-bridge`). It passes
+the checklist against a fake `codex` program, and a synthetic engine in its tests calls it only through
+`wb run --provides model-bridge`. An independent security pass and a workflow review of the plan found no Critical
+or High finding; the fixes carry regression tests and were not reviewed a second time.
+
+How it meets the contract:
+
+- **The command line.** `codex exec --sandbox read-only --ephemeral --ignore-user-config --ignore-rules --color
+  never --json --cd <root> --output-last-message <file> [--model <name>] [--config
+  model_reasoning_effort="<level>"] [--output-schema <file>] -`, with the prompt on its standard input. The
+  `--ignore-rules` flag means the vendor's own rule files are not read.
+- **The schema is a copy.** The vendor program is given a copy of the schema in the private temporary directory,
+  not the file in the project; it holds the bytes the bridge read.
+- **Paths and the temporary directory.** The temporary directory is checked before it is made: a `TMPDIR` inside
+  the project is refused. `--root` inside `.git` or `.workbench` is refused (stricter than the contract), as is a
+  root the program cannot enter.
+- **The trusted-path boundary** is the outermost repository, in the bridge and in the kit's `wb` search alike
+  (`module-boundary.md`), compared by file identity, so a project nested in another repository, a link and a
+  differently spelled case do not make a `PATH` entry look outside. A home directory that is itself a repository
+  would make the guarded store look untrusted; the result is a refusal.
+- **Sign-in text.** The text of a failure is classified by patterns; "401" counts only beside "status", "error"
+  or "code".
+- **Interrupts.** On SIGTERM the bridge stops the vendor program's process group and removes the temporary
+  directory.
+
+Limits:
+
+- **Killed from outside.** A SIGKILL of the caller's process group leaves the vendor program running, because it
+  is in a session of its own. A grandchild that starts yet another session survives the bridge's group kill and
+  can hold the output pipes open until the timeout. An engine's own time limit must therefore exceed the
+  bridge's `--timeout`, so that the bridge can report `timeout` and clean up first.
+- **Not checked against a real Codex.** The flags above (`--ephemeral`, `--ignore-user-config`, `--ignore-rules`,
+  `--output-last-message`, `--output-schema`, `--cd`, and the `model_reasoning_effort` setting) and the mapping of
+  error text to classes were written from the contract and tested against a fake. The first hand run starts with
+  `codex exec --help` and checks each flag against what the installed version accepts.
+- **The vendor reads the repository.** The program may also read the repository's own instruction files (an
+  `AGENTS.md`, a `.codex` directory); the bridge does not stop it.
+- **No depth limit across `wb run`.** Each hop is an approved, pinned command and each call has a time limit, which
+  ends a loop; nothing counts the depth.
+- **Linux, and a virtual-environment `sys.executable`,** were not run.
+- **No end-to-end run** with a real vendor, a sign-in or a live session has been done.
 
 ## Acceptance criteria
 

@@ -152,9 +152,24 @@ The review is not an acceptance; the owner accepted the record on 2026-10-22, as
 
 ## Verification
 
-None yet. The plans that carry it out would show a bridge passing the conformance checklist against a fake vendor
-program, an engine run against a fake bridge, a refusal for a bridge that is not installed, pinned or a
-`model-bridge`, and the boundary test passing with the installer naming no engine or bridge.
+Partly built by plan `2026-10-22-ask-codex-bridge` (increments A to E, 2026-10-22). The plans that carry it out show
+a bridge passing the conformance checklist against a fake vendor program, an engine run against a fake bridge, a
+refusal for a bridge that is not installed, pinned or a `model-bridge`, and the boundary test passing with the
+installer naming no engine or bridge.
+
+- **The contract (decision 2):** done. `docs/specs/model-bridge.md`, contract version 1, with a conformance
+  checklist.
+- **A bridge (decision 2):** done for one vendor. The module `ask-codex` passes the checklist against a fake `codex`
+  program; no test starts a real one. A hand run against a real Codex is not yet done.
+- **The launcher rule (decision 4, the consequence):** done. A helper runs another module's pinned command through
+  the kit's `wbkit/call.py` and `wb run --provides model-bridge`. A synthetic engine in the bridge's tests treats a
+  hostile reply as data and is refused for a command that no installed module provides, a module that does not
+  provide the capability, an unpinned command and an edited helper. The security pass is recorded in the plan.
+- **The boundary test:** passes with the installer naming no bridge or engine.
+- **The review engine (decision 3):** not yet.
+- **The action-review engine (decisions 3, 6 and 7):** not yet.
+- **The engines' project setting and the owner's personal setting (decision 5):** not yet.
+- **A second vendor (`ask-claude`, `ask-gemini`):** not yet.
 
 ## Related files and decisions
 
