@@ -15,13 +15,13 @@ OTHER = "b" * 64
 
 def document(**changes):
     value = {
-        "files": [{"hash": HASH, "path": ".claude/agents/reviewer.md"},
-                  {"hash": OTHER, "path": ".claude/settings.local.json"},
-                  {"hash": HASH, "path": "CLAUDE.md"}],
+        "files": [{"hash": HASH, "path": ".fixture/agents/reviewer.md"},
+                  {"hash": OTHER, "path": ".fixture/settings.local.json"},
+                  {"hash": HASH, "path": "FIXTURE.md"}],
         "format": 1,
-        "harness": "claude",
+        "harness": "fixture",
         "module_version": "1.2.0",
-        "source": "packages/workbench",
+        "source": "packages/synthetic",
         "tree": OTHER,
         "workbench": "0.1.0",
     }
@@ -39,7 +39,7 @@ class Shape(unittest.TestCase):
 
     def test_the_layout_is_one_file_entry_per_line(self):
         lines = localmanifest.serialize(document()).decode().split("\n")
-        self.assertIn('    {"hash": "%s", "path": "CLAUDE.md"}' % HASH, lines)
+        self.assertIn('    {"hash": "%s", "path": "FIXTURE.md"}' % HASH, lines)
         self.assertEqual('  "files": [', lines[1])
 
     def test_an_empty_file_list_is_valid(self):
@@ -73,7 +73,7 @@ class Shape(unittest.TestCase):
     def test_bad_values_are_refused(self):
         bad = [
             {"format": 2}, {"format": True}, {"format": "1"}, {"format": 1.0},
-            {"harness": "Claude"}, {"harness": ""}, {"harness": "a" * 65}, {"harness": 3},
+            {"harness": "Fixture"}, {"harness": ""}, {"harness": "a" * 65}, {"harness": 3},
             {"module_version": "v1"}, {"module_version": ""}, {"module_version": 1},
             {"source": ""}, {"source": "a\nb"}, {"source": "x" * 513}, {"source": None},
             {"tree": "A" * 64}, {"tree": "a" * 63}, {"tree": "sha"}, {"tree": None},
@@ -148,7 +148,7 @@ class Files(Fixture):
         localmanifest.write(writer, document())
         with self.assertRaises(WriteConflict):
             localmanifest.write(writer, document(harness="other"))
-        self.assertEqual("claude", localmanifest.read(writer)["harness"])
+        self.assertEqual("fixture", localmanifest.read(writer)["harness"])
 
     def test_a_linked_record_is_not_written_through(self):
         os.makedirs(os.path.join(self.root, ".workbench"))
@@ -169,7 +169,7 @@ class Files(Fixture):
     def test_a_record_that_is_not_canonical_is_refused_on_read(self):
         os.makedirs(os.path.join(self.root, ".workbench", "local"))
         with open(os.path.join(self.root, localmanifest.PATH), "wb") as handle:
-            handle.write(b'{"harness": "claude"}')
+            handle.write(b'{"harness": "fixture"}')
         with self.assertRaises(LocalManifestError):
             localmanifest.read(self.writer())
 

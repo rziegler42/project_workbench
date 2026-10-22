@@ -47,17 +47,17 @@ class Exclude(Base):
 
     def test_lines_are_anchored_and_added_in_order(self):
         self.make_git(content=b"# owner\n*.pyc\n")
-        added = self.writer().add_exclude([".claude/skills/", "CLAUDE.md"])
-        self.assertEqual([".claude/skills/", "CLAUDE.md"], added)
-        self.assertEqual(b"# owner\n*.pyc\n/.claude/skills/\n/CLAUDE.md\n", self.text())
+        added = self.writer().add_exclude([".fixture/skills/", "FIXTURE.md"])
+        self.assertEqual([".fixture/skills/", "FIXTURE.md"], added)
+        self.assertEqual(b"# owner\n*.pyc\n/.fixture/skills/\n/FIXTURE.md\n", self.text())
 
     def test_a_line_is_never_added_twice(self):
-        self.make_git(content=b"/CLAUDE.md\n")
+        self.make_git(content=b"/FIXTURE.md\n")
         writer = self.writer()
-        self.assertEqual([], writer.add_exclude(["CLAUDE.md"]))
-        self.assertEqual(["a"], writer.add_exclude(["a", "a", "CLAUDE.md"]))
-        self.assertEqual([], writer.add_exclude(["a", "CLAUDE.md"]))
-        self.assertEqual(b"/CLAUDE.md\n/a\n", self.text())
+        self.assertEqual([], writer.add_exclude(["FIXTURE.md"]))
+        self.assertEqual(["a"], writer.add_exclude(["a", "a", "FIXTURE.md"]))
+        self.assertEqual([], writer.add_exclude(["a", "FIXTURE.md"]))
+        self.assertEqual(b"/FIXTURE.md\n/a\n", self.text())
 
     def test_a_rerun_with_nothing_to_add_does_not_touch_the_file(self):
         self.make_git(content=b"/a\n")
@@ -226,8 +226,8 @@ class Exclude(Base):
 
     def test_a_trailing_slash_marks_a_directory_and_is_kept(self):
         self.make_git()
-        self.writer().add_exclude([".claude/", ".claude/settings.local.json"])
-        self.assertEqual(b"/.claude/\n/.claude/settings.local.json\n", self.text())
+        self.writer().add_exclude([".fixture/", ".fixture/settings.local.json"])
+        self.assertEqual(b"/.fixture/\n/.fixture/settings.local.json\n", self.text())
 
     def test_unicode_letters_are_written_as_utf8(self):
         self.make_git()
@@ -304,7 +304,7 @@ class Check(Base):
             with self.subTest(entry=bad), self.assertRaises(safefs.SafeFsError):
                 self.writer().check_exclude([bad])
         with self.assertRaises(safefs.SafeFsError):
-            self.writer().check_exclude("CLAUDE.md")
+            self.writer().check_exclude("FIXTURE.md")
         with self.assertRaises(safefs.SafeFsError):
             self.writer().check_exclude(["e%d" % n for n in range(projectfs.MAX_EXCLUDE_ENTRIES + 1)])
 

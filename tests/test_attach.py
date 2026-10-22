@@ -11,31 +11,32 @@ import unittest.mock
 from tests import support
 from tests import test_preview as preview_tests
 from tests import test_upgrade_preview as base_tests
+from tests import support_harness
 from tests.support_harness import AGENT, COMMAND, SKILL
 from workbench import (acknowledgement, attach, cli, harnessplan, installplan, localmanifest, manifest,
                        neutral, projectfs, rules, snapshot, sources)
 from workbench.wbkit import safefs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CLAUDE = os.path.join(ROOT, "packages", "workbench")
+DEFAULT = object()
 HARNESS = base_tests.HARNESS
 FILL = base_tests.FILL
 NOTES2 = base_tests.NOTES2
 LOCAL = localmanifest.PATH
-SETTINGS = ".claude/settings.local.json"
+SETTINGS = ".fixture/settings.local.json"
 NEUTRAL_FILES = {"harness/neutral/skills/sample/SKILL.md": SKILL,
                  "harness/neutral/agents/reviewer.md": AGENT,
                  "harness/neutral/commands/ship.md": COMMAND}
 NOTES = ({"writes": ["docs/notes.md"], "ships": ["scripts/run.sh"]},
          dict({"files/docs/notes.md": b"# Notes\n", "scripts/run.sh": b"#!/bin/sh\n"},
               **NEUTRAL_FILES))
-HARNESS_PATHS = ["CLAUDE.md", ".claude/agents/reviewer.md", ".claude/commands/ship.md",
-                 ".claude/settings.local.json", ".claude/skills/sample/SKILL.md"]
+HARNESS_PATHS = ["FIXTURE.md", ".fixture/agents/reviewer.md", ".fixture/commands/ship.md",
+                 ".fixture/settings.local.json", ".fixture/skills/sample/SKILL.md"]
 
 
 class Base(base_tests.UpgradePreview):
     """A project installed the way `install` writes it, with neutral items in one of its modules,
-    and the first-party Claude module to attach."""
+    and a synthetic first-party harness module, in a distribution of its own, to attach."""
 
     MODULES = {"h": (HARNESS, {}), "notes": NOTES, "a": FILL(b"Rule A\n")}
     skip_approval = ()
@@ -46,6 +47,14 @@ class Base(base_tests.UpgradePreview):
         os.mkdir(self.home)
         self.outside = os.path.join(self.root, "outside")
         os.mkdir(self.outside)
+        self.dist = support_harness.distribution(os.path.join(self.root, "distribution"))
+        self.synth = os.path.join(self.dist, "packages", support_harness.PACKAGE)
+
+    def warm(self, path):
+        """Run a command once so the launcher is written for this distribution, which is the one later
+        commands pass; a different distribution would rewrite it and change the store."""
+        cli.main(["verify", path], io.StringIO(), io.StringIO(), store_root=self.store_root,
+                 distribution=self.dist)
 
     def approve(self, path, only=None):
         names = [name for name in self.MODULES if name not in self.skip_approval]
@@ -56,14 +65,17 @@ class Base(base_tests.UpgradePreview):
         self.install(self.pkg)
         return self.pkg
 
-    def attach(self, *args, harness="workbench/claude", package=CLAUDE, place=None, packages=None):
-        if package == CLAUDE:
-            support.require_release(self)
+    def attach(self, *args, harness=support_harness.HARNESS, package=DEFAULT, place=None, packages=None,
+               dist=DEFAULT):
+        """`package=None` leaves the harness package out; `dist=None` is the running distribution."""
+        package = self.synth if package is DEFAULT else package
+        dist = self.dist if dist is DEFAULT else dist
         argv = ["attach", place or self.place, "--harness", harness]
         for given in (packages if packages is not None else [self.pkg] + ([package] if package else [])):
             argv += ["--package", given]
         out, err = io.StringIO(), io.StringIO()
-        code = cli.main(argv + list(args), out, err, store_root=self.store_root, home=self.home)
+        code = cli.main(argv + list(args), out, err, store_root=self.store_root, home=self.home,
+                       distribution=dist)
         return code, out.getvalue(), err.getvalue()
 
     def content(self, top=None):
@@ -122,30 +134,30 @@ class Attached(Base):
         self.assertEqual(0, code, err)
         for path in HARNESS_PATHS:
             self.assertTrue(os.path.isfile(os.path.join(self.place, *path.split("/"))), path)
-        self.assertEqual(b"@AGENTS.md\n", self.read("CLAUDE.md"))
-        self.assertEqual(b"/CLAUDE.md\n/.claude/\n", self.read(".git/info/exclude"))
+        self.assertEqual(b"@AGENTS.md\n", self.read("FIXTURE.md"))
+        self.assertEqual(b"/FIXTURE.md\n/.fixture/\n", self.read(".git/info/exclude"))
         document = self.planned()
-        self.assertEqual("claude", document["harness"])
+        self.assertEqual("fixture", document["harness"])
         self.assertEqual("0.1.0", document["module_version"])
-        self.assertEqual("local:workbench", document["source"])
+        self.assertEqual("local:synthetic", document["source"])
         self.assertEqual(sorted(HARNESS_PATHS), [f["path"] for f in document["files"]])
         for item in document["files"]:
             self.assertEqual(item["hash"], hashlib.sha256(self.read(item["path"])).hexdigest())
-        verified = base_tests.verify.verify_package(CLAUDE, first_party=True).modules[0]
+        verified = base_tests.verify.verify_package(self.synth, first_party=True).modules[0]
         self.assertEqual(verified.tree_hash, document["tree"])
 
     def test_the_report_names_the_files_the_warning_and_the_note(self):
         self.ready()
         code, out, err = self.attach()
         self.assertEqual(0, code, err)
-        self.assertTrue(out.startswith("attached workbench/claude 0.1.0 in %s\n" % self.real
-                                       if hasattr(self, "real") else "attached workbench/claude"))
+        self.assertTrue(out.startswith("attached synthetic/fixture 0.1.0 in %s\n" % self.real
+                                       if hasattr(self, "real") else "attached synthetic/fixture"))
         self.assertIn("wrote 5 files:\n", out)
-        self.assertIn("  .claude/settings.local.json\n", out)
-        self.assertIn("added 2 lines to .git/info/exclude: CLAUDE.md, .claude/\n", out)
+        self.assertIn("  .fixture/settings.local.json\n", out)
+        self.assertIn("added 2 lines to .git/info/exclude: FIXTURE.md, .fixture/\n", out)
         self.assertIn("recorded .workbench/local/harness.json\nnothing was committed\n", out)
-        self.assertIn("note: Restart the Claude session to load the new settings.\n", out)
-        self.assertIn("warning: .claude/settings.local.json changes what the agent may do", err)
+        self.assertIn("note: Restart the session to load the new settings.\n", out)
+        self.assertIn("warning: .fixture/settings.local.json changes what the agent may do", err)
         self.assertNotIn("harness not attached", out + err)
 
     def test_the_settings_deny_the_owner_run_commands_and_the_store_and_never_allow(self):
@@ -175,8 +187,8 @@ class Attached(Base):
                 continue
             self.assertEqual(data, after[path], path)
         added = sorted(set(after) - set(before))
-        self.assertEqual(sorted(HARNESS_PATHS + [".claude", ".claude/agents", ".claude/commands",
-                                                 ".claude/skills", ".claude/skills/sample",
+        self.assertEqual(sorted(HARNESS_PATHS + [".fixture", ".fixture/agents", ".fixture/commands",
+                                                 ".fixture/skills", ".fixture/skills/sample",
                                                  ".git/info", ".git/info/exclude", ".workbench/local",
                                                  LOCAL]),
                          added)
@@ -210,21 +222,19 @@ class Attached(Base):
         self.assertEqual(sorted(HARNESS_PATHS), sorted(order[1:-2]))
 
     def test_it_is_not_terminal_gated(self):
-        support.require_release(self)
         self.ready()
         out, err = io.StringIO(), io.StringIO()
-        code = cli.main(["attach", self.place, "--harness", "workbench/claude", "--package",
-                         self.pkg, "--package", CLAUDE], out, err, store_root=self.store_root,
-                        home=self.home, stdin=io.StringIO(""))
+        code = cli.main(["attach", self.place, "--harness", "synthetic/fixture", "--package",
+                         self.pkg, "--package", self.synth], out, err, store_root=self.store_root,
+                        home=self.home, stdin=io.StringIO(""), distribution=self.dist)
         self.assertEqual(0, code, err.getvalue())
 
     def test_the_dir_option_names_the_target(self):
-        support.require_release(self)
         self.ready()
         out, err = io.StringIO(), io.StringIO()
-        code = cli.main(["attach", "--dir", self.place, "--harness", "workbench/claude",
-                         "--package", self.pkg, "--package", CLAUDE], out, err,
-                        store_root=self.store_root, home=self.home)
+        code = cli.main(["attach", "--dir", self.place, "--harness", "synthetic/fixture",
+                         "--package", self.pkg, "--package", self.synth], out, err,
+                        store_root=self.store_root, home=self.home, distribution=self.dist)
         self.assertEqual(0, code, err.getvalue())
 
     def test_a_project_written_by_an_older_workbench_warns_and_continues(self):
@@ -247,43 +257,43 @@ class Overrides(Base):
         return (NOTES[0], files)
 
     def test_an_override_replaces_one_item_and_is_reported(self):
-        replacement = b"---\nname: sample\n---\nThe claude-specific skill.\n"
+        replacement = b"---\nname: sample\n---\nThe fixture-specific skill.\n"
         self.pkg = self.version(notes=self.override_notes(
-            {"harness/claude/skills/sample/SKILL.md": replacement}))
+            {"harness/fixture/skills/sample/SKILL.md": replacement}))
         self.install(self.pkg)
         code, out, err = self.attach()
         self.assertEqual(0, code, err)
-        self.assertEqual(replacement, self.read(".claude/skills/sample/SKILL.md"))
+        self.assertEqual(replacement, self.read(".fixture/skills/sample/SKILL.md"))
         self.assertIn("overridden: skill/sample: replaced by the module's own files", out)
-        self.assertIn(b"Reviews changes", self.read(".claude/agents/reviewer.md"))
+        self.assertIn(b"Reviews changes", self.read(".fixture/agents/reviewer.md"))
 
     def test_an_exclusion_stops_one_item_and_the_reason_is_reported(self):
         manifest_text = json.dumps({"exclude": [{"item": "commands/ship",
-                                                 "reason": "no ship on claude"}]}).encode()
+                                                 "reason": "no ship on fixture"}]}).encode()
         self.pkg = self.version(notes=self.override_notes(
-            {"harness/claude/manifest.json": manifest_text}))
+            {"harness/fixture/manifest.json": manifest_text}))
         self.install(self.pkg)
         code, out, err = self.attach()
         self.assertEqual(0, code, err)
-        self.assertFalse(os.path.exists(os.path.join(self.place, ".claude", "commands", "ship.md")))
-        self.assertIn("excluded: command/ship: no ship on claude", out)
-        self.assertNotIn(".claude/commands/ship.md", [f["path"] for f in self.planned()["files"]])
+        self.assertFalse(os.path.exists(os.path.join(self.place, ".fixture", "commands", "ship.md")))
+        self.assertIn("excluded: command/ship: no ship on fixture", out)
+        self.assertNotIn(".fixture/commands/ship.md", [f["path"] for f in self.planned()["files"]])
 
     def test_an_override_for_another_harness_is_left_alone(self):
         self.pkg = self.version(notes=self.override_notes(
             {"harness/other/skills/sample/SKILL.md": b"---\nname: sample\n---\nOther.\n"}))
         self.install(self.pkg)
         self.assertEqual(0, self.attach()[0])
-        self.assertIn(b"Do the thing.", self.read(".claude/skills/sample/SKILL.md"))
+        self.assertIn(b"Do the thing.", self.read(".fixture/skills/sample/SKILL.md"))
 
     def test_an_agent_override_without_a_tools_list_is_skipped_not_installed(self):
         bare = b"---\nname: reviewer\ndescription: Reviews\n---\nAll tools.\n"
         self.pkg = self.version(notes=self.override_notes(
-            {"harness/claude/agents/reviewer.md": bare}))
+            {"harness/fixture/agents/reviewer.md": bare}))
         self.install(self.pkg)
         code, out, err = self.attach()
         self.assertEqual(0, code, err)
-        self.assertFalse(os.path.exists(os.path.join(self.place, ".claude", "agents")))
+        self.assertFalse(os.path.exists(os.path.join(self.place, ".fixture", "agents")))
         self.assertIn("warning: skipped: agent/reviewer", err)
 
     def test_an_item_that_needs_hooks_is_skipped_because_the_module_does_not_provide_them(self):
@@ -293,7 +303,7 @@ class Overrides(Base):
         self.install(self.pkg)
         code, out, err = self.attach()
         self.assertEqual(0, code, err)
-        self.assertFalse(os.path.exists(os.path.join(self.place, ".claude", "skills", "hooked")))
+        self.assertFalse(os.path.exists(os.path.join(self.place, ".fixture", "skills", "hooked")))
         self.assertIn("warning: skipped: skill/hooked: needs hooks, which this harness does not "
                       "provide", err)
 
@@ -305,14 +315,14 @@ class Overrides(Base):
         self.assertEqual(0, code, err)
         self.assertIn("warning: this harness provides no permissions, so the hard stops and the "
                       "guarded store are enforced only by instruction", err)
-        self.assertFalse(os.path.exists(os.path.join(self.place, ".claude")))
+        self.assertFalse(os.path.exists(os.path.join(self.place, ".fixture")))
         document = self.planned()
         self.assertEqual(("hq", []), (document["harness"], document["files"]))
         self.assertNotIn("changes what the agent may do", err)
 
     def test_an_override_with_no_neutral_item_is_refused(self):
         self.pkg = self.version(notes=self.override_notes(
-            {"harness/claude/skills/ghost/SKILL.md": b"---\nname: ghost\n---\nx\n"}))
+            {"harness/fixture/skills/ghost/SKILL.md": b"---\nname: ghost\n---\nx\n"}))
         self.install(self.pkg)
         self.refuses(contains="skill/ghost")
 
@@ -329,11 +339,11 @@ class Inputs(unittest.TestCase):
             snaps[(package, module)] = snapshot.Snapshot(package, module, contents, frozenset())
         return mods, snaps
 
-    def read(self, harness="claude", **files):
+    def read(self, harness="fixture", **files):
         mods, snaps = self.modules(**files)
         return attach.inputs(mods, snaps, harness)
 
-    def refused(self, text, harness="claude", **files):
+    def refused(self, text, harness="fixture", **files):
         with self.assertRaises(attach.Refused) as caught:
             self.read(harness, **files)
         self.assertIn(text, str(caught.exception))
@@ -352,22 +362,22 @@ class Inputs(unittest.TestCase):
 
     def test_an_override_is_keyed_by_kind_and_name(self):
         _, overrides, _ = self.read(**{"p.a": {
-            "harness/claude/skills/x/SKILL.md": b"s", "harness/claude/skills/x/ref/a.md": b"r",
-            "harness/claude/agents/y.md": b"y", "harness/claude/commands/z.md": b"z"}})
+            "harness/fixture/skills/x/SKILL.md": b"s", "harness/fixture/skills/x/ref/a.md": b"r",
+            "harness/fixture/agents/y.md": b"y", "harness/fixture/commands/z.md": b"z"}})
         self.assertEqual({("skill", "x"): {"SKILL.md": b"s", "ref/a.md": b"r"},
                           ("agent", "y"): {"y.md": b"y"}, ("command", "z"): {"z.md": b"z"}},
                          overrides)
 
     def test_two_modules_overriding_one_item_are_refused(self):
         self.refused("p/a and p/b both override skill/x", **{
-            "p.a": {"harness/claude/skills/x/SKILL.md": b"1"},
-            "p.b": {"harness/claude/skills/x/SKILL.md": b"2"}})
+            "p.a": {"harness/fixture/skills/x/SKILL.md": b"1"},
+            "p.b": {"harness/fixture/skills/x/SKILL.md": b"2"}})
 
     def test_a_misplaced_override_is_refused(self):
-        for rel in ("harness/claude/tools/x.md", "harness/claude/skills/x.md",
-                    "harness/claude/skills/x", "harness/claude/agents/y.txt",
-                    "harness/claude/agents/dir/y.md", "harness/claude/skills/Bad/SKILL.md",
-                    "harness/claude/agents/Bad.md"):
+        for rel in ("harness/fixture/tools/x.md", "harness/fixture/skills/x.md",
+                    "harness/fixture/skills/x", "harness/fixture/agents/y.txt",
+                    "harness/fixture/agents/dir/y.md", "harness/fixture/skills/Bad/SKILL.md",
+                    "harness/fixture/agents/Bad.md"):
             with self.subTest(rel=rel), self.assertRaises(attach.Refused):
                 self.read(**{"p.a": {rel: b"x"}})
 
@@ -375,8 +385,8 @@ class Inputs(unittest.TestCase):
         first = json.dumps({"exclude": [{"item": "skills/x", "reason": "r1"}]}).encode()
         second = json.dumps({"exclude": [{"item": "skills/x", "reason": "r2"},
                                          {"item": "agents/y", "reason": "r3"}]}).encode()
-        _, _, excludes = self.read(**{"p.a": {"harness/claude/manifest.json": first},
-                                      "p.b": {"harness/claude/manifest.json": second}})
+        _, _, excludes = self.read(**{"p.a": {"harness/fixture/manifest.json": first},
+                                      "p.b": {"harness/fixture/manifest.json": second}})
         self.assertEqual({("skill", "x"): "r1", ("agent", "y"): "r3"}, excludes)
 
     def test_a_bad_exclusion_manifest_is_refused(self):
@@ -386,7 +396,7 @@ class Inputs(unittest.TestCase):
                      b'{"exclude": [{"item": "skills/", "reason": "r"}]}',
                      b'{"exclude": [{"item": 5, "reason": "r"}]}'):
             with self.subTest(text=text), self.assertRaises(attach.Refused):
-                self.read(**{"p.a": {"harness/claude/manifest.json": text}})
+                self.read(**{"p.a": {"harness/fixture/manifest.json": text}})
 
     def test_files_that_are_not_harness_items_are_ignored(self):
         tree, overrides, excludes = self.read(**{"p.a": {
@@ -401,7 +411,7 @@ class Refusals(Base):
         before = (self.content(), self.content(self.store_root))
         code, out, err = self.attach()
         self.assertEqual((1, ""), (code, out))
-        self.assertIn("refused: this clone already records the harness claude", err)
+        self.assertIn("refused: this clone already records the harness fixture", err)
         self.assertEqual(before, (self.content(), self.content(self.store_root)))
 
     def test_a_local_manifest_that_is_not_canonical_is_refused_not_ignored(self):
@@ -442,16 +452,16 @@ class Refusals(Base):
 
     def test_the_harness_package_is_not_given(self):
         self.ready()
-        self.refuses(package=None, contains="the harness package workbench is not one this "
+        self.refuses(package=None, contains="the harness package synthetic is not one this "
                                             "project records; give it with --package")
 
     def test_a_recorded_local_package_must_be_given(self):
         self.ready()
-        self.refuses(packages=[CLAUDE], contains="give it with --package <directory>")
+        self.refuses(packages=[self.synth], contains="give it with --package <directory>")
 
     def test_a_module_the_package_does_not_declare(self):
         self.ready()
-        self.refuses(harness="workbench/ghost", contains="declares no module ghost")
+        self.refuses(harness="synthetic/ghost", contains="declares no module ghost")
 
     def test_a_module_that_is_not_a_harness(self):
         self.ready()
@@ -477,21 +487,18 @@ class Refusals(Base):
         self.ready()
         newer = self.version(notes=(NOTES[0], dict(NOTES[1], **{"scripts/run.sh": b"#!/bin/sh\necho 2\n"})))
         self.approve(newer)
-        err = self.refuses(packages=[newer, CLAUDE], contains="not the one the lock records")
+        err = self.refuses(packages=[newer, self.synth], contains="not the one the lock records")
         self.assertIn("wb upgrade", err)
 
     def test_a_first_party_module_edited_after_release_is_third_party_and_refused(self):
         self.ready()
-        copy = os.path.join(self.root, "edited")
-        shutil.copytree(CLAUDE, os.path.join(copy, "workbench"))
-        path = os.path.join(copy, "workbench", "claude", "module.json")
+        path = os.path.join(self.synth, "fixture", "module.json")
         with open(path, encoding="utf-8") as handle:
             document = json.load(handle)
         document["description"] = "changed after approval"
         with open(path, "w", encoding="utf-8") as handle:
             json.dump(document, handle)
-        self.refuses(packages=[self.pkg, os.path.join(copy, "workbench")],
-                     contains="unprefixed capability 'instructions' is reserved")
+        self.refuses(contains="unprefixed capability 'instructions' is reserved")
 
     def test_a_third_party_harness_edited_after_it_was_approved_is_not_approved(self):
         self.ready()
@@ -545,7 +552,7 @@ class Refusals(Base):
         self.ready()
         newer = self.version(h=({"type": "harness", "layout": {}, "description": "other"}, {}))
         self.approve(newer)
-        self.refuses(packages=[newer, CLAUDE], contains="the package p is not the one the lock records")
+        self.refuses(packages=[newer, self.synth], contains="the package p is not the one the lock records")
 
     def test_a_module_hash_the_lock_does_not_match_is_refused_though_the_package_is_the_same(self):
         self.ready()
@@ -561,16 +568,17 @@ class Refusals(Base):
     def test_the_package_is_not_cached_and_nothing_is_fetched(self):
         self.pkg = self.version()
         self.install(self.pkg, source="https://example.test/p.git", ref="HEAD", commit="a" * 40)
-        self.refuses(packages=[CLAUDE], contains="has not been downloaded")
+        self.refuses(packages=[self.synth], contains="has not been downloaded")
         base_tests.fetch.fetch.assert_not_called()
 
     def test_the_harness_must_be_two_names(self):
         self.ready()
-        for bad in ("workbench", "workbench/", "/claude", "a/b/c", "Workbench/claude"):
+        for bad in ("synthetic", "synthetic/", "/fixture", "a/b/c", "Synthetic/fixture"):
             with self.subTest(harness=bad):
                 out, err = io.StringIO(), io.StringIO()
-                code = cli.main(["attach", self.place, "--harness", bad, "--package", CLAUDE],
-                                out, err, store_root=self.store_root, home=self.home)
+                code = cli.main(["attach", self.place, "--harness", bad, "--package",
+                                 self.synth], out, err, store_root=self.store_root, home=self.home,
+                                distribution=self.dist)
                 self.assertEqual(2, code)
                 self.assertIn("--harness takes <package>/<module>", err.getvalue())
 
@@ -581,13 +589,13 @@ class Refusals(Base):
         self.refuses(contains="cannot write the path")
 
     def test_a_home_that_is_unknown_refuses(self):
-        support.require_release(self)
         self.ready()
         with unittest.mock.patch.object(attach, "default_home", lambda: None):
             out, err = io.StringIO(), io.StringIO()
             before = self.content()
-            code = cli.main(["attach", self.place, "--harness", "workbench/claude", "--package",
-                             self.pkg, "--package", CLAUDE], out, err, store_root=self.store_root)
+            code = cli.main(["attach", self.place, "--harness", "synthetic/fixture", "--package",
+                             self.pkg, "--package", self.synth], out, err, store_root=self.store_root,
+                             distribution=self.dist)
         self.assertEqual(1, code)
         self.assertIn("the home directory is not known", err.getvalue())
         self.assertEqual(before, self.content())
@@ -610,73 +618,73 @@ class Conflicts(Base):
             handle.write(data)
 
     def test_a_harness_file_with_other_content_is_a_conflict_and_nothing_is_written(self):
-        self.put("CLAUDE.md", b"# my own\n")
-        err = self.refuses(contains="CLAUDE.md: it exists with other content")
-        self.assertEqual(b"# my own\n", self.read("CLAUDE.md"))
-        self.assertFalse(os.path.exists(os.path.join(self.place, ".claude")))
+        self.put("FIXTURE.md", b"# my own\n")
+        err = self.refuses(contains="FIXTURE.md: it exists with other content")
+        self.assertEqual(b"# my own\n", self.read("FIXTURE.md"))
+        self.assertFalse(os.path.exists(os.path.join(self.place, ".fixture")))
 
     def test_every_conflict_is_listed_together(self):
-        self.put("CLAUDE.md")
-        self.put(".claude/agents/reviewer.md")
-        err = self.refuses(contains="CLAUDE.md")
-        self.assertIn(".claude/agents/reviewer.md", err)
+        self.put("FIXTURE.md")
+        self.put(".fixture/agents/reviewer.md")
+        err = self.refuses(contains="FIXTURE.md")
+        self.assertIn(".fixture/agents/reviewer.md", err)
 
     def test_an_existing_settings_file_is_not_merged_and_the_entries_are_printed(self):
         self.put(SETTINGS, b'{"permissions": {"allow": ["Bash(ls)"]}}\n')
-        err = self.refuses(contains=".claude/settings.local.json: it exists with other content")
+        err = self.refuses(contains=".fixture/settings.local.json: it exists with other content")
         self.assertEqual(b'{"permissions": {"allow": ["Bash(ls)"]}}\n', self.read(SETTINGS))
         self.assertIn("  the entries attach would have written to it:\n", err)
         self.assertIn('"Bash(wb install)"', err)
         self.assertIn("attach never edits a settings file it did not write", err)
         self.assertNotIn('"allow"', err.split("the entries attach would")[1])
 
-    def test_a_link_at_claude_is_refused_and_nothing_is_written_through_it(self):
-        os.symlink(self.outside, os.path.join(self.place, ".claude"))
-        self.refuses(contains=".claude")
+    def test_a_link_at_the_harness_directory_is_refused_and_nothing_is_written_through_it(self):
+        os.symlink(self.outside, os.path.join(self.place, ".fixture"))
+        self.refuses(contains=".fixture")
         self.assertEqual([], os.listdir(self.outside))
 
     def test_a_link_at_the_settings_file_is_refused_and_its_target_is_untouched(self):
         victim = os.path.join(self.outside, "victim")
         with open(victim, "wb") as handle:
             handle.write(b"keep\n")
-        os.makedirs(os.path.join(self.place, ".claude"))
-        os.symlink(victim, os.path.join(self.place, ".claude", "settings.local.json"))
+        os.makedirs(os.path.join(self.place, ".fixture"))
+        os.symlink(victim, os.path.join(self.place, ".fixture", "settings.local.json"))
         self.refuses(contains="settings.local.json")
         with open(victim, "rb") as handle:
             self.assertEqual(b"keep\n", handle.read())
 
     def test_a_dangling_link_is_not_created_through(self):
-        os.symlink(os.path.join(self.outside, "new"), os.path.join(self.place, "CLAUDE.md"))
-        self.refuses(contains="CLAUDE.md")
+        os.symlink(os.path.join(self.outside, "new"), os.path.join(self.place, "FIXTURE.md"))
+        self.refuses(contains="FIXTURE.md")
         self.assertEqual([], os.listdir(self.outside))
 
     def test_a_directory_where_a_file_goes_is_a_conflict(self):
-        os.mkdir(os.path.join(self.place, "CLAUDE.md"))
-        self.refuses(contains="CLAUDE.md")
+        os.mkdir(os.path.join(self.place, "FIXTURE.md"))
+        self.refuses(contains="FIXTURE.md")
 
     def test_a_file_where_a_directory_goes_is_a_conflict(self):
-        self.put(".claude", b"a file\n")
-        self.refuses(contains=".claude")
+        self.put(".fixture", b"a file\n")
+        self.refuses(contains=".fixture")
 
     def test_a_link_at_the_exclude_file_is_refused_before_any_file_is_written(self):
         os.mkdir(os.path.join(self.place, ".git", "info"))
         os.symlink(os.path.join(self.outside, "x"), os.path.join(self.place, ".git", "info",
                                                                  "exclude"))
         self.refuses(contains=".git/info/exclude")
-        self.assertFalse(os.path.exists(os.path.join(self.place, ".claude")))
+        self.assertFalse(os.path.exists(os.path.join(self.place, ".fixture")))
         self.assertEqual([], os.listdir(self.outside))
 
     def test_a_link_at_git_info_is_refused_before_any_file_is_written(self):
         os.symlink(self.outside, os.path.join(self.place, ".git", "info"))
         self.refuses(contains=".git/info/exclude")
-        self.assertFalse(os.path.exists(os.path.join(self.place, "CLAUDE.md")))
+        self.assertFalse(os.path.exists(os.path.join(self.place, "FIXTURE.md")))
 
     def test_the_owners_exclude_lines_are_kept(self):
         os.mkdir(os.path.join(self.place, ".git", "info"))
         with open(os.path.join(self.place, ".git", "info", "exclude"), "wb") as handle:
             handle.write(b"# mine\n*.log\n")
         self.assertEqual(0, self.attach()[0])
-        self.assertEqual(b"# mine\n*.log\n/CLAUDE.md\n/.claude/\n", self.read(".git/info/exclude"))
+        self.assertEqual(b"# mine\n*.log\n/FIXTURE.md\n/.fixture/\n", self.read(".git/info/exclude"))
 
 
 class Rerun(Base):
@@ -702,22 +710,22 @@ class Rerun(Base):
             code, out, err = self.attach()
         self.assertEqual((3, ""), (code, out))
         self.assertIn("failed: disk full\n", err)
-        self.assertIn("written:\n  .git/info/\n  .git/info/exclude\n  .claude/\n", err)
+        self.assertIn("written:\n  .git/info/\n  .git/info/exclude\n  .fixture/\n", err)
         self.assertIn("not written:\n", err)
         self.assertIn("that file may be incomplete: remove it yourself", err)
         self.assertIn("  .workbench/local/harness.json\n", err)
         self.assertIn("the project itself is complete", err)
         self.assertIn("`wb attach` again", err)
         self.assertFalse(os.path.exists(os.path.join(self.place, *LOCAL.split("/"))))
-        self.assertEqual(b"/CLAUDE.md\n/.claude/\n", self.read(".git/info/exclude"))
+        self.assertEqual(b"/FIXTURE.md\n/.fixture/\n", self.read(".git/info/exclude"))
 
     def test_a_failure_adding_the_exclude_lines_leaves_no_harness_file(self):
         with unittest.mock.patch.object(projectfs.Writer, "add_exclude",
                                         side_effect=OSError("no space")):
             code, out, err = self.attach()
         self.assertEqual(3, code)
-        self.assertFalse(os.path.exists(os.path.join(self.place, "CLAUDE.md")))
-        self.assertFalse(os.path.exists(os.path.join(self.place, ".claude")))
+        self.assertFalse(os.path.exists(os.path.join(self.place, "FIXTURE.md")))
+        self.assertFalse(os.path.exists(os.path.join(self.place, ".fixture")))
         self.assertEqual(0, self.attach()[0])
 
     def test_the_rerun_leaves_the_files_it_wrote_and_finishes(self):
@@ -732,24 +740,24 @@ class Rerun(Base):
         for path, data in written.items():
             self.assertEqual(data, self.read(path))
         self.assertEqual(sorted(HARNESS_PATHS), [f["path"] for f in self.planned()["files"]])
-        self.assertEqual(b"/CLAUDE.md\n/.claude/\n", self.read(".git/info/exclude"))
+        self.assertEqual(b"/FIXTURE.md\n/.fixture/\n", self.read(".git/info/exclude"))
 
     def test_a_rerun_after_a_failed_manifest_write_adds_no_exclude_line_twice(self):
         with unittest.mock.patch.object(localmanifest, "write", side_effect=OSError("no space")):
             self.assertEqual(3, self.attach()[0])
-        self.assertEqual(b"/CLAUDE.md\n/.claude/\n", self.read(".git/info/exclude"))
+        self.assertEqual(b"/FIXTURE.md\n/.fixture/\n", self.read(".git/info/exclude"))
         code, out, err = self.attach()
         self.assertEqual(0, code, err)
         self.assertNotIn("added", out)
-        self.assertEqual(b"/CLAUDE.md\n/.claude/\n", self.read(".git/info/exclude"))
+        self.assertEqual(b"/FIXTURE.md\n/.fixture/\n", self.read(".git/info/exclude"))
 
     def test_a_file_edited_after_the_failure_is_a_conflict_not_overwritten(self):
         with self.stop_at(4):
             self.assertEqual(3, self.attach()[0])
-        with open(os.path.join(self.place, "CLAUDE.md"), "wb") as handle:
+        with open(os.path.join(self.place, "FIXTURE.md"), "wb") as handle:
             handle.write(b"edited\n")
-        self.refuses(contains="CLAUDE.md: it exists with other content")
-        self.assertEqual(b"edited\n", self.read("CLAUDE.md"))
+        self.refuses(contains="FIXTURE.md: it exists with other content")
+        self.assertEqual(b"edited\n", self.read("FIXTURE.md"))
 
     def test_a_target_that_changed_before_the_first_write_is_not_written(self):
         from workbench import target
@@ -803,10 +811,10 @@ class Git(Base):
         self.assertIn(".git/info/exclude", ignored)
         git("add", "-A")
         self.assertEqual("", "\n".join(line for line in git("ls-files").splitlines()
-                                       if line == "CLAUDE.md" or line.startswith(".claude/")))
+                                       if line == "FIXTURE.md" or line.startswith(".fixture/")))
         self.assertEqual("", "\n".join(line for line in git("status", "--porcelain",
                                                             "--untracked-files=all").splitlines()
-                                       if "CLAUDE.md" in line or ".claude/" in line))
+                                       if "FIXTURE.md" in line or ".fixture/" in line))
 
 
 class Parse(unittest.TestCase):
@@ -814,9 +822,9 @@ class Parse(unittest.TestCase):
         return attach.parse(list(tokens))
 
     def test_a_full_command(self):
-        command = self.parse("proj", "--harness", "workbench/claude", "--package", "a", "--ref",
+        command = self.parse("proj", "--harness", "synthetic/fixture", "--package", "a", "--ref",
                              "v1", "--package", "b")
-        self.assertEqual(("proj", ("workbench", "claude"), [("a", "v1"), ("b", None)]),
+        self.assertEqual(("proj", ("synthetic", "fixture"), [("a", "v1"), ("b", None)]),
                          (command.target, command.harness, command.packages))
 
     def test_the_target_defaults_to_the_current_directory_and_dir_works(self):
@@ -871,7 +879,7 @@ class Paths(unittest.TestCase):
             attach._check_paths([big])
 
     def test_good_paths_pass(self):
-        attach._check_paths([self.planned("CLAUDE.md"), self.planned(".claude/a/b.md")])
+        attach._check_paths([self.planned("FIXTURE.md"), self.planned(".fixture/a/b.md")])
 
 
 if __name__ == "__main__":

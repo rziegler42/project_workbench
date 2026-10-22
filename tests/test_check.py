@@ -6,11 +6,11 @@ import subprocess
 import unittest
 import unittest.mock
 
-from tests.test_attach import HARNESS_PATHS, LOCAL, SETTINGS, Base
+from tests.support_real import HARNESS_PATHS, LOCAL, SETTINGS, Base, RealHarness
 from workbench import check, cli, gitindex, localmanifest, sources
 
 
-class Clone(Base):
+class Clone(RealHarness, Base):
     """A project installed as `install` writes it, in a real git repository with everything
     committed, so what git tracks is real."""
 

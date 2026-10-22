@@ -10,13 +10,11 @@ import subprocess
 import unittest
 import unittest.mock
 
-from tests import support, test_install
+from tests import support_harness, test_install
 from tests.test_preview import NOTES
 from workbench import (__version__, attach, cli, fetch, harnessstage, install, localmanifest,
                        preview, projectfs, sources)
 
-ROOT = test_install.ROOT
-CLAUDE = os.path.join(ROOT, "packages", "workbench")
 MARKER = test_install.MARKER
 
 
@@ -25,6 +23,8 @@ class Base(test_install.InstallBase):
         test_install.InstallBase.setUp(self)
         self.home = os.path.join(self.root, "home")
         os.mkdir(self.home)
+        self.dist = support_harness.distribution(os.path.join(self.root, "distribution"))
+        self.synth = os.path.join(self.dist, "packages", support_harness.PACKAGE)
 
     def notes(self, fields=None, files=None):
         path = self.package(modules={"notes": (fields or NOTES[0], files or NOTES[1])})
@@ -32,20 +32,19 @@ class Base(test_install.InstallBase):
         return path
 
     def command(self, place, path):
-        support.require_release(self)
-        return sources.Command(place, [(path, None), (CLAUDE, None)], ["claude", "notes"])
+        return sources.Command(place, [(path, None), (self.synth, None)], ["fixture", "notes"])
 
     def install(self, place, path, reply=test_install.correct):
         out, err = io.StringIO(), io.StringIO()
         code = install.run(self.guarded, self.command(place, path),
                            test_install.Typist(out, reply), out, err, seed=test_install.SEED,
-                           home=self.home)
+                           home=self.home, distribution=self.dist)
         return code, out.getvalue(), err.getvalue()
 
     def preview(self, place, path):
         out, err = io.StringIO(), io.StringIO()
         code = preview.run(self.guarded, self.command(place, path), out, err,
-                           seed=test_install.SEED, home=self.home)
+                           seed=test_install.SEED, home=self.home, distribution=self.dist)
         return code, out.getvalue(), err.getvalue()
 
     def lines(self, place, *parts):
@@ -57,9 +56,9 @@ class Preview(Base):
         code, out, err = self.preview(self.place(), self.notes())
         self.assertEqual(0, code, err)
         self.assertNotIn("harness not attached", out)
-        for line in ("harness: workbench/claude is attached after the install",
-                     "  create CLAUDE.md [per-clone]", "  create .claude/settings.local.json",
-                     "add to .git/info/exclude: /CLAUDE.md, /.claude/",
+        for line in ("harness: synthetic/fixture is attached after the install",
+                     "  create FIXTURE.md [per-clone]", "  create .fixture/settings.local.json",
+                     "add to .git/info/exclude: /FIXTURE.md, /.fixture/",
                      "  create .workbench/local/harness.json [per-clone] sha256 ",
                      "changes what the agent may do here"):
             self.assertIn(line, out)
@@ -75,7 +74,7 @@ class Preview(Base):
             out, err = io.StringIO(), io.StringIO()
             command = self.command(os.path.join(self.root, "same"), path)
             code = install.run(self.guarded, command, test_install.Typist(out, lambda text: "no"),
-                               out, err, seed=test_install.SEED, home=home)
+                               out, err, seed=test_install.SEED, home=home, distribution=self.dist)
             self.assertEqual(1, code, err.getvalue())
             self.assertIn("cancelled: nothing was written", out.getvalue())
             digests.append(test_install.DIGEST.findall(out.getvalue())[-1])
@@ -83,7 +82,7 @@ class Preview(Base):
         self.assertFalse(os.path.exists(os.path.join(self.root, "same")))
 
     def test_a_harness_file_that_collides_with_an_installed_file_is_refused_unwritten(self):
-        path = self.notes({"writes": ["CLAUDE.md"]}, {"files/CLAUDE.md": b"mine\n"})
+        path = self.notes({"writes": ["FIXTURE.md"]}, {"files/FIXTURE.md": b"mine\n"})
         place = self.place()
         code, out, err = self.install(place, path)
         self.assertEqual(1, code)
@@ -96,7 +95,7 @@ class Preview(Base):
         def file_bytes(staged):
             files = []
             for f in staged.files:
-                if f.path == "CLAUDE.md":
+                if f.path == "FIXTURE.md":
                     data = b"@AGENTX.md\n"
                     f = f._replace(data=data, sha256=hashlib.sha256(data).hexdigest())
                 files.append(f)
@@ -141,7 +140,7 @@ class Preview(Base):
         self.assertFalse(os.path.exists(os.path.join(place, ".workbench")))
 
     def test_a_case_variant_of_an_installed_path_is_refused(self):
-        path = self.notes({"writes": ["claude.md"]}, {"files/claude.md": b"mine\n"})
+        path = self.notes({"writes": ["fixture.md"]}, {"files/fixture.md": b"mine\n"})
         place = self.place()
         code, out, err = self.install(place, path)
         self.assertEqual(1, code)
@@ -164,25 +163,25 @@ class Attached(Base):
             code, out, err = self.install(place, path)
         self.assertEqual(0, code, (out, err))
         self.assertTrue(seen["docs/notes.md"])
-        for rel in ("CLAUDE.md", ".claude/settings.local.json", localmanifest.PATH):
+        for rel in ("FIXTURE.md", ".fixture/settings.local.json", localmanifest.PATH):
             self.assertFalse(seen[rel], rel)
         self.assertFalse(os.path.exists(os.path.join(place, MARKER)))
-        self.assertIn("attached workbench/claude", out)
-        self.assertIn("added 2 lines to .git/info/exclude: CLAUDE.md, .claude/", out)
+        self.assertIn("attached synthetic/fixture", out)
+        self.assertIn("added 2 lines to .git/info/exclude: FIXTURE.md, .fixture/", out)
 
     def test_the_files_are_those_attach_would_write_and_nothing_is_tracked_by_git(self):
         path = self.notes()
         place = self.place()
         code, out, err = self.install(place, path)
         self.assertEqual(0, code, (out, err))
-        self.assertEqual(b"@AGENTS.md\n", self.read(place, "CLAUDE.md"))
-        settings = json.loads(self.read(place, ".claude", "settings.local.json"))
+        self.assertEqual(b"@AGENTS.md\n", self.read(place, "FIXTURE.md"))
+        settings = json.loads(self.read(place, ".fixture", "settings.local.json"))
         self.assertIn("Bash(wb install)", settings["permissions"]["deny"])
-        self.assertEqual(["/CLAUDE.md", "/.claude/"],
+        self.assertEqual(["/FIXTURE.md", "/.fixture/"],
                          self.lines(place, ".git", "info", "exclude"))
         document = localmanifest.parse(self.read(place, localmanifest.PATH))
-        self.assertEqual("claude", document["harness"])
-        self.assertEqual({"CLAUDE.md", ".claude/settings.local.json"},
+        self.assertEqual("fixture", document["harness"])
+        self.assertEqual({"FIXTURE.md", ".fixture/settings.local.json"},
                          {item["path"] for item in document["files"]})
         env = fetch.git_environment()
         env["HOME"] = self.home
@@ -190,8 +189,8 @@ class Attached(Base):
             ["git", "-C", place, "status", "--porcelain", "--untracked-files=all"], env=env,
             capture_output=True, text=True)
         self.assertEqual(0, status.returncode, status.stderr)
-        self.assertNotIn("CLAUDE.md", status.stdout)
-        self.assertNotIn(".claude", status.stdout)
+        self.assertNotIn("FIXTURE.md", status.stdout)
+        self.assertNotIn(".fixture", status.stdout)
         self.assertIn("AGENTS.md", status.stdout)
         tracked = subprocess.run(["git", "-C", place, "ls-files"], env=env, capture_output=True,
                                  text=True)
@@ -202,24 +201,23 @@ class Attached(Base):
         place = self.place()
         self.assertEqual(0, self.install(place, path)[0])
         document = localmanifest.parse(self.read(place, localmanifest.PATH))
-        self.assertEqual("local:workbench", document["source"])
+        self.assertEqual("local:synthetic", document["source"])
         self.assertEqual(__version__, document["workbench"])
         self.assertEqual(64, len(document["tree"]))
 
     def test_the_rules_name_the_home_directory_given_through_the_command_line(self):
-        support.require_release(self)
         path = self.notes()
         place = self.place()
         out, err = io.StringIO(), io.StringIO()
-        code = cli.main(["install", place, "--package", path, "--package", CLAUDE,
-                         "--select", "claude", "notes"], out, err, store_root=self.store_root,
-                        home=self.home, stdin=test_install.Typist(out, test_install.correct))
+        code = cli.main(["install", place, "--package", path, "--package", self.synth,
+                         "--select", "fixture", "notes"], out, err, store_root=self.store_root,
+                        home=self.home, stdin=test_install.Typist(out, test_install.correct),
+                        distribution=self.dist)
         self.assertEqual(0, code, (out.getvalue(), err.getvalue()))
         self.assertIn(os.path.realpath(self.home), self.read(
-            place, ".claude", "settings.local.json").decode())
+            place, ".fixture", "settings.local.json").decode())
 
     def test_the_preview_command_shows_the_rules_for_the_home_directory_given(self):
-        support.require_release(self)
         path = self.notes()
         shown = []
         for name in ("one", "two"):
@@ -227,18 +225,18 @@ class Attached(Base):
             os.mkdir(home)
             out, err = io.StringIO(), io.StringIO()
             code = cli.main(["preview", "install", os.path.join(self.root, "same"), "--package",
-                             path, "--package", CLAUDE, "--select", "claude", "notes"], out, err,
-                            store_root=self.store_root, home=home)
+                             path, "--package", self.synth, "--select", "fixture", "notes"], out,
+                            err, store_root=self.store_root, home=home, distribution=self.dist)
             self.assertEqual(0, code, err.getvalue())
             shown.append([line for line in out.getvalue().splitlines()
-                          if ".claude/settings.local.json" in line][0])
+                          if ".fixture/settings.local.json" in line][0])
         self.assertNotEqual(*shown)
 
     def test_the_committed_manifest_does_not_name_the_harness(self):
         path = self.notes()
         place = self.place()
         self.assertEqual(0, self.install(place, path)[0])
-        self.assertNotIn(b"claude", self.read(place, ".workbench", "manifest.json"))
+        self.assertNotIn(b'"fixture"', self.read(place, ".workbench", "manifest.json"))
 
 
 class Failure(Base):
@@ -255,42 +253,42 @@ class Failure(Base):
     def test_a_failed_attach_leaves_a_finished_install_and_names_attach(self):
         path = self.notes()
         place = self.place()
-        with self.failing("CLAUDE.md"):
+        with self.failing("FIXTURE.md"):
             code, out, err = self.install(place, path)
         self.assertEqual(3, code)
         self.assertIn("failed: disk full\n", err)
         self.assertIn("the install is complete", err)
-        self.assertIn("`wb attach --harness workbench/claude`", err)
+        self.assertIn("`wb attach --harness synthetic/fixture`", err)
         self.assertNotIn("Traceback", out + err)
         self.assertFalse(os.path.exists(os.path.join(place, MARKER)))
         self.assertTrue(os.path.isfile(os.path.join(place, ".workbench", "manifest.json")))
         self.assertFalse(os.path.exists(os.path.join(place, localmanifest.PATH)))
-        self.assertTrue(os.path.isfile(os.path.join(place, ".claude", "settings.local.json")))
-        self.assertFalse(os.path.exists(os.path.join(place, "CLAUDE.md")))
+        self.assertTrue(os.path.isfile(os.path.join(place, ".fixture", "settings.local.json")))
+        self.assertFalse(os.path.exists(os.path.join(place, "FIXTURE.md")))
         written, _, not_written = err.partition("\nwritten:\n")[2].partition("not written:\n")
-        self.assertIn("  .claude/settings.local.json\n", written)
+        self.assertIn("  .fixture/settings.local.json\n", written)
         self.assertNotIn("AGENTS.md", written)
         self.assertNotIn(".workbench/manifest.json", written)
-        self.assertIn("  CLAUDE.md\n", not_written)
+        self.assertIn("  FIXTURE.md\n", not_written)
 
     def test_a_rerun_of_attach_finishes_it(self):
         path = self.notes()
         place = self.place()
-        with self.failing("CLAUDE.md"):
+        with self.failing("FIXTURE.md"):
             self.assertEqual(3, self.install(place, path)[0])
         out, err = io.StringIO(), io.StringIO()
-        code = cli.main(["attach", place, "--harness", "workbench/claude", "--package", path,
-                         "--package", CLAUDE], out, err, store_root=self.store_root,
-                        home=self.home)
+        code = cli.main(["attach", place, "--harness", "synthetic/fixture", "--package", path,
+                         "--package", self.synth], out, err, store_root=self.store_root,
+                        home=self.home, distribution=self.dist)
         self.assertEqual(0, code, (out.getvalue(), err.getvalue()))
-        self.assertEqual(b"@AGENTS.md\n", self.read(place, "CLAUDE.md"))
+        self.assertEqual(b"@AGENTS.md\n", self.read(place, "FIXTURE.md"))
         self.assertTrue(os.path.isfile(os.path.join(place, localmanifest.PATH)))
         self.assertIn("left 1 files as they were", out.getvalue())
 
     def test_an_interrupt_while_attaching_is_a_failure_after_a_finished_install(self):
         path = self.notes()
         place = self.place()
-        with self.failing(".claude/", KeyboardInterrupt()):
+        with self.failing(".fixture/", KeyboardInterrupt()):
             code, out, err = self.install(place, path)
         self.assertEqual(3, code)
         self.assertIn("failed: interrupted\n", err)
@@ -304,8 +302,8 @@ class Failure(Base):
             code, out, err = self.install(place, path)
         self.assertEqual(3, code)
         self.assertIn("the install is complete", err)
-        self.assertFalse(os.path.exists(os.path.join(place, "CLAUDE.md")))
-        self.assertFalse(os.path.exists(os.path.join(place, ".claude")))
+        self.assertFalse(os.path.exists(os.path.join(place, "FIXTURE.md")))
+        self.assertFalse(os.path.exists(os.path.join(place, ".fixture")))
 
     def test_the_unfinished_write_record_does_not_list_the_harness_files(self):
         path = self.notes()
@@ -320,7 +318,7 @@ class Failure(Base):
 
         with unittest.mock.patch.object(install, "record_of", recording):
             self.assertEqual(0, self.install(place, path)[0])
-        for name in (b"CLAUDE.md", b".claude", b"harness.json"):
+        for name in (b"FIXTURE.md", b".fixture", b"harness.json"):
             self.assertNotIn(name, seen[0])
 
     def test_attach_does_not_run_when_the_install_itself_failed(self):

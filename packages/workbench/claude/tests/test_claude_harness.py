@@ -10,10 +10,11 @@ import os
 import subprocess
 import unittest
 
-from tests import support_install
-from workbench import cli, layout, localmanifest, rules
+from tests import support, support_install
+from workbench import cli, layout, localmanifest, rules, verify
 
 CLAUDE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PACKAGE = os.path.dirname(CLAUDE_DIR)
 MODULE = os.path.join(CLAUDE_DIR, "module.json")
 SETTINGS = ".claude/settings.local.json"
 LOCAL = localmanifest.PATH
@@ -64,6 +65,17 @@ class Project(support_install.Base):
         self.assertEqual(0, done.returncode, done.stderr)
         return done.stdout
 
+    def attach(self, *args, **kwargs):
+        """Attach this module itself, from the running distribution."""
+        support.require_release(self)
+        kwargs.setdefault("harness", "workbench/claude")
+        kwargs.setdefault("package", PACKAGE)
+        kwargs.setdefault("dist", None)
+        return support_install.Base.attach(self, *args, **kwargs)
+
+    def warm(self, path):
+        cli.main(["verify", path], io.StringIO(), io.StringIO(), store_root=self.store_root)
+
     def attached(self):
         self.ready()
         code, out, err = self.attach()
@@ -96,6 +108,17 @@ class Attached(Project):
         self.assertEqual(b"@AGENTS.md\n", self.read("CLAUDE.md"))
         self.assertEqual(b"/CLAUDE.md\n/.claude/\n", self.read(".git/info/exclude"))
         self.assertIn("note: Restart the Claude session to load the new settings.\n", out)
+
+    def test_the_record_and_the_report_name_this_module(self):
+        self.ready()
+        code, out, err = self.attach()
+        self.assertEqual(0, code, err)
+        self.assertTrue(out.startswith("attached workbench/claude 0.1.0 in "), out)
+        document = self.planned()
+        self.assertEqual(("claude", "0.1.0", "local:workbench"),
+                         (document["harness"], document["module_version"], document["source"]))
+        verified = verify.verify_package(PACKAGE, first_party=True).modules[0]
+        self.assertEqual(verified.tree_hash, document["tree"])
 
     def test_the_tolerated_file_is_not_written(self):
         self.ready()

@@ -2,7 +2,11 @@
 
 A module's own tests may import this (a `tests/support*` file) and no other test module."""
 
-from workbench import neutral
+import json
+import os
+import shutil
+
+from workbench import firstparty, neutral
 
 SKILL = b"---\nname: sample\ndescription: A sample skill\n---\nDo the thing.\n"
 AGENT = (b"---\nname: reviewer\ndescription: Reviews changes\ntools: read, search\n"
@@ -44,3 +48,37 @@ SYNTHETIC = {
     "exclude": ["FIXTURE.md", ".fixture/"],
     "notes": ["Restart the session to load the new settings."],
 }
+
+PACKAGE = "synthetic"
+MODULE = "fixture"
+HARNESS = PACKAGE + "/" + MODULE
+PROVIDES = ["instructions", "skills", "agents", "commands", "permissions"]
+
+
+def write_package(distribution, layout=None):
+    """The synthetic harness package, `<distribution>/packages/synthetic`, with one harness module named
+    `fixture`. It provides the five capabilities its layout renders. Returns the package path."""
+    path = os.path.join(distribution, firstparty.PACKAGES, PACKAGE)
+    os.makedirs(os.path.join(path, MODULE))
+    with open(os.path.join(path, "package.json"), "w") as handle:
+        json.dump({"name": PACKAGE, "version": "0.1.0", "contract": 1, "modules": [MODULE]}, handle)
+    with open(os.path.join(path, MODULE, "module.json"), "w") as handle:
+        json.dump({"name": MODULE, "version": "0.1.0", "type": "harness",
+                   "description": "A synthetic harness for the installer's tests.",
+                   "provides": PROVIDES, "layout": layout or SYNTHETIC}, handle)
+    return path
+
+
+def distribution(directory, layout=None):
+    """A distribution at `directory` whose one first-party package is the synthetic harness, with its
+    shipped approvals written by the release mechanism. A harness has to be first-party to provide the
+    unprefixed capabilities, so the tests attach it from here and pass this path as the distribution."""
+    # `workbench/` holds the shipped approvals the release mechanism writes below.
+    os.makedirs(os.path.join(directory, "workbench"))
+    # `install` reads the base from its distribution. The base is the installer's own content, not a
+    # module's, so the tests copy the real one instead of making up a second.
+    shutil.copytree(os.path.join(firstparty.default_distribution(), "base"),
+                    os.path.join(directory, "base"))
+    write_package(directory, layout)
+    firstparty.release_approvals(directory)
+    return directory

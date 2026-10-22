@@ -11,7 +11,7 @@ import os
 import unittest
 import unittest.mock
 
-from tests import test_attach, test_preview as preview_tests, test_upgrade
+from tests import support_real, test_attach, test_preview as preview_tests, test_upgrade
 from workbench import approve, manifest, verify
 
 HARNESS = test_attach.HARNESS
@@ -44,7 +44,7 @@ def groundwork(readmes=None, index=INDEX_V1, policy=POLICY_V1, version="1.0.0"):
     return fields, files
 
 
-class Fixture(test_attach.Base):
+class Fixture(support_real.RealHarness, test_attach.Base):
     """A project installed as `install` writes it, from a package with the fixture module."""
 
     MODULES = {"h": (HARNESS, {}), "groundwork": groundwork()}
