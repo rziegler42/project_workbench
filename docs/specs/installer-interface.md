@@ -168,6 +168,8 @@ says so.
 | `release-approvals` | package | nothing | the shipped first-party records in the workbench distribution | no | built |
 | `approve-plan` | project | a plan path | the guarded store: a plan approval record | yes, owner-run | built |
 | `plan-status` | project | a plan path | nothing | no | built |
+| `settings` | project | nothing | nothing | no | proposed |
+| `gate` | project | a harness name, and the hook's JSON on standard input | nothing | no | proposed |
 
 - `verify --no-harness-required` turns off the rule that a selection needs a harness module
   (`module-contract.md`). It is a check option and installs nothing, so it does not weaken a
@@ -501,6 +503,21 @@ uses, with the same refusals. The behaviour, the path rules, the record, the out
 `trust-and-approval.md`, "Plan approval records". `approve-plan` is owner-run and terminal-only and a harness
 denies it to the agent; `plan-status` is read-only and agent-safe. Neither commits, pushes or edits a plan, and
 neither reads a plan itself: the process module's declared, pinned command does.
+
+### `settings` and `gate` (proposed by plan `2026-10-22-checkpoint-settings-and-caps`)
+
+`wb settings` takes no argument and no option and runs from anywhere inside a project, with the root and the ID
+found as `wb run` finds them. It resolves exactly one process module, none or more than one being a refusal, reads
+its verified declaration and prints, on standard output, one line per declared checkpoint, `checkpoint <name>:
+stop` or `checkpoint <name>: delegate`, then one line per declared cap, `cap <name>: <n>`, then one `settings:
+<text>` line per problem in the owner's settings. It is read-only and agent-safe. Exit codes: 0 printed, 1 refused
+(a `refused:` line on standard error and nothing on standard output), 2 usage error.
+
+`wb gate claude` takes exactly the one argument `claude` and reads the harness's hook JSON from standard input. It
+is the command the Claude harness's rendered hook runs. It is read-only and agent-safe, prints nothing, and
+exits 0 to allow and 2 to refuse; any usage error is also 2, because the hook treats exit 2 alone as a block. The
+rules, the deadline and the refusals are in `trust-and-approval.md`, "Checkpoint and cap settings, and the edit
+gate". Neither command writes in the project, and neither writes in the store beyond the bootstrap above.
 
 ## The existing commands
 

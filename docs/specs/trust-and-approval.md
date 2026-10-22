@@ -400,6 +400,59 @@ prose above and this section differ in precision, this section is what the code 
   authority on what the region is, as far as its owner-approved bytes go, and a helper that misreports it defeats
   the approval; the record binds the helper's hash so that an edit of it is a change.
 
+### Checkpoint and cap settings, and the edit gate
+
+*(Proposed by plan `2026-10-22-checkpoint-settings-and-caps`; nothing here is built until that plan's increments B to F. The names are in
+`code-work.md`; the declaration fields are in `module-contract.md`.)*
+
+- **What the module declares.** A process module declares `checkpoints`, `caps` and `approval.active`. The
+  installer treats every name as opaque text and knows no plan: it never reads one.
+- **The `caps` setting.** The personal settings gain an optional `caps`, `{"<name>": <integer>}`. `version` stays 1
+  because the key is additive; a workbench that predates it reports the key as unknown and ignores it. A missing
+  `caps` is empty.
+- **Effective values.** A checkpoint is `delegate` only when the owner set exactly `delegate` for a name the
+  module declares, and `stop` otherwise; `delegate` has no effect until `delegated-approval` reads it. A cap is the
+  owner's value when that is a JSON integer from 1 to the module's ceiling (a boolean, a float, zero, a negative
+  number or a larger number is not), and the module's default otherwise. A checkpoint or cap entry for a name the
+  module does not declare is ignored. Each ignored or replaced value is reported as a `settings:` note. A damaged
+  settings file gives every default, every checkpoint `stop`, and the existing damage note, and is not
+  overwritten.
+- **`wb settings`** (read-only, agent-safe; `installer-interface.md`). It resolves the one process module,
+  reads its verified declaration, and prints the effective values and the notes.
+- **The active command.** For a module that declares `approval.active`, the installer runs
+  `<command> <active>` with no further argument, with standard input closed, as it runs the region command, and
+  accepts within 8,192 bytes of standard output one JSON object and a newline and nothing else:
+  `{"format": 1, "plans": ["<root-relative path>", ...]}` with at most 32 paths of at most 240 characters, each
+  passing the path validator, none repeated. Anything else, a non-zero exit, a timeout or a `refused:` line is a
+  failure of the helper. The output is data and is validated, never followed.
+- **`wb gate claude`** (the edit gate; the hook's command). It reads one JSON object from standard input,
+  at most 65,536 bytes, and decides one tool call. It prints nothing and exits 0 to allow, and prints one `refused:`
+  line on standard error and exits 2 to refuse. Every other outcome, a crash included, is a refusal. A total
+  deadline of 10 seconds covers everything including the helper runs, and its expiry is a refusal. In order:
+  1. The object must carry a string `cwd`, a string `tool_name` and an object `tool_input`. The project is found
+     from `cwd` as `wb run` finds it; none is a refusal (the hook is only rendered into a project).
+  2. A project whose manifest has no process module that declares `approval` and `approval.active` is allowed. More
+     than one such module is a refusal.
+  3. The `active` command is run. No plan under way is an allow. A failed command is a refusal.
+  4. The targets are read from `tool_input` by the closed table in `harness-modules.md`, "The edit gate hook". A
+     `tool_name` outside the table, a missing or empty field, a field that is not a string, and a NUL are refusals.
+     Every target is placed and judged, and the call is allowed only when all of them pass.
+  5. A target is placed by resolving a relative path against `cwd` and folding `.` and `..` lexically. Containment
+     in the root and equality with a plan compare with case and Unicode variants folded, so a case-insensitive
+     filesystem cannot turn an inside path into an outside one. A target outside the root passes. A target inside
+     the root is refused when any component that exists is a symbolic link. A target that is a plan under way
+     passes, so that a plan's status, review record and result can still be written.
+  6. Any other target passes only when every plan under way reads `approved` by "The check" above; the first plan
+     that does not stops the check. The refusal names the plan, its state (`not approved` or `changed since
+     approval`) and `wb approve-plan`.
+- **Writes.** Nothing in the project and nothing in the store beyond the bootstrap that every command makes
+  ("The guarded store and the personal settings", "Initialization"). The first tool call of a session may seed
+  a missing `settings` file, as any other command would.
+- **Limits.** The gate stops a mistaken agent and not a hostile one. A `Status:` line is informational and an agent
+  can edit it; a shell command writes any file without passing a file-editing tool; a plan that no listed
+  status marks as under way is not seen; and the hook runs only where the owner's local settings carry it.
+  `Bash` and commit-time gates are deferred (`2026-10-22-checkpoint-settings-and-caps`, "Deferred work").
+
 ### The `approve` command
 
 `approve (<package> | --source <url> [--ref <ref>]) [--module <name>]` is run by the owner.
@@ -583,7 +636,8 @@ document written by someone other than the owner until acknowledged.
 Every unattended loop has a cap, and exceeding it stops the run with a report:
 review rounds (with a hard ceiling), retries of the same failure, and exchanges with a
 second reviewer per checkpoint. The caps and their defaults are set by the way of
-working in use; there is no cap on increments inside an approved plan. A second identical failure stops and diagnoses
+working in use, held as the `caps` setting and read with `wb settings` ("Checkpoint and cap settings, and the
+edit gate"); there is no cap on increments inside an approved plan. A second identical failure stops and diagnoses
 instead of retrying. No dollar ceiling is required.
 
 ## Residual risk
@@ -620,8 +674,9 @@ instead of retrying. No dollar ceiling is required.
   stripped from tracked copies, are decided in the `researcher-fetch-tool` candidate.
 - **Formats still proposals.** The formats in "Concrete formats" are fixed by the code at `format: 1`.
   The format of plan approvals is built ("Plan approval records"); the formats of
-  delegated-approval records and the setting names for
-  checkpoints remain proposals (the baselines format is built) until the way of working that uses them is built.
+  delegated-approval records remain a proposal (the baselines format is built) until the way of working that
+  uses them is built. The `caps` setting and the edit gate are proposed by plan `2026-10-22-checkpoint-settings-and-caps` ("Checkpoint and cap
+  settings, and the edit gate"); the checkpoint names are in `code-work.md`.
 - **Added hard stops.** A module may add hard stops, and the function that combines stops accepts
   additions, but a module declaration has no field to declare one and no module supplies any. The owner
   decides the field (a `module-contract` change) or defers it.
@@ -631,6 +686,9 @@ instead of retrying. No dollar ceiling is required.
 ## Acceptance criteria
 
 - With no personal settings, every checkpoint behaves as `stop`.
+- *(Proposed by plan `2026-10-22-checkpoint-settings-and-caps`.)* With no `caps`, `wb settings` reports every default; a value that is not an
+  integer from 1 to the ceiling is replaced by the default with a `settings:` note. `wb gate claude` refuses an
+  edit while a plan under way is not approved, allows it otherwise, and refuses on any doubt.
 - A module whose declaration or content differs from its approval is not installed,
   and nothing is written.
 - A plan whose hashed region differs from the approved hash is not acted on. Changing

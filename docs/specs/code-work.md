@@ -36,7 +36,9 @@ Non-goals:
 | blocks | nothing beyond the one-process rule of the type |
 | fills | the policy slot in `AGENTS.md`; the `docs-index` slot |
 | writes | `docs/plans/` and its README |
-| ships | one helper (code-bearing, shown at approval) with the subcommands `check`, `plans`, `report` and `region`; the `wb` launcher is a workbench component and not shipped by this module |
+| ships | one helper (code-bearing, shown at approval) with the subcommands `check`, `plans`, `report`, `region` and, proposed, `active`; the `wb` launcher is a workbench component and not shipped by this module |
+| approval | `region` computes a plan's hashed region; `active` (proposed) lists the plans under way |
+| checkpoints, caps | the eight checkpoint names and three caps under "Checkpoints" and "Loop caps" (proposed by plan `2026-10-22-checkpoint-settings-and-caps`) |
 
 It also ships neutral items: skills for drafting a plan, running the increment loop,
 and reviewing; and a read-only reviewer agent. Templates stay in the module; no
@@ -220,15 +222,20 @@ step without a recorded outcome.
 
 ## Checkpoints
 
-| checkpoint | default | notes |
-|---|---|---|
-| approve a plan | stop | delegable on convergence; never delegable if the plan's risks list a hard stop |
-| push to a shared branch | stop | delegable; see "Push" |
-| submit a remote job on a profile the plan declares | stop | delegable |
-| fetch the output of a remote job | stop | delegable; overwriting an existing or tracked file is a hard stop |
-| change a spec's or roadmap's direction | stop | delegable |
-| accept a decision | stop | delegable |
-| acknowledge changes made by someone else | stop | second tier delegable; first tier only by explicit setting |
+| checkpoint | setting name | default | notes |
+|---|---|---|---|
+| approve a plan | `approve-plan` | stop | delegable on convergence; never delegable if the plan's risks list a hard stop |
+| push to a shared branch | `push-shared-branch` | stop | delegable; see "Push" |
+| submit a remote job on a profile the plan declares | `submit-remote-job` | stop | delegable |
+| fetch the output of a remote job | `fetch-remote-output` | stop | delegable; overwriting an existing or tracked file is a hard stop |
+| change a spec's or roadmap's direction | `change-direction` | stop | delegable |
+| accept a decision | `accept-decision` | stop | delegable |
+| acknowledge changes made by someone else, first tier | `acknowledge-first-tier` | stop | only by explicit setting |
+| acknowledge changes made by someone else, second tier | `acknowledge-second-tier` | stop | delegable |
+
+The setting names are what the module declares in `checkpoints` and what the owner writes under `checkpoints` in
+the personal settings (`trust-and-approval.md`). Setting `delegate` has no effect until `delegated-approval`:
+every checkpoint stops, whatever the setting says. `wb settings` reports the effective values.
 
 Not checkpoints inside an approved plan: starting the next increment, a local commit
 after a passing review, archiving a plan, pushing a branch that is not shared, and
@@ -262,7 +269,9 @@ module adds none of its own.
   check: one `Candidate:` line, the sections of the hashed region, required fields),
   `wb run code-work plans` (the active plans, derived by listing plans by status) and
   `wb run code-work report` (candidate completion, derived from work records). They change
-  nothing, and run no program.
+  nothing, and run no program. A fifth, `wb run code-work active` *(proposed)*, lists the plans whose `Status:` is
+  `Approved` or `In Progress` as `{"format": 1, "plans": [...]}` for the edit gate, with the same reader and
+  limits as `region`.
 - A commit that completes an increment ends with the trailer `Plan: <plan stem>#<label>`.
 - A commit never authorizes a push.
 
@@ -274,11 +283,14 @@ identical failure stops and diagnoses instead of
 retrying. Exceeding a cap stops the run with a report.
 
 The default values are held in the owner's personal settings, and a project may lower
-them but not raise them:
+them but not raise them. The module declares them as `caps`, named `review-rounds`, `same-failure-retries` and
+`reviewer-exchanges`, each with its default and ceiling, and the owner's `caps` setting may set a value from 1 to
+the ceiling. A project-level lowering is deferred (plan `2026-10-22-checkpoint-settings-and-caps`, "Deferred work"):
 
 - review rounds: 3, with a hard ceiling of 5;
-- retries of the same failure: 1, so the second identical failure stops and diagnoses;
-- exchanges with a reviewer per checkpoint: 6;
+- retries of the same failure: 1, so the second identical failure stops and diagnoses, with a hard ceiling of 2;
+- exchanges with a reviewer per checkpoint: 6, with a hard ceiling of 12 *(my proposal; the ceilings of the
+  other two caps are 5 and 2)*;
 - increments per run: no number. A run is bounded by its approved plan and never
   starts a new plan without a new approval.
 

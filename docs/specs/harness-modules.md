@@ -115,6 +115,9 @@ Hooks have no neutral form. They are code that runs, so they ship only as files 
 plain terms when the module is approved. A harness that declares `hooks: none` simply
 does not receive them.
 
+The one hook the installer itself renders is the edit gate, for a harness whose layout carries a `hooks` key
+("The edit gate hook", proposed). It is not a module's file and not listed under `ships`.
+
 ## Root files and instructions
 
 - Every harness reads `AGENTS.md` for project policy, directly or through its root
@@ -129,7 +132,8 @@ does not receive them.
 Built as the first-party module `claude` in `packages/workbench/`, declared as data (`layout`
 in `module.json`) and rendered by the installer. It provides five capabilities:
 `instructions`, `skills`, `agents`, `commands` and `permissions`. It declares `hooks: none`;
-the sixth, `hooks`, is added when a module ships a hook (`checkpoint-settings-and-caps` may be the first). Layout, verified against
+the sixth, `hooks`, is added by `checkpoint-settings-and-caps`, which renders the installer's own gate hook ("The edit gate
+hook") and no module's hook. Layout, verified against
 Claude Code 2.1.305 (see "Evidence" below):
 
 | kind or file | path |
@@ -180,6 +184,34 @@ normalisation beyond doubled spaces, and loading of an untracked skill, agent or
 command (a scratch test showed an untracked skill, agent and command all listed by the
 session; the documentation is silent).
 
+Hook facts, read from `code.claude.com/docs/en/hooks`, `hooks-guide`, `tools-reference` and `permissions` on
+2026-10-22 (the pages show no version; the installed version is 2.1.305 as above, and the hook behaviour is
+not yet tested on it). Proposed use is in "The edit gate hook".
+
+- **Input.** A `PreToolUse` hook gets one JSON object on standard input with `session_id`, `transcript_path`,
+  `cwd`, `permission_mode`, `hook_event_name`, `tool_name`, `tool_input` and `tool_use_id`. For the file tools
+  "`tool_input.file_path` is always absolute" and `~` and relative paths are expanded before the hook runs.
+- **Editing tools.** `Edit` and `Write` take `file_path`; neither targets several files. `NotebookEdit` exists;
+  the permissions page names `notebook_path` as its path field and the hooks page gives no schema for it.
+  `MultiEdit` is not in the current tools reference. An `Edit(...)` permission rule covers `Edit`, `Write` and
+  `NotebookEdit`.
+- **Exit codes.** 0 is success (stdout JSON is parsed); 2 is a blocking error and "your stderr is the reason";
+  any other non-zero code is a non-blocking error and "the action goes ahead". Exit 2 overrides a JSON `allow`.
+  A JSON `permissionDecision` of `deny` on exit 0 also denies; the gate uses exit 2 only.
+- **Matcher.** A value of letters, digits, `_`, `-`, spaces, `,` and `|` is an exact name or a list of exact names
+  (`Edit|Write`); anything else is an unanchored JavaScript regular expression; matching is case-sensitive.
+- **Registration.** `{"hooks": {"PreToolUse": [{"matcher": ..., "hooks": [{"type": "command", "command": ...,
+  "timeout": <seconds>}]}]}}` in a settings file; user, project, local and managed files are read and "hook
+  entries merge across settings levels". Precedence between project and local files is not verified.
+- **Timeout.** `timeout` is in seconds, default 600 for a command hook; on expiry the hook is cancelled, its output
+  is discarded and the call is not blocked, unless `"onFailure": "block"` is set.
+- **Execution.** A command string runs through `sh -c` on macOS and Linux, in the session's current directory.
+  `${CLAUDE_PROJECT_DIR}` is the project root where the session started.
+- **Not verified, and not relied on:** that `notebook_path` is the key a `NotebookEdit` hook receives; that
+  `MultiEdit` exists; whether `CLAUDE_PROJECT_DIR` is exported to a plain command hook; the `PATH` the hook's
+  shell sees (so whether `wb` is found); and hooks through a symlinked path. The last 73,000 characters of the
+  hooks page were searched for terms and not read in full.
+
 ### As built, and its limits
 
 Recorded by `claude-harness` (`docs/plans/2026-10-20-claude-harness.md`), each limit found in
@@ -201,7 +233,8 @@ review or in the security pass:
   boundary; see "Verified rendering rules".
 - **The rendered rules do not deny edits to `.claude/settings.local.json` or
   `.git/info/exclude`.** Claude prompts for an edit, but an agent that has been allowed edits
-  could change its own deny rules. Adding a rule is a separate decision.
+  could change its own deny rules. Adding a rule is a separate decision; `checkpoint-settings-and-caps` proposes
+  it ("The edit gate hook").
 - **`.git/info/exclude` has the lowest precedence of git's ignore sources,** so a committed
   `.gitignore` can re-include a path with `!`. `wb check` reports such a file once it is tracked.
   An exclude file that already holds a later `!` line defeats an exclude line that is present.
@@ -227,6 +260,34 @@ review or in the security pass:
 - **Not verified:** case-insensitive filesystem behavior (the development machine cannot create
   the colliding names), and a live `claude` session started in an installed project, which needs
   the owner's allowance.
+
+### The edit gate hook
+
+*(Proposed by plan `2026-10-22-checkpoint-settings-and-caps`, increment F; not built. The Claude module declares `hooks: none` until then.)*
+
+The installer, not a module, renders one hook into the same per-clone file as the permission rules, under the
+layout's `hooks` key, and the Claude module then provides `hooks`. A layout with `hooks: none` receives no hook, and
+attach says so. The rendered entry is fixed by the layout and not chosen by any module:
+
+```json
+{"hooks": {"PreToolUse": [{"matcher": "Edit|Write|MultiEdit|NotebookEdit",
+  "hooks": [{"type": "command", "command": "wb gate claude || exit 2", "timeout": 20}]}]}}
+```
+
+- **Why `|| exit 2`.** Claude treats exit 2 as the only blocking code, so a `wb` that is missing from `PATH` (exit
+  127) or a gate that fails for any reason would let the call through. The shell's `||` turns every non-zero exit
+  into 2. A hook whose command cannot start in the shell at all is not covered; criterion 9 of the plan checks it.
+- **Why `timeout: 20`.** A timed-out command hook does not block the call. The gate stops itself after 10
+  seconds and refuses, and the harness's limit is set above that. `onFailure: "block"` exists in the current
+  documentation and is not rendered, because it is unverified on the installed version.
+- **The target table** (closed; anything else is a refusal): `Edit` reads `tool_input.file_path`, `Write` reads
+  `tool_input.file_path`, `NotebookEdit` reads `tool_input.notebook_path`, and `MultiEdit` reads
+  `tool_input.file_path`. The first two are verified in the documentation; `notebook_path` is documented for
+  permission rules only and `MultiEdit` is not in the current documentation (see "Evidence"), so both are
+  unverified and the gate refuses a call whose field is missing. No documented tool names several files.
+- **The deny.** The rendered deny list also covers edits to `.claude/settings.local.json` and `.git/info/exclude`
+  (the owner edits both by hand), so an agent cannot delete the hook. This is the one rule beyond the hook and the
+  owner may strike it; it is arranged so that it can be dropped alone.
 
 ## The opencode harness module
 
