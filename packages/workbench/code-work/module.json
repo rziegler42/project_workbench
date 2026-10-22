@@ -9,7 +9,8 @@
   "requires": [
     "specs",
     "roadmaps",
-    "decisions"
+    "decisions",
+    "commit"
   ],
   "writes": [
     "docs/plans/README.md"
@@ -25,9 +26,7 @@
       "arguments": [
         "check",
         "plans",
-        "report",
-        "commit",
-        "remove"
+        "report"
       ]
     }
   },

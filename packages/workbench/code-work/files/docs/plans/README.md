@@ -47,11 +47,11 @@ lines come before the first `##` heading.
 
 ## Committing an increment
 
-- Commit an increment through the code-work helper, naming the commit HEAD is expected to be
+- Commit an increment with `wb run safe-git commit`, naming the commit HEAD is expected to be
   and the exact paths. The helper stages only those paths, refuses a commit when anything else
   is staged, and prints the new commit.
 - The message describes the change only. It carries no attribution of any tool unless the
-  project allows it in `.workbench/code-work.json`.
+  project allows it in `.workbench/safe-git.json`.
 - A commit that completes an increment ends with the trailer `Plan: <plan stem>#<label>`.
 - On a branch with no commit yet, the expected commit is `none`.
 

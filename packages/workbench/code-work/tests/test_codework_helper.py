@@ -97,7 +97,7 @@ class Project(unittest.TestCase):
 
 
 class Source(unittest.TestCase):
-    def test_the_helper_imports_only_the_standard_library_and_the_kit(self):
+    def test_the_helper_imports_only_the_standard_library(self):
         with open(HELPER, encoding="utf-8") as handle:
             tree = ast.parse(handle.read())
         names = set()
@@ -106,27 +106,19 @@ class Source(unittest.TestCase):
                 names.update(alias.name.split(".")[0] for alias in node.names)
             elif isinstance(node, ast.ImportFrom):
                 names.add((node.module or "").split(".")[0])
-        self.assertEqual({"datetime", "html", "io", "itertools", "json", "os", "re", "stat", "subprocess", "sys",
-                          "unicodedata", "wbkit"}, names)
-        self.assertEqual({"wbkit"}, names - set(sys.stdlib_module_names))
+        self.assertEqual({"datetime", "html", "io", "itertools", "os", "re", "stat", "sys"}, names)
+        self.assertEqual(set(), names - set(sys.stdlib_module_names))
 
-    def test_the_only_import_of_subprocess_is_below_the_read_only_part(self):
-        read_only, marker, below = self.split_text()
-        self.assertNotIn("subprocess", read_only)
-        self.assertIn("import subprocess", below)
-
-    @staticmethod
-    def split_text():
-        """The helper's text above and below the line that begins the code that runs git."""
+    def test_the_helper_holds_no_git_code(self):
         with open(HELPER, encoding="utf-8") as handle:
             text = handle.read()
-        marker = "# --- running git "
-        above, found, below = text.partition(marker)
-        assert found, "the helper has no line that begins the git code"
-        return above, found, below
+        for word in ("subprocess", "git_shape_ok", "command_commit", "command_remove", "CHANGING",
+                     "running git", ".workbench/code-work.json", "\"git\""):
+            self.assertNotIn(word, text, word)
 
-    def test_the_read_only_part_opens_nothing_for_writing_and_runs_no_program(self):
-        text, _, _ = self.split_text()
+    def test_the_helper_opens_nothing_for_writing_and_runs_no_program(self):
+        with open(HELPER, encoding="utf-8") as handle:
+            text = handle.read()
         for word in ("subprocess", "os.system", "os.exec", "os.popen", "O_WRONLY", "O_RDWR",
                      "O_CREAT", "O_APPEND", "os.write", "os.rename", "os.unlink", "os.remove",
                      "os.mkdir", "os.rmdir", "os.chmod", "os.utime", "os.symlink", "os.link", "O_TRUNC",
@@ -505,7 +497,7 @@ class Dispatch(Project):
             code = helper.main(args, out, err, self.place)
             self.assertEqual((1, ""), (code, out.getvalue()), args)
             self.assertTrue(err.getvalue().startswith("refused: usage: code-work check"), args)
-            self.assertIn("commit or remove", err.getvalue())
+            self.assertNotIn("commit", err.getvalue())
 
     def test_run_as_a_program_from_a_directory_of_lookalike_modules(self):
         """The working directory holds `json.py`, `os.py` and `re.py` that would fail if imported."""

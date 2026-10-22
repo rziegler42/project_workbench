@@ -272,3 +272,21 @@ Nothing is left for the owner. The review is not an approval; the plan stays `Pr
 - The shipped-approval tests passed, so the release in increment D is still needed for the real shipped
   records but nothing fails before it.
 - Next: increment B.
+
+### Increment B — done
+
+- The `code-work` helper lost the git region and the `CHANGING` table: 1,745 lines became 680. It has the
+  three read commands, imports only the standard library, and starts no program. Its docstring and usage text
+  no longer mention `commit` or `remove`.
+- `module.json`: arguments are `check`, `plans`, `report`; `requires` gains `commit`. The policy block says
+  "the git helper"; the plans README says `wb run safe-git commit` and `.workbench/safe-git.json`.
+- Tests: deleted `support_git.py`, `test_codework_git.py`, `test_codework_commit.py` and
+  `test_codework_remove.py`. Updated the declaration, policy and install expectations (the installs select
+  `safe-git` too). Added a test that the helper holds no git code, a test that installing `code-work` without
+  `safe-git` stops on the `commit` requirement, and a check that `commit` and `remove` are refused arguments.
+- Differences from the plan, both small: the helper's unused imports (`json`, `unicodedata`, `wbkit`) went
+  with the git code, so the import test now expects the standard library only; the old "only import of
+  subprocess is below the read-only part" test became a test that no git code is present.
+- Verification: the full suite runs 2650 tests in 5 roots, OK (2860 before; the difference is the deleted
+  copies of the moved tests).
+- Next: increment C.
