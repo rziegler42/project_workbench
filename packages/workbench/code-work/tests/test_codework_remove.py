@@ -397,6 +397,15 @@ class Limits(Remove):
         self.assertIn("deeper", json.loads(out)["reason"])
         self.assertTrue(self.exists("d/e/x.txt"))
 
+    def test_a_tree_that_grows_past_the_entry_bound_during_the_walk_stops_it(self):
+        self.write("d/e/x.txt", "x\n")
+        H.HOOK = lambda stage, rel: setattr(H, "MAX_REMOVE_ENTRIES", 1) if (stage, rel) == ("entry", "d") else None
+        self.addCleanup(setattr, H, "MAX_REMOVE_ENTRIES", H.MAX_REMOVE_ENTRIES)
+        code, out, err = self.confirm("d", recursive=True)
+        self.assertEqual(1, code)
+        self.assertIn("more than", json.loads(out)["reason"])
+        self.assertTrue(self.exists("d/e/x.txt"))
+
     def test_the_bound_on_entries_counts_the_whole_tree_and_not_one_directory(self):
         for sub in "efg":
             for number in range(3):

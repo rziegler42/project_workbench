@@ -737,3 +737,55 @@ removed, and the test shows the program does not run.
 - Limit: the helper's own standard error is not captured by `commands.run`, so the end-to-end tests assert
   exit codes and repository state for helper refusals; the refusal texts are covered in the helper tests.
 - The shipped approvals for `code-work` stay stale until F.
+
+### Increment F — security pass (2026-10-22; the release is not yet run)
+
+Three read-only `security-reviewer` passes covered the git runner and repository checks, `commit`, and
+`remove`, with the cases of Review focus, then three more rounds tried to bypass the fixes. All probes ran
+in scratch repositories against real git; sentinel files outside the target were checked after each.
+
+Fixed, each with a test that failed before the fix:
+
+- **High.** `repo_program_findings` ran `core.fsmonitor` through its own `git ls-files`. Every run now sets
+  `core.fsmonitor=false` through `GIT_CONFIG_COUNT`; an entry whose value is false is not a finding.
+- **High.** A partial-clone configuration plus a missing object made `diff` and `commit` run
+  `remote.*.uploadpack`. Every run sets `GIT_NO_LAZY_FETCH=1`, and the keys `uploadpack`, `receivepack`,
+  `vcs`, `helper`, `promisor`, `partialclone`, `partialclonefilter`, `core.gitproxy` and `core.askpass`
+  are findings.
+- **High.** Auto-maintenance after a commit ran `gc.recentObjectsHook`. Every run sets `maintenance.auto=false`
+  and `gc.auto=0`, and any key ending in `hook` is a finding.
+- **High.** A hooks directory without read permission (mode 0311 or 0111) was skipped, though git runs a
+  hook it names. It is now the finding `hooks:unreadable`.
+- **Low.** `diff` shapes that read contents now require `--no-ext-diff` and `--no-textconv`, unless they only
+  list names.
+- **Medium.** Attribution evaded the check through look-alike letters: Latin small capitals and IPA letters
+  (refused), letters with a stroke, hook or dot and boxed letters (folded to the base letter), a handful of
+  single symbols (mapped), and words that mix scripts (refused, with Japanese, Chinese and Korean counted
+  as one). The mixed-script rule now applies to every word, not only to words that hold Latin.
+- **Low.** `remove` now enforces the entry bound during the delete walk too.
+
+Not fixed, with the reason:
+
+- **The attribution setting is read from the work tree** (decision 4). An agent that can write files can
+  set it to `allow` itself, and reading it from `HEAD` only moves that, since the agent can commit the
+  change. The guard prevents a mistake; it is not a control against a deliberate agent.
+- **A look-alike list cannot be complete.** Visual substitutes of a letter by a digit or a capital I
+  (`C1aude`, `CIaude`) and other characters not yet listed can still pass.
+- **The caller's `HOME` and `PATH` are trusted** (plan assumption). A `git` in an absolute `PATH` entry
+  outside the repository runs, and a `HOME` chosen by the caller selects the global configuration. The
+  repository is the untrusted party.
+- **An attribute in the repository can select a filter the owner's global configuration defines.**
+- **The expected-HEAD guarantee is detection** (decision 7). A file staged by another process between the
+  last check and the commit is committed and reported.
+- **The check for a nested repository is not repeated per target** under one parent in `remove --confirm`.
+  It needs a concurrent writer of the same user and affects only a path named by the owner.
+- **Linux bind mounts** share a device number with the filesystem under them, so the mount guard of
+  `remove` does not see them. Not reachable on macOS; untested.
+- **Settings checked only by reading:** `GIT_CONFIG_COUNT` needs git 2.31 and `GIT_NO_LAZY_FETCH` needs 2.44;
+  an older git ignores them and only the findings protect.
+- **The last two fixes** (the script-mix rule and `hooks:unreadable`) have not had their own bypass round.
+- Messages are not checked for control characters when the project allows attribution.
+
+Verification: the full suite, 2638 tests in 4 roots, OK (13 more than before F plus the later fixes).
+The shipped approvals for `code-work` are still stale, and F is not complete until the owner runs
+`release-approvals` and the stale records are removed.

@@ -91,12 +91,16 @@ class Nested(support_git.Repo):
         git(sub, "init", "-q")
         with open(os.path.join(sub, "f.txt"), "w") as handle:
             handle.write("x\n")
-        git(sub, "add", "f.txt")
+        with open(os.path.join(sub, ".gitattributes"), "w") as handle:
+            handle.write("f.txt filter=x\n")
+        git(sub, "add", "f.txt", ".gitattributes")
         git(sub, "commit", "-q", "-m", "inner")
         if committed:
             git(self.repo, "add", "sub")
             git(self.repo, "commit", "-q", "-m", "gitlink")
-        git(sub, "config", "core.fsmonitor", self.script)
+        git(sub, "config", "filter.x.clean", self.script)
+        later = os.stat(os.path.join(sub, "f.txt")).st_mtime + 100
+        os.utime(os.path.join(sub, "f.txt"), (later, later))   # looks changed, so git runs the clean filter
         return sub
 
     def test_a_committed_gitlink_is_a_finding_so_the_commit_is_refused(self):
@@ -185,7 +189,7 @@ class Shapes(unittest.TestCase):
 class Environment(support_git.Repo):
     HOSTILE = {
         "GIT_DIR": "/nonexistent", "GIT_WORK_TREE": "/nonexistent", "GIT_INDEX_FILE": "/nonexistent",
-        "GIT_OBJECT_DIRECTORY": "/nonexistent", "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.fsmonitor",
+        "GIT_OBJECT_DIRECTORY": "/nonexistent", "GIT_CONFIG_COUNT": "5", "GIT_CONFIG_KEY_0": "core.sshcommand",
         "GIT_CONFIG_VALUE_0": "/bin/false", "GIT_CONFIG_PARAMETERS": "'core.fsmonitor=/bin/false'",
         "GIT_EXEC_PATH": "/nonexistent", "GIT_SSH_COMMAND": "/bin/false", "GIT_ASKPASS": "/bin/false",
         "GIT_EDITOR": "/bin/false", "GIT_PAGER": "/bin/false", "GIT_EXTERNAL_DIFF": "/bin/false",
@@ -211,7 +215,6 @@ class Environment(support_git.Repo):
         self.assertNotIn("LD_PRELOAD", seen)
         self.assertNotIn("DYLD_INSERT_LIBRARIES", seen)
         self.assertNotIn("GIT_DIR", seen)
-        self.assertNotIn("GIT_CONFIG_COUNT", seen)
 
     def test_the_helper_sets_the_few_variables_it_needs(self):
         seen = self.logged_environment()
@@ -220,6 +223,17 @@ class Environment(support_git.Repo):
         self.assertEqual("true", seen["GIT_EDITOR"])
         self.assertEqual("cat", seen["GIT_PAGER"])
         self.assertEqual("1", seen["GIT_LITERAL_PATHSPECS"])
+        self.assertEqual("1", seen["GIT_NO_LAZY_FETCH"])
+
+    def test_the_helper_switches_the_file_system_monitor_off_for_every_run(self):
+        seen = self.logged_environment()
+        self.assertEqual("false", seen["GIT_CONFIG_VALUE_0"])
+        self.assertEqual("core.fsmonitor", seen["GIT_CONFIG_KEY_0"])
+        count = int(seen["GIT_CONFIG_COUNT"])
+        settings = {seen["GIT_CONFIG_KEY_%d" % n]: seen["GIT_CONFIG_VALUE_%d" % n] for n in range(count)}
+        self.assertEqual("false", settings["maintenance.auto"])   # no automatic maintenance after a commit
+        self.assertEqual("0", settings["gc.auto"])
+        self.assertNotIn("GIT_CONFIG_PARAMETERS", seen)
 
     def test_the_locale_and_the_home_of_the_caller_are_kept(self):
         seen = self.logged_environment()
@@ -296,6 +310,12 @@ class Allowed(support_git.Repo):
                      ["show", "-s", "--format=%H", "HEAD"], ["diff-tree", "HEAD"], ["config", "user.name", "x"],
                      ["config", "--global", "--list"], ["config", "--list"], ["status"],
                      ["rev-parse", "--git-dir"], ["rev-parse", "--local-env-vars"], ["rev-parse", "-q"]):
+            self.refused(*argv)
+
+    def test_a_diff_that_reads_file_contents_must_switch_off_external_programs(self):
+        for argv in (["diff", "--check", "--", "a.txt"], ["diff", "--cached", "--check"],
+                     ["diff", "--check", "--no-ext-diff", "--", "a.txt"],
+                     ["diff", "--check", "--no-textconv", "--", "a.txt"]):
             self.refused(*argv)
 
     def test_the_shapes_the_helper_uses_are_accepted(self):
@@ -461,6 +481,102 @@ class Findings(support_git.Repo):
         with open(os.path.join(self.repo, ".git", "config"), "w") as handle:
             handle.write("[core\n")
         self.assertEqual(["config:unreadable"], self.found())
+
+    def program(self, name="prog.sh"):
+        marker = os.path.join(self.scratch, name + ".ran")
+        script = os.path.join(self.scratch, name)
+        with open(script, "w") as handle:
+            handle.write("#!/bin/sh\ntouch '%s'\nexit 1\n" % marker)
+        os.chmod(script, 0o755)
+        return script, marker
+
+    def test_the_check_itself_never_runs_the_program_it_reports(self):
+        script, marker = self.program()
+        self.config("core.fsmonitor", script)
+        self.assertEqual(["core.fsmonitor"], self.found())
+        self.assertFalse(os.path.exists(marker))
+
+    def test_a_file_system_monitor_set_to_false_is_not_a_finding(self):
+        self.config("core.fsmonitor", "false")
+        self.assertEqual([], self.found())
+
+    def test_no_shape_the_helper_runs_starts_the_file_system_monitor(self):
+        script, marker = self.program()
+        self.config("core.fsmonitor", script)
+        self.write("b.txt", "two\n")
+        for argv in (["ls-files", "-s", "-z"], ["diff", "--name-only", "-z"], ["add", "--", "b.txt"],
+                     ["diff", "--cached", "--name-only", "-z"], ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+                     ["commit", "-m", "s"], ["reset", "-q", "--", "b.txt"]):
+            with self.subTest(argv=argv):
+                H.run(["git", *argv], self.repo, check=False)
+                self.assertFalse(os.path.exists(marker))
+
+    def test_the_settings_that_make_git_fetch_or_ask_for_a_program_are_found(self):
+        for key in ("extensions.partialClone", "remote.origin.promisor", "remote.origin.uploadpack",
+                    "remote.origin.receivepack", "remote.origin.vcs", "remote.origin.partialCloneFilter",
+                    "core.gitProxy", "core.askPass", "credential.helper", "credential.https://x.example.helper"):
+            with self.subTest(key=key):
+                git(self.repo, "config", key, "something")
+                self.assertIn(key.lower(), [f.lower() for f in self.found()])
+                git(self.repo, "config", "--unset", key)
+
+    def test_a_missing_object_never_makes_a_diff_start_the_remote_program(self):
+        script, marker = self.program()
+        origin = os.path.join(self.scratch, "origin")
+        os.mkdir(origin)
+        git(origin, "init", "-q", "--bare")
+        git(self.repo, "config", "core.repositoryformatversion", "1")
+        for key, value in (("extensions.partialClone", "origin"), ("remote.origin.promisor", "true"),
+                           ("remote.origin.url", origin), ("remote.origin.uploadpack", script)):
+            git(self.repo, "config", key, value)
+        blob = git(self.repo, "rev-parse", "HEAD:a.txt").stdout.strip()
+        loose = os.path.join(self.repo, ".git", "objects", blob[:2], blob[2:])
+        os.chmod(loose, 0o644)
+        os.unlink(loose)
+        self.write("a.txt", "changed\n")
+        for argv in (["diff", "--check", "--no-ext-diff", "--no-textconv", "--", "a.txt"],
+                     ["diff", "--cached", "--check", "--no-ext-diff", "--no-textconv"],
+                     ["diff", "--name-only", "-z"], ["commit", "-m", "s"]):
+            with self.subTest(argv=argv):
+                H.run(["git", *argv], self.repo, check=False)
+                self.assertFalse(os.path.exists(marker))
+
+    def test_a_commit_never_starts_the_maintenance_program_a_repository_names(self):
+        import hashlib
+        script, marker = self.program()
+        for key, value in (("gc.auto", "1"), ("gc.autoDetach", "false"), ("maintenance.strategy", "incremental"),
+                           ("maintenance.loose-objects.auto", "1"), ("gc.recentObjectsHook", script)):
+            git(self.repo, "config", key, value)
+        for number in range(100000):      # loose objects git counts in its sample directory (names starting 17)
+            data = b"filler %d\n" % number
+            if hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest().startswith("17"):
+                subprocess_input = data
+                break
+        import subprocess
+        subprocess.run([support_git.REAL_GIT, "hash-object", "-w", "--stdin"], cwd=self.repo, input=subprocess_input,
+                       env=dict(support_git._CLEAN, HOME=self.scratch), check=True, capture_output=True)
+        self.write("b.txt", "two\n")
+        git(self.repo, "add", "b.txt")
+        H.run(["git", "commit", "-m", "s"], self.repo, check=False)
+        self.assertFalse(os.path.exists(marker))
+
+    def test_a_hooks_directory_that_cannot_be_listed_is_a_finding_and_not_skipped(self):
+        script, marker = self.program()
+        hooks = os.path.join(self.repo, ".git", "hooks")
+        os.makedirs(hooks, exist_ok=True)
+        os.symlink(script, os.path.join(hooks, "pre-commit"))
+        for mode in (0o311, 0o111):
+            with self.subTest(mode=oct(mode)):
+                os.chmod(hooks, mode)
+                self.addCleanup(os.chmod, hooks, 0o755)
+                self.assertEqual(["hooks:unreadable"], self.found())
+
+    def test_a_setting_whose_name_ends_in_hook_is_found(self):
+        for key in ("gc.recentObjectsHook", "pack.packObjectsHook", "uploadpack.packObjectsHook"):
+            with self.subTest(key=key):
+                git(self.repo, "config", key, "something")
+                self.assertIn(key.lower(), [f.lower() for f in self.found()])
+                git(self.repo, "config", "--unset", key)
 
     def test_the_findings_are_sorted_and_without_repeats(self):
         self.config("core.fsmonitor", "x")

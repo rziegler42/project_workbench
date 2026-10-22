@@ -683,8 +683,9 @@ _DIFF_FLAGS = ("--cached", "--name-only", "-z", "--check", "--no-ext-diff", "--n
 # Repository settings shaped like "a program or command to run": the shape decides and not a list of
 # names, because a list kept missing keys. A key is lower-cased before it is matched.
 EXEC_KEY = re.compile(
-    r".*\.(program|command|driver|cmd|clean|smudge|process|textconv|external|defaultkeycommand)"
-    r"|core\.(hookspath|fsmonitor|sshcommand)")
+    r".*\.(program|command|driver|cmd|clean|smudge|process|textconv|external|defaultkeycommand"
+    r"|uploadpack|receivepack|vcs|helper|promisor|partialclone|partialclonefilter)"
+    r"|core\.(hookspath|fsmonitor|sshcommand|gitproxy|askpass)|.*hook")
 
 
 def is_inside(path, boundary):
@@ -746,12 +747,17 @@ def trusted_which(name, boundary, entries=None):
 
 def git_environment(entries, extra=None):
     """The environment git runs in: a short list of the caller's variables, the trusted PATH and the
-    few Git variables set here. No variable of the caller that starts with GIT_ is passed."""
+    few Git variables set here. No variable of the caller that starts with GIT_ is passed. A repository's
+    file system monitor is switched off, a missing object is never fetched and no maintenance runs after a
+    commit, because each could run a program the repository names."""
     env = {name: os.environ[name] for name in _KEPT if name in os.environ}
     env.update({name: value for name, value in os.environ.items() if name.startswith("LC_")})
     env["PATH"] = os.pathsep.join(entries)
     env.update({"GIT_NO_REPLACE_OBJECTS": "1", "GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true",
-                "GIT_PAGER": "cat", "GIT_LITERAL_PATHSPECS": "1"})
+                "GIT_PAGER": "cat", "GIT_LITERAL_PATHSPECS": "1", "GIT_NO_LAZY_FETCH": "1",
+                "GIT_CONFIG_COUNT": "3", "GIT_CONFIG_KEY_0": "core.fsmonitor", "GIT_CONFIG_VALUE_0": "false",
+                "GIT_CONFIG_KEY_1": "maintenance.auto", "GIT_CONFIG_VALUE_1": "false",
+                "GIT_CONFIG_KEY_2": "gc.auto", "GIT_CONFIG_VALUE_2": "0"})
     env.update(extra or {})
     return env
 
@@ -774,15 +780,22 @@ def _after_dashes(rest, start):
     return rest[start:start + 1] == ["--"] and _paths_ok(rest[start + 1:])
 
 
+def _flags_ok(flags):
+    return len(set(flags)) == len(flags) and ("--name-only" in flags
+                                              or ("--no-ext-diff" in flags and "--no-textconv" in flags))
+
+
 def _diff_shape(rest):
+    """A diff in the allowed flags. One that reads file contents must also switch off external diff and
+    text conversion, so a program a configuration names is never started by it."""
     flags = []
     for index, item in enumerate(rest):
         if item == "--":
-            return len(set(flags)) == len(flags) and _after_dashes(rest, index)
+            return _flags_ok(flags) and _after_dashes(rest, index)
         if item not in _DIFF_FLAGS:
             return False
         flags.append(item)
-    return len(set(flags)) == len(flags) and bool(flags)
+    return _flags_ok(flags) and bool(flags)
 
 
 def _commit_shape(rest):
@@ -917,6 +930,8 @@ def repo_program_findings(root):
     for entry in listing.stdout.split("\0"):
         key, separator, value = entry.partition("\n")
         lowered = key.lower()
+        if lowered == "core.fsmonitor" and not git_bool_is_true(bool(separator), value):
+            continue   # off, as the runner itself sets it
         if EXEC_KEY.fullmatch(lowered) or (lowered == "commit.gpgsign"
                                            and git_bool_is_true(bool(separator), value)):
             findings.append(display.ascii_text(key)[:80])
@@ -925,7 +940,10 @@ def repo_program_findings(root):
         hooks = os.path.join(directory if os.path.isabs(directory) else os.path.join(root, directory), "hooks")
         try:
             listed = sorted(os.listdir(hooks))
-        except OSError:
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        except OSError:      # git needs only search permission to run a hook it names
+            findings.append("hooks:unreadable")
             continue
         for name in listed:
             path = os.path.join(hooks, name)
@@ -968,10 +986,26 @@ _ATTRIBUTION = [re.compile(pattern, re.I) for pattern in (
     r"(?<![A-Za-z0-9-])(?:www\.)?claude\.(ai|com)[:/?]\S")]
 _CONFUSABLE = {0x430: "a", 0x435: "e", 0x43E: "o", 0x440: "p", 0x441: "c", 0x445: "x", 0x443: "y",
                0x455: "s", 0x456: "i", 0x458: "j", 0x3BF: "o", 0x3B1: "a", 0x501: "d", 0x57D: "u", 0x3C5: "u", 0x3BC: "u",
-               0x251: "a", 0x1D04: "c", 0x142: "l", 0x19A: "l", 0x3002: "."}
+               0x251: "a", 0x1D04: "c", 0x142: "l", 0x19A: "l", 0x131: "i", 0x1DD: "e", 0x1BF: "p", 0x1F7: "p", 0x2184: "c", 0x2C75: "h", 0x2C76: "h", 0x2223: "l", 0x5C0: "l", 0x2373: "i", 0x212E: "e", 0x1C0: "l", 0x1C1: "l", 0x1455: "c", 0x3002: "."}
+# Blocks of Latin letters drawn like ASCII ones (IPA, small capitals, modifier letters, Latin extensions).
+_PHONETIC = ((0x250, 0x2FF), (0x1D00, 0x1DBF), (0xA720, 0xA7FF), (0xAB30, 0xAB6F))
+_STROKED = re.compile(r"LATIN (?:CAPITAL|SMALL) LETTER ([A-Z]) WITH ")
+_SQUARES = (0x1F130, 0x1F150, 0x1F170)   # squared, negative circled and negative squared capital letters
 _FILLERS = "\u115f\u1160\u3164\uffa0"
 _BLANKS = "\u2800\u1680"
 _LOOKALIKE_SCRIPTS = {"CYRILLIC", "GREEK", "ARMENIAN", "COPTIC", "CHEROKEE"}
+
+
+def _base_letter(char):
+    """A non-ASCII letter drawn as an ASCII one (a stroke, a hook, a dot or a box around it) as that letter."""
+    code = ord(char)
+    if code < 128:
+        return char
+    for start in _SQUARES:
+        if start <= code < start + 26:
+            return chr(97 + code - start)
+    found = _STROKED.match(unicodedata.name(char, ""))
+    return found.group(1).lower() if found else char
 
 
 def _script(char):
@@ -1073,14 +1107,22 @@ def _folded(text):
         raise Refused("the message has a control, combining, private-use or invisible character; "
                       "write it with plain letters")
     text = "".join(c for c in text if unicodedata.category(c) != "Cf" and c not in _FILLERS)
-    text = text.casefold()
+    text = text.casefold().replace("\u00b7", "")   # NFKC reads a letter with a middle dot as the letter and a dot
+    for c in text:
+        if c.isalpha() and ord(c) not in _CONFUSABLE and any(low <= ord(c) <= high for low, high in _PHONETIC):
+            raise Refused("a letter in the message looks like another letter: %s" % shown(c, 10))
     for word in re.findall(r"\w+", text.replace("\u03bc", "u")):      # a micro sign is not a look-alike
         scripts = {_script(c) for c in word if c.isalpha()}
         if "LATIN" in scripts and scripts & _LOOKALIKE_SCRIPTS:
             raise Refused("a word in the message mixes scripts: %s" % shown(word, 40))
-    text = text.translate(_CONFUSABLE)
+    text = "".join(_base_letter(c) for c in text.translate(_CONFUSABLE))
     text = "".join("-" if unicodedata.category(c) == "Pd" or c == "\u2212" else c for c in text)
     text = "".join(c for c in unicodedata.normalize("NFKD", text) if unicodedata.category(c) != "Mn")
+    for token in re.findall(r"\S+", text.replace("\u03bc", "u")):
+        scripts = {"LATIN" if c.isascii() else _script(c) for c in token
+                   if (c.isascii() and c.isalpha()) or (not c.isascii() and (c.isalpha() or unicodedata.category(c)[0] == "N"))}
+        if len(scripts - {"CJK"}) > 1:
+            raise Refused("a word in the message mixes scripts: %s" % shown(token, 40))
     text = re.sub(r"[^\S\n]+", " ", text)
     return re.sub(r":[ \t]*\n[ \t]*", ": ", re.sub(r"\n[ \t]+", " ", text))
 
@@ -1579,9 +1621,10 @@ def plan_removal(root_fd, paths, recursive):
     return targets
 
 
-def _remove_entry(parent_fd, name, rel, listed, device, depth):
+def _remove_entry(parent_fd, name, rel, listed, device, depth, counter):
     """Delete `name` below `parent_fd`, which was listed as `listed`. A directory is emptied bottom-up,
-    each entry relative to its own parent's descriptor. Anything that is not as it was listed stops it."""
+    each entry relative to its own parent's descriptor. Anything that is not as it was listed stops it, and so
+    does a tree that has grown past the bound since it was checked (`counter` counts the entries listed)."""
     _event("entry", rel)
     try:
         now = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
@@ -1612,9 +1655,12 @@ def _remove_entry(parent_fd, name, rel, listed, device, depth):
         found = _holds_repository(listing)
         if found:
             raise Stopped("%s holds %s" % (shown(rel, 80), found))
+        counter[0] += len(listing)
+        if counter[0] > MAX_REMOVE_ENTRIES:
+            raise Stopped("%s: the tree holds more than %d entries" % (shown(rel, 80), MAX_REMOVE_ENTRIES))
         _event("listed", rel)
         for child, info in listing:
-            _remove_entry(fd, child, rel + "/" + child, info, device, depth + 1)
+            _remove_entry(fd, child, rel + "/" + child, info, device, depth + 1, counter)
         try:
             os.rmdir(name, dir_fd=parent_fd)
         except OSError as exc:
@@ -1631,7 +1677,7 @@ def _remove_target(root_fd, target, device, seen):
     except Refused as exc:
         raise Stopped(str(exc))
     try:
-        _remove_entry(parent, target.parts[-1], target.path, target.info, device, 1)
+        _remove_entry(parent, target.parts[-1], target.path, target.info, device, 1, [0])
     finally:
         os.close(parent)
 
