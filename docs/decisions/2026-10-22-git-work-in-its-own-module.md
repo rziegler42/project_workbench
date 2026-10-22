@@ -1,6 +1,6 @@
 # Git work lives in its own module
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-22
 Date: 2026-10-22
 
 ## Context
@@ -65,8 +65,7 @@ and policy text that name `wb run code-work commit`, so moving is cheapest now.
   shipped approvals, which is owner-run. A pin recorded for `code-work` does not carry over; nothing is
   installed yet.
 - The completed plan `2026-10-22-code-work-commit` stays as history and keeps the old names.
-- Open for the owner: the capability name, and whether `code-work` should require the capability
-  hard (proposed) or soft.
+- The owner accepted the record as drafted, so the capability is named `commit` and `code-work` requires it hard.
 
 ## Verification
 
