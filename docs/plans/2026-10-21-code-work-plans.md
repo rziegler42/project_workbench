@@ -1,6 +1,6 @@
 # The code-work module: plans and its read-only helper
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-21
 Candidate: workbench-v1#code-work-plans
 Specs: code-work, module-contract, trust-and-approval, installer-interface, harness-modules
@@ -394,7 +394,9 @@ names it), `docs/decisions/` (two records, `Proposed`).
 
 Round 1 of 3, 2026-10-21, requested by the owner: Codex (`gpt-5.6-luna`, medium effort, read-only).
 Outcome `converged`, no findings. The reviewer checked the plan against the specs, the decisions, the
-roadmap candidate and the current code. The review is still open (not archived).
+roadmap candidate and the current code. The owner archived the review on 2026-10-22 (`ask-codex archive`, closed 2026-10-22T12:36:21Z, outcome
+`converged`). It covered the plan before the 2026-10-22 amendment of increments F to H and the insertion of
+F-A; those were not reviewed by Codex.
 
 ## Deferred work
 
