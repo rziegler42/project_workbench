@@ -25,7 +25,7 @@ import os
 import shutil
 import stat
 
-from . import (__version__, approve, attach, confirm, fetch, installplan, manifest, preview, projectfs,
+from . import (__version__, approvals, approve, attach, confirm, fetch, installplan, manifest, preview, projectfs,
                sources, target, unfinished)
 from .wbkit import display, safefs
 
@@ -184,8 +184,9 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
                 resolved = _resolve(guarded, command.packages, out, fetched)
                 seed = seed or manifest.new_seed()
                 version = version or __version__
+                now = approvals.utc_now()
                 plan, warnings = preview.prepare(guarded, held, resolved, command.select,
-                                                 distribution, seed, version, which, home)
+                                                 distribution, seed, version, which, home, now)
             except sources.SourceError as exc:
                 raise preview.Refused([str(exc)])
             except preview.Refused as exc:
@@ -208,7 +209,7 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
             try:
                 _still_the_same(held)
                 again, _ = preview.prepare(guarded, held, resolved, command.select, distribution,
-                                           seed, version, which, home)
+                                           seed, version, which, home, now)
             except preview.Refused as exc:
                 raise preview.Refused(["the packages changed while the plan was shown: %s; "
                                        "nothing was written" % "; ".join(exc.lines)])

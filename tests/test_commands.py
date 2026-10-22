@@ -119,6 +119,7 @@ class Refused(Resolver):
 
     def test_an_unpinned_helper(self):
         self.ready()
+        self.unpin("tool")
         self.refused("its owner pins")
 
     def test_a_pin_that_records_another_path(self):

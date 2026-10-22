@@ -125,6 +125,7 @@ class Refused(Run):
 
     def test_an_unpinned_command_is_refused(self):
         self.ready()
+        self.unpin("tool")
         self.refused("tool", "check", contains="not pinned")
 
     def test_an_unknown_command_is_refused(self):
@@ -179,6 +180,7 @@ class FromTheCommandLine(Run):
 
     def test_an_unpinned_command_is_one_refused_line_with_exit_1(self):
         self.ready()
+        self.unpin("tool")
         with unittest.mock.patch("os.getcwd", return_value=self.real):
             code, out, err = self.main("run", "tool", "check")
         self.assertEqual((1, ""), (code, out))

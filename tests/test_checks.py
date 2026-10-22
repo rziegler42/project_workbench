@@ -175,6 +175,7 @@ class OutputIsBounded(Checks):
 class Refused(Checks):
     def test_an_unpinned_check_is_a_problem_and_nothing_ran(self):
         self.ready()
+        self.unpin()
         [section] = self.run_all()
         self.assertEqual(("p/a", []), (section.label, section.warnings))
         self.assertEqual(1, len(section.problems))
@@ -209,6 +210,7 @@ class Refused(Checks):
     def test_a_refused_check_does_not_stop_the_others(self):
         self.MODULES = {"h": (support_project.HARNESS, {}), "a": module("one", "two")}
         self.ready()
+        self.unpin("one")
         self.pin_check("a", "two")
         [section] = self.run_all()
         self.assertEqual(1, len(section.problems))
@@ -278,6 +280,7 @@ class Command(Checks):
     def test_an_unpinned_helper_is_a_problem_and_the_rest_still_run(self):
         self.MODULES = {"h": (support_project.HARNESS, {}), "a": module("lint", "style")}
         self.ready()
+        self.unpin("lint")
         self.pin_check("a", "style")
         with unittest.mock.patch.object(check, "examine", return_value=check.Report(None, [], [], "m")):
             code, out, err = self.check()

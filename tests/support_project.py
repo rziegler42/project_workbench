@@ -35,6 +35,14 @@ class Project(test_attach.Base):
     def installed(self, module="tool", rel=HELPER_PATH):
         return ".workbench/p/%s/%s" % (module, rel)
 
+    def unpin(self, *names):
+        """Remove the pins the installer made, as if the owner had never confirmed them: the named
+        ones, or every pin when none is named."""
+        held = pins.load(self.guarded, self.project_id)
+        for name in names or list(held):
+            del held[name]
+        self.guarded.write("projects/%s/pins" % self.project_id, pins.serialize(held))
+
     def pin(self, name="tool", path=None, data=None, kit=None):
         """Pin a helper as `wb pin` would: by default the installed helper of the `tool` module."""
         path = path or self.installed()

@@ -336,17 +336,16 @@ class Install(support_install.InstallBase):
         self.assertIn("conflict AGENTS.md block workbench/code-work slot:policy", out.getvalue())
         self.assertEqual(mine, self.read(path))
 
-    def test_the_installed_command_runs_through_wb_run_once_its_owner_pins_the_helper(self):
-        """The real path: install, refuse while unpinned, pin as the owner would, run the helper."""
+    def test_the_installed_command_runs_through_wb_run_with_no_pin_typed_and_stops_when_the_helper_changes(self):
+        """The real path: install pins the helper on the owner's confirmed digest, `wb run` runs it, and
+        an edited helper is refused until the change is acknowledged."""
         place = self.place()
         self.assertEqual(0, self.install(place)[0])
-        errors = io.StringIO()
-        self.assertEqual(1, commands.run(self.guarded, ["code-work", "check"], errors, cwd=place))
-        self.assertIn("not pinned", errors.getvalue())
         ident = project.read_id(place)
         rel = ".workbench/workbench/code-work/" + HELPER
-        pins.set_pin(self.guarded, ident, "code-work", rel,
-                     pins.hash_bytes(self.read(os.path.join(place, *rel.split("/")))), "owner")
+        pin = pins.lookup(self.guarded, ident, "code-work")
+        self.assertEqual((rel, "workbench install"), (pin.path, pin.pinned_by))
+        self.assertEqual(pins.hash_bytes(self.read(os.path.join(place, *rel.split("/")))), pin.sha256)
         errors = io.StringIO()
         # The helper finds the project from its own working directory, as it does when a person runs it.
         before = os.getcwd()
@@ -359,6 +358,11 @@ class Install(support_install.InstallBase):
         self.assertEqual("", errors.getvalue())
         self.assertEqual(0, code, shown)
         self.assertEqual(1, commands.run(self.guarded, ["code-work", "commit"], io.StringIO(), cwd=place))
+        with open(os.path.join(place, *rel.split("/")), "ab") as handle:
+            handle.write(b"\n# edited\n")
+        errors = io.StringIO()
+        self.assertEqual(1, commands.run(self.guarded, ["code-work", "check"], errors, cwd=place))
+        self.assertIn("has changed since it was pinned", errors.getvalue())
 
 
 if __name__ == "__main__":

@@ -20,10 +20,13 @@ runs: the launcher takes the kit from the pin, and a module command is refused u
 Reading fails closed: a missing file means no pins, and anything unreadable, malformed or not
 a regular file raises ``PinError``. The project id is the hash of the project's seed
 (``repository-boundary.md``): 64 lowercase hex digits, which also makes it safe as a
-directory name. Writing is atomic and is done only by ``run``, the owner-run ``pin`` command,
-which needs a terminal in the same way as ``approve`` and asks the owner to type the first
-twelve characters of the hash shown. As with approvals, that is friction and not the barrier;
-the barrier is the harness's deny rule on this command and on the store.
+directory name. Writing is atomic. The owner-run ``pin`` command (``run``) needs a terminal in
+the same way as ``approve`` and asks the owner to type the first twelve characters of the hash
+shown. The helpers the modules of an install, add or upgrade declare are pinned by those commands
+in the step the owner confirms by digest, and a pin moves when ``acknowledge`` accepts an edit to
+a helper that held it (``pinplan.py``); such a pin records ``workbench <command>`` as its maker.
+As with approvals, the typed text is friction and not the barrier; the barrier is the harness's
+deny rule on these commands and on the store.
 """
 
 import collections

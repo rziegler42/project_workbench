@@ -13,8 +13,10 @@ command is the owner's way past that refusal. It is owner-run and terminal-only,
 * the owner types the first twelve characters of the digest of that list. Typed-ahead input is
   discarded, the answer is bounded, and anything else writes nothing;
 * after the answer the project is read again; a different digest is refused. Then the baselines
-  of exactly the listed paths are replaced, in one atomic replacement of the store entry. Nothing
-  in the project is written.
+  of exactly the listed paths are replaced, in one atomic replacement of the store entry, and each
+  pin that was holding the bytes last acknowledged for a listed path moves to the bytes now there.
+  A pin held at other bytes, or for another path, is not moved, and no module declaration is read:
+  the differences may include the declarations themselves. Nothing in the project is written.
 
 A path that is a link, a directory or another kind of file where a file is expected has no hash to
 accept, so it cannot be acknowledged; the owner deals with it first. The typed text is friction,
@@ -24,8 +26,8 @@ for the guarded store.
 
 import hashlib
 
-from . import (__version__, acknowledgement, approve, confirm, installed, installplan, manifest, projectfs,
-               sources, target)
+from . import (__version__, acknowledgement, approvals, approve, confirm, installed, installplan, manifest,
+               pins, projectfs, sources, target)
 from .wbkit import display, safefs
 
 MANIFEST = acknowledgement.MANIFEST
@@ -77,13 +79,17 @@ def _sha(data):
 class Review:
     """What the owner is shown: the differences and the baselines that would result."""
 
-    def __init__(self, existing, project, store_hash, found, after, identity):
+    def __init__(self, existing, project, store_hash, found, after, identity, held_pins=None,
+                 moved=(), pins_hash=None):
         self.existing = existing
         self.project = project
         self.found = found
         self.after = after
         self.store_hash = store_hash
         self.identity = identity
+        self.held_pins = held_pins or {}
+        self.moved = list(moved)
+        self.pins_hash = pins_hash
         self.fields = {
             "command": "acknowledge",
             "target": {"device": identity[0], "inode": identity[1]},
@@ -94,6 +100,9 @@ class Review:
             "differences": [{"path": d.path, "kind": d.kind, "baseline": d.baseline,
                              "current": d.current} for d in found],
             "baselines_after": after,
+            "pins_before": pins_hash,
+            "pins_moved": [{"name": new.name, "path": new.path, "from": old.sha256, "to": new.sha256,
+                            "kit": new.kit} for old, new in self.moved],
         }
         self.digest = installplan.digest_of(self.fields)
 
@@ -101,9 +110,31 @@ class Review:
     def store_bytes(self):
         return installplan.json_store({"baselines": self.after, "format": acknowledgement.FORMAT})
 
+    @property
+    def pins_bytes(self):
+        """The pins file after the moves, or None when no pin moves."""
+        if not self.moved:
+            return None
+        return pins.serialize(dict(self.held_pins, **{new.name: new for _, new in self.moved}))
 
-def examine(guarded, held, version):
-    """Read the project and its baselines and return a ``Review``; raises ``Refused``."""
+
+def _moves(held_pins, found, now):
+    """``[(old pin, new pin)]``: each pin that holds the bytes last acknowledged for a path that now
+    holds other bytes moves to them, under the pin's own name, path and kit."""
+    current = {d.path: d for d in found if d.current is not None and d.baseline is not None}
+    moved = []
+    for name in sorted(held_pins):
+        old = held_pins[name]
+        item = current.get(old.path)
+        if item is not None and old.sha256 == item.baseline:
+            moved.append((old, pins.Pin(name, old.path, item.current, "workbench acknowledge", now,
+                                        old.kit)))
+    return moved
+
+
+def examine(guarded, held, version, now=None):
+    """Read the project and its baselines and return a ``Review``; raises ``Refused``. `now` is the
+    time any moved pin records, fixed once by the caller."""
     if held.state != "existing":
         raise Refused(["the target is not an existing project; use install"])
     writer = projectfs.Writer(held)
@@ -117,8 +148,10 @@ def examine(guarded, held, version):
         # would write a block into (AGENTS.md), and this command must be able to clear that.
         found = acknowledgement.differences(writer, baselines, writes=sorted(baselines))
         store_hash = _sha(guarded.read(_STORE % project))
+        held_pins = pins.load(guarded, project)
+        pins_hash = _pins_hash(guarded, project)
     except (installed.InstalledError, acknowledgement.AcknowledgementError,
-            manifest.ManifestError, safefs.SafeFsError) as exc:
+            manifest.ManifestError, safefs.SafeFsError, pins.PinError) as exc:
         raise Refused([str(exc)])
     if len(found) > MAX_LISTED:
         raise Refused(["%d paths differ, more than the %d that can be reviewed here; deal with "
@@ -141,7 +174,9 @@ def examine(guarded, held, version):
     # other than the one summarised.
     if after.get(MANIFEST) != existing.manifest_hash:
         raise Refused(["the manifest changed while it was read; nothing was done"])
-    return Review(existing, project, store_hash, found, after, held.identity)
+    moved = _moves(held_pins, found, approvals.utc_now() if now is None else now)
+    return Review(existing, project, store_hash, found, after, held.identity, held_pins, moved,
+                  pins_hash)
 
 
 def render(review, target_path):
@@ -173,8 +208,14 @@ def render(review, target_path):
         lines.append("  %s %s" % (item.kind, display.ascii_text(item.path)))
         lines.append("    baseline %s" % (item.baseline or "(none)"))
         lines.append("    current  %s" % (item.current or "(none)"))
-    lines.append("accepting replaces the baselines of exactly these %d paths; nothing in the "
-                 "project is written" % len(review.found))
+    for old, new in review.moved:
+        lines.append("  moves the pin %s: %s from sha256 %s to sha256 %s" % (
+            display.ascii_text(new.name), display.ascii_text(new.path), old.sha256[:12],
+            new.sha256[:12]))
+    lines.append("accepting replaces the baselines of exactly these %d paths%s; nothing in the "
+                 "project is written" % (len(review.found), (
+                     " and moves %d pin%s, so the launcher runs the bytes now there"
+                     % (len(review.moved), "" if len(review.moved) == 1 else "s")) if review.moved else ""))
     lines.append("digest: %s" % review.digest)
     return "\n".join(lines) + "\n"
 
@@ -191,10 +232,17 @@ def _stored(guarded, project):
         return None
 
 
+def _pins_hash(guarded, project):
+    """The hash of the project's pins file, or None when there is none."""
+    rel = "projects/%s/pins" % project
+    return None if guarded.kind(rel) is None else _sha(guarded.read(rel))
+
+
 def _run(guarded, spelling, stdin, out, err, version):
     try:
         with target.open_target(spelling, guarded.root) as held:
-            review = examine(guarded, held, version)
+            now = approvals.utc_now()
+            review = examine(guarded, held, version, now)
             if not review.found:
                 out.write("nothing to acknowledge\n")
                 return 0
@@ -207,20 +255,25 @@ def _run(guarded, spelling, stdin, out, err, version):
                 out.write("cancelled: nothing was written\n")
                 return 1
             held.recheck()
-            again = examine(guarded, held, version)
+            again = examine(guarded, held, version, now)
             if again.digest != review.digest:
                 return _refuse(err, "the project changed while the list was shown; nothing was "
                                     "written")
             try:
                 guarded.write(_STORE % review.project, review.store_bytes)
+                if review.pins_bytes is not None:
+                    guarded.write("projects/%s/pins" % review.project, review.pins_bytes)
             except (Exception, KeyboardInterrupt) as exc:
                 cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
-                kept = _stored(guarded, review.project) == review.store_hash
+                kept = (_stored(guarded, review.project) == review.store_hash
+                        and _pins_hash(guarded, review.project) == review.pins_hash)
                 err.write("failed: %s\n%s\n" % (display.ascii_text(cause), (
                     "the baselines were not changed" if kept else
-                    "the baselines may have been replaced; run `wb preview upgrade` to see")))
+                    "the baselines or the pins may have been replaced; run `wb preview upgrade` to see")))
                 return 3
-            out.write("acknowledged %d paths; the project was not touched\n" % len(review.found))
+            out.write("acknowledged %d paths%s; the project was not touched\n" % (
+                len(review.found), (" and moved %d pin%s" % (len(review.moved), "" if len(review.moved) == 1 else "s"))
+                if review.moved else ""))
             return 0
     except Refused as exc:
         for index, line in enumerate(exc.lines):

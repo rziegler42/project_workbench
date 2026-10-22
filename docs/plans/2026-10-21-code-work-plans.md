@@ -306,6 +306,24 @@ pulled edit to a helper moves its pin. The owner never types `pin` for a declare
 **Verification:** new tests, then the full suite.
 **Evidence:** commit with trailer `Plan: 2026-10-21-code-work-plans#F`.
 
+### Increment F-A — Recover a stop between the two store writes (inserted 2026-10-22)
+
+**Outcome:** an upgrade or add that stopped after the baselines and before the pins can be cleared by
+`wb recover`, and the hint printed after the failure tells the owner what works.
+**Dependencies:** F, and the owner's choice of this option after F's review.
+**Affected areas:** `workbench/recover.py` (`judge`), `workbench/upgrade.py` (the hint), tests.
+**Steps:**
+1. Failing tests: the examination of an upgrade or add whose files are written, whose baselines are
+   written and whose pins entry is not (and the reverse) is cleared by `wb recover` with the outcome that
+   says which entry is missing; a store entry that holds neither the old nor the new content is still
+   refused; an install in the same state is still refused; the hint names a step that works (`wb pin` for
+   each helper the recover listing shows as not yet pinned, or `wb acknowledge` when the baselines are the
+   missing entry).
+2. Implement in `judge`: for `upgrade` and `add` with the files all written, a store that is a mix of
+   entries each holding the old or the new content is cleared and the lines say which entries are old.
+**Verification:** new tests, then the full suite.
+**Evidence:** commit with trailer `Plan: 2026-10-21-code-work-plans#F-A`.
+
 ### Increment G — Security pass, release and end-to-end (amended 2026-10-22)
 
 **Outcome:** the package is first-party again and the whole path is proven.
@@ -583,3 +601,72 @@ package's modules (`test_claude_module`, `test_groundwork_module`) now expect `c
   runs). Left for G: a fake helper through the real `cli.main` with hostile arguments, a deleted or
   renamed working directory under a running process, a damaged or oversized pins file through the
   command line, bind mounts and case-insensitive layouts, and the real helper through the dispatch.
+
+### Increment F — the installer pins the declared helpers (2026-10-22)
+
+`workbench/pinplan.py` (new) says which pins a set of modules implies (`wanted`), how they differ from the
+pins that exist (`changes`) and what results (`apply`); install, add, upgrade and acknowledge use it.
+New tests: `test_pinplan.py` (15), `test_install_pins.py` (7), `test_upgrade_pins.py` (11),
+`test_acknowledge_pins.py` (10). Full suite: 2397 tests in 4 roots, passing with `-W error`; the `claude`
+root skips 11 tests and `code-work` 2, see "Stale approvals" below.
+
+- **Install.** `installplan.build` takes `now` and adds the pins as one more store write,
+  `projects/<id>/pins`, so the digest, the preview, the marker record and the write already cover it; a
+  `pins` field lists each pin in the digest. A pin's hash is that of the bytes the plan writes, its path is
+  the declared helper under `.workbench/<package>/<module>/`, its kit is the declaration's (a check always
+  has one; a command only when it runs as Python), and `pinned_by` is `workbench install`. No pins file is
+  written when no module declares a helper.
+- **One clock.** The pins file carries a time, so a plan built twice would differ by a second and the
+  second build would be refused as "the plan changed while it was shown". `install`, `upgrade` and `add`
+  fix `now` once and pass it to both builds; with the second build given no `now`, the install and
+  upgrade clock tests fail (checked). `acknowledge` also passes it, but its digest holds the moves and
+  not their time, so the acknowledge clock test does not guard that and passes without it.
+- **Upgrade and add.** `upgradeplan.build` takes the project's pins and `now`. A helper the plan creates
+  or replaces is pinned at the bytes written (created, updated, or, for a pin under another path, replaced
+  and listed with the old path, the first twelve characters of the old hash and who made it). A helper
+  left as it is gets a pin only when it has none and its acknowledged bytes are the ones the manifest
+  records (so an edit the project made and acknowledged is not pinned), which is how a project
+  installed before this increment is pinned; an existing pin is kept. A helper in conflict gets none. A
+  plan whose only change is a pin is no longer "nothing to change". A damaged pins file refuses the
+  command and writes nothing.
+- **Acknowledge.** A pin moves when its path is a listed path that still exists and its hash equals the
+  baseline last acknowledged for it. **This differs from the amended text in one respect: no module
+  declaration is read.** The differences may include the declarations themselves, which would make a pulled
+  file an input to a decision about what runs; the rule needs only the pin and the baseline. The cost is
+  that a pin the owner typed for any baselined file moves by the same rule. The list says "moves the pin"
+  for each, the digest covers the moves and the pins file it started from, and the baselines are written
+  before the pins; a stop between them says "the baselines or the pins may have been replaced".
+- **Recovery.** Install and upgrade record the pins file as one more store entry, so a stop between the
+  files and the store is found by `wb recover`. A stop between the two store entries is reported as a
+  partial store (a test stops the install before the pins). The plan text called the pins "one atomic
+  store write with the baselines"; they are two atomic writes, and the order makes the unfinished state
+  safe: a helper that is unpinned or pinned at other bytes is refused by the launcher.
+- **Tests that assumed an unpinned install.** Seven installer tests and three module tests asserted the
+  old state. The installer's tests now call `unpin`, a helper in `tests/support_project.py`; the module
+  tests were rewritten to the new behaviour (the `code-work` one now runs the helper with no pin typed,
+  edits it and sees the launcher refuse).
+- **Stale approvals.** The two module test files are inside their module's tree, so the approvals shipped
+  for `groundwork` and `code-work` are stale until the owner runs `release-approvals`. That is increment
+  G. Until then the tests that need the shipped approvals skip, so those skips hide whatever they cover.
+- **Not exercised:** a hand run on a real terminal; Linux; a pins file that is a link or oversized (the
+  loader's own tests cover it); a package whose helper changes between the preview and the write (G).
+- **Review (security-reviewer, with scratch experiments, 2026-10-22; it stopped at its turn limit and
+  was asked for a partial report).** No Critical or High finding.
+  - *Medium, fixed:* an unrelated upgrade pinned a helper the project had edited and then acknowledged,
+    because the baseline equalled the edited bytes. Acknowledging an edit is not permission to run it.
+    The pin is now made only when the acknowledged bytes equal the manifest's record; a test fails with
+    the fix removed.
+  - *Medium, open:* the upgrade now has two store entries, and a stop between them (baselines written,
+    pins not) leaves a marker that `wb recover` refuses (`recover.judge` accepts only no entry or all
+    of them written for an upgrade). The state is safe, because the pin still holds the old bytes and
+    the launcher refuses the new ones, but the hint printed after the failure ("run `wb recover`, then
+    `wb acknowledge`") does not work: recover refuses and acknowledge lists nothing. An install had the
+    same partial state before this increment. The owner took the recommendation, to extend
+    `recover.judge`: it is increment F-A, inserted after F.
+  - *Low, accepted:* the acknowledge list shows hashes and a "moves the pin" line and no file head, as
+    it did for baselines; after a stop between its two writes a rerun finds no difference, so the pin
+    is made by `wb pin`. `pinplan.changes` does not reject two wanted pins of one name; the verifier
+    already refuses that, so it is defence in depth only.
+  - *Not exercised by the reviewer:* mutation of the new tests, a symlink as the helper path, a file
+    changed between the preview and the write, hostile pins in acknowledge, a harness module that
+    declares commands, a module removed from its package, a pin name the parser refuses.

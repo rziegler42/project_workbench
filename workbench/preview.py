@@ -25,7 +25,7 @@ def _recorded_source(resolved, name):
 
 
 def prepare(guarded, held, resolved, select, distribution, seed, version, which=shutil.which,
-            home=None):
+            home=None, now=None):
     """Verify, gate, snapshot and plan, the harness files included. Returns ``(plan, warnings)``;
     raises ``Refused``. `home` is the directory the rendered permission rules name."""
     distribution = distribution or firstparty.default_distribution()
@@ -72,7 +72,7 @@ def prepare(guarded, held, resolved, select, distribution, seed, version, which=
             raise Refused([".git/info/exclude: %s" % exc])
     try:
         plan = installplan.build(held, installplan.Selection(modules, packages), snaps,
-                                 loaded_base, seed, version, staged)
+                                 loaded_base, seed, version, staged, now)
     except (installplan.PlanError, manifest.ManifestError) as exc:
         raise Refused([str(exc)])
     return plan, list(result.warnings)

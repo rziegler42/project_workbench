@@ -34,7 +34,7 @@ import copy
 import hashlib
 
 from . import base as base_module
-from . import blocks, installed, installplan, manifest
+from . import approvals, blocks, installed, installplan, manifest, pinplan, pins
 from .wbkit import display, safefs
 
 MODES = ("upgrade", "add")
@@ -50,8 +50,10 @@ CONFLICT = "conflict"
 Row = collections.namedtuple("Row", "kind path block slot owner_class detail")
 # `op` is "create" or "replace"; `expected` is the hash the file must still have for a replace.
 Write = collections.namedtuple("Write", "op path data expected hash executable")
+# `pins` are the pinplan changes and `pins_data` the bytes of the pins file after them, or None.
 UpgradePlan = collections.namedtuple(
-    "UpgradePlan", "mode rows writes dirs document manifest_bytes baselines")
+    "UpgradePlan", "mode rows writes dirs document manifest_bytes baselines pins pins_data",
+    defaults=((), None))
 
 
 class UpgradeError(Exception):
@@ -306,11 +308,13 @@ def _merge_packages(new, old, selected):
     return [merged[name] for name in sorted(merged)]
 
 
-def build(existing, reader, baselines, selection, snapshots, base, workbench_version, mode):
+def build(existing, reader, baselines, selection, snapshots, base, workbench_version, mode,
+          held_pins=None, now=None):
     """Plan an upgrade (or an add) of the project `existing` (an ``installed.Installed``).
 
     `reader` has ``read_file`` (a ``projectfs.Writer``); `baselines` is the acknowledgement
-    ``{path: sha256}``. Raises UpgradeError. Reads the project; writes nothing."""
+    ``{path: sha256}``; `held_pins` is the project's ``{name: Pin}`` and `now` the time the pins
+    record, fixed once by the caller. Raises UpgradeError. Reads the project; writes nothing."""
     if mode not in MODES:
         raise UpgradeError("the mode is upgrade or add")
     try:
@@ -365,19 +369,46 @@ def build(existing, reader, baselines, selection, snapshots, base, workbench_ver
     for w in writes:
         new_baselines[w.path] = w.hash
     rows = sorted(work.rows, key=lambda r: _key(r.path, r.block))
+    recorded = {e["path"]: e["hash"] for e in existing.document["files"] if "block" not in e}
+    made, pins_data = _pins(selection, writes, rows, baselines, recorded, held_pins or {}, mode, now)
     return UpgradePlan(mode, tuple(rows), tuple(writes), tuple(dirs), document, manifest_bytes,
-                       new_baselines)
+                       new_baselines, tuple(made), pins_data)
+
+
+def _pins(selection, writes, rows, baselines, recorded, held, mode, now):
+    """The pin changes of the plan and the bytes of the pins file after them (None for no change).
+
+    A helper the plan writes is pinned at the bytes it writes. A helper left as it is is pinned, when
+    it has no pin, only if its acknowledged bytes are the ones the manifest records, which is to say
+    the bytes a confirmed install or upgrade wrote: a file the project edited and then acknowledged is
+    not pinned here, because acknowledging an edit is not permission to run it. One in conflict gets none."""
+    written = {w.path: w.hash for w in writes if w.op in ("create", "replace")}
+    unchanged = {r.path for r in rows if r.kind == SKIP and r.block is None}
+
+    def hash_of(path):
+        if path in written:
+            return written[path]
+        if path in unchanged and baselines.get(path) == recorded.get(path):
+            return baselines.get(path)
+        return None
+
+    made = pinplan.changes(held, pinplan.wanted(selection.modules, hash_of), "workbench " + mode,
+                           approvals.utc_now() if now is None else now, set(written))
+    return made, (pins.serialize(pinplan.apply(held, made)) if made else None)
 
 
 # --- the digest and the preview text -----------------------------------------------------------
 
 
 def store_writes(plan):
-    """The guarded-store writes of an upgrade: ``((path, bytes),)``. Only the baselines change;
-    the first-seen record is already there."""
+    """The guarded-store writes of an upgrade: ``((path, bytes),)``. The baselines change, and the
+    pins when the plan pins a helper; the first-seen record is already there."""
     project = manifest.project_id(plan.document["seed"])
-    return (("projects/%s/baselines" % project,
-             installplan.json_store({"baselines": plan.baselines, "format": 1})),)
+    found = (("projects/%s/baselines" % project,
+              installplan.json_store({"baselines": plan.baselines, "format": 1})),)
+    if plan.pins_data is not None:
+        found += (("projects/%s/pins" % project, plan.pins_data),)
+    return found
 
 
 def _changes(existing, selection):
@@ -427,6 +458,7 @@ def digest_fields(plan, existing, selection, identity):
                    for w in plan.writes],
         "baselines": plan.baselines,
         "store_writes": [{"path": p, "hash": _sha(d)} for p, d in store_writes(plan)],
+        "pins": pinplan.fields(plan.pins),
     }
 
 
@@ -501,7 +533,11 @@ def render(plan, existing, selection, target_path, identity, show_digest=False, 
                                                       _show(r.block)))
     lines.append("guarded store:")
     for path, data in store_writes(plan):
-        lines.append("  replace %s sha256 %s" % (path, _sha(data)))
+        lines.append("  %s %s sha256 %s" % ("write" if path.endswith("/pins") else "replace", path,
+                                           _sha(data)))
+    if plan.pins:
+        lines.append("pins (the confirmed helpers the launcher may run, made by the installer):")
+        lines.extend(pinplan.lines(plan.pins, _show))
     lines.append("git: not run; nothing is committed")
     if show_digest:
         lines.append("digest: %s" % digest(plan, existing, selection, identity))

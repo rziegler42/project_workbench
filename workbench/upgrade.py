@@ -28,9 +28,9 @@ import os
 import shutil
 import stat
 
-from . import (__version__, acknowledgement, approve, base, confirm, declarations, firstparty, gate,
-               installed, installplan, manifest, preview, projectfs, snapshot, sources, target, unfinished,
-               upgradeplan, verify)
+from . import (__version__, acknowledgement, approvals, approve, base, confirm, declarations, firstparty,
+               gate, installed, installplan, manifest, pins, preview, projectfs, snapshot, sources, target,
+               unfinished, upgradeplan, verify)
 from .wbkit import display, safefs
 
 ENDING = preview.ENDING
@@ -167,7 +167,7 @@ def _installed_unchanged(changes, recorded):
 
 
 def prepare(guarded, held, given, distribution, version, which=shutil.which, mode="upgrade",
-            add=()):
+            add=(), now=None):
     """Read, check, verify, gate and plan. Returns a dict with ``plan``, ``existing``,
     ``selection``, ``approvals``, ``warnings`` and ``writer``; raises ``preview.Refused``."""
     if held.state != "existing":
@@ -242,11 +242,11 @@ def prepare(guarded, held, given, distribution, version, which=shutil.which, mod
         _installed_unchanged(upgradeplan._changes(existing, selection), recorded)
     try:
         plan = upgradeplan.build(existing, writer, baselines, selection, snaps, loaded_base,
-                                 version, mode)
+                                 version, mode, pins.load(guarded, project), now)
         found = acknowledgement.differences(writer, baselines,
                                             writes=upgradeplan.written_paths(plan))
     except (upgradeplan.UpgradeError, acknowledgement.AcknowledgementError,
-            manifest.ManifestError) as exc:
+            manifest.ManifestError, pins.PinError) as exc:
         raise preview.Refused([str(exc)])
     if found:
         _refuse_differences(found)
@@ -284,7 +284,7 @@ def run_preview(guarded, parsed, out, err, distribution=None, version=None,
     for warning in done["warnings"]:
         err.write("warning: %s\n" % display.clean(warning))
     out.write(text)
-    if not done["plan"].writes:
+    if not done["plan"].writes and not done["plan"].pins:
         out.write("nothing to change\n")
     out.write(ENDING + "\n")
     return 0
@@ -413,14 +413,15 @@ def _lines(err, exc):
 def _run(guarded, parsed, stdin, out, err, distribution, version, which, progress, mode):
     try:
         with target.open_target(parsed.target, guarded.root) as held:
+            now = approvals.utc_now()
             done = prepare(guarded, held, parsed.packages, distribution, version, which, mode,
-                           parsed.select or ())
+                           parsed.select or (), now)
             plan, existing, selection = done["plan"], done["existing"], done["selection"]
             for warning in done["warnings"]:
                 err.write("warning: %s\n" % display.clean(warning))
             out.write(upgradeplan.render(plan, existing, selection, held.path, held.identity,
                                          show_digest=True, approvals=done["approvals"]))
-            if not plan.writes:
+            if not plan.writes and not plan.pins:
                 out.write("nothing to change\n")
                 return 0
             digest = upgradeplan.digest(plan, existing, selection, held.identity)
@@ -434,7 +435,7 @@ def _run(guarded, parsed, stdin, out, err, distribution, version, which, progres
             held.recheck()
             try:
                 again = prepare(guarded, held, parsed.packages, distribution, version, which,
-                                mode, parsed.select or ())
+                                mode, parsed.select or (), now)
             except preview.Refused as exc:
                 raise preview.Refused(["the project or its packages changed while the plan was "
                                        "shown: %s; nothing was written" % "; ".join(exc.lines)])

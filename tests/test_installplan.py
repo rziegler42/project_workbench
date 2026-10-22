@@ -279,6 +279,7 @@ class PlanTest(unittest.TestCase):
                          "size": a.size, "hash": a.hash, "detail": a.detail}
                         for a in plan.actions],
             "store_writes": [{"path": p, "hash": sha(d)} for p, d in plan.store_writes],
+            "pins": [],
         }
 
     def test_digest_encoding_is_injective(self):

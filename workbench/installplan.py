@@ -27,7 +27,7 @@ import json
 import re
 
 from . import base as base_module
-from . import localmanifest, manifest
+from . import approvals, localmanifest, manifest, pinplan, pins
 from .wbkit import display, safefs
 
 Action = collections.namedtuple("Action", "kind path owner_class mode size hash detail data")
@@ -36,7 +36,7 @@ PackageSource = collections.namedtuple("PackageSource", "name source ref commit 
 Selection = collections.namedtuple("Selection", "modules packages")
 Plan = collections.namedtuple(
     "Plan", "target_identity state actions modules manifest seed project_id store_writes "
-            "git_init digest harness", defaults=(None,))
+            "git_init digest harness pins", defaults=(None, ()))
 
 MARKER_PATH = ".workbench/local/incomplete"
 GIT_DETAIL = "an empty repository on branch main, written by the workbench; git is not run"
@@ -254,8 +254,11 @@ def json_store(document):
     return (json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n").encode("ascii")
 
 
-def build(target, selection, snapshots, base, seed, workbench_version, harness=None):
+def build(target, selection, snapshots, base, seed, workbench_version, harness=None, now=None):
     """Build the whole plan. Raises PlanError; nothing is read or written.
+
+    `now` is the time the pins record. The caller fixes it once for the command and passes it to every
+    build, so the plan the owner confirms and the plan that is written are the same bytes.
 
     `harness` is the ``harnessstage.Staged`` attached after the install, or None. It is not an
     action: the files are per-clone and written once the install itself is complete, but the
@@ -307,6 +310,15 @@ def build(target, selection, snapshots, base, seed, workbench_version, harness=N
         ("projects/%s/seen" % project, json_store(
             {"format": 1, "kind": "path", "value": target.path})),
     )
+    # The owner who types this plan's digest confirms the bytes of every helper it writes, so the
+    # helpers the modules declare are pinned in the same step.
+    made = pinplan.changes(
+        {}, pinplan.wanted(selection.modules, lambda path: _sha(files.items[path]["data"])
+                           if path in files.items else None),
+        "workbench install", approvals.utc_now() if now is None else now, set(files.order))
+    if made:
+        store_writes += (("projects/%s/pins" % project,
+                          pins.serialize(pinplan.apply({}, made))),)
     modules = tuple({
         "declaration": v.declaration_hash, "name": v.name, "package": v.package,
         "tree": v.tree_hash, "type": v.type, "version": v.version} for v in selection.modules)
@@ -323,11 +335,12 @@ def build(target, selection, snapshots, base, seed, workbench_version, harness=N
         "actions": [{"kind": a.kind, "path": a.path, "class": a.owner_class, "mode": a.mode,
                      "size": a.size, "hash": a.hash, "detail": a.detail} for a in actions],
         "store_writes": [{"path": p, "hash": _sha(d)} for p, d in store_writes],
+        "pins": pinplan.fields(made),
     }
     if harness is not None:
         fields["harness"] = _harness_fields(harness)
     return Plan(target.identity, target.state, tuple(actions), modules, document, seed,
-                project, store_writes, git_init, digest_of(fields), harness)
+                project, store_writes, git_init, digest_of(fields), harness, tuple(made))
 
 
 def _local_manifest(harness):
@@ -424,6 +437,9 @@ def render(plan, target_path, show_digest=False):
     lines.append("guarded store:")
     for path, data in plan.store_writes:
         lines.append("  write %s sha256 %s" % (path, _sha(data)))
+    if plan.pins:
+        lines.append("pins (the confirmed helpers the launcher may run, made by the installer):")
+        lines.extend(pinplan.lines(plan.pins, _show))
     if plan.git_init:
         lines.append("git: creates %s" % GIT_DETAIL)
     else:

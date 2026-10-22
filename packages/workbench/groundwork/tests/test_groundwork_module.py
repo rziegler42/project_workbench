@@ -405,8 +405,12 @@ class Install(support_install.InstallBase):
         pins.set_pin(self.guarded, manifest.project_id(support_install.SEED), name, rel,
                      pins.hash_bytes(self.read(place, rel)), "owner", kit=1)
 
-    def pin_doccheck(self, place):
-        self.pin_helper(place, "doccheck")
+    def unpin_helper(self, name):
+        """Take back the pin the installer made, as if the owner had never confirmed the helper."""
+        project = manifest.project_id(support_install.SEED)
+        held = pins.load(self.guarded, project)
+        del held[name]
+        self.guarded.write("projects/%s/pins" % project, pins.serialize(held))
 
     def pin_both(self, place):
         for name in HELPERS:
@@ -438,14 +442,14 @@ class Install(support_install.InstallBase):
         self.git(place, "commit", "-q", "-m", "x")
 
     def test_a_fresh_install_with_the_harness_attached_passes_check_once_committed(self):
+        """The installer pinned the check helpers on the digest the owner confirmed: no `pin` is typed."""
         place = self.place()
         self.assertEqual(0, self.install(place)[0])
-        self.commit(place)
-        code, out, err = self.check(place)
-        self.assertEqual(1, code)
+        held = pins.load(self.guarded, manifest.project_id(support_install.SEED))
         for name in HELPERS:
-            self.assertIn("problem: workbench/groundwork: the check %s is not pinned" % name, err)
-        self.pin_both(place)
+            self.assertEqual(("workbench install", 1), (held[name].pinned_by, held[name].kit))
+            self.assertEqual(".workbench/workbench/groundwork/helper/" + name, held[name].path)
+        self.commit(place)
         code, out, err = self.check(place)
         self.assertEqual((0, ""), (code, err), out)
         self.assertTrue(out.endswith("check found no problems\n"), out)
@@ -467,7 +471,7 @@ class Install(support_install.InstallBase):
     def test_a_tracked_reference_with_no_index_is_reported_and_an_unpinned_helper_is_not_run(self):
         place = self.place()
         self.assertEqual(0, self.install(place)[0])
-        self.pin_doccheck(place)
+        self.unpin_helper("refcheck")
         self.write(place, "docs/references/a.pdf", PDF)
         self.commit(place)
         code, out, err = self.check(place)
