@@ -248,7 +248,29 @@ module adds none of its own.
   check: one `Candidate:` line, the sections of the hashed region, required fields),
   `wb run code-work plans` (the active plans, derived by listing plans by status) and
   `wb run code-work report` (candidate completion, derived from work records). They change
-  nothing.
+  nothing, and run no program.
+- `commit` and `remove` change a repository and run only `git`. `commit` takes
+  `--expected-head <full hash | none>`, `--subject`, optional `--body`, `--trailer 'Key: value'` and
+  `--leave-other-staged`, then `--` and exact repository-relative paths. It stages and commits only
+  those paths, and refuses when HEAD is not the expected commit (`none` is accepted only on a branch that
+  has no commit yet), when anything else is staged (without `--leave-other-staged`), when a path is a
+  directory, a glob, a link, in a nested repository or Git metadata, or when the repository selects a
+  program to run (a hook, a filter, a file system monitor, signing). After the commit it checks the
+  message, the parent and the changed paths, and says so when they differ. The expected-HEAD guarantee is
+  detection and not atomicity: a writer that moves HEAD after the last check produces a commit the
+  helper reports as failed. `remove` previews, then with `--confirm` deletes exact paths, and with
+  `--recursive` the directories among them; it refuses Git metadata, nested repositories, the repository
+  root, links and overlapping targets, and follows no link. Both print one JSON line on success and
+  `refused: <reason>` on standard error with exit 1 on a refusal.
+- The message carries no tool attribution unless `.workbench/code-work.json`
+  (`{"format": 1, "attribution": "refuse" | "allow"}`) says `allow`; absent means refuse. The check is
+  a guard against a mistake and a heuristic: it is not a control against an agent that writes the setting
+  or spells the name with a look-alike the check does not know.
+- The helper runs `git` found only in an absolute `PATH` entry outside the repository, with a scrubbed
+  environment, literal pathspecs, no editor, pager, lazy fetch, file system monitor or automatic
+  maintenance, and only in the argument shapes it uses. It does not write the acknowledgement baselines:
+  a change made and committed through it is listed by the next `wb acknowledge`
+  (`2026-10-22-commit-helper-leaves-baselines-to-the-owner`).
 - A commit never authorizes a push.
 
 ## Loop caps

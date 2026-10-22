@@ -353,8 +353,8 @@ harness name or harness path.
 
 **Outcome:** the helper gains `commit` and `remove`, so a commit is local, lists exact
 paths, carries no tool attribution unless a project says otherwise, and can be the first
-commit in a repository with no commits; a deliberate change made through it updates the
-acknowledgement baselines of the files it changed.
+commit in a repository with no commits; it leaves the acknowledgement baselines to the
+owner, so a change made through it is listed by the next `wb acknowledge`.
 **Dependencies:** `code-work-plans`.
 **Boundary:** local commits and approved deletions only. It never pushes. The helper
 reads a repository the project controls, so a security pass is part of it.

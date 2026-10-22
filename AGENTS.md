@@ -81,10 +81,7 @@ The workbench's own tooling does not exist yet. Until it does:
   tracked-pointer rule, the tracked reference index, acknowledgement of changes
   made by others) is enforced by the installer once built; until then by the
   owner in session;
-- harness files and the old template manifest are never committed;
-- the first commit, on a branch with no commits, is made by the owner by hand,
-  because the commit helper does not yet support that case. This is a known gap to
-  fix in `code-work-commit`.
+- harness files and the old template manifest are never committed.
 
 ## Independent review
 

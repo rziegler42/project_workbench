@@ -230,8 +230,10 @@ reviewed. It protects against text changed by someone else.
   need acknowledgement before the agent drafts from or acts on a changed one. The
   checkpoint can be delegated like any other.
 - References need no acknowledgement. They never carry authority.
-- A deliberate change the owner makes through the commit helper updates the baseline
-  for the files changed.
+- A change made and committed through the commit helper does not update a baseline. The helper
+  runs with the owner's privileges at an agent's request, and a baseline is the owner's acceptance of a
+  change someone else made, so the next `wb acknowledge` lists the change and the owner accepts it there
+  (`2026-10-22-commit-helper-leaves-baselines-to-the-owner`).
 - Approving an install or an upgrade preview updates the baselines for exactly the
   files in that preview, so the owner is not asked to acknowledge their own approved
   change.

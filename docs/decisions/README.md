@@ -71,3 +71,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-21-harness-facts-from-layouts](2026-10-21-harness-facts-from-layouts.md) | The installer reads a harness's paths from that harness module's layout | Proposed |
 | [2026-10-22-plan-check-in-the-shipped-helper](2026-10-22-plan-check-in-the-shipped-helper.md) | The plan check lives in the helper the `code-work` module ships | Proposed |
 | [2026-10-22-installer-pins-declared-helpers](2026-10-22-installer-pins-declared-helpers.md) | The installer pins the helpers a confirmed plan declares | Proposed |
+| [2026-10-22-commit-helper-leaves-baselines-to-the-owner](2026-10-22-commit-helper-leaves-baselines-to-the-owner.md) | The commit helper leaves the acknowledgement baselines to the owner | Proposed |

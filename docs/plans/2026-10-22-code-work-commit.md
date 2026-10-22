@@ -1,6 +1,6 @@
 # The code-work module: the commit helper
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-22
 Candidate: workbench-v1#code-work-commit
 Specs: code-work, trust-and-approval, module-contract
@@ -789,3 +789,26 @@ Not fixed, with the reason:
 Verification: the full suite, 2638 tests in 4 roots, OK (13 more than before F plus the later fixes).
 The shipped approvals for `code-work` are still stale, and F is not complete until the owner runs
 `release-approvals` and the stale records are removed.
+
+### Increment G — documentation and decisions (2026-10-22)
+
+- `docs/specs/code-work.md`: the Commit section now states what `commit` and `remove` take and refuse, that
+  the expected-HEAD guarantee is detection, the attribution setting and its limits, the git runner's rules,
+  and that the read-only subcommands run no program while `commit` and `remove` run only `git` (this
+  restates criterion 5 of `2026-10-21-code-work-plans` for the two that change a repository).
+- `docs/specs/trust-and-approval.md`: the line that said a change through the commit helper updates the
+  baseline now says it does not, and that `wb acknowledge` lists it.
+- `docs/roadmaps/workbench-v1.md`: the outcome of `code-work-commit` no longer promises baseline updates.
+- `AGENTS.md`: the Bootstrap paragraph about the first commit is removed.
+- `docs/development.md`: two command rows and a section, "The code-work helper", with the recorded limits.
+- `docs/decisions/2026-10-22-commit-helper-leaves-baselines-to-the-owner.md`, `Proposed`, and its row in
+  the decisions index. Accepting it is the owner's act.
+- Not run: the plan check on this repository (`wb run code-work check` needs a workbench project, and this
+  repository is not one until `self-hosting`).
+
+### Result of the plan
+
+All seven increments are committed. Criterion 9 holds with one recorded exception the owner accepted:
+the last two security fixes (the mixed-script rule and `hooks:unreadable`) had no bypass round of their own.
+The specs, the guide, the roadmap and `AGENTS.md` describe what was built, the decision record exists, and
+the full suite passed with `-W error` (2638 tests in 4 roots, OK) after increment F.

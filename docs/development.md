@@ -43,6 +43,8 @@ ambiguous blank.
 | Run a pinned helper | `python3 -m workbench launch <project-id> <name> --root <project-dir> -- <args>` |
 | Run a module command | `python3 -m workbench run <command> [<argument> ...]` from anywhere in the project (agent-safe; the command must be installed and pinned; the arguments after the first reach the helper unchanged) |
 | Check, list or report the plans | `python3 -m workbench run code-work check\|plans\|report` (the `code-work` module's command; the installer pinned the helper when the install was confirmed) |
+| Commit exact paths (local) | `python3 -m workbench run code-work commit --expected-head <full hash or none> --subject <text> [--body <text>] [--trailer 'Key: value'] [--leave-other-staged] -- <path> ...` (needs git; see "The code-work helper") |
+| Preview and remove exact project paths | `python3 -m workbench run code-work remove [--recursive] -- <path> ...`, then the same with `--confirm` after the owner approves |
 | Release time: write the approvals shipped with first-party packages | `python3 -m workbench release-approvals` |
 | Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
 | One focused test file | `python3 -m unittest discover -s tests -p 'test_approvals.py'` (a test module that imports `support` only loads under `discover -s tests`); for a module's own tests, `python3 -B -m unittest discover -s packages/<package>/<module>/tests -t packages/<package>/<module>/tests` from the repository root |
@@ -52,6 +54,24 @@ ambiguous blank.
 | Type check | not applicable (none configured) |
 | Build | not applicable (none configured) |
 | All required checks | `python3 -B -W error tests/run_all.py`; document checks are run by the owner in session, as `docs/README.md` states |
+
+## The code-work helper
+
+`check`, `plans` and `report` read the project and run no program. `commit` and `remove` change it and run
+only `git`: found in an absolute `PATH` entry outside the repository, with an environment of its own
+(no `GIT_*` variable of the caller; literal pathspecs; no editor, pager, lazy fetch, file system monitor
+or automatic maintenance), and only in the argument shapes the helper uses. A repository whose
+configuration or hooks select a program is refused, so such a repository is committed to by hand.
+
+- `commit` needs the full hash of HEAD, or `none` on a branch with no commit. A message that names a tool as
+  its author is refused unless `.workbench/code-work.json` says `"attribution": "allow"`.
+- The tests that run it need `git` and skip with a reason without it. The expected-HEAD check detects a
+  concurrent writer after the fact; it does not prevent one.
+- The helper never writes the acknowledgement baselines. After a commit of a baselined path, `acknowledge`
+  lists the change.
+- Recorded limits are in the plan `2026-10-22-code-work-commit` (Result, increment F): the caller's `HOME`
+  and `PATH` are trusted, a `git` in an absolute `PATH` entry outside the repository is run, and the
+  look-alike letters of the attribution check are a list that cannot be complete.
 
 ## The verify command
 
