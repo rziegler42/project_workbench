@@ -435,6 +435,9 @@ versus made unreachable, the editor and pager variables the helper sets, and the
 increment B. No choice changed. Round 3 of the bound is unused.
 The review did not approve the plan. The owner approved it in session on 2026-10-22, with the eight choices
 in "Decided by me" as written.
+The owner closed the review with `ask-codex archive` on 2026-10-22 (16:51 UTC) after the plan was completed:
+2 of 3 rounds used, outcome "not converged" (three major findings in the last round, all accepted in part
+above), 6 decisions applied, none rejected.
 
 ## Deferred work
 
