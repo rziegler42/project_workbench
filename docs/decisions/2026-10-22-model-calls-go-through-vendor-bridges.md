@@ -1,6 +1,6 @@
 # Model calls go through thin vendor bridges; review and action review are separate engines
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-22
 Date: 2026-10-22
 
 ## Context
@@ -148,7 +148,7 @@ the owner after round 3. Outcome: converged.
 - R3-F2 (major, applied): decision 6 now says an action verdict is never actionable by itself and fails closed.
 - R4-F1 (minor, applied): the control in decision 5 is a run-time refusal, not the acknowledgement alone.
 
-The review is not an acceptance; the record stays `Proposed`.
+The review is not an acceptance; the owner accepted the record on 2026-10-22, as written.
 
 ## Verification
 
