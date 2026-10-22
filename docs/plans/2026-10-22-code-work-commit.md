@@ -505,3 +505,87 @@ The helper can run `git` safely and refuses a repository that selects programs. 
     configuration supplies the commit identity; only the configuration scan excludes it.
   - **Not covered:** the unit tests of the fixes, TOCTOU between the PATH search and the start, and the
     bind-mount and case-folding PATH cases beyond `samefile`.
+
+### Increment B — `commit` (2026-10-22)
+
+`code-work commit` makes one local commit of exactly the named files in a repository that has commits. The
+module's `arguments` do not list it yet, so `wb run` does not pass it (increment E); the helper's `main`
+dispatches it.
+
+- **Code** (below `# --- commit ---` in the helper): `parse_commit` (hand-parsed: unknown option, repeated
+  singleton, missing value, missing `--`, more than 2000 paths refuse), `validate_message`,
+  `refuse_attribution` (the contract's patterns, after NFKC, `Cf` removal, case folding, the confusable
+  table and folded-line joining; subject, body, each trailer and the whole), `validate_paths` (built on
+  `wbkit.safefs.validate_relpath` and `Root.list_dir`: no link at any component, no directory, no
+  nested repository, no glob or leading `-`, no duplicate or case-colliding pair, a missing path must be
+  tracked, a path in a merge state is refused), `command_commit` and `verify_commit`.
+- **Flow:** repository checks (A), HEAD against the expected hash before anything, before staging, after
+  staging and just before the commit; the staged set must equal the named set plus what was staged
+  before; `diff --check` before and after staging; `commit -m` per paragraph (`--only -- <paths>` with
+  `--leave-other-staged`). Afterwards: the only parent is the expected hash, the message is the one asked
+  for (as git cleans it), the commit holds exactly the named paths, and the rest of the index is as it was.
+  A failure before the commit runs `reset -q -- <named paths>` only while HEAD is the expected one; a
+  failure after it says `nothing was undone`.
+- **Departures and additions, for the owner:**
+  1. `--no-renames` joins the allowed `diff` flags and is used for the staged-set comparison. Without it, a
+     delete plus an add that git reads as a rename never matched the named set (the likely reason the old
+     helper refused such a commit).
+  2. `validate_relpath` is stricter than the contract: it also refuses `:` and a backslash anywhere, a
+     non-printable character (a tab, a newline) and a path over 512 characters.
+  3. `--expected-head none` is refused until increment C; `-m` text that git would clean (trailing space,
+     runs of blank lines) is compared after the same cleaning, not byte for byte.
+  4. A moved HEAD is detected, not prevented (Choice 7): the test makes a `git` that moves HEAD just before
+     the commit runs and the result is exit 1 naming the commit.
+- **Tests:** `test_codework_commit.py` (46, real git; a `git` that moves HEAD at a chosen call; a recording
+  `git` showing only the allowed subcommands on success and failure and one `reset -q -- a.txt`; hostile
+  `GIT_*` variables not reaching git). Mutation checks: removing the first, third or parent HEAD check, the
+  staged-set comparison, the link refusal, the unstage, the already-staged and non-empty-index refusals, the
+  program scan, the attribution check or the nested-repository check fails a named test each time. Full
+  suite: 2514 tests in 4 roots, passing with `-W error` (the 11 `claude` tests that need the shipped
+  approvals are still skipped until F).
+- **Not covered:** a file changed between `add` and `commit` (the commit takes the index as staged);
+  skip-worktree, assume-unchanged and sparse-checkout paths; a security review (asked for separately).
+- **Review (security-reviewer, round 1, 2026-10-22): no Critical or High; two Medium, three Low, one
+  informational. All fixed except L3, with tests and mutation checks.**
+  - **M1, fixed:** a merge in progress made the commit a two-parent merge before the post-check could report
+    it. `refuse_operation_in_progress` now refuses before anything is staged when the git directory holds
+    `MERGE_HEAD`, `REVERT_HEAD`, `CHERRY_PICK_HEAD`, `rebase-merge` or `rebase-apply` (this takes over the
+    part of increment C that named those states).
+  - **M2, fixed:** the attribution check read a few spellings the contract's patterns missed (non-hyphen
+    dashes, runs of blanks or a newline between the words, punctuation before the name, combining and filler
+    characters, more look-alike letters, other verbs, `Claude-Session:`, `noreply+x@anthropic.com`). The
+    text is now folded further (every dash a hyphen, blanks collapsed, accents dropped) and the message is
+    refused outright when it holds a combining mark no precomposed letter has or a word that mixes
+    scripts. The patterns gained `drafted`, `powered`, `using`, `via`, `AI-assisted (Claude)`,
+    `claude-session:` and `noreply…@anthropic.com`. This is broader than the contract and can refuse a
+    message that only mentions a tool next to a verb ("written by Claude"); it is a guard against a mistake,
+    not a boundary. A bare `claude.ai` is still allowed.
+  - **L1, fixed:** the `co-authored-by:` patterns scanned to the end of the line from every occurrence
+    (20 s for 100,000 characters); the gap is now bounded at 200 characters.
+  - **L2, fixed:** a tracked name present on disk under another Unicode spelling (a link in NFD where the
+    index holds NFC) skipped the link check. An absent-but-tracked path is now `lstat`ed and must be a plain
+    file or nothing.
+  - **L3, accepted and recorded:** a repository can select the owner's own global filter by attributes
+    (limit 3 of increment A). Nothing in the repository's configuration runs.
+  - **Informational, fixed:** `commit.cleanup=strip` in the repository dropped `#` lines and the
+    post-check reported a failure after the commit. The helper now passes `--cleanup=whitespace`.
+- **Review, round 2 (a bypass attempt on the fixes, 2026-10-22):** no way to give a commit a foreign parent
+  and none to read outside the repository; a regex-cost stress of 28 inputs of 80 to 100 KB ran in 0.2 s or
+  less; `_commit_shape` accepted nothing it should not. Findings, all fixed except as noted:
+  - **Medium, fixed:** the attribution check still passed control characters, private-use and unassigned
+    characters, U+2800 and U+1680 inside the name, Latin look-alikes the table lacked (`ɑ`, `ᴄ`, `ł`, `ƚ`),
+    `Co-developed-by:`, `Signed-off-by:`, `Built with`, `Claude wrote`, `Claude Session:` and a session URL
+    with a query, a port or an unlisted path (and a `。` for the dot). The message is now refused outright
+    when it holds a control character other than newline or tab, a private-use or unassigned character,
+    U+2800 or U+1680; the table and the patterns gained the rest; any `claude.ai` or `claude.com` followed by
+    `/`, `:` or `?` and a character is attribution, a bare host is not.
+  - **Low, fixed:** the mixed-script refusal rejected Japanese, Korean and Latin with Japanese
+    (`APIを修正`) and a micro sign (`µs`). Han, Kana, Hangul and Bopomofo are one script now, and the test is
+    Latin mixed with Cyrillic, Greek, Armenian, Coptic or Cherokee only.
+  - **Low, fixed:** `sequencer` joins the states `refuse_operation_in_progress` refuses. A bisect in progress
+    is not refused (it does not change the commit's parent).
+  - **Recorded as limits:** the attribution filter is best-effort against an agent that deliberately
+    obfuscates, not a boundary; a message in a script that uses combining marks (Hindi) is refused rather
+    than read; a path through a case-variant or NFC-versus-NFD directory link passes the helper's own check
+    and is stopped by `git add` ("beyond a symbolic link"), after which the paths are unstaged; case
+    variants were tried on case-insensitive APFS only.

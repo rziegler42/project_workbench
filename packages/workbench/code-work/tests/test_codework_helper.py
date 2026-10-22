@@ -106,8 +106,8 @@ class Source(unittest.TestCase):
                 names.update(alias.name.split(".")[0] for alias in node.names)
             elif isinstance(node, ast.ImportFrom):
                 names.add((node.module or "").split(".")[0])
-        self.assertEqual({"datetime", "html", "io", "itertools", "os", "re", "stat", "subprocess", "sys",
-                          "wbkit"}, names)
+        self.assertEqual({"datetime", "html", "io", "itertools", "json", "os", "re", "stat", "subprocess", "sys",
+                          "unicodedata", "wbkit"}, names)
         self.assertEqual({"wbkit"}, names - set(sys.stdlib_module_names))
 
     def test_the_only_import_of_subprocess_is_below_the_read_only_part(self):

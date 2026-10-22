@@ -10,6 +10,7 @@ line is what the subcommands that change a repository use; it starts one program
     code-work plans      list the plans that are Proposed, Approved or In Progress
     code-work report     list the roadmap candidates a Completed plan names, and the plans whose
                          Candidate: names a roadmap or candidate that is not there
+    code-work commit     make one local commit of exactly the named files (see `parse_commit`)
 
 The rules are in ``docs/specs/code-work.md`` and in the README the module writes into
 ``docs/plans/``. Everything read is untrusted repository content: the number of files, the bytes in
@@ -22,12 +23,14 @@ import datetime
 import html
 import io
 import itertools
+import json
 import os
 import re
 import stat
 import sys
+import unicodedata
 
-from wbkit import display
+from wbkit import display, safefs
 
 MAX_FILES = 2000
 MAX_BYTES = 4 * 1024 * 1024
@@ -675,7 +678,7 @@ MAX_REF = 200
 MAX_GITLINK_FINDINGS = 5
 _KEPT = ("HOME", "XDG_CONFIG_HOME", "USER", "LOGNAME", "LANG", "TZ", "TERM", "TMPDIR")
 _BRANCH = re.compile(r"\Arefs/heads/[A-Za-z0-9._][A-Za-z0-9._/-]*\Z")
-_DIFF_FLAGS = ("--cached", "--name-only", "-z", "--check", "--no-ext-diff", "--no-textconv")
+_DIFF_FLAGS = ("--cached", "--name-only", "-z", "--check", "--no-ext-diff", "--no-textconv", "--no-renames")
 # Repository settings shaped like "a program or command to run": the shape decides and not a list of
 # names, because a list kept missing keys. A key is lower-cased before it is matched.
 EXEC_KEY = re.compile(
@@ -781,10 +784,11 @@ def _diff_shape(rest):
 
 
 def _commit_shape(rest):
-    index = 0
+    start = 1 if rest[:1] == ["--cleanup=whitespace"] else 0
+    index = start
     while rest[index:index + 1] == ["-m"] and index + 1 < len(rest):
         index += 2
-    if index == 0:
+    if index == start:
         return False
     tail = rest[index:]
     return tail == [] or (tail[:2] == ["--only", "--"] and _paths_ok(tail[2:]))
@@ -882,7 +886,7 @@ def head(root):
 
 def names(root, cached=False):
     """The paths git reports as changed in the work tree, or (with `cached`) staged."""
-    command = ["git", "diff"] + (["--cached"] if cached else []) + ["--name-only", "-z"]
+    command = ["git", "diff"] + (["--cached"] if cached else []) + ["--no-renames", "--name-only", "-z"]
     return {item for item in run(command, root).stdout.split("\0") if item}
 
 
@@ -937,12 +941,365 @@ def repo_program_findings(root):
     return sorted(set(findings))
 
 
+# --- commit --------------------------------------------------------------------------------------
+
+MAX_SUBJECT = 300
+MAX_BODY = 100000
+MAX_TRAILERS = 50
+MAX_TRAILER = 1000
+MAX_PATHS = 2000
+_HEX40 = re.compile(r"\A[0-9a-f]{40}\Z")
+_TRAILER = re.compile(r"\A[A-Za-z][A-Za-z0-9-]{0,63}:[ ]+\S[^\0\r\n]*\Z")
+_TOOL = r"(?:the\s+|an?\s+)?(?:ai\s+)?[\W_]{0,4}(claude|anthropic)\b"
+_ATTRIBUTION = [re.compile(pattern, re.I) for pattern in (
+    r"co[-\s]?(authored|developed)[-\s]?by\s*:[^\n]{0,200}(claude|anthropic)",
+    r"signed[-\s]?off[-\s]?by\s*:[^\n]{0,200}(claude|anthropic)",
+    r"\b(claude|anthropic)\b[^\n]{0,20}\b(wrote|authored|generated|created|made|drafted)\b",
+    r"\b(assisted|generated|created|written|authored|reviewed|helped|made|drafted|powered|built|developed)[-\s]+"
+    r"(with|by|using|via)\s+" + _TOOL,
+    r"(assisted|generated|created|written|authored|reviewed|helped)[-\s]?(with|by)\s*:[^\n]{0,200}(claude|anthropic)",
+    r"\bai[-\s]assisted\b[^\n]{0,20}\b(claude|anthropic)\b",
+    r"noreply[^@\s]{0,20}@anthropic\.com",
+    r"claude[-\s]session\s*:",
+    r"(?<![A-Za-z0-9-])(?:www\.)?claude\.(ai|com)[:/?]\S")]
+_CONFUSABLE = {0x430: "a", 0x435: "e", 0x43E: "o", 0x440: "p", 0x441: "c", 0x445: "x", 0x443: "y",
+               0x455: "s", 0x456: "i", 0x458: "j", 0x3BF: "o", 0x3B1: "a", 0x501: "d", 0x57D: "u", 0x3C5: "u", 0x3BC: "u",
+               0x251: "a", 0x1D04: "c", 0x142: "l", 0x19A: "l", 0x3002: "."}
+_FILLERS = "\u115f\u1160\u3164\uffa0"
+_BLANKS = "\u2800\u1680"
+_LOOKALIKE_SCRIPTS = {"CYRILLIC", "GREEK", "ARMENIAN", "COPTIC", "CHEROKEE"}
+
+
+def _script(char):
+    """The script of a letter, from the first word of its Unicode name; the Japanese and Korean scripts
+    and Han count as one, so a sentence that mixes them is not a mix."""
+    first = unicodedata.name(char, "?").split(" ")[0]
+    return "CJK" if first in ("CJK", "HIRAGANA", "KATAKANA", "HANGUL", "BOPOMOFO") else first
+_COMMIT_OPTIONS = ("--expected-head", "--subject", "--body", "--trailer", "--leave-other-staged")
+
+
+class Request:
+    """What `commit` was asked to do, after the arguments were read."""
+
+    def __init__(self):
+        self.expected = None
+        self.subject = None
+        self.body = None
+        self.trailers = []
+        self.leave_other_staged = False
+        self.paths = []
+
+
+def parse_commit(argv):
+    """Read the arguments of `commit` by hand: options, then ``--``, then the paths. An unknown option, a
+    repeated one that takes one value, a missing value and a missing ``--`` are refused."""
+    request = Request()
+    seen = set()
+    index = 0
+    while index < len(argv) and argv[index] != "--":
+        option = argv[index]
+        if option not in _COMMIT_OPTIONS:
+            raise Refused("unknown option: %s" % shown(option, 40))
+        if option != "--trailer" and option in seen:
+            raise Refused("%s was given more than once" % option)
+        seen.add(option)
+        if option == "--leave-other-staged":
+            request.leave_other_staged = True
+            index += 1
+            continue
+        if index + 1 >= len(argv):
+            raise Refused("%s needs a value" % option)
+        value = argv[index + 1]
+        index += 2
+        if option == "--expected-head":
+            request.expected = value
+        elif option == "--subject":
+            request.subject = value
+        elif option == "--body":
+            request.body = value
+        else:
+            request.trailers.append(value)
+    if index >= len(argv):
+        raise Refused("usage: code-work commit --expected-head <hash> --subject <text> [--body <text>] "
+                      "[--trailer 'Key: value']... [--leave-other-staged] -- <path>...")
+    request.paths = argv[index + 1:]
+    for required, label in ((request.expected, "--expected-head"), (request.subject, "--subject")):
+        if required is None:
+            raise Refused("%s is required" % label)
+    if not request.paths:
+        raise Refused("name at least one path after --")
+    if len(request.paths) > MAX_PATHS:
+        raise Refused("more than %d paths" % MAX_PATHS)
+    return request
+
+
+def validate_expected(value):
+    if _HEX40.match(value) is None:
+        raise Refused("--expected-head must be the full 40-digit lower-case hash of HEAD")
+
+
+def validate_message(request):
+    """Refuse a subject, body or trailer that git or a reader would read differently from what was given."""
+    subject = request.subject
+    if not subject.strip() or len(subject) > MAX_SUBJECT or any(c in subject for c in "\0\r\n"):
+        raise Refused("the subject must be one non-empty line of at most %d characters" % MAX_SUBJECT)
+    if request.body is not None:
+        if "\0" in request.body or len(request.body) > MAX_BODY or not request.body.strip():
+            raise Refused("the body must be non-empty text without NUL, at most %d characters" % MAX_BODY)
+    if len(request.trailers) > MAX_TRAILERS:
+        raise Refused("more than %d trailers" % MAX_TRAILERS)
+    for trailer in request.trailers:
+        if len(trailer) > MAX_TRAILER or _TRAILER.match(trailer) is None:
+            raise Refused("a trailer must be one 'Key: value' line: %s" % shown(trailer, 60))
+
+
+def _folded(text):
+    """`text` as the attribution patterns read it: compatibility-normalised, without format characters and
+    fillers, every dash a hyphen, every run of blanks one space, accents dropped, lower-cased, look-alike
+    letters mapped to ASCII, a folded line joined to the one before. A combining mark that no precomposed
+    letter holds, or a word that mixes scripts, cannot be read safely and is refused."""
+    text = unicodedata.normalize("NFKC", text)
+    if any(unicodedata.category(c) in ("Mn", "Me", "Co", "Cn") or c in _BLANKS
+           or (unicodedata.category(c) == "Cc" and c not in "\n\t") for c in text):
+        raise Refused("the message has a control, combining, private-use or invisible character; "
+                      "write it with plain letters")
+    text = "".join(c for c in text if unicodedata.category(c) != "Cf" and c not in _FILLERS)
+    text = text.casefold()
+    for word in re.findall(r"\w+", text.replace("\u03bc", "u")):      # a micro sign is not a look-alike
+        scripts = {_script(c) for c in word if c.isalpha()}
+        if "LATIN" in scripts and scripts & _LOOKALIKE_SCRIPTS:
+            raise Refused("a word in the message mixes scripts: %s" % shown(word, 40))
+    text = text.translate(_CONFUSABLE)
+    text = "".join("-" if unicodedata.category(c) == "Pd" or c == "\u2212" else c for c in text)
+    text = "".join(c for c in unicodedata.normalize("NFKD", text) if unicodedata.category(c) != "Mn")
+    text = re.sub(r"[^\S\n]+", " ", text)
+    return re.sub(r":[ \t]*\n[ \t]*", ": ", re.sub(r"\n[ \t]+", " ", text))
+
+
+def refuse_attribution(request):
+    """Refuse a message that names a tool as its author (the commit helper writes the owner's, not a tool's)."""
+    fields = [request.subject] + ([request.body] if request.body is not None else []) + request.trailers
+    for text in fields + ["\n".join(fields)]:
+        folded = _folded(text)
+        if any(pattern.search(folded) for pattern in _ATTRIBUTION):
+            raise Refused("the message carries tool attribution; this project does not allow it")
+
+
+def message_paragraphs(request):
+    paragraphs = [request.subject]
+    if request.body is not None:
+        paragraphs.append(request.body)
+    if request.trailers:
+        paragraphs.append("\n".join(request.trailers))
+    return paragraphs
+
+
+def _cleaned(text):
+    """`text` as git stores a message given with ``-m``: trailing space off each line, runs of blank lines
+    collapsed, blank lines at either end dropped."""
+    lines = [line.rstrip() for line in text.split("\n")]
+    kept = []
+    for line in lines:
+        if line or (kept and kept[-1]):
+            kept.append(line)
+    return "\n".join(kept).strip("\n")
+
+
+def validate_paths(root, paths, entries):
+    """Refuse a path that is not one tracked or existing regular file of the repository, reached without
+    a link or through a directory that holds its own repository. `entries` maps each indexed path to
+    ``(mode, stage)``. Repositories with a gitlink are refused earlier, by `repo_program_findings`."""
+    cache = {}
+    seen = set()
+    try:
+        tree = safefs.Root(root, "repository")
+    except safefs.SafeFsError as exc:
+        raise Refused("the repository cannot be read safely: %s" % display.ascii_text(str(exc))[:200])
+    with tree:
+        def listing(directory):
+            if directory not in cache:
+                cache[directory] = tree.list_dir(directory, lenient=True)
+            return cache[directory]
+
+        for path in paths:
+            label = shown(path, 80)
+            try:
+                parts = safefs.validate_relpath(path)
+                if path.startswith("-") or any(c in path for c in "*?[]"):
+                    raise Refused("path refused (a glob or an option): %s" % label)
+                if path.casefold() in seen:
+                    raise Refused("path named twice (or two spellings of one file): %s" % label)
+                seen.add(path.casefold())
+                if entries.get(path, ("", "0"))[1] != "0":
+                    raise Refused("path has an unresolved merge state: %s" % label)
+                present = False
+                for depth in range(len(parts)):
+                    found = listing("/".join(parts[:depth]))
+                    if found is None:
+                        break
+                    if depth and any(name.casefold().rstrip(" .") == ".git" for name, _ in found):
+                        raise Refused("path lies inside a nested repository: %s" % label)
+                    kind = dict(found).get(parts[depth])
+                    if kind is None:
+                        break
+                    if kind != ("dir" if depth < len(parts) - 1 else "file"):
+                        raise Refused("path goes through, or is, a %s and not a file: %s" % (kind, label))
+                    present = depth == len(parts) - 1
+                if not present and path not in entries:
+                    raise Refused("path does not exist and is not tracked: %s" % label)
+                if not present:
+                    # A tracked name the listing did not show may still be there under another spelling
+                    # of the same name (Unicode normalisation): it must be a plain file or nothing.
+                    try:
+                        mode = os.lstat(os.path.join(root, *parts)).st_mode
+                    except FileNotFoundError:
+                        continue
+                    except OSError as exc:
+                        raise Refused("path refused: %s" % display.ascii_text(exc.strerror or "error"))
+                    if not stat.S_ISREG(mode):
+                        raise Refused("path is a link or not a file under another spelling: %s" % label)
+            except safefs.SafeFsError as exc:
+                raise Refused("path refused: %s" % display.ascii_text(str(exc))[:200])
+    return paths
+
+
+def indexed(root):
+    """The index as ``{path: (mode, stage)}`` plus the raw text, for a comparison before and after."""
+    listing = run(["git", "ls-files", "-s", "-z"], root).stdout
+    found = {}
+    for entry in listing.split("\0"):
+        if not entry:
+            continue
+        meta, _, path = entry.partition("\t")
+        fields = meta.split(" ")
+        if len(fields) != 3:
+            raise Refused("git listed the index in a form this helper does not read")
+        found[path] = (fields[0], fields[2])
+    return found, listing
+
+
+def refuse_operation_in_progress(root):
+    """A merge, revert, cherry-pick or rebase in progress would give the commit another parent or belong to
+    that operation; this helper does not commit into one."""
+    directory = run(["git", "rev-parse", "--absolute-git-dir"], root).stdout.strip()
+    for name in ("MERGE_HEAD", "REVERT_HEAD", "CHERRY_PICK_HEAD", "rebase-merge", "rebase-apply", "sequencer"):
+        if os.path.lexists(os.path.join(directory, name)):
+            raise Refused("a %s is in progress in this repository; finish or abort it by hand"
+                          % name.replace("_HEAD", "").replace("-", " ").lower())
+
+
+def _expect_head(root, expected, when):
+    now = head(root)
+    if now != expected:
+        raise Refused("HEAD moved %s: expected %s, found %s" % (when, expected[:12], now[:12]))
+
+
+def _unstage(root, paths, expected):
+    """Take the named paths out of the index again, but only while HEAD is still where it was expected."""
+    try:
+        if head(root) != expected:
+            return "HEAD moved, so the index was left as it is"
+        run(["git", "reset", "-q", "--"] + paths, root)
+    except Refused as exc:
+        return "the named paths could not be unstaged (%s)" % exc
+    return "the named paths were unstaged"
+
+
+def command_commit(argv, cwd, out, err):
+    request = parse_commit(argv)
+    validate_expected(request.expected)
+    validate_message(request)
+    refuse_attribution(request)
+    root = git_root(cwd)
+    found = repo_program_findings(root)
+    if found:
+        raise Refused("this repository would make git run a program (%s); commit by hand"
+                      % ", ".join(found[:10]))
+    refuse_operation_in_progress(root)
+    paths = request.paths
+    named = set(paths)
+    _expect_head(root, request.expected, "before the commit was started")
+    entries, before = indexed(root)
+    validate_paths(root, paths, entries)
+    staged = names(root, cached=True)
+    if staged and not request.leave_other_staged:
+        raise Refused("the index already holds staged changes (%d path(s)); use --leave-other-staged to keep "
+                      "them out of this commit" % len(staged))
+    if staged & named:
+        raise Refused("a named path is already staged: %s" % shown(sorted(staged & named)[0], 80))
+    problems = run(["git", "diff", "--check", "--no-ext-diff", "--no-textconv", "--"] + paths, root,
+                   check=False)
+    if problems.returncode:
+        raise Refused("git diff --check finds whitespace errors in the named paths: %s"
+                      % display.ascii_text(problems.stdout.strip())[:300])
+    try:
+        _expect_head(root, request.expected, "before staging")
+        run(["git", "add", "--"] + paths, root)
+        _expect_head(root, request.expected, "while staging")
+        after_add = names(root, cached=True)
+        if after_add != staged | named:
+            missing = sorted((staged | named) - after_add)
+            extra = sorted(after_add - staged - named)
+            raise Refused("staging did not give exactly the named paths (no change: %s; extra: %s)"
+                          % (shown(", ".join(missing), 120) or "none", shown(", ".join(extra), 120) or "none"))
+        checked = run(["git", "diff", "--cached", "--check", "--no-ext-diff", "--no-textconv", "--"] + paths,
+                      root, check=False)
+        if checked.returncode:
+            raise Refused("git diff --cached --check finds whitespace errors: %s"
+                          % display.ascii_text(checked.stdout.strip())[:300])
+        _expect_head(root, request.expected, "just before the commit")
+        command = ["git", "commit", "--cleanup=whitespace"]
+        for paragraph in message_paragraphs(request):
+            command += ["-m", paragraph]
+        if request.leave_other_staged:
+            command += ["--only", "--"] + paths
+        run(command, root)
+    except Refused as exc:
+        raise Refused("%s; %s" % (exc, _unstage(root, paths, request.expected)))
+    return verify_commit(root, request, named, before, out)
+
+
+def verify_commit(root, request, named, before, out):
+    """Check what the commit holds; a failure here is reported with the commit and undoes nothing."""
+    made = head(root)
+    try:
+        parents = run(["git", "rev-parse", "HEAD^@"], root).stdout.split()
+        if parents != [request.expected]:
+            raise Refused("HEAD moved during the commit; the commit %s was made on %s"
+                          % (made[:12], ", ".join(p[:12] for p in parents) or "no parent"))
+        expected_message = _cleaned("\n\n".join(message_paragraphs(request)))
+        if _cleaned(run(["git", "show", "-s", "--format=%B", "HEAD"], root).stdout) != expected_message:
+            raise Refused("the commit %s has a message other than the one asked for" % made[:12])
+        changed = {item for item in run(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "-z",
+                                         "HEAD"], root).stdout.split("\0") if item}
+        if changed != named:
+            raise Refused("the commit %s holds %s, not the named paths" % (made[:12], shown(", ".join(sorted(changed)), 120)))
+        _, after = indexed(root)
+        if _others(after, named) != _others(before, named):
+            raise Refused("the commit %s was made but the rest of the index is not as it was" % made[:12])
+        if head(root) != made:
+            raise Refused("HEAD moved after the commit %s was made" % made[:12])
+    except Refused as exc:
+        raise Refused("%s; nothing was undone" % exc)
+    out.write(json.dumps({"committed": made, "subject": request.subject, "paths": sorted(named)},
+                         ensure_ascii=True) + "\n")
+    return 0
+
+
+def _others(listing, named):
+    """The index listing without the entries of the named paths."""
+    return sorted(entry for entry in listing.split("\0") if entry and entry.partition("\t")[2] not in named)
+
+
 COMMANDS = {"check": command_check, "plans": command_plans, "report": command_report}
+CHANGING = {"commit": command_commit}
 
 
 def main(argv, out, err, cwd):
     """Run one subcommand from `cwd`. Returns the exit code."""
     try:
+        if argv and argv[0] in CHANGING:
+            return CHANGING[argv[0]](argv[1:], cwd, out, err)
         if len(argv) != 1 or argv[0] not in COMMANDS:
             raise Refused("usage: code-work %s (no arguments)" % "|".join(sorted(COMMANDS)))
         return COMMANDS[argv[0]](find_root(cwd), out, err)
