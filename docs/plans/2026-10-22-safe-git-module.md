@@ -326,3 +326,31 @@ Nothing is left for the owner. The review is not an approval; the plan stays `Pr
   while they were stale, ran and still listed three modules. It now lists `safe-git` too.
 - Verification: the full suite runs 2658 tests in 5 roots, OK.
 - Next: increment E.
+
+### Increment E — done
+
+- `docs/specs/safe-git.md` added (purpose, declaration, the Commit and Remove rules moved from
+  `code-work.md`, the attribution setting, how it runs git, the skill, the superpowers git slice with the
+  reasons `using-git-worktrees` and `finishing-a-development-branch` were not ported, as built and limits,
+  acceptance criteria) and indexed in `docs/specs/README.md`.
+- `docs/specs/code-work.md`: the status line no longer says implementation has not started; the declaration
+  table lists `requires commit` and the three read subcommands; the Commit section points to `safe-git`;
+  acceptance and decided points name the new command; a new "As built, and its limits" section lists what
+  exists and what is `code-work-approval`. `module-boundary.md` names `safe-git` among the modules that keep
+  specs. `docs/development.md` names `wb run safe-git commit` and `remove`, the section "The safe-git
+  helper" and `.workbench/safe-git.json` (the three lines the review flagged).
+- Roadmap: a Current-state entry for this plan; a note on `code-work-commit` that the helper moved; the
+  `port-superpowers` boundary now says the git slice was taken; the accepted decision is listed.
+- Decisions: the Verification of `2026-10-22-git-work-in-its-own-module` is filled with this plan's
+  evidence. The Proposed `commit-helper-leaves-baselines-to-the-owner` is refined for the new names and
+  stays Proposed. `plan-check-in-the-shipped-helper` names only `check`, which stays in `code-work`, so it
+  is unchanged. `trust-and-approval.md` says "the commit helper" without a command, so it is unchanged.
+  No other accepted record was edited.
+- Search: no live document outside `docs/plans/` and the accepted decision this plan carries out names
+  `wb run code-work commit`, `code-work remove`, `the code-work helper` as the commit helper, or
+  `.workbench/code-work.json`.
+- Not done, not in this plan: the two missing rows in the decisions index, and accepting the Proposed
+  records.
+- Verification: `doccheck` and `refcheck` print no problems, `git diff --check` is clean, and the full suite
+  runs 2658 tests in 5 roots, OK.
+- The plan is complete: all five increments are done. Its status stays `Approved` until the owner archives it.

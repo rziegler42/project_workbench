@@ -34,4 +34,5 @@ or an evidence note.
 | [`installer-interface.md`](installer-interface.md) | The installer's commands: the target, options, preview and approval, output and exit codes |
 | [`groundwork.md`](groundwork.md) | Specs, roadmaps, decisions and references |
 | [`code-work.md`](code-work.md) | The programming way of working |
+| [`safe-git.md`](safe-git.md) | Local commits of exact paths and approved deletions, as a module of their own |
 | [`harness-modules.md`](harness-modules.md) | How a harness module describes one AI runtime |

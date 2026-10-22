@@ -1,13 +1,14 @@
 # code-work
 
-Status: Current. Approved by the owner on 2026-10-19; implementation has not started. Paths, field names
-and file formats are proposals; the rules are the substance. Open items are listed
-at the end.
+Status: Current. Approved by the owner on 2026-10-19. The plan format, the three read subcommands and the
+commit rules are built; the approval, review, caps and push parts are not (see "As built"). Paths, field
+names and file formats not yet built are proposals; the rules are the substance. Open items are listed at
+the end.
 
 Terms are defined in `terms.md`. The declaration it must satisfy is defined in
 `module-contract.md`; the places and upgrade rules in `repository-boundary.md`; the
 authority rules in `trust-and-approval.md`; the documents it builds on in
-`groundwork.md`.
+`groundwork.md`; the commit helper it requires in `safe-git.md`.
 
 ## Purpose and scope
 
@@ -31,11 +32,11 @@ Non-goals:
 |---|---|
 | type | `process` |
 | provides | `plans` |
-| requires | `specs`, `roadmaps`, `decisions` (hard); `peer-review`, `permissions` (soft) |
+| requires | `specs`, `roadmaps`, `decisions`, `commit` (hard); `peer-review`, `permissions` (soft) |
 | blocks | nothing beyond the one-process rule of the type |
 | fills | the policy slot in `AGENTS.md`; the `docs-index` slot |
 | writes | `docs/plans/` and its README |
-| ships | one helper (code-bearing, shown at approval) with the subcommands `commit`, `remove`, `check`, `plans` and `report`; the `wb` launcher is a workbench component and not shipped by this module |
+| ships | one helper (code-bearing, shown at approval) with the subcommands `check`, `plans` and `report`; the `wb` launcher is a workbench component and not shipped by this module |
 
 It also ships neutral items: skills for drafting a plan, running the increment loop,
 and reviewing; and a read-only reviewer agent. Templates stay in the module; no
@@ -172,7 +173,7 @@ For each increment, in order:
 3. Peer review the result. Review is mandatory (see "Review").
 4. If the review has blocking findings, fix them and review again, up to the round
    cap. At the cap, or on a repeated finding, stop and report.
-5. When the review passes, commit through the commit helper. The commit is local.
+5. When the review passes, commit through the commit helper (`safe-git.md`). The commit is local.
 6. Start the next increment. This is not a checkpoint.
 
 After the last increment, review and verify the whole plan, set the status, supply any
@@ -236,41 +237,19 @@ module adds none of its own.
 
 ## Commit
 
-- The agent commits through the commit helper, never by composing raw git commands.
-  A commit is local, is made after a passing review, and lists exact paths.
-- The helper ships with this module, in `.workbench/<package>/code-work/`, so every
-  teammate has the same one. It is run as `wb run code-work commit` (and `wb run code-work
-  remove` for an approved deletion of project files). `wb` is a small launcher kept
-  in the guarded store, on the owner's `PATH`, that verifies the helper's hash
-  against its pin before running it, so a pulled edit to the helper is not run until
-  acknowledged. The owner's personal allowance targets `wb`.
-- The same helper holds the read-only subcommands: `wb run code-work check` (the plan
+- The agent commits through the commit helper, never by composing raw git commands. A commit is local, is
+  made after a passing review, and lists exact paths.
+- The helper is not this module's. It is the `commit` capability, provided by the `safe-git` module, which
+  this module requires (hard). `safe-git.md` holds its rules: the command (`wb run safe-git commit`, and
+  `wb run safe-git remove` for an approved deletion), the expected-HEAD check, the refusals, the attribution
+  setting `.workbench/safe-git.json`, and how it runs git. The plan README this module writes tells the
+  agent to commit that way, and the policy block says so without naming a command.
+- The helper this module ships holds the read-only subcommands: `wb run code-work check` (the plan
   check: one `Candidate:` line, the sections of the hashed region, required fields),
   `wb run code-work plans` (the active plans, derived by listing plans by status) and
   `wb run code-work report` (candidate completion, derived from work records). They change
   nothing, and run no program.
-- `commit` and `remove` change a repository and run only `git`. `commit` takes
-  `--expected-head <full hash | none>`, `--subject`, optional `--body`, `--trailer 'Key: value'` and
-  `--leave-other-staged`, then `--` and exact repository-relative paths. It stages and commits only
-  those paths, and refuses when HEAD is not the expected commit (`none` is accepted only on a branch that
-  has no commit yet), when anything else is staged (without `--leave-other-staged`), when a path is a
-  directory, a glob, a link, in a nested repository or Git metadata, or when the repository selects a
-  program to run (a hook, a filter, a file system monitor, signing). After the commit it checks the
-  message, the parent and the changed paths, and says so when they differ. The expected-HEAD guarantee is
-  detection and not atomicity: a writer that moves HEAD after the last check produces a commit the
-  helper reports as failed. `remove` previews, then with `--confirm` deletes exact paths, and with
-  `--recursive` the directories among them; it refuses Git metadata, nested repositories, the repository
-  root, links and overlapping targets, and follows no link. Both print one JSON line on success and
-  `refused: <reason>` on standard error with exit 1 on a refusal.
-- The message carries no tool attribution unless `.workbench/code-work.json`
-  (`{"format": 1, "attribution": "refuse" | "allow"}`) says `allow`; absent means refuse. The check is
-  a guard against a mistake and a heuristic: it is not a control against an agent that writes the setting
-  or spells the name with a look-alike the check does not know.
-- The helper runs `git` found only in an absolute `PATH` entry outside the repository, with a scrubbed
-  environment, literal pathspecs, no editor, pager, lazy fetch, file system monitor or automatic
-  maintenance, and only in the argument shapes it uses. It does not write the acknowledgement baselines:
-  a change made and committed through it is listed by the next `wb acknowledge`
-  (`2026-10-22-commit-helper-leaves-baselines-to-the-owner`).
+- A commit that completes an increment ends with the trailer `Plan: <plan stem>#<label>`.
 - A commit never authorizes a push.
 
 ## Loop caps
@@ -355,16 +334,17 @@ installer's and is replaced on upgrade only while unedited.
   push to a non-shared branch does not.
 - A plan that lists a decision to be recorded is not reported complete until the
   decision record exists, whichever commit supplied it.
-- The commit is made through the helper, is local, and is not followed by a push.
+- The commit is made through the `safe-git` helper, is local, and is not followed by a push.
+- Installing `code-work` without `safe-git` stops with a hard-requirement message.
 - Exceeding a loop cap stops the run with a report.
 - `check`, `plans` and `report` change no file.
 - Upgrading never modifies an existing plan.
 
 ## Decided points that were open
 
-- The commit helper is run as `wb run code-work commit`, through the `wb` launcher in the
-  guarded store; the helper's files are committed under
-  `.workbench/<package>/code-work/`.
+- The commit helper is run as `wb run safe-git commit` (moved out of this module's helper by
+  `2026-10-22-git-work-in-its-own-module`), through the `wb` launcher in the guarded store; its files are
+  committed under `.workbench/<package>/safe-git/`.
 - The loop cap defaults are the values above.
 - Context across increments uses the plan as durable state, a fresh subagent per
   increment where `agents` exists, and automatic compaction otherwise. The old rule to
@@ -382,10 +362,21 @@ installer's and is replaced on upgrade only while unedited.
   `CLAUDE.md` itself and honoring it through an import is unverified. The file is
   per-clone and uncommitted, so the committed repository stays harness-neutral.
 
+## As built, and its limits
+
+- Built: `code-work-plans` (the module, the plan format, the README, the `draft-plan` skill, the policy and
+  docs-index blocks, and the helper with `check`, `plans` and `report`) and, from `code-work-commit`, the
+  commit rules, which moved to `safe-git` with `2026-10-22-safe-git-module`.
+- Not built: plan approval as a recorded approval, the gate, the checkpoint settings, the increment-loop and
+  review skills and the reviewer agent, the review record's enforcement, the loop caps, the push checkpoint,
+  and the compaction guidance. These are `code-work-approval`. Until then approval is the owner's explicit
+  statement in session, and the policy block says so.
+- The helper reads untrusted plans and is bounded; the limits are in the plan `2026-10-21-code-work-plans`.
+
 ## Open items
 
 - How compaction guidance is delivered to opencode, once its installed version is
   known (`verify-opencode`).
 - Paths, field names and file formats remain proposals until the candidate that builds
   each item writes the real schema: `code-work-plans` has written the plan format and its helper;
-  `code-work-commit` and `code-work-approval` write the rest.
+  `code-work-commit` wrote the commit rules, now in `safe-git.md`, and `code-work-approval` writes the rest.

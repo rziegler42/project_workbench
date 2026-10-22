@@ -120,6 +120,12 @@ meet here and the order matters.
   decisions it proposed (`2026-10-21-reference-index-format`,
   `2026-10-21-installer-runs-document-checks`) were accepted on 2026-10-21. The hand run in a live `claude`
   session was not done. `groundwork.md` ("As built, and its limits") lists the limits.
+- Git work lives in its own module (plan `2026-10-22-safe-git-module`, increments A to E; it carries out
+  `2026-10-22-git-work-in-its-own-module` and has no roadmap candidate, so its completion is not derived).
+  The first-party module `safe-git` provides the capability `commit` and ships `wb run safe-git commit` and
+  `remove` and the neutral skill `commit-changes`. `code-work` keeps `check`, `plans` and `report` and
+  requires `commit`. The code moved unchanged; the attribution setting is `.workbench/safe-git.json`.
+  `docs/specs/safe-git.md` records it. The hand run of install and commit in a project is still to do.
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.
 
@@ -354,7 +360,8 @@ harness name or harness path.
 **Outcome:** the helper gains `commit` and `remove`, so a commit is local, lists exact
 paths, carries no tool attribution unless a project says otherwise, and can be the first
 commit in a repository with no commits; it leaves the acknowledgement baselines to the
-owner, so a change made through it is listed by the next `wb acknowledge`.
+owner, so a change made through it is listed by the next `wb acknowledge`. The helper was built in
+`code-work` and then moved to the `safe-git` module (`2026-10-22-safe-git-module`).
 **Dependencies:** `code-work-plans`.
 **Boundary:** local commits and approved deletions only. It never pushes. The helper
 reads a repository the project controls, so a security pass is part of it.
@@ -410,7 +417,10 @@ go to `groundwork` as a step before `draft-spec`; the rest to `code-work` or `sa
 the inventory shows a practice that every process shares, which would argue for a module of its own.
 **Dependencies:** `claude-harness`, `groundwork-module`, `code-work-approval` (which owns the
 increment loop, review and reviewer-agent skills).
-**Boundary:** the inventory, the placement decisions, and the skills the inventory selects first.
+**Boundary:** the inventory, the placement decisions, and the skills the inventory selects first. The
+git-specific slice was taken by `2026-10-22-safe-git-module`: the `commit-changes` skill is written, and
+`using-git-worktrees` and `finishing-a-development-branch` are recorded as not ported, with the reasons, in
+`docs/specs/safe-git.md`; this candidate starts from that and does not revisit git.
 Each further port is its own candidate. Whether the superpowers wording may be reused is checked
 against its licence before any text is copied, and the default is to write new text. Removing
 superpowers from the owner's `~/.claude` belongs to `global-config-migration`.
@@ -499,3 +509,7 @@ Accepted 2026-10-21:
 
 - `2026-10-21-reference-index-format`
 - `2026-10-21-installer-runs-document-checks`
+
+Accepted 2026-10-22:
+
+- `2026-10-22-git-work-in-its-own-module`

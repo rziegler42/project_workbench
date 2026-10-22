@@ -26,7 +26,7 @@ careful file-reading code.
 
 Non-goals:
 
-- The content of any module. `groundwork`, `code-work` and `claude` keep the specifications they have.
+- The content of any module. `groundwork`, `code-work`, `safe-git` and `claude` keep the specifications they have.
 - How a module is approved, pinned or acknowledged. That stays in `trust-and-approval.md`.
 - A plugin system. A module still declares data and ships files; it still gets no way to run at install,
   or to change what the installer does to another module.

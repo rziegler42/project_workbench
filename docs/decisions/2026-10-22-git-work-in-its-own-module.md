@@ -69,9 +69,17 @@ and policy text that name `wb run code-work commit`, so moving is cheapest now.
 
 ## Verification
 
-None yet. The plan that carries out the move would show the moved tests passing in the new module, the
-`code-work` tests passing without the git code, the boundary test passing, and the released approvals
-matching.
+Filled in by plan `2026-10-22-safe-git-module` (increments A to E), the plan that carries out the move.
+
+- The moved tests pass in `packages/workbench/safe-git/tests/` (229 tests, with the declaration and launcher
+  tests added); a diff of the moved region against the original shows four edits: the setting path and three
+  strings.
+- The `code-work` tests pass without the git code: its helper imports only the standard library and a test
+  fails if git code returns; a test shows installing `code-work` without `safe-git` stops on the `commit`
+  requirement.
+- The boundary test passes with the installer naming neither module's helper.
+- The shipped approvals were released again and match (the full suite runs 2658 tests in 5 roots, OK).
+- An independent read-only review found no defect in the moved code.
 
 ## Related files and decisions
 
