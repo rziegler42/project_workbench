@@ -1,6 +1,6 @@
 # Harness paths from the harness module
 
-Status: Approved
+Status: Completed
 Created: 2026-10-21
 
 Candidate: workbench-v1#module-harness-paths
