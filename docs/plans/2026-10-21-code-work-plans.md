@@ -700,3 +700,38 @@ commands the install tests fail (checked). Full suite: 2408 tests in 4 roots, pa
   outcome is `partial`; a test fails with the old comparison. Not checked by the reviewer: the
   launcher with old pins and new bytes (checked by F's tests), `acknowledge` when the pins are already
   new, and the specs, which increment H updates.
+
+### Increment G — security pass, release and end-to-end (2026-10-22)
+
+The pins an installer makes now record the hash of the module declaration the owner confirmed, and the
+release approvals are recorded again. Two commits: the security fix (`7bea3e1`) and this one.
+
+- **Security pass (security-reviewer, two rounds, both partial at the 25-turn bound).** Round 1 found no
+  Critical or High issue and three items: (1) a pull that rewrites `module.json` and recomputes the
+  manifest's declaration hash could widen a command's `arguments` (ran: `wb run tool evil` resolved); (2)
+  `acknowledge` moved any pin whose path was in the changed set, including a pin the owner typed for an
+  undeclared file; (3) a pin-name collision across packages at `add` (not tested by the reviewer). Fixes:
+  `Pin` gained an optional `declaration`; the installer records `verified.declaration_hash`;
+  `commands.resolve` and the check runner refuse when it differs from the manifest's; `pinplan.changes`
+  treats a changed declaration as an update; `acknowledge` moves only pins that record one. A pin the
+  owner types has none and stands for the whole module. (3) was already refused by the verifier
+  ("one pin name is used more than once"); a regression test now says so. Mutation checks: with the
+  `resolve`, check-runner or `acknowledge` guard removed, tests fail.
+- **Round 2 (bypass attempt on the fixes).** No bypass of the declaration check for an installer pin. After
+  `acknowledge` the pin keeps its old declaration, so the refusal persists; only `wb upgrade` or `wb pin`
+  clears it. The refusal message named `wb acknowledge` wrongly and was reworded. Accepted limits: (a) an
+  owner-typed pin does not bind the declaration, so a pull can still widen its `arguments`; (b) pins made
+  by F (`d84009b`, unpushed) carry no declaration and are listed for update on the next upgrade. Increment H
+  states both in the docs.
+- **Not covered by any reviewer:** hostile-tree runs against the `code-work` helper (a FIFO, a link,
+  oversized files), a link swapped in for a project-side helper, a module removed from its package, a
+  hostile pins file in `acknowledge`, and a full `wb upgrade` after acknowledging a pulled declaration.
+  The helper was read and its argument and read limits looked strict; this is not a claim of soundness.
+- **Release.** `release-approvals` was run for the owner and the stale records were removed by hand
+  after preview.
+- **End-to-end test** (`test_codework_module.py`): install the three modules into an empty directory with no
+  pin typed; write plans by hand; `wb run code-work check`, `plans` and `report` and `wb check` pass; edit the
+  `code-work` helper and the `groundwork` check helper and both refuse; `wb acknowledge` moves 2 pins and
+  both run again. The plan's "attach, commit" steps are not part of it: the install has no git history in the
+  test. Upgrade leaving plans alone was already tested. Full suite: 2421 tests in 4 roots, passing with
+  `-W error`, with nothing skipped in the `claude` root.

@@ -364,6 +364,71 @@ class Install(support_install.InstallBase):
         self.assertEqual(1, commands.run(self.guarded, ["code-work", "check"], errors, cwd=place))
         self.assertIn("has changed since it was pinned", errors.getvalue())
 
+    def code_work(self, place, command):
+        """``(code, standard output, standard error)`` of `wb run code-work <command>` in `place`."""
+        errors = io.StringIO()
+        before = os.getcwd()
+        self.addCleanup(os.chdir, before)
+        os.chdir(place)
+        with tempfile.TemporaryFile() as out:
+            code = commands.run(self.guarded, ["code-work", command], errors, cwd=place, stdout=out)
+            out.seek(0)
+            shown = out.read().decode()
+        return code, shown, errors.getvalue()
+
+    def wb_check(self, place):
+        out, err = io.StringIO(), io.StringIO()
+        code = cli.main(["check", place], out, err, store_root=self.store_root, distribution=self.dist)
+        return code, out.getvalue(), err.getvalue()
+
+    def acknowledge(self, place):
+        out, err = io.StringIO(), io.StringIO()
+        code = cli.main(["acknowledge", place], out, err, store_root=self.store_root,
+                        stdin=support_install.Typist(out, support_install.correct))
+        return code, out.getvalue(), err.getvalue()
+
+    def test_the_whole_path_from_install_to_a_refused_edit_and_its_acknowledgement(self):
+        """Plan 2026-10-21-code-work-plans, increment G: install the three packages' modules into an empty
+        directory, write plans by hand and run every command with no pin typed; edit a helper of each
+        module and see both refuse; acknowledge and see them run again."""
+        from test_codework_helper import plan
+        place = self.place()
+        self.assertEqual(0, self.install(place)[0])
+        for name, status in (("2026-10-21-first.md", "Approved"), ("2026-10-21-second.md", "Completed")):
+            with open(os.path.join(place, "docs", "plans", name), "w", encoding="utf-8") as handle:
+                handle.write(plan(status=status))
+        for command in ("check", "plans", "report"):
+            code, shown, err = self.code_work(place, command)
+            self.assertEqual(("", 0), (err, code), (command, shown))
+        self.assertIn("2026-10-21-first", self.code_work(place, "plans")[1])
+        self.assertNotIn("2026-10-21-second", self.code_work(place, "plans")[1])
+        code, shown, err = self.wb_check(place)
+        self.assertEqual(0, code, (shown, err))
+        self.assertNotIn("did not run", shown)
+        self.assertNotIn("not pinned", shown)
+
+        code_work_helper = os.path.join(place, ".workbench", "workbench", "code-work", *HELPER.split("/"))
+        linter = os.path.join(place, ".workbench", "workbench", "groundwork", "helper", "doccheck")
+        for path in (code_work_helper, linter):
+            with open(path, "ab") as handle:
+                handle.write(b"\n# edited\n")
+        code, shown, err = self.code_work(place, "check")
+        self.assertEqual(1, code)
+        self.assertIn("has changed since it was pinned", err)
+        code, shown, err = self.wb_check(place)
+        self.assertEqual(1, code, shown)
+        self.assertIn("has changed since it was pinned", shown + err)
+
+        code, out, err = self.acknowledge(place)
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertIn("moved 2 pins", out)
+        for command in ("check", "plans", "report"):
+            code, shown, err = self.code_work(place, command)
+            self.assertEqual(("", 0), (err, code), (command, shown))
+        code, shown, err = self.wb_check(place)
+        self.assertEqual(0, code, (shown, err))
+        self.assertNotIn("has changed since it was pinned", shown + err)
+
 
 if __name__ == "__main__":
     unittest.main()
