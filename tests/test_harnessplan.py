@@ -4,11 +4,11 @@ import unittest
 from unittest import mock
 
 from workbench import harnessplan, neutral
-from tests.support_harness import AGENT, CLAUDE, COMMAND, SKILL, items, tree
+from tests.support_harness import AGENT, SYNTHETIC, COMMAND, SKILL, items, tree
 from tests.test_layout import edit
 
 
-def run(layout=CLAUDE, found=None, overrides=None, excludes=None, **kw):
+def run(layout=SYNTHETIC, found=None, overrides=None, excludes=None, **kw):
     return harnessplan.translate(found if found is not None else items(), layout,
                                  overrides or {}, excludes or {}, **kw)
 
@@ -24,16 +24,16 @@ def levels(result, level):
 class Paths(unittest.TestCase):
     def test_each_kind_goes_to_the_path_of_the_layout(self):
         self.assertEqual(sorted(by_path(run())), [
-            ".claude/agents/reviewer.md", ".claude/commands/ship.md",
-            ".claude/skills/sample/SKILL.md"])
+            ".fixture/agents/reviewer.md", ".fixture/commands/ship.md",
+            ".fixture/skills/sample/SKILL.md"])
 
     def test_bundled_files_follow_their_skill(self):
         found = items(**{"skills/sample/notes/ref.md": b"ref\n"})
         files = by_path(run(found=found))
-        self.assertEqual(files[".claude/skills/sample/notes/ref.md"].data, b"ref\n")
+        self.assertEqual(files[".fixture/skills/sample/notes/ref.md"].data, b"ref\n")
 
     def test_a_file_records_mode_hash_and_source(self):
-        planned = by_path(run())[".claude/skills/sample/SKILL.md"]
+        planned = by_path(run())[".fixture/skills/sample/SKILL.md"]
         self.assertEqual(planned.mode, 0o644)
         self.assertEqual(planned.sha256, hashlib.sha256(planned.data).hexdigest())
         self.assertEqual(planned.source, "skill/sample")
@@ -47,18 +47,18 @@ class Paths(unittest.TestCase):
 
 class Rendering(unittest.TestCase):
     def test_a_skill(self):
-        data = by_path(run())[".claude/skills/sample/SKILL.md"].data
+        data = by_path(run())[".fixture/skills/sample/SKILL.md"].data
         self.assertEqual(data, b'---\nname: "sample"\ndescription: "A sample skill"\n---\n'
                                b"Do the thing.\n")
 
     def test_an_agent_has_a_mapped_allowlist(self):
-        data = by_path(run())[".claude/agents/reviewer.md"].data.decode()
+        data = by_path(run())[".fixture/agents/reviewer.md"].data.decode()
         self.assertIn('tools: "Glob, Grep, Read"\n', data)
         self.assertIn('model: "sonnet"\n', data)
         self.assertTrue(data.endswith("---\nYou review.\n"))
 
     def test_a_command_maps_args_to_its_harness_field(self):
-        data = by_path(run())[".claude/commands/ship.md"].data.decode()
+        data = by_path(run())[".fixture/commands/ship.md"].data.decode()
         self.assertIn('argument-hint: "[target]"\n', data)
         self.assertNotIn("args:", data)
 
@@ -66,14 +66,14 @@ class Rendering(unittest.TestCase):
         for word in ("null", "true", "123", "no", "~", "a: b", '"q"', "x # y", "back\\slash"):
             text = SKILL.replace(b"A sample skill", word.encode())
             data = by_path(run(found=neutral.read_items({"skills/sample/SKILL.md": text})))[
-                ".claude/skills/sample/SKILL.md"].data.decode()
+                ".fixture/skills/sample/SKILL.md"].data.decode()
             line = data.split("\n")[2]
             self.assertTrue(line.startswith('description: "') and line.endswith('"'), line)
         text = SKILL.replace(b"name: sample", b"name: null").replace(
             b"skills/sample", b"skills/null")
         found = neutral.read_items({"skills/null/SKILL.md": text})
         self.assertIn('name: "null"\n', by_path(run(found=found))[
-            ".claude/skills/null/SKILL.md"].data.decode())
+            ".fixture/skills/null/SKILL.md"].data.decode())
 
     def test_a_quoted_value_decodes_to_the_original(self):
         import json
@@ -84,13 +84,13 @@ class Rendering(unittest.TestCase):
     def test_empty_optional_fields_are_not_written(self):
         text = AGENT.replace(b"model: sonnet\n", b"")
         found = neutral.read_items({"agents/reviewer.md": text})
-        self.assertNotIn("model", by_path(run(found=found))[".claude/agents/reviewer.md"]
+        self.assertNotIn("model", by_path(run(found=found))[".fixture/agents/reviewer.md"]
                          .data.decode())
 
     def test_a_body_that_looks_like_front_matter_is_kept_whole(self):
         body = b"---\nname: other\n---\ntext\n"
         found = neutral.read_items({"skills/sample/SKILL.md": SKILL + body})
-        data = by_path(run(found=found))[".claude/skills/sample/SKILL.md"].data
+        data = by_path(run(found=found))[".fixture/skills/sample/SKILL.md"].data
         self.assertTrue(data.endswith(b"---\nDo the thing.\n" + body))
 
 
@@ -98,7 +98,7 @@ class Dropping(unittest.TestCase):
     def test_a_field_the_layout_does_not_map_is_dropped_with_a_warning(self):
         layout = edit(["kinds", "command", "fields"], {"name": "name", "description": "description"})
         result = run(layout)
-        self.assertNotIn("[target]", by_path(result)[".claude/commands/ship.md"].data.decode())
+        self.assertNotIn("[target]", by_path(result)[".fixture/commands/ship.md"].data.decode())
         warnings = levels(result, "warning")
         self.assertEqual([(w.item, "args" in w.message) for w in warnings], [("command/ship", True)])
 
@@ -108,7 +108,7 @@ class Dropping(unittest.TestCase):
 
 class FailClosed(unittest.TestCase):
     def skipped(self, result, item="agent/reviewer"):
-        self.assertNotIn(".claude/agents/reviewer.md", by_path(result))
+        self.assertNotIn(".fixture/agents/reviewer.md", by_path(result))
         found = [r for r in levels(result, "skipped") if r.item == item]
         self.assertEqual(len(found), 1, result.reports)
         return found[0].message
@@ -129,13 +129,13 @@ class FailClosed(unittest.TestCase):
     def test_a_tool_the_layout_cannot_grant_is_dropped_with_a_warning(self):
         layout = edit(["kinds", "agent", "tools"], {"read": ["Read"]})
         result = run(layout)
-        data = by_path(result)[".claude/agents/reviewer.md"].data.decode()
+        data = by_path(result)[".fixture/agents/reviewer.md"].data.decode()
         self.assertIn('tools: "Read"\n', data)
         self.assertEqual([w.item for w in levels(result, "warning")], ["agent/reviewer"])
         self.assertIn("search", levels(result, "warning")[0].message)
 
     def test_no_agent_is_ever_written_without_a_tools_line(self):
-        for layout in (CLAUDE, edit(["kinds", "agent", "tools"], {"read": ["Read"]})):
+        for layout in (SYNTHETIC, edit(["kinds", "agent", "tools"], {"read": ["Read"]})):
             for planned in run(layout).files:
                 if planned.source.startswith("agent/"):
                     self.assertIn("\ntools: ", planned.data.decode())
@@ -143,14 +143,14 @@ class FailClosed(unittest.TestCase):
     def test_a_kind_the_layout_lacks_is_skipped(self):
         layout = edit(["kinds", "command"], None)
         result = run(layout)
-        self.assertNotIn(".claude/commands/ship.md", by_path(result))
+        self.assertNotIn(".fixture/commands/ship.md", by_path(result))
         self.assertEqual([r.item for r in levels(result, "skipped")], ["command/ship"])
 
     def test_a_kind_the_module_does_not_provide_is_skipped(self):
         result = run(provides=("instructions", "skills", "permissions"))
         self.assertEqual(sorted(r.item for r in levels(result, "skipped")),
                          ["agent/reviewer", "command/ship"])
-        self.assertEqual(list(by_path(result)), [".claude/skills/sample/SKILL.md"])
+        self.assertEqual(list(by_path(result)), [".fixture/skills/sample/SKILL.md"])
 
     def test_an_unverified_layout_is_refused(self):
         with self.assertRaises(harnessplan.PlanError) as caught:
@@ -166,7 +166,7 @@ class Needs(unittest.TestCase):
 
     def test_met_needs_install(self):
         result = run(found=self.found(b"hooks"))
-        self.assertIn(".claude/skills/sample/SKILL.md", by_path(result))
+        self.assertIn(".fixture/skills/sample/SKILL.md", by_path(result))
 
     def test_unmet_needs_skip_with_a_warning(self):
         result = run(found=self.found(b"hooks"),
@@ -182,26 +182,26 @@ class Overrides(unittest.TestCase):
         own = {"SKILL.md": b"hand written\n", "extra.txt": b"x"}
         result = run(overrides={("skill", "sample"): own})
         files = by_path(result)
-        self.assertEqual(files[".claude/skills/sample/SKILL.md"].data, b"hand written\n")
-        self.assertEqual(files[".claude/skills/sample/extra.txt"].data, b"x")
-        self.assertIn(".claude/agents/reviewer.md", files)
+        self.assertEqual(files[".fixture/skills/sample/SKILL.md"].data, b"hand written\n")
+        self.assertEqual(files[".fixture/skills/sample/extra.txt"].data, b"x")
+        self.assertIn(".fixture/agents/reviewer.md", files)
         self.assertEqual([r.item for r in levels(result, "overridden")], ["skill/sample"])
 
     def test_an_override_drops_the_neutral_bundled_files(self):
         found = items(**{"skills/sample/notes/ref.md": b"ref\n"})
         result = run(found=found, overrides={("skill", "sample"): {"SKILL.md": b"own\n"}})
-        self.assertNotIn(".claude/skills/sample/notes/ref.md", by_path(result))
+        self.assertNotIn(".fixture/skills/sample/notes/ref.md", by_path(result))
 
     def test_an_agent_override_is_one_file(self):
         own = b"---\ntools: Read\n---\nown\n"
         result = run(overrides={("agent", "reviewer"): {"reviewer.md": own}})
-        self.assertEqual(by_path(result)[".claude/agents/reviewer.md"].data, own)
+        self.assertEqual(by_path(result)[".fixture/agents/reviewer.md"].data, own)
 
     def test_an_agent_override_without_a_tools_line_is_never_installed(self):
         for data in (b"---\nname: reviewer\ndescription: x\n---\nbody\n", b"no front matter\n",
                      b'---\ntools: ""\n---\n', b"---\nname: x\n---\ntools: Read\n"):
             result = run(overrides={("agent", "reviewer"): {"reviewer.md": data}})
-            self.assertNotIn(".claude/agents/reviewer.md", by_path(result))
+            self.assertNotIn(".fixture/agents/reviewer.md", by_path(result))
             self.assertEqual([r.item for r in levels(result, "skipped")], ["agent/reviewer"])
 
     def test_an_agent_override_is_held_to_a_strict_tools_line(self):
@@ -216,7 +216,7 @@ class Overrides(unittest.TestCase):
                head + b" tools: Read\n---\n", head + b"tools: ''  # x\n---\n"]
         for data in bad:
             result = run(overrides={("agent", "reviewer"): {"reviewer.md": data}})
-            self.assertNotIn(".claude/agents/reviewer.md", by_path(result), data)
+            self.assertNotIn(".fixture/agents/reviewer.md", by_path(result), data)
 
     def test_a_value_that_can_swallow_the_tools_line_is_refused(self):
         for opening in (b'description: "x', b"description: 'x", b"description: [x",
@@ -226,14 +226,14 @@ class Overrides(unittest.TestCase):
                         b"description: x:", b"description: @x", b"description: -x"):
             data = b"---\nname: a\n" + opening + b"\ntools: Read\nmodel: y\n---\n"
             result = run(overrides={("agent", "reviewer"): {"reviewer.md": data}})
-            self.assertNotIn(".claude/agents/reviewer.md", by_path(result), data)
+            self.assertNotIn(".fixture/agents/reviewer.md", by_path(result), data)
 
     def test_a_key_the_layout_does_not_map_is_refused(self):
         for line in (b"hooks: {PreToolUse: x}", b"allowed-tools: Bash", b"permissionmode: x",
                      b"mcpservers: x", b"skills: x"):
             data = b"---\nname: a\ntools: Read\n" + line + b"\n---\n"
             result = run(overrides={("agent", "reviewer"): {"reviewer.md": data}})
-            self.assertNotIn(".claude/agents/reviewer.md", by_path(result), data)
+            self.assertNotIn(".fixture/agents/reviewer.md", by_path(result), data)
 
     def test_non_ascii_and_control_characters_in_the_front_matter_are_refused(self):
         for char in ("\u2028", "\u2029", "\u0085", "\u00a0", "\x0b", "\x0c", "\x1c", "\t"):
@@ -243,7 +243,7 @@ class Overrides(unittest.TestCase):
                          'description: "a%s"' % char):
                 data = ("---\nname: a\ntools: Read\n%s\n---\n" % line).encode("utf-8")
                 result = run(overrides={("agent", "reviewer"): {"reviewer.md": data}})
-                self.assertNotIn(".claude/agents/reviewer.md", by_path(result), repr(line))
+                self.assertNotIn(".fixture/agents/reviewer.md", by_path(result), repr(line))
 
     def test_a_repeated_key_or_a_non_string_plain_value_is_refused(self):
         for lines in ("name: a\nname: b", "description: d\ndescription: e", "model: x\nmodel: y",
@@ -251,18 +251,18 @@ class Overrides(unittest.TestCase):
                       "model: 12", "model: No"):
             data = ("---\ntools: Read\n%s\n---\n" % lines).encode()
             result = run(overrides={("agent", "reviewer"): {"reviewer.md": data}})
-            self.assertNotIn(".claude/agents/reviewer.md", by_path(result), lines)
+            self.assertNotIn(".fixture/agents/reviewer.md", by_path(result), lines)
 
     def test_a_double_quoted_json_string_value_is_accepted(self):
         data = b'---\nname: "a"\ndescription: "x: y # z"\ntools: "Read"\n---\nb\n'
         result = run(overrides={("agent", "reviewer"): {"reviewer.md": data}})
-        self.assertIn(".claude/agents/reviewer.md", by_path(result))
+        self.assertIn(".fixture/agents/reviewer.md", by_path(result))
 
     def test_good_agent_overrides_are_installed(self):
         for line in (b"tools: Read", b'tools: "Read, Grep"', b"tools: Read,Grep"):
             data = b"---\nname: a\n" + line + b"\n---\nbody\n"
             result = run(overrides={("agent", "reviewer"): {"reviewer.md": data}})
-            self.assertIn(".claude/agents/reviewer.md", by_path(result), data)
+            self.assertIn(".fixture/agents/reviewer.md", by_path(result), data)
 
     def test_an_agent_override_is_skipped_when_the_layout_cannot_restrict(self):
         own = b"---\ntools: Read\n---\n"
@@ -270,12 +270,12 @@ class Overrides(unittest.TestCase):
                        edit(["kinds", "agent", "fields"], {"name": "name",
                                                           "description": "description"})):
             result = run(layout, overrides={("agent", "reviewer"): {"reviewer.md": own}})
-            self.assertNotIn(".claude/agents/reviewer.md", by_path(result))
+            self.assertNotIn(".fixture/agents/reviewer.md", by_path(result))
 
     def test_an_agent_override_with_a_tools_line_is_installed(self):
         own = b'---\ntools: "Read"\n---\nbody\n'
         result = run(overrides={("agent", "reviewer"): {"reviewer.md": own}})
-        self.assertEqual(by_path(result)[".claude/agents/reviewer.md"].data, own)
+        self.assertEqual(by_path(result)[".fixture/agents/reviewer.md"].data, own)
 
     def test_a_non_text_exclusion_reason_is_an_error(self):
         with self.assertRaises(harnessplan.PlanError):
@@ -319,7 +319,7 @@ class Overrides(unittest.TestCase):
 class Excludes(unittest.TestCase):
     def test_an_excluded_item_is_not_installed_and_is_reported_with_its_reason(self):
         result = run(excludes={("command", "ship"): "not for this harness"})
-        self.assertNotIn(".claude/commands/ship.md", by_path(result))
+        self.assertNotIn(".fixture/commands/ship.md", by_path(result))
         excluded = levels(result, "excluded")
         self.assertEqual([(r.item, r.message) for r in excluded],
                          [("command/ship", "not for this harness")])
@@ -334,8 +334,8 @@ class Collisions(unittest.TestCase):
     def test_two_items_on_one_path_are_an_error(self):
         # The validator forbids two kinds sharing a directory, so the translator is also
         # checked against a layout that it was not given the chance to refuse.
-        layout = copy.deepcopy(CLAUDE)
-        layout["kinds"]["command"]["path"] = ".claude/agents/{name}.md"
+        layout = copy.deepcopy(SYNTHETIC)
+        layout["kinds"]["command"]["path"] = ".fixture/agents/{name}.md"
         text = COMMAND.replace(b"name: ship", b"name: reviewer")
         found = neutral.read_items({"agents/reviewer.md": AGENT, "commands/reviewer.md": text})
         with mock.patch.object(harnessplan.layout, "problems", return_value=[]):
@@ -366,19 +366,19 @@ class Bounds(unittest.TestCase):
 
 class Root(unittest.TestCase):
     def test_the_root_file_is_the_import_line_and_nothing_else(self):
-        planned = harnessplan.render_root(CLAUDE)
-        self.assertEqual((planned.path, planned.data), ("CLAUDE.md", b"@AGENTS.md\n"))
+        planned = harnessplan.render_root(SYNTHETIC)
+        self.assertEqual((planned.path, planned.data), ("FIXTURE.md", b"@AGENTS.md\n"))
         self.assertEqual((planned.mode, planned.source), (0o644, "root"))
         self.assertEqual(planned.sha256, hashlib.sha256(b"@AGENTS.md\n").hexdigest())
 
     def test_a_layout_without_a_root_file_has_none(self):
         layout = edit(("root",), "none")
-        layout["exclude"] = [".claude/"]
+        layout["exclude"] = [".fixture/"]
         self.assertIsNone(harnessplan.render_root(layout))
 
     def test_the_import_and_the_file_come_from_the_layout(self):
         layout = edit(("root",), {"file": "ROOT.md", "import": "POLICY.md"})
-        layout["exclude"] = ["ROOT.md", ".claude/"]
+        layout["exclude"] = ["ROOT.md", ".fixture/"]
         planned = harnessplan.render_root(layout)
         self.assertEqual((planned.path, planned.data), ("ROOT.md", b"@POLICY.md\n"))
 

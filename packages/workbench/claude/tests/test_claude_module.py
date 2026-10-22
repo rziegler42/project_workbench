@@ -6,11 +6,36 @@ import unittest
 
 from workbench import approvals, declarations, firstparty, harnessplan, request, verify
 from tests import support
-from tests.support_harness import CLAUDE, SKILL, items, tree
+from tests.support_harness import SKILL, items, tree
 
 CLAUDE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PACKAGE = os.path.dirname(CLAUDE_DIR)
 MODULE = os.path.join(CLAUDE_DIR, "module.json")
+
+
+EXPECTED_LAYOUT = {
+    "root": {"file": "CLAUDE.md", "import": "AGENTS.md"},
+    "kinds": {
+        "skill": {"path": ".claude/skills/{name}/SKILL.md",
+                  "fields": {"name": "name", "description": "description"}},
+        "agent": {"path": ".claude/agents/{name}.md",
+                  "fields": {"name": "name", "description": "description", "tools": "tools",
+                             "model": "model"},
+                  "tools": {"read": ["Read"], "search": ["Grep", "Glob"],
+                            "edit": ["Edit", "Write"], "shell": ["Bash"]}},
+        "command": {"path": ".claude/commands/{name}.md",
+                    "fields": {"name": "name", "description": "description",
+                               "args": "argument-hint"}},
+    },
+    "local_settings": {
+        "path": ".claude/settings.local.json", "format": "json",
+        "actions": {"deny": "permissions.deny", "ask": "permissions.ask"},
+        "rules": {"shell": "Bash({pattern})", "read": "Read({path})", "write": "Edit({path})"},
+        "absolute": "//"},
+    "hooks": "none",
+    "exclude": ["CLAUDE.md", ".claude/"],
+    "notes": [],
+}
 
 
 def declaration():
@@ -107,7 +132,7 @@ class Declaration(unittest.TestCase):
 
     def test_the_layout_is_the_verified_one(self):
         shipped = declaration()["layout"]
-        expected = dict(CLAUDE)
+        expected = dict(EXPECTED_LAYOUT)
         expected.pop("notes")
         shipped = dict(shipped)
         notes = shipped.pop("notes")

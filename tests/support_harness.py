@@ -1,4 +1,4 @@
-"""Shared test support for the harness tests: a neutral tree, the items read from it, and Claude's layout.
+"""Shared test support for the harness tests: a neutral tree, the items read from it, and a synthetic layout with made-up names.
 
 A module's own tests may import this (a `tests/support*` file) and no other test module."""
 
@@ -21,26 +21,26 @@ def items(**extra):
     return neutral.read_items(tree(**extra))
 
 
-CLAUDE = {
-    "root": {"file": "CLAUDE.md", "import": "AGENTS.md"},
+SYNTHETIC = {
+    "root": {"file": "FIXTURE.md", "import": "AGENTS.md"},
     "kinds": {
-        "skill": {"path": ".claude/skills/{name}/SKILL.md",
+        "skill": {"path": ".fixture/skills/{name}/SKILL.md",
                   "fields": {"name": "name", "description": "description"}},
-        "agent": {"path": ".claude/agents/{name}.md",
+        "agent": {"path": ".fixture/agents/{name}.md",
                   "fields": {"name": "name", "description": "description", "tools": "tools",
                              "model": "model"},
                   "tools": {"read": ["Read"], "search": ["Grep", "Glob"],
                             "edit": ["Edit", "Write"], "shell": ["Bash"]}},
-        "command": {"path": ".claude/commands/{name}.md",
+        "command": {"path": ".fixture/commands/{name}.md",
                     "fields": {"name": "name", "description": "description",
                                "args": "argument-hint"}},
     },
     "local_settings": {
-        "path": ".claude/settings.local.json", "format": "json",
+        "path": ".fixture/settings.local.json", "format": "json",
         "actions": {"deny": "permissions.deny", "ask": "permissions.ask"},
         "rules": {"shell": "Bash({pattern})", "read": "Read({path})", "write": "Edit({path})"},
         "absolute": "//"},
     "hooks": "none",
-    "exclude": ["CLAUDE.md", ".claude/"],
+    "exclude": ["FIXTURE.md", ".fixture/"],
     "notes": ["Restart the session to load the new settings."],
 }

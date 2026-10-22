@@ -4,12 +4,12 @@ import os
 import unittest
 
 from workbench import layout, neutral
-from tests.support_harness import CLAUDE
+from tests.support_harness import SYNTHETIC
 from tests.test_modulefiles import Base
 
 
 def edit(path, new, base=None):
-    value = copy.deepcopy(base or CLAUDE)
+    value = copy.deepcopy(base or SYNTHETIC)
     node = value
     for key in path[:-1]:
         node = node[key]
@@ -21,8 +21,8 @@ def edit(path, new, base=None):
 
 
 class Accepted(unittest.TestCase):
-    def test_the_claude_layout_is_accepted(self):
-        self.assertEqual(layout.problems(CLAUDE), [])
+    def test_the_synthetic_layout_is_accepted(self):
+        self.assertEqual(layout.problems(SYNTHETIC), [])
 
     def test_the_minimal_layouts_are_accepted(self):
         self.assertEqual(layout.problems({}), [])
@@ -61,12 +61,12 @@ class Facts(unittest.TestCase):
             "generated": (".fixture/skills", ".fixture/prompts"),
             "tolerated": (".fixture/shared.json",)})
 
-    def test_facts_of_the_claude_layout_include_its_settings_directory(self):
-        found = layout.facts(CLAUDE)
-        self.assertEqual(found["roots"], ("CLAUDE.md", ".claude"))
-        self.assertEqual(found["directories"], (".claude",))
+    def test_facts_of_the_synthetic_layout_include_its_settings_directory(self):
+        found = layout.facts(SYNTHETIC)
+        self.assertEqual(found["roots"], ("FIXTURE.md", ".fixture"))
+        self.assertEqual(found["directories"], (".fixture",))
         self.assertEqual(found["generated"],
-                         (".claude/skills", ".claude/agents", ".claude/commands"))
+                         (".fixture/skills", ".fixture/agents", ".fixture/commands"))
 
     def test_a_layout_with_nothing_gives_empty_facts(self):
         empty = {"roots": (), "directories": (), "generated": (), "tolerated": ()}
@@ -147,8 +147,8 @@ class Tolerated(unittest.TestCase):
             self.assertTrue(any("layout.tolerated" in m for m in layout.problems(value)), path)
 
     def test_a_path_inside_a_file_the_layout_writes_is_refused(self):
-        value = copy.deepcopy(CLAUDE)
-        value["tolerated"] = [CLAUDE["local_settings"]["path"] + "/x"]
+        value = copy.deepcopy(SYNTHETIC)
+        value["tolerated"] = [SYNTHETIC["local_settings"]["path"] + "/x"]
         self.assertTrue(any("inside a file" in m for m in layout.problems(value)))
 
     def test_unicode_spellings_of_one_path_are_a_duplicate(self):
@@ -171,10 +171,10 @@ class Tolerated(unittest.TestCase):
         self.bad([".FIXTURE/Skills"], "written by this layout")
 
     def test_the_settings_file_is_not_tolerated(self):
-        value = copy.deepcopy(CLAUDE)
-        value["tolerated"] = [CLAUDE["local_settings"]["path"]]
+        value = copy.deepcopy(SYNTHETIC)
+        value["tolerated"] = [SYNTHETIC["local_settings"]["path"]]
         self.assertTrue(any("written by this layout" in m for m in layout.problems(value)))
-        value["tolerated"] = [".claude/settings.json"]
+        value["tolerated"] = [".fixture/settings.json"]
         self.assertEqual(layout.problems(value), [])
 
 
@@ -189,11 +189,11 @@ class Refused(unittest.TestCase):
             self.bad(value)
 
     def test_root(self):
-        for root in ("CLAUDE.md", [], {"file": "CLAUDE.md"}, {"import": "AGENTS.md"},
-                     {"file": "a/b", "import": "AGENTS.md"}, {"file": "CLAUDE.md", "import": "../x"},
+        for root in ("FIXTURE.md", [], {"file": "FIXTURE.md"}, {"import": "AGENTS.md"},
+                     {"file": "a/b", "import": "AGENTS.md"}, {"file": "FIXTURE.md", "import": "../x"},
                      {"file": "/abs", "import": "AGENTS.md"}, {"file": ".git", "import": "x"},
                      {"file": 3, "import": "x"},
-                     {"file": "CLAUDE.md", "import": "AGENTS.md", "extra": 1}):
+                     {"file": "FIXTURE.md", "import": "AGENTS.md", "extra": 1}):
             self.bad(edit(["root"], root), "layout.root")
 
     def test_reserved_places_are_refused_by_their_own_guard(self):
@@ -207,33 +207,33 @@ class Refused(unittest.TestCase):
         self.bad(edit(["local_settings", "path"], ".config/project-workbench/x.json"),
                  "guarded store")
         self.bad(edit(["local_settings", "path"], ".workbench/x.json"), "inside .workbench")
-        self.bad(edit(["exclude"], CLAUDE["exclude"] + [".workbench/local/"]), "inside .workbench")
-        self.bad(edit(["exclude"], CLAUDE["exclude"] + [".config/project-workbench/"]),
+        self.bad(edit(["exclude"], SYNTHETIC["exclude"] + [".workbench/local/"]), "inside .workbench")
+        self.bad(edit(["exclude"], SYNTHETIC["exclude"] + [".config/project-workbench/"]),
                  "guarded store")
-        self.bad(edit(["exclude"], CLAUDE["exclude"] + [".git/"]), "git metadata")
+        self.bad(edit(["exclude"], SYNTHETIC["exclude"] + [".git/"]), "git metadata")
 
     def test_kinds_keys_and_shape(self):
         self.bad(edit(["kinds"], []), "kinds")
-        self.bad(edit(["kinds", "hook"], CLAUDE["kinds"]["skill"]), "hook")
-        self.bad(edit(["kinds", "skill"], {"path": ".claude/skills/{name}/SKILL.md"}), "fields")
+        self.bad(edit(["kinds", "hook"], SYNTHETIC["kinds"]["skill"]), "hook")
+        self.bad(edit(["kinds", "skill"], {"path": ".fixture/skills/{name}/SKILL.md"}), "fields")
         self.bad(edit(["kinds", "skill", "extra"], 1), "extra")
         self.bad(edit(["kinds", "skill", "tools"], {"read": ["Read"]}), "tools")
 
     def test_kind_paths(self):
-        for path in (".claude/skills/{name}.md", ".claude/skills/x/SKILL.md", "{name}/SKILL.md",
+        for path in (".fixture/skills/{name}.md", ".fixture/skills/x/SKILL.md", "{name}/SKILL.md",
                      "/abs/{name}/SKILL.md", "../x/{name}/SKILL.md", ".git/{name}/SKILL.md",
                      ".workbench/{name}/SKILL.md", ".config/project-workbench/{name}/SKILL.md",
                      ".Config/Project-Workbench/{name}/SKILL.md", "a/{x}/{name}/SKILL.md",
-                     ".claude\\skills/{name}/SKILL.md", 5):
+                     ".fixture\\skills/{name}/SKILL.md", 5):
             self.bad(edit(["kinds", "skill", "path"], path), "skill.path")
-        for path in (".claude/agents/{name}/SKILL.md", ".claude/agents/{name}",
-                     ".claude/agents/x.md"):
+        for path in (".fixture/agents/{name}/SKILL.md", ".fixture/agents/{name}",
+                     ".fixture/agents/x.md"):
             self.bad(edit(["kinds", "agent", "path"], path), "agent.path")
 
     def test_two_kinds_may_not_share_a_directory(self):
-        self.bad(edit(["kinds", "command", "path"], ".claude/agents/{name}.md"), "overlaps")
-        self.bad(edit(["kinds", "command", "path"], ".claude/agents/sub/{name}.md"), "overlaps")
-        self.bad(edit(["kinds", "command", "path"], ".CLAUDE/Agents/{name}.md"), "overlaps")
+        self.bad(edit(["kinds", "command", "path"], ".fixture/agents/{name}.md"), "overlaps")
+        self.bad(edit(["kinds", "command", "path"], ".fixture/agents/sub/{name}.md"), "overlaps")
+        self.bad(edit(["kinds", "command", "path"], ".FIXTURE/Agents/{name}.md"), "overlaps")
 
     def test_fields(self):
         for fields in ({"name": "name"}, {"description": "description"}, [],
@@ -284,43 +284,43 @@ class Refused(unittest.TestCase):
 
     def test_exclude_paths(self):
         for entry in ("/abs", "../x", "a/../x", ".git", ".git/", ".GIT/info", ".workbench",
-                      ".workbench/local/", ".config/project-workbench/", "*.md", ".claude/*",
-                      "a b", "#x", "!x", "a\\b", "a[1]", "a?", "", 3, "x:y", ".claude//"):
-            self.bad(edit(["exclude"], CLAUDE["exclude"] + [entry]), "exclude")
-        self.bad(edit(["exclude"], "CLAUDE.md"), "exclude")
-        self.bad(edit(["exclude"], ["CLAUDE.md", ".claude/"] * 1 + ["CLAUDE.md"]), "twice")
-        self.bad(edit(["exclude"], ["CLAUDE.md"] + [".c%d/" % n for n in range(layout.MAX_EXCLUDE)]),
+                      ".workbench/local/", ".config/project-workbench/", "*.md", ".fixture/*",
+                      "a b", "#x", "!x", "a\\b", "a[1]", "a?", "", 3, "x:y", ".fixture//"):
+            self.bad(edit(["exclude"], SYNTHETIC["exclude"] + [entry]), "exclude")
+        self.bad(edit(["exclude"], "FIXTURE.md"), "exclude")
+        self.bad(edit(["exclude"], ["FIXTURE.md", ".fixture/"] * 1 + ["FIXTURE.md"]), "twice")
+        self.bad(edit(["exclude"], ["FIXTURE.md"] + [".c%d/" % n for n in range(layout.MAX_EXCLUDE)]),
                  "at most")
 
     def test_every_written_path_must_be_excluded(self):
-        self.bad(edit(["exclude"], [".claude/"]), "root.file")
-        self.bad(edit(["exclude"], ["CLAUDE.md"]), "no exclude entry")
-        self.bad(edit(["exclude"], ["CLAUDE.md", ".claude/skills/"]), "kinds.agent")
-        self.bad(edit(["exclude"], ["CLAUDE.md", ".claude/settings.local.json"]), "kinds.agent")
+        self.bad(edit(["exclude"], [".fixture/"]), "root.file")
+        self.bad(edit(["exclude"], ["FIXTURE.md"]), "no exclude entry")
+        self.bad(edit(["exclude"], ["FIXTURE.md", ".fixture/skills/"]), "kinds.agent")
+        self.bad(edit(["exclude"], ["FIXTURE.md", ".fixture/settings.local.json"]), "kinds.agent")
         # a file entry does not cover what is under a directory of that name
-        self.bad(edit(["exclude"], ["CLAUDE.md", ".claude"]), "no exclude entry")
+        self.bad(edit(["exclude"], ["FIXTURE.md", ".fixture"]), "no exclude entry")
         # git compares exactly, so a differently-cased entry covers nothing
-        self.bad(edit(["exclude"], ["claude.md", ".Claude/"]), "no exclude entry")
-        self.bad(edit(["exclude"], ["claude.md", ".Claude/"]), "covers no path")
+        self.bad(edit(["exclude"], ["fixture.md", ".Fixture/"]), "no exclude entry")
+        self.bad(edit(["exclude"], ["fixture.md", ".Fixture/"]), "covers no path")
         # a directory entry does not cover a file of that name
-        self.bad(edit(["exclude"], ["CLAUDE.md/", ".claude/"]), "layout.root.file")
-        self.bad(edit(["exclude"], ["CLAUDE.md", ".claude/skills/", ".claude/agents/",
-                                    ".claude/commands/"]), "local_settings.path")
-        self.bad(edit(["local_settings", "path"], ".claude/s.json",
-                      edit(["exclude"], ["CLAUDE.md", ".claude/skills/", ".claude/agents/",
-                                         ".claude/commands/", ".claude/s.json/"])),
+        self.bad(edit(["exclude"], ["FIXTURE.md/", ".fixture/"]), "layout.root.file")
+        self.bad(edit(["exclude"], ["FIXTURE.md", ".fixture/skills/", ".fixture/agents/",
+                                    ".fixture/commands/"]), "local_settings.path")
+        self.bad(edit(["local_settings", "path"], ".fixture/s.json",
+                      edit(["exclude"], ["FIXTURE.md", ".fixture/skills/", ".fixture/agents/",
+                                         ".fixture/commands/", ".fixture/s.json/"])),
                  "local_settings.path")
 
     def test_an_exclude_entry_must_cover_a_written_path(self):
-        self.bad(edit(["exclude"], CLAUDE["exclude"] + ["docs/"]), "covers no path")
-        self.bad(edit(["exclude"], CLAUDE["exclude"] + ["src"]), "covers no path")
+        self.bad(edit(["exclude"], SYNTHETIC["exclude"] + ["docs/"]), "covers no path")
+        self.bad(edit(["exclude"], SYNTHETIC["exclude"] + ["src"]), "covers no path")
         self.assertEqual(layout.problems(edit(["exclude"], [
-            "CLAUDE.md", ".claude/skills/", ".claude/agents/", ".claude/commands/",
-            ".claude/settings.local.json"])), [])
+            "FIXTURE.md", ".fixture/skills/", ".fixture/agents/", ".fixture/commands/",
+            ".fixture/settings.local.json"])), [])
 
     def test_written_paths_may_not_overlap(self):
-        self.bad(edit(["local_settings", "path"], ".claude/agents/s.json"), "overlaps")
-        self.bad(edit(["local_settings", "path"], "CLAUDE.md"), "overlaps")
+        self.bad(edit(["local_settings", "path"], ".fixture/agents/s.json"), "overlaps")
+        self.bad(edit(["local_settings", "path"], "FIXTURE.md"), "overlaps")
 
     def test_the_permission_lists_cannot_be_an_allow_or_nested(self):
         base = ["local_settings", "actions"]
@@ -348,7 +348,7 @@ class Refused(unittest.TestCase):
         self.bad(edit(["kinds", "skill", "path"], ".config/{name}/SKILL.md"), "guarded store")
 
     def test_a_root_file_may_not_import_itself(self):
-        self.bad(edit(["root", "import"], "CLAUDE.md"), "itself")
+        self.bad(edit(["root", "import"], "FIXTURE.md"), "itself")
 
     def test_notes(self):
         for notes in ("x", ["a\nb"], [""], [3], ["x" * (layout.MAX_NOTE_CHARS + 1)],
@@ -366,7 +366,7 @@ class Verification(Base):
         self.edit_module("sample-harness", layout=value)
 
     def test_a_good_layout_verifies_and_changes_nothing_else(self):
-        self.set_layout(CLAUDE)
+        self.set_layout(SYNTHETIC)
         result = self.check("sample-harness")
         self.assertEqual(result.problems, [], [str(p) for p in result.problems])
 
@@ -445,20 +445,20 @@ class AgentAndSettingsTables(unittest.TestCase):
             self.bad(edit(["kinds", "agent", "tools"], table), "may only grant")
 
     def test_a_settings_path_is_a_json_file_directly_in_a_dot_directory(self):
-        for path in (".claude/settings.json", ".claude/settings.local.json", ".fixture/s.json",
+        for path in (".fixture/settings.json", ".fixture/settings.local.json", ".fixture/s.json",
                      ".a/b.json"):
             value = edit(["local_settings", "path"], path,
-                         edit(["exclude"], ["CLAUDE.md", ".claude/skills/", ".claude/agents/",
-                                            ".claude/commands/", path]))
+                         edit(["exclude"], ["FIXTURE.md", ".fixture/skills/", ".fixture/agents/",
+                                            ".fixture/commands/", path]))
             self.assertEqual(layout.problems(value), [], path)
 
     def test_a_settings_path_of_the_wrong_shape_is_refused_even_when_excluded(self):
-        for path in ("settings.json", ".claude/sub/settings.json", "claude/settings.json",
-                     ".claude/settings", ".claude/settingsjson", ".claude/settings.json.bak",
-                     ".claude/settings.JSON", ".claude/.json", "docs/settings.local.json",
-                     ".claude/x.json/y.json", ".claude/ .json", ".claude/  .json"):
+        for path in ("settings.json", ".fixture/sub/settings.json", "fixture/settings.json",
+                     ".fixture/settings", ".fixture/settingsjson", ".fixture/settings.json.bak",
+                     ".fixture/settings.JSON", ".fixture/.json", "docs/settings.local.json",
+                     ".fixture/x.json/y.json", ".fixture/ .json", ".fixture/  .json"):
             value = edit(["local_settings", "path"], path,
-                         edit(["exclude"], ["CLAUDE.md", ".claude/", path]))
+                         edit(["exclude"], ["FIXTURE.md", ".fixture/", path]))
             self.bad(value, "layout.local_settings.path: must be <.directory>/<name>.json")
 
     def test_a_reserved_or_unsafe_settings_path_is_refused_for_its_own_reason(self):
@@ -473,18 +473,18 @@ class AgentAndSettingsTables(unittest.TestCase):
                 (".Config/Project-Workbench/settings.json", "guarded store"),
                 (".config/project-workbench./settings.json", "guarded store"),
                 ("../settings.json", "empty, '.' or '..'"), ("./settings.json", "empty, '.' or '..'"),
-                (".", "empty, '.' or '..'"), (".claude/", "empty, '.' or '..'"),
-                ("/abs/settings.json", "absolute"), (".claude\\settings.json", "backslash or colon"),
-                (".claude/a\x00.json", "non-printable"), (5, "must be a string")):
+                (".", "empty, '.' or '..'"), (".fixture/", "empty, '.' or '..'"),
+                ("/abs/settings.json", "absolute"), (".fixture\\settings.json", "backslash or colon"),
+                (".fixture/a\x00.json", "non-printable"), (5, "must be a string")):
             value = edit(["local_settings", "path"], path,
-                         edit(["exclude"], ["CLAUDE.md", ".claude/", path] if isinstance(path, str)
-                              else ["CLAUDE.md", ".claude/"]))
+                         edit(["exclude"], ["FIXTURE.md", ".fixture/", path] if isinstance(path, str)
+                              else ["FIXTURE.md", ".fixture/"]))
             self.bad(value, "layout.local_settings.path: ")
             self.bad(value, reason)
 
     def test_a_settings_path_the_exclude_list_does_not_cover_is_refused(self):
-        value = edit(["local_settings", "path"], ".claude/other.json",
-                     edit(["exclude"], ["CLAUDE.md", ".claude/skills/", ".claude/agents/",
-                                        ".claude/commands/"]))
+        value = edit(["local_settings", "path"], ".fixture/other.json",
+                     edit(["exclude"], ["FIXTURE.md", ".fixture/skills/", ".fixture/agents/",
+                                        ".fixture/commands/"]))
         self.bad(value, "local_settings.path")
         self.bad(value, "no exclude entry")

@@ -45,13 +45,13 @@ class Rule(unittest.TestCase):
     def test_the_shared_support_is_allowed(self):
         for source in ("from tests import support", "from tests import support_harness, support",
                        "from tests.support import forbid_real_store", "import tests.support_harness",
-                       "from tests.support_harness import CLAUDE", "import os"):
+                       "from tests.support_harness import SYNTHETIC", "import os"):
             with self.subTest(source=source):
                 self.assertEqual([], offences(source))
 
     def test_any_other_reach_into_tests_is_found(self):
         for source, text in (("from tests import test_layout", "from tests import test_layout"),
-                             ("from tests.test_layout import CLAUDE", "from tests.test_layout import ..."),
+                             ("from tests.test_layout import SYNTHETIC", "from tests.test_layout import ..."),
                              ("import tests.test_layout", "import tests.test_layout"),
                              ("import tests", "import tests"),
                              ("from tests import support, test_neutral", "from tests import test_neutral"),

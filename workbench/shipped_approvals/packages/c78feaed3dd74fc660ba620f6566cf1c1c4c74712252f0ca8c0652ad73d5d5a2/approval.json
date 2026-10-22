@@ -8,7 +8,7 @@
     {
       "declaration_hash": "4a861f15d8bbea05d84fa3ab266e1b82f05094510d4816ed858ceb365148163d",
       "name": "claude",
-      "tree_hash": "4b5e1f261bba1619a23c1723fc5f2a197e79798383cef028595db05391f19d26"
+      "tree_hash": "f0fe425b0c26e3264b4cefae0ce9f4622fcff91eaf98c408d89c64375a628e38"
     },
     {
       "declaration_hash": "6524bace85fc3f56de5c84396e3dde7cc8aeec795e68fae7ca8c4ae2cf094266",
@@ -23,6 +23,6 @@
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "d8d093b1a53cfd6f6cda4020fb9d49fb989971737abcad830b9c6c2e8003800a",
+  "tree_hash": "a89ddb29c996063a860d0b1b934253c598232fa955fcd46470f301207f13388d",
   "workbench_version": "0.1.0"
 }

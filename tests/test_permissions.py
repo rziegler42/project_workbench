@@ -4,18 +4,18 @@ import os
 import unittest
 
 from workbench import cli, floor, harnessplan, neutral, rules
-from tests.support_harness import CLAUDE
+from tests.support_harness import SYNTHETIC
 from tests.test_layout import edit
 
 HOME = "/Users/tester"
 STORE = HOME + "/.config/project-workbench"
 
 
-def render(module_rules=(), layout=CLAUDE, store=STORE, home=HOME):
+def render(module_rules=(), layout=SYNTHETIC, store=STORE, home=HOME):
     return harnessplan.render_permissions(list(module_rules), layout, store, home)
 
 
-def lists(layout=CLAUDE, **kw):
+def lists(layout=SYNTHETIC, **kw):
     document = json.loads(render(layout=layout, **kw))
     return document["permissions"]["deny"], document["permissions"]["ask"]
 
