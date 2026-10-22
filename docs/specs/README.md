@@ -35,4 +35,5 @@ or an evidence note.
 | [`groundwork.md`](groundwork.md) | Specs, roadmaps, decisions and references |
 | [`code-work.md`](code-work.md) | The programming way of working |
 | [`safe-git.md`](safe-git.md) | Local commits of exact paths and approved deletions, as a module of their own |
+| [`model-bridge.md`](model-bridge.md) | The contract of a thin vendor module that lets an engine ask a model one read-only question |
 | [`harness-modules.md`](harness-modules.md) | How a harness module describes one AI runtime |

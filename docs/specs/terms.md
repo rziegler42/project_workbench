@@ -250,6 +250,11 @@ path or field.
   plan that records a review is named "Review record", so the two are never
   confused.
 
+**model bridge**
+: A thin module for one vendor that provides the capability `model-bridge`. It takes a prompt
+  and options, asks the vendor's program one read-only question and prints one JSON object. It holds no state and
+  no policy; it is run only through the launcher (`model-bridge.md`).
+
 **launcher**
 : The small workbench component, run as `wb`, that the installer places in the guarded
   store. It checks a shipped helper's hash against a pin and only then runs it. It is not
