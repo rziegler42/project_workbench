@@ -8,8 +8,8 @@ import argparse
 import os
 import sys
 
-from . import (acknowledge, approve, attach, check, firstparty, install, launch, pins, preview,
-               recover, settings, sources, store, target, upgrade, verify)
+from . import (acknowledge, approve, attach, check, firstparty, install, launch, pins, planapprovals,
+               preview, recover, settings, sources, store, target, upgrade, verify)
 from . import commands as module_commands
 from .wbkit import display, safefs
 
@@ -36,6 +36,8 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench attach [<target> | --dir <path>] --harness <package>/<module>\n"
          "                                   [--package <source> [--ref <ref>]] ...   (owner-run)\n"
          "       python3 -m workbench check [<target> | --dir <path>]   (read-only)\n"
+         "       python3 -m workbench approve-plan <plan>   (owner-run, terminal only)\n"
+         "       python3 -m workbench plan-status <plan>   (read-only)\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
 
@@ -263,6 +265,21 @@ def _run(tokens, out, err, store_root, distribution):
     return module_commands.run(opened[0], tokens, err)
 
 
+def _plan_command(name, tokens, out, err, store_root, distribution, stdin):
+    """``approve-plan`` and ``plan-status``: one argument, never parsed as an option here."""
+    if planapprovals.one_argument(tokens) is None:
+        err.write(planapprovals.APPROVE_USAGE if name == "approve-plan" else planapprovals.STATUS_USAGE)
+        return 2
+    opened = _open_store(store_root, err)
+    if opened is None:
+        return 1
+    # Only the wrapper is checked; nothing else is printed, so a status line stays alone on its stream.
+    launch.install_wrapper(opened[0], distribution or firstparty.default_distribution())
+    if name == "plan-status":
+        return planapprovals.plan_status(opened[0], tokens, out, err)
+    return planapprovals.approve_plan(opened[0], tokens, stdin if stdin is not None else sys.stdin, out, err)
+
+
 def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=None, home=None):
     """Run a command. `store_root`, `distribution`, `stdin` and `home` are for tests; the command
     line cannot set them."""
@@ -280,6 +297,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         argv, passthrough = argv[:split], argv[split + 1:]
     if argv and argv[0] == "run":
         return _run(argv[1:], out, err, store_root, distribution)
+    if argv and argv[0] in ("approve-plan", "plan-status"):
+        return _plan_command(argv[0], argv[1:], out, err, store_root, distribution, stdin)
     if argv and argv[0] == "preview":
         return _preview(argv, out, err, store_root, distribution, home)
     if argv and argv[0] == "acknowledge":

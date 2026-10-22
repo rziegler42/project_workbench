@@ -309,7 +309,7 @@ round 3 fix was not reviewed.
 
 ## Result
 
-In progress. Increments A and B are done.
+In progress. Increments A, B and C are done.
 
 - **A** (`aad363f`): the specs and the Proposed decision `2026-10-22-installer-records-plan-approval-module-computes-region`.
 - **B**: the `approval` declaration field (`workbench/declarations.py`; `Module.approval`, refused on any
@@ -323,4 +323,15 @@ In progress. Increments A and B are done.
     addition to choice 7's rules, made because the helper takes the path as an argument.
   - "Approved" in choice 5 is what `wb run` checks: the manifest records the module and its declaration hash
     matches. The tree hash is not compared at run time, as for `wb run`; the helper's bytes are, through the pin.
-- **Next:** increment C (the record and the two commands).
+- **C**: `workbench/planapprovals.py` (the record, the path conversion of choice 7, `plan_status`, `approve_plan`),
+  the routing in `workbench/cli.py`, `approve-plan` in `OWNER_RUN` and `plan-status` in `AGENT_SAFE`
+  (`workbench/rules.py`), the command entries in `docs/development.md` and `docs/specs/installer-interface.md`
+  (now "built"). Tests: `tests/test_planapprovals.py` (35 tests; a synthetic helper that hashes the plan without
+  its `Status:` line) and the rules list in `tests/test_permissions.py`.
+  - A plan named by a path whose first segment starts with `-` is refused when it reaches the helper, and an
+    argument that starts with `-` is a usage error (exit 2); name such a plan as `./-name`.
+  - `approve-plan` re-resolves the command and re-reads the report after the typed answer, and compares the
+    plan path, the process declaration, the helper hash and the report; any difference writes nothing.
+  - Not done here: the Claude module's `deny` rendering is driven by `OWNER_RUN`, so it follows; the
+    `trust-and-approval.md` and `module-contract.md` "proposed" markers stay until increment F.
+- **Next:** increment D (the `code-work` side).

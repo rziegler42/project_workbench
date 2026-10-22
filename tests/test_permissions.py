@@ -45,7 +45,7 @@ class OwnerRun(unittest.TestCase):
     def test_the_constant_is_the_documented_list(self):
         self.assertEqual(set(rules.OWNER_RUN), {
             "install", "upgrade", "add", "attach", "acknowledge", "recover", "approve", "pin",
-            "release-approvals"})
+            "release-approvals", "approve-plan"})
 
     def test_the_cli_routes_nothing_that_is_unclassified(self):
         """A command routed in cli.py is owner-run or agent-safe; a new one fails here."""
