@@ -247,7 +247,7 @@ def _check(tokens, out, err, store_root, distribution):
     notes += launch.install_wrapper(guarded, distribution or firstparty.default_distribution())
     for note in notes:
         err.write("warning: %s\n" % _clean(note))
-    return check.run(guarded, command, out, err)
+    return check.run(guarded, command, out, err, distribution)
 
 
 def _run(tokens, out, err, store_root, distribution):

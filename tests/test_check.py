@@ -6,11 +6,17 @@ import subprocess
 import unittest
 import unittest.mock
 
-from tests.support_real import HARNESS_PATHS, LOCAL, SETTINGS, Base, RealHarness
-from workbench import check, cli, gitindex, localmanifest, sources
+from tests import support_harness
+from tests.test_attach import Base
+from workbench import check, cli, firstparty, gitindex, harnesses, localmanifest, sources
+
+LOCAL = localmanifest.PATH
+SETTINGS = ".fixture/settings.local.json"
+HARNESS_PATHS = ["FIXTURE.md", ".fixture/agents/reviewer.md", ".fixture/commands/ship.md", SETTINGS,
+                 ".fixture/skills/sample/SKILL.md"]
 
 
-class Clone(RealHarness, Base):
+class Clone(Base):
     """A project installed as `install` writes it, in a real git repository with everything
     committed, so what git tracks is real."""
 
@@ -35,7 +41,7 @@ class Clone(RealHarness, Base):
     def check(self, *args, place=None):
         out, err = io.StringIO(), io.StringIO()
         code = cli.main(["check", place or self.place] + list(args), out, err,
-                        store_root=self.store_root, home=self.home)
+                        store_root=self.store_root, home=self.home, distribution=self.dist)
         return code, out.getvalue(), err.getvalue()
 
     def attached(self):
@@ -57,7 +63,7 @@ class Check(Clone):
         self.attached()
         code, out, err = self.check()
         self.assertEqual((0, ""), (code, err), err)
-        self.assertIn("harness: claude attached in", out)
+        self.assertIn("harness: fixture attached in", out)
         self.assertIn("scratch record", out)
         self.assertTrue(out.endswith("check found no problems\n"), out)
 
@@ -70,38 +76,38 @@ class Check(Clone):
 
     def test_files_of_a_harness_beside_none_attached_warn_and_do_not_fail(self):
         self.ready()
-        self.write(".claude/settings.json", b"{}\n")
+        self.write(".fixture/settings.json", b"{}\n")
         code, out, err = self.check()
         self.assertEqual(0, code, err)
-        self.assertIn("warning: .claude belongs to the harness claude, and no harness is attached",
+        self.assertIn("warning: .fixture belongs to the harness fixture, and no harness is attached",
                       err)
         self.assertEqual([], self.problems(err))
 
     def test_an_edited_generated_file_is_a_problem(self):
         self.attached()
-        self.write(".claude/commands/ship.md", b"edited\n")
+        self.write(".fixture/commands/ship.md", b"edited\n")
         code, out, err = self.check()
         self.assertEqual(1, code)
-        self.assertEqual(["problem: .claude/commands/ship.md: differs from what attach wrote"],
+        self.assertEqual(["problem: .fixture/commands/ship.md: differs from what attach wrote"],
                          self.problems(err))
         self.assertTrue(out.endswith("check found 1 problem\n"), out)
 
     def test_a_missing_generated_file_is_a_problem(self):
         self.attached()
-        os.unlink(os.path.join(self.place, "CLAUDE.md"))
+        os.unlink(os.path.join(self.place, "FIXTURE.md"))
         code, out, err = self.check()
         self.assertEqual(1, code)
         self.assertEqual(1, len(self.problems(err)), err)
-        self.assertIn("problem: CLAUDE.md: missing", err)
+        self.assertIn("problem: FIXTURE.md: missing", err)
 
     def test_an_extra_file_under_a_generated_directory_is_a_problem(self):
         self.attached()
-        self.write(".claude/skills/sample/notes.md", b"mine\n")
-        self.write(".claude/agents/extra.md", b"mine\n")
+        self.write(".fixture/skills/sample/notes.md", b"mine\n")
+        self.write(".fixture/agents/extra.md", b"mine\n")
         code, out, err = self.check()
         self.assertEqual(1, code)
-        self.assertEqual(["problem: .claude/agents/extra.md: not a file attach wrote",
-                          "problem: .claude/skills/sample/notes.md: not a file attach wrote"],
+        self.assertEqual(["problem: .fixture/agents/extra.md: not a file attach wrote",
+                          "problem: .fixture/skills/sample/notes.md: not a file attach wrote"],
                          sorted(self.problems(err)))
 
     def test_a_link_in_a_generated_directory_is_reported_and_not_followed(self):
@@ -109,12 +115,12 @@ class Check(Clone):
         secret = os.path.join(self.outside, "secret")
         with open(secret, "wb") as handle:
             handle.write(b"x")
-        os.symlink(self.outside, os.path.join(self.place, ".claude", "skills", "linked"))
-        os.symlink(secret, os.path.join(self.place, ".claude", "agents", "leak.md"))
+        os.symlink(self.outside, os.path.join(self.place, ".fixture", "skills", "linked"))
+        os.symlink(secret, os.path.join(self.place, ".fixture", "agents", "leak.md"))
         code, out, err = self.check()
         self.assertEqual(1, code)
-        self.assertIn("problem: .claude/skills/linked: not a file attach wrote", err)
-        self.assertIn("problem: .claude/agents/leak.md: not a file attach wrote", err)
+        self.assertIn("problem: .fixture/skills/linked: not a file attach wrote", err)
+        self.assertIn("problem: .fixture/agents/leak.md: not a file attach wrote", err)
         self.assertNotIn("secret", err)
 
     def test_a_recorded_file_replaced_by_a_link_is_a_problem(self):
@@ -122,34 +128,34 @@ class Check(Clone):
         target = os.path.join(self.outside, "elsewhere")
         with open(target, "wb") as handle:
             handle.write(b"@AGENTS.md\n")
-        full = os.path.join(self.place, "CLAUDE.md")
+        full = os.path.join(self.place, "FIXTURE.md")
         os.unlink(full)
         os.symlink(target, full)
         code, out, err = self.check()
         self.assertEqual(1, code)
-        self.assertIn("problem: CLAUDE.md: cannot be read", err)
+        self.assertIn("problem: FIXTURE.md: cannot be read", err)
 
     def test_a_linked_harness_directory_is_a_problem(self):
         self.attached()
-        agents = os.path.join(self.place, ".claude", "agents")
+        agents = os.path.join(self.place, ".fixture", "agents")
         for name in os.listdir(agents):
             os.unlink(os.path.join(agents, name))
         os.rmdir(agents)
         os.symlink(self.outside, agents)
         code, out, err = self.check()
         self.assertEqual(1, code)
-        self.assertIn(".claude/agents/reviewer.md: cannot be read", err)
-        self.assertIn("problem: .claude/agents: unreadable", err)
+        self.assertIn(".fixture/agents/reviewer.md: cannot be read", err)
+        self.assertIn("problem: .fixture/agents: unreadable", err)
 
     def test_the_local_manifest_is_not_evidence(self):
         """A file edited together with the scratch record is not reported: no drift means the
         file matches the record, and the output says that is all it means."""
         self.attached()
         data = b"edited and recorded\n"
-        self.write(".claude/commands/ship.md", data)
+        self.write(".fixture/commands/ship.md", data)
         document = self.planned()
         for item in document["files"]:
-            if item["path"] == ".claude/commands/ship.md":
+            if item["path"] == ".fixture/commands/ship.md":
                 item["hash"] = hashlib.sha256(data).hexdigest()
         with open(os.path.join(self.place, *LOCAL.split("/")), "wb") as handle:
             handle.write(localmanifest.serialize(document))
@@ -166,7 +172,7 @@ class Check(Clone):
 
     def test_nothing_is_written_and_the_index_is_unchanged(self):
         self.attached()
-        self.write(".claude/agents/extra.md", b"mine\n")
+        self.write(".fixture/agents/extra.md", b"mine\n")
         before = (self.content(), self.content(self.store_root))
         index = self.read(".git/index")
         self.check()
@@ -192,7 +198,7 @@ class Check(Clone):
     def test_the_findings_are_bounded(self):
         self.attached()
         for number in range(check.LISTED + 5):
-            self.write(".claude/commands/x%d.md" % number, b"x\n")
+            self.write(".fixture/commands/x%d.md" % number, b"x\n")
         code, out, err = self.check()
         self.assertEqual(1, code)
         self.assertEqual(check.LISTED + 1, len(self.problems(err)))
@@ -200,19 +206,17 @@ class Check(Clone):
 
     def test_other_entries_directly_under_the_harness_directory_warn(self):
         self.attached()
-        self.write(".claude/hooks/x.sh", b"#!/bin/sh\n")
-        self.write(".claude/settings.json", b"{}\n")
+        self.write(".fixture/hooks/x.sh", b"#!/bin/sh\n")
         code, out, err = self.check()
         self.assertEqual(0, code, err)
         self.assertTrue(out.endswith("check found no problems\n"), out)
-        self.assertIn("warning: .claude/hooks: not written by attach", err)
-        self.assertNotIn("settings.json", err)
+        self.assertIn("warning: .fixture/hooks: not written by attach", err)
 
     def test_hostile_names_are_cleaned_in_the_findings(self):
         self.attached()
-        self.write(".claude/agents/evil\x1b[2Jname.md", b"x\n")
-        os.mkdir(os.path.join(self.place, ".claude", "skills", "bi\u202edi"))
-        self.write(".claude/skills/bi\u202edi/f.md", b"x\n")
+        self.write(".fixture/agents/evil\x1b[2Jname.md", b"x\n")
+        os.mkdir(os.path.join(self.place, ".fixture", "skills", "bi\u202edi"))
+        self.write(".fixture/skills/bi\u202edi/f.md", b"x\n")
         code, out, err = self.check()
         self.assertEqual(1, code)
         self.assertNotIn("\x1b", err)
@@ -224,34 +228,60 @@ class Check(Clone):
         self.attached()
         with unittest.mock.patch.object(check, "MAX_ENTRIES", 3):
             for number in range(6):
-                self.write(".claude/commands/y%d.md" % number, b"x\n")
+                self.write(".fixture/commands/y%d.md" % number, b"x\n")
             code, out, err = self.check()
         self.assertEqual(1, code)
         self.assertIn("not all were looked at", err)
-        deep = ".claude/skills/sample" + "/d" * (check.MAX_DEPTH + 2) + "/f.md"
+        deep = ".fixture/skills/sample" + "/d" * (check.MAX_DEPTH + 2) + "/f.md"
         self.write(deep, b"x\n")
         code, out, err = self.check()
         self.assertIn("nested too deeply", err)
 
     def test_a_recorded_path_below_a_linked_directory_is_unreadable(self):
         self.attached()
-        sample = os.path.join(self.place, ".claude", "skills", "sample")
+        sample = os.path.join(self.place, ".fixture", "skills", "sample")
         os.unlink(os.path.join(sample, "SKILL.md"))
         os.rmdir(sample)
         os.symlink(self.outside, sample)
         code, out, err = self.check()
         self.assertEqual(1, code)
-        self.assertIn("problem: .claude/skills/sample/SKILL.md: cannot be read", err)
+        self.assertIn("problem: .fixture/skills/sample/SKILL.md: cannot be read", err)
 
     def test_an_unknown_harness_name_is_valid_and_has_no_stray_scan(self):
         self.attached()
         document = self.planned()
-        document["harness"] = "gemini"
+        document["harness"] = "stranger"
         with open(os.path.join(self.place, *LOCAL.split("/")), "wb") as handle:
             handle.write(localmanifest.serialize(document))
-        self.write(".claude/agents/extra.md", b"x\n")
+        self.write(".fixture/agents/extra.md", b"x\n")
         code, out, err = self.check()
-        self.assertIn("harness: gemini attached", out)
+        self.assertIn("harness: stranger attached", out)
+        self.assertIn("warning: stranger is not a harness this workbench knows, so its files were "
+                      "not scanned", err)
+        self.assertNotIn("extra.md: not a file", err)
+
+    def test_files_of_another_known_harness_are_problems(self):
+        support_harness.write_package(self.dist, support_harness.renamed(support_harness.SYNTHETIC),
+                                      package="second", module="second")
+        firstparty.release_approvals(self.dist)
+        self.attached()
+        self.write("SECOND.md", b"x\n")
+        self.write(".second/notes.md", b"x\n")
+        code, out, err = self.check()
+        self.assertEqual(1, code)
+        self.assertEqual(["problem: .second belongs to the harness second, not to the attached fixture",
+                          "problem: SECOND.md belongs to the harness second, not to the attached fixture"],
+                         sorted(self.problems(err)))
+
+    def test_a_name_two_first_party_packages_declare_is_not_scanned(self):
+        support_harness.write_package(self.dist, support_harness.renamed(support_harness.SYNTHETIC),
+                                      package="copy", module=support_harness.MODULE)
+        firstparty.release_approvals(self.dist)
+        self.attached()
+        self.write(".fixture/agents/extra.md", b"x\n")
+        code, out, err = self.check()
+        self.assertIn("warning: fixture is declared by more than one first-party package, so its "
+                      "files were not scanned", err)
         self.assertNotIn("extra.md: not a file", err)
 
     def test_every_recorded_path_is_looked_at(self):
@@ -302,23 +332,23 @@ class Tracked(Clone):
     def test_tracked_harness_output_and_scratch_are_problems(self):
         self.attached()
         self.write(".debug/2026-10-21-x/README", b"x\n")
-        self.force_add("CLAUDE.md", SETTINGS, ".debug/2026-10-21-x/README", LOCAL)
+        self.force_add("FIXTURE.md", SETTINGS, ".debug/2026-10-21-x/README", LOCAL)
         code, out, err = self.check()
         self.assertEqual(1, code)
         found = sorted(self.problems(err))
-        for path, what in (("CLAUDE.md", "output of the harness claude"),
-                           (SETTINGS, "output of the harness claude"),
+        for path, what in (("FIXTURE.md", "output of the harness fixture"),
+                           (SETTINGS, "output of the harness fixture"),
                            (LOCAL, "scratch"), (".debug/2026-10-21-x/README", "scratch")):
             self.assertIn("problem: %s: tracked by git, but it looks like %s" % (path, what), found)
 
     def test_paths_are_matched_without_case(self):
-        tracked = gitindex.Tracked(frozenset({".Claude/notes", ".DEBUG/x", "Claude.md", "src/a"}),
+        tracked = gitindex.Tracked(frozenset({".Fixture/notes", ".DEBUG/x", "Fixture.md", "src/a"}),
                                    frozenset(), frozenset())
         self.assertEqual(
             ["%s: tracked by git, but it looks like %s" % item for item in
-             ((".Claude/notes", "output of the harness claude"), (".DEBUG/x", "scratch"),
-              ("Claude.md", "output of the harness claude"))],
-            check._generated(tracked))
+             ((".DEBUG/x", "scratch"), (".Fixture/notes", "output of the harness fixture"),
+              ("Fixture.md", "output of the harness fixture"))],
+            check._generated(tracked, harnesses.known(self.dist)))
 
     def test_documents_that_point_into_untracked_content_are_problems(self):
         self.ready()
@@ -457,11 +487,11 @@ class Tracked(Clone):
     def test_a_damaged_local_manifest_does_not_stop_the_git_checks(self):
         self.attached()
         self.write(LOCAL, b"{}\n")
-        self.force_add("CLAUDE.md")
+        self.force_add("FIXTURE.md")
         code, out, err = self.check()
         self.assertEqual(1, code)
         self.assertIn("problem: %s: " % LOCAL, err)
-        self.assertIn("problem: CLAUDE.md: tracked by git", err)
+        self.assertIn("problem: FIXTURE.md: tracked by git", err)
         self.assertIn("manifest: tracked by git\n", out)
 
     def test_a_tracked_document_that_cannot_be_read_is_reported(self):
@@ -491,11 +521,11 @@ class Tracked(Clone):
     def test_a_damaged_index_is_a_problem_and_the_other_checks_still_run(self):
         self.attached()
         self.write(".git/index", b"DIRC" + b"\0" * 40)
-        self.write(".claude/agents/extra.md", b"x\n")
+        self.write(".fixture/agents/extra.md", b"x\n")
         code, out, err = self.check()
         self.assertEqual(1, code)
         self.assertIn("problem: .git/index: ", err)
-        self.assertIn("problem: .claude/agents/extra.md: not a file attach wrote", err)
+        self.assertIn("problem: .fixture/agents/extra.md: not a file attach wrote", err)
 
     def test_an_index_over_the_limit_is_a_problem(self):
         self.ready()

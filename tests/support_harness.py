@@ -55,15 +55,22 @@ HARNESS = PACKAGE + "/" + MODULE
 PROVIDES = ["instructions", "skills", "agents", "commands", "permissions"]
 
 
-def write_package(distribution, layout=None):
+def renamed(layout, name="second"):
+    """The layout with its paths moved from `fixture` to `name`, for a second synthetic harness."""
+    return json.loads(json.dumps(layout).replace("FIXTURE.md", name.upper() + ".md")
+                      .replace(".fixture", "." + name))
+
+
+def write_package(distribution, layout=None, package=PACKAGE, module=MODULE):
     """The synthetic harness package, `<distribution>/packages/synthetic`, with one harness module named
-    `fixture`. It provides the five capabilities its layout renders. Returns the package path."""
-    path = os.path.join(distribution, firstparty.PACKAGES, PACKAGE)
-    os.makedirs(os.path.join(path, MODULE))
+    `fixture`; `package` and `module` name another. It provides the five capabilities its layout
+    renders. Returns the package path."""
+    path = os.path.join(distribution, firstparty.PACKAGES, package)
+    os.makedirs(os.path.join(path, module))
     with open(os.path.join(path, "package.json"), "w") as handle:
-        json.dump({"name": PACKAGE, "version": "0.1.0", "contract": 1, "modules": [MODULE]}, handle)
-    with open(os.path.join(path, MODULE, "module.json"), "w") as handle:
-        json.dump({"name": MODULE, "version": "0.1.0", "type": "harness",
+        json.dump({"name": package, "version": "0.1.0", "contract": 1, "modules": [module]}, handle)
+    with open(os.path.join(path, module, "module.json"), "w") as handle:
+        json.dump({"name": module, "version": "0.1.0", "type": "harness",
                    "description": "A synthetic harness for the installer's tests.",
                    "provides": PROVIDES, "layout": layout or SYNTHETIC}, handle)
     return path
