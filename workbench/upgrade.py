@@ -39,10 +39,10 @@ RECOVERY = ("a file already replaced no longer matches the manifest, so a second
             "it edited, and there is no automatic repair: put the files listed as written back "
             "from version control or a copy, then run `wb recover` yourself to clear the marker "
             "and run the command again")
-RECOVERY_FILES_DONE = ("the project's files and manifest are complete; only the store entry or "
-                       "the marker is left: run `wb recover` yourself to see what the project "
-                       "holds and clear the marker, then run `wb acknowledge` and review what "
-                       "it lists")
+RECOVERY_FILES_DONE = ("the project's files and manifest are complete; only the store entries or "
+                       "the marker are left: run `wb recover` yourself to see what the project "
+                       "holds and clear the marker; it says whether to run `wb acknowledge` and "
+                       "review what it lists, or `wb pin` for each helper that was replaced")
 MAX_PACKAGE_JSON = 1 << 20
 
 

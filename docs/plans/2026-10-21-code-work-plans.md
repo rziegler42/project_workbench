@@ -670,3 +670,33 @@ root skips 11 tests and `code-work` 2, see "Stale approvals" below.
   - *Not exercised by the reviewer:* mutation of the new tests, a symlink as the helper path, a file
     changed between the preview and the write, hostile pins in acknowledge, a harness module that
     declares commands, a module removed from its package, a pin name the parser refuses.
+
+### Increment F-A — recover a stop between the two store writes (2026-10-22)
+
+`recover.judge` now clears an `upgrade` or `add` whose files are all written and whose store entries (the
+baselines and the pins) each hold exactly the old or exactly the new content, with the new outcome
+`partial`; an entry that holds other content, an install in the same state, and files that are not all
+written are still refused. The listing says which entries are still old: if the baselines, `wb
+acknowledge` lists the written paths; if the pins, the launcher refuses each replaced helper until the
+owner runs `wb pin`. The failure hint printed by upgrade and add now says the same
+(`RECOVERY_FILES_DONE`). New tests: `test_recover_pins.py` (10): the stop at the pins write clears and
+says to pin, the launcher still refuses the new helper, and a rerun does not pin it for the owner; an add
+stopped the same way clears; `judge` on made-up examinations for both mixes, for both commands, and for
+the refusals. With the mix guard removed the other-content tests fail, and with `install` added to the
+commands the install tests fail (checked). Full suite: 2408 tests in 4 roots, passing with `-W error`.
+
+- **The other mix is not reached by the code.** Baselines are written first, so a stop leaves old pins and
+  new baselines; the reverse (new pins, old baselines) is accepted by `judge` and tested on a made-up
+  examination only.
+- **Found while testing:** `tests/test_upgrade.py` asserted the old hint wording ("store entry"); it now
+  asserts "store entries".
+- **For increment H:** `installer-interface.md` and `trust-and-approval.md` describe what `wb recover`
+  clears; they need the new case.
+- **Review (workflow-reviewer, read-only, 2026-10-22; partial, about 8 tool calls):** one Medium, fixed. A
+  record that names no store entry gave `store == "partial"` with no store item, and `judge` accepted
+  it as a mix because the empty set is a subset of `{before, after}`; the marker would be cleared on no
+  evidence and `_partial_lines` printed "it still holds the old " with nothing after. `judge` now needs
+  both states present (`== {"before", "after"}`), which also makes `_old_entries` non-empty whenever the
+  outcome is `partial`; a test fails with the old comparison. Not checked by the reviewer: the
+  launcher with old pins and new bytes (checked by F's tests), `acknowledge` when the pins are already
+  new, and the specs, which increment H updates.

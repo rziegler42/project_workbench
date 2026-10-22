@@ -21,7 +21,12 @@ The marker is cleared only in these states, and every other is refused with the 
 * ``upgrade`` and ``add`` only, files ``after`` and store ``none``: the files are written and the
   old baselines are still in the store, so the project differs from them and ``wb acknowledge``
   lists exactly the written paths. The marker goes. An ``install`` in that state has no old
-  baselines to fall back on and is refused: the files have to be put back and the install run again.
+  baselines to fall back on and is refused: the files have to be put back and the install run again;
+* ``upgrade`` and ``add`` only, files ``after`` and a store that is part old and part new, each entry
+  holding exactly the old or exactly the new content (the baselines and the pins are two entries): the
+  marker goes. If the baselines are the old ones, ``wb acknowledge`` lists the written paths; if the
+  pins are the old ones, the launcher refuses the helpers the plan replaced until the owner pins them
+  again with ``wb pin``. An entry that holds other content is refused.
 
 Nothing else is written or removed: no file is restored or deleted, the store is not touched, no
 directory that holds anything is removed and the target directory itself is never removed. The
@@ -35,7 +40,7 @@ from .wbkit import display, safefs
 MAX_LISTED = 500
 
 _LOCAL = ".workbench/local"
-_BEFORE, _AFTER, _UNSTORED = "before", "after", "unstored"
+_BEFORE, _AFTER, _UNSTORED, _PARTIAL = "before", "after", "unstored", "partial"
 
 parse = acknowledge.parse
 
@@ -63,6 +68,10 @@ def judge(found):
         return _BEFORE, []
     if state == ("after", "all"):
         return _AFTER, []
+    if found.files == "after" and found.store == "partial" and record.command in ("upgrade", "add"):
+        # Only a real mix: no store item at all (a record that names none) is no evidence of one.
+        if {i.state for i in found.items if i.kind == "store"} == {"before", "after"}:
+            return _PARTIAL, []
     lines = unfinished.render(found, hint=False)
     if found.files == "after" and found.store in ("none", "partial"):
         if state == ("after", "none") and record.command in ("upgrade", "add"):
@@ -133,6 +142,25 @@ def examine(guarded, held):
     return Review(found, outcome, removals, held.identity)
 
 
+def _old_entries(found):
+    """The store entries the examination found still holding their old content, as their file names."""
+    return sorted(i.path.rsplit("/", 1)[-1] for i in found.items
+                  if i.kind == "store" and i.state == "before")
+
+
+def _partial_lines(found):
+    old = _old_entries(found)
+    lines = ["the files are written and the store is part old and part new; it still holds the old %s"
+             % " and the old ".join(old)]
+    if "baselines" in old:
+        lines.append("the project differs from the old baselines; after this, `wb acknowledge` lists "
+                     "exactly the written paths for you to accept")
+    if "pins" in old:
+        lines.append("the pins are the old ones, so the launcher refuses each helper the unfinished "
+                     "command replaced until you pin it again with `wb pin`")
+    return lines
+
+
 def render(review, target_path):
     found = review.found
     lines = ["target: %s" % display.ascii_text(target_path), "command: recover"]
@@ -143,6 +171,8 @@ def render(review, target_path):
     elif review.outcome == _AFTER:
         lines.append("the unfinished %s was carried out; only its marker was left"
                      % found.record.command)
+    elif review.outcome == _PARTIAL:
+        lines += _partial_lines(found)
     else:
         lines.append("the files are written and the store holds the old baselines, so the project "
                      "differs from them; after this, `wb acknowledge` lists exactly the written "
@@ -190,6 +220,11 @@ def _clear(writer, review, out, err):
         return 3
     if review.outcome == _UNSTORED:
         out.write("cleared the marker; run `wb acknowledge` to accept the written paths\n")
+    elif review.outcome == _PARTIAL:
+        old = _old_entries(review.found)
+        out.write("cleared the marker;%s%s\n" % (
+            " run `wb acknowledge` to accept the written paths;" if "baselines" in old else "",
+            " run `wb pin` for each helper the unfinished command replaced" if "pins" in old else ""))
     else:
         out.write("cleared the marker\n")
     return 0

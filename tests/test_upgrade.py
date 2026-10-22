@@ -616,7 +616,7 @@ class Finish(Upgrade):
         self.assertEqual(3, code)
         self.assertIn("is not what was written", err)
         self.assertTrue(self.marker())
-        self.assertIn("only the store entry or the marker is left", err)
+        self.assertIn("only the store entries or the marker are left", err)
 
     def test_a_directory_moved_away_after_the_write_is_not_reported_as_written(self):
         new = self.ready(notes=base_tests.NOTES2)
