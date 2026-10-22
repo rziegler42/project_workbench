@@ -305,3 +305,24 @@ Nothing is left for the owner. The review is not an approval; the plan stays `Pr
   Claude test compares the body only.
 - Verification: the full suite runs 2657 tests in 5 roots, OK (the new root has 229).
 - Next: increment D.
+
+### Increment D — done
+
+- Review: a read-only `workflow-reviewer` read the whole move with the diff of the moved region. The diff
+  shows only the four listed edits, so no security pass was run. The reviewer found no defect in the moved
+  code (names and imports resolve in both helpers, no git left in `code-work`, the setting is read only at
+  `.workbench/safe-git.json`, the hard requirement and the declarations hold, the skill matches the helper).
+  It ran nothing, so those checks are by reading. Two findings:
+  - `docs/development.md` lines 46, 47 and 67 still name `run code-work commit`, `run code-work remove` and
+    `.workbench/code-work.json`. Left for increment E, whose step 2 covers that file.
+  - No test showed that a `safe-git` pin lets no other command run. Added
+    `test_the_pin_of_safe_git_lets_no_other_command_run`. A real upgrade from a project that holds only a
+    `code-work` pin is not tested; nothing is installed yet, so none exists.
+- Release: on the owner's "Run it for me", `release-approvals` wrote 5 approvals for the one first-party
+  package (record directories `26b17c7ce070`, `5399615cb502`, `7d863844209e`, `976d923470fb`,
+  `cbcc75d58a13`). On the owner's "remove them", after a preview, the 4 stale records (`45b866c8efb9`,
+  `78582b5e6f5d`, `7e2cbd8c1bdd`, `c8d8649a3323`) were deleted.
+- With the approvals matching, the shipped-approval test in `test_claude_module.py`, which had been skipped
+  while they were stale, ran and still listed three modules. It now lists `safe-git` too.
+- Verification: the full suite runs 2658 tests in 5 roots, OK.
+- Next: increment E.

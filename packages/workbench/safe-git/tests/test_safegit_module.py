@@ -219,6 +219,13 @@ class Launcher(support_install.InstallBase):
         with self.assertRaises(pins.PinError):
             pins.lookup(self.guarded, ident, "code-work")
 
+    def test_the_pin_of_safe_git_lets_no_other_command_run(self):
+        place = self.place()
+        self.assertEqual(0, self.install(place)[0])
+        errors = io.StringIO()
+        self.assertEqual(1, commands.run(self.guarded, ["code-work", "check"], errors, cwd=place))
+        self.assertNotEqual("", errors.getvalue())
+
     def test_the_first_commit_and_the_next_one_are_made_through_the_launcher(self):
         place = self.project_with_identity()
         self.write_in(place, "docs/plans/2026-10-22-mine.md", "# Mine\n")

@@ -1,0 +1,33 @@
+{
+  "approver": "workbench-release",
+  "commit": null,
+  "declaration_hash": "dbc660f76ea97580d5f1a98409aded88bfe92f4b3eadd367566c6964138b52ae",
+  "format": 1,
+  "kind": "package",
+  "modules": [
+    {
+      "declaration_hash": "4a861f15d8bbea05d84fa3ab266e1b82f05094510d4816ed858ceb365148163d",
+      "name": "claude",
+      "tree_hash": "30c0e4d09fe42f7be6052b0cfc439bd0fd1d90e8862458ca437307d56e018ea6"
+    },
+    {
+      "declaration_hash": "ff967dd4ff1cfc2c3197df1b762ad1a321abd06240a5533159a53d0e04b693db",
+      "name": "code-work",
+      "tree_hash": "405c11a0be1858f6bcb25ba588f540a7267cb054c05d999f84aea4e5f18764de"
+    },
+    {
+      "declaration_hash": "eb8f2f640ad950914c8de822f9c50fe8bc387c4938e656f339f11d092329bf3f",
+      "name": "groundwork",
+      "tree_hash": "00db9b7cccefcc44c4456886d6be97f385e117dbfabcd9435c7bb23b83dcb92a"
+    },
+    {
+      "declaration_hash": "bccb1c58ac073f7230ae3c54ff7620cabead85fd5cd90eefb4f2254e2bda75cb",
+      "name": "safe-git",
+      "tree_hash": "a7258040835a713304a0e5cf59f2ae968e5f5b494329e6a41617f1554338be98"
+    }
+  ],
+  "subject": "workbench",
+  "time": "1970-01-01T00:00:00Z",
+  "tree_hash": "94270ba0cee7a7726b734c35dce2b6eea73fd49fef266a076623a17823d6b940",
+  "workbench_version": "0.1.0"
+}
