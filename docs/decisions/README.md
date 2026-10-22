@@ -75,3 +75,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-22-installer-pins-declared-helpers](2026-10-22-installer-pins-declared-helpers.md) | The installer pins the helpers a confirmed plan declares | Accepted |
 | [2026-10-22-commit-helper-leaves-baselines-to-the-owner](2026-10-22-commit-helper-leaves-baselines-to-the-owner.md) | The commit helper leaves the acknowledgement baselines to the owner | Accepted |
 | [2026-10-22-git-work-in-its-own-module](2026-10-22-git-work-in-its-own-module.md) | Git work (`commit`, `remove`) lives in its own module, not in `code-work` or `groundwork` | Accepted |
+| [2026-10-22-model-calls-go-through-vendor-bridges](2026-10-22-model-calls-go-through-vendor-bridges.md) | Model calls go through thin vendor bridges; review and action review are separate engines | Proposed |
