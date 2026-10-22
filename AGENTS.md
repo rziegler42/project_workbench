@@ -84,7 +84,7 @@ The workbench's own tooling does not exist yet. Until it does:
 - harness files and the old template manifest are never committed;
 - the first commit, on a branch with no commits, is made by the owner by hand,
   because the commit helper does not yet support that case. This is a known gap to
-  fix in `code-work-module`.
+  fix in `code-work-commit`.
 
 ## Independent review
 

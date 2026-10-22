@@ -69,3 +69,5 @@ List every record, including rejected and superseded ones.
 | [2026-10-20-upgrade-needs-no-git](2026-10-20-upgrade-needs-no-git.md) | An upgrade asks no git question; cleanliness is decided by file hashes | Accepted |
 | [2026-10-21-module-code-lives-in-modules](2026-10-21-module-code-lives-in-modules.md) | Module-specific code, tests and tooling live in the module, behind a shared kit | Accepted |
 | [2026-10-21-harness-facts-from-layouts](2026-10-21-harness-facts-from-layouts.md) | The installer reads a harness's paths from that harness module's layout | Proposed |
+| [2026-10-22-plan-check-in-the-shipped-helper](2026-10-22-plan-check-in-the-shipped-helper.md) | The plan check lives in the helper the `code-work` module ships | Proposed |
+| [2026-10-22-installer-pins-declared-helpers](2026-10-22-installer-pins-declared-helpers.md) | The installer pins the helpers a confirmed plan declares | Proposed |

@@ -163,7 +163,7 @@ says so.
 | `recover` | project | target | removes the unfinished-write marker and the empty directories the plan created, nothing else | yes, owner-run | built |
 | `verify` | package | a package directory (`<package>` or `--dir`), `--select`, `--no-harness-required` | nothing | no | built |
 | `approve` | package | a package directory, or `--source` with an optional `--ref`; `--module` | the guarded store: approval records, the cache | yes | built; `--dir` proposed |
-| `pin` | package | a project id, a name, a helper, `--root` | the guarded store: a pin | yes | built |
+| `pin` | package | a project id, a name, a helper, `--root` | the guarded store: a pin (the installer pins declared helpers itself; this is for any other) | yes | built |
 | `launch` | package | a project id, a name, `--root`, arguments after `--` | a private copy of the pinned helper under `bin/run/` while it runs, removed afterwards | no | built |
 | `release-approvals` | package | nothing | the shipped first-party records in the workbench distribution | no | built |
 
@@ -426,9 +426,11 @@ publishes, and none edits a living or historical document** (`repository-boundar
   into) and each file added or removed under `.workbench/` outside `local/`, with the
   path, the baseline hash, the current hash and the reason, and a parsed summary of the manifest
   (packages, sources, refs, commits, module declaration hashes). The store keeps hashes and not
-  old bytes, so this is not a line diff.
+  old bytes, so this is not a line diff. It also lists each pin it will move: a pin that records a
+  declaration, whose helper is a listed path and which holds the bytes last acknowledged, moves to the
+  bytes now there. A pin the owner typed is not moved.
 - **Asks** for the first 12 characters of the digest of that list, with the same input rules as
-  the preview approval. On a match it replaces the baselines for exactly the listed paths. Any
+  the preview approval. On a match it replaces the baselines for exactly the listed paths, then the moved pins. Any
   other answer writes nothing and exits 1; no differences says `nothing to acknowledge` and
   exits 0.
 - **Agent may run it:** no. It is denied to an agent by the harness as `approve` is.
@@ -471,7 +473,10 @@ publishes, and none edits a living or historical document** (`repository-boundar
 - **Clears the marker only** with files `before` and store `none` (the recorded directories that
   are empty go too, deepest first, by `rmdir`); files `after` and store `all`; and, for `upgrade`
   and `add` only, files `after` and store `none`, after which `acknowledge` lists exactly the
-  written paths. An `install` with files `after` and the store `none` or `partial` is refused with
+  written paths, and files `after` and store `partial` where each entry that is not new holds exactly its
+  old content (the two entries are the baselines and the pins, written in that order), after which the
+  listing says which is still old: for the baselines `wb acknowledge` lists the written paths, for the pins
+  the launcher refuses each replaced helper until the owner runs `wb pin` for it. An `install` with files `after` and the store `none` or `partial` is refused with
   the advice to put the project back and install again. Every other state is refused with the
   paths to deal with and nothing is written.
 - **Never** writes or restores a file, removes any file but the marker, removes a directory that
@@ -595,7 +600,9 @@ and an owner-run write is a **rule** *(owner)*; the layout of the text is a prop
   its hash and the reason for a conflict.
 - Directories to be created, the `.git/info/exclude` lines, the local manifest, the harness
   files, and every write to the guarded store (the project's directory, its first-seen
-  record, the baselines).
+  record, the baselines, the pins).
+- Every pin the command makes for a declared helper: created, updated or replaced, with its path, hash, kit
+  and declaration, and for an update or replacement the pin it had and who made it. The pins are in the digest.
 - The digest, shown in full on the owner's terminal only.
 - **rule:** every path, name and package-supplied string in a preview is shown through
   `display.ascii_text`, with the backslash escaped, so look-alike letters and a literal `\n`

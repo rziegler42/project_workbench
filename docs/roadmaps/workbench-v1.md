@@ -291,9 +291,10 @@ creates the module; the next two add to it and release the package again.
 **Outcome:** the process module `code-work` exists in `packages/workbench/`: the plan
 format, the `docs/plans/` README, a `docs-index` entry, a policy block, a skill for
 drafting a plan, and one shipped, self-contained helper whose read-only subcommands
-`check`, `plans` and `report` are run as `wb code-work <subcommand>` through the pinned
-launcher. It proves the path every later helper subcommand uses: shipping, pinning,
-launching and reading untrusted plans.
+`check`, `plans` and `report` are run as `wb run code-work <subcommand>`, a command the module
+declares, through the launcher; the installer pins the helper when the owner confirms the install. It
+proves the path every later helper subcommand uses: shipping, pinning, launching and reading untrusted
+plans.
 **Dependencies:** `module-approvals`, `claude-harness`, `groundwork-module`.
 **Boundary:** reading only. No commit or remove, no approval record, no review loop,
 caps, checkpoint or push rule. Until `code-work-approval`, approval is the owner's
@@ -302,8 +303,9 @@ explicit statement in session and the policy block says so.
 
 The next four candidates carry out `docs/specs/module-boundary.md` and the decision
 `2026-10-21-module-code-lives-in-modules`: module-specific code, tests and tooling leave the
-installer for the modules. The open `code-work-plans` plan is reconsidered after
-`module-commands`; its increments F to H assume the older design.
+installer for the modules. The open `code-work-plans` plan was reconsidered after
+`module-commands` and its increments F to H were amended for the installer pinning declared helpers
+(`2026-10-22-installer-pins-declared-helpers`).
 
 ### module-boundary-kit — The kit and the maintainer directories
 

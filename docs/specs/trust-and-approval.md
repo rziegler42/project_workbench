@@ -269,6 +269,20 @@ silent replacement.
   harness's allowance matches a path and not a hash.
 - A pulled edit to the helper changes its hash, so it loses its pre-approval until
   the change is acknowledged and the pin is updated.
+- **The installer pins the helpers a confirmed plan declares.** A `commands` or `checks` helper of a
+  module in an install, add or upgrade is pinned in the step the owner confirms with the digest
+  (`workbench/pinplan.py`): the owner has just confirmed those exact bytes, so a separate `pin` for each
+  adds friction and no information. The preview and the digest list every pin made, moved or replaced, and a
+  replacement shows the pin it replaces and who made it; the pin records `workbench <command>` as its
+  maker. A helper the plan does not write keeps the pin it has, so a pulled edit stays refused until
+  `acknowledge`. An installer-made pin also records the hash of the `module.json` the owner confirmed
+  (`declaration`); `wb run` and `wb check` refuse a pin whose declaration differs from the manifest's, so
+  a pull that rewrites a declaration and its hash cannot widen what a pinned helper accepts. Only an
+  upgrade of the module, with the digest typed, or an owner-run `pin` clears that refusal.
+- **`acknowledge` moves only the pins the installer made.** When it accepts an edit to
+  a helper whose pin records a declaration and holds the bytes last acknowledged, the pin moves to the bytes
+  accepted and keeps its declaration; the move is listed in the digest. A pin the owner typed with `pin`
+  records no declaration and is never moved: acknowledging an edit is not permission to run it.
 - The pin file, the launcher and the `wb` script are described under "Concrete formats".
 
 ## Concrete formats
@@ -420,7 +434,9 @@ A package is brought into `cache/<id>/` as data only: the files under `package/`
 ### Pinned helpers, the launcher and `wb`
 
 - **Pins.** `projects/<id>/pins` is strict JSON,
-  `{"format": 1, "pins": {"<name>": {"path", "pinned_by", "sha256", "time"}}}`. The project id is 64
+  `{"format": 1, "pins": {"<name>": {"path", "pinned_by", "sha256", "time"}}}`, and an entry may also hold
+  `kit` (the kit API number) and `declaration` (the hash of the `module.json` an installer-made pin was
+  confirmed with; absent from a pin the owner typed). The project id is 64
   lowercase hex digits. A helper name is letters, digits and `._+-`, at most 64 characters, starting
   with a letter or digit. The path is relative to the project root and passes the path validator, so
   clones at different locations share a pin. Reading fails closed.
@@ -521,6 +537,10 @@ instead of retrying. No dollar ceiling is required.
 - A harness without `permissions` leaves hard stops and the guarded store protected
   by instruction only.
 - The guarded store shares the owner's account.
+- A pin the owner types records no declaration and so stands for the whole module: a pull that rewrites the
+  `module.json` and its manifest hash can widen the command's `arguments`, which are a filter and not a
+  boundary (`module-boundary.md`). The helper must validate its own arguments. A pin made before the installer recorded
+  declarations carries none and is updated at the next upgrade.
 - The typed confirmation of `approve`, `pin` and the project write commands (`installer-interface.md`) is friction, not authentication, and a process that
   opens its own pseudo-terminal passes the terminal test. Only the harness deny rules stop an agent
   from running those commands.

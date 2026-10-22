@@ -42,7 +42,7 @@ ambiguous blank.
 | Owner-run: add a module (terminal only) | `python3 -m workbench add [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Run a pinned helper | `python3 -m workbench launch <project-id> <name> --root <project-dir> -- <args>` |
 | Run a module command | `python3 -m workbench run <command> [<argument> ...]` from anywhere in the project (agent-safe; the command must be installed and pinned; the arguments after the first reach the helper unchanged) |
-| Check, list or report the plans | `python3 -m workbench run code-work check\|plans\|report` (the `code-work` module's command; its owner pins the helper first) |
+| Check, list or report the plans | `python3 -m workbench run code-work check\|plans\|report` (the `code-work` module's command; the installer pinned the helper when the install was confirmed) |
 | Release time: write the approvals shipped with first-party packages | `python3 -m workbench release-approvals` |
 | Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
 | One focused test file | `python3 -m unittest discover -s tests -p 'test_approvals.py'` (a test module that imports `support` only loads under `discover -s tests`); for a module's own tests, `python3 -B -m unittest discover -s packages/<package>/<module>/tests -t packages/<package>/<module>/tests` from the repository root |
@@ -184,8 +184,8 @@ the `--package` before it. Options are not abbreviated.
   source into the cache, inertly, after the target is accepted and before it prints the plan.
   Every module must be approved on this machine (the gate); neither command records an approval.
 - **The preview** lists the target and its state, each module with its hashes, every action
-  (directories, files with class, mode, size and hash, the `.git`) and the two store entries,
-  and ends `preview only: nothing was written`. It uses a fresh seed each time, so its digest is
+  (directories, files with class, mode, size and hash, the `.git`), the store entries and each pin it will make
+  for a declared helper, and ends `preview only: nothing was written`. It uses a fresh seed each time, so its digest is
   not shown and differs from one run to the next.
 - **`install`** is owner-run: it refuses unless standard input and output are terminals. It
   prints the same plan with its digest and asks for the first 12 characters of the digest.
@@ -196,8 +196,8 @@ the `--package` before it. Options are not abbreviated.
   plan from the packages as they are now and refuses a different digest. The bytes written are
   those of the plan that was shown.
 - **The write** creates `.workbench/local/incomplete` first, then the `.git` when there is none,
-  the directories and files (the manifest last), the two store entries and last removes the
-  marker. Git is not run: the empty `.git` is made with `mkdir` and a fixed skeleton written
+  the directories and files (the manifest last), the store entries (the project record, the baselines
+  and, when a module declares a helper, the pins) and last removes the marker. Git is not run: the empty `.git` is made with `mkdir` and a fixed skeleton written
   through held descriptors. Nothing is overwritten, and files get 0644 (0755 when
   executable), directories 0755, narrowed by the umask. It then prints the count of paths and
   `nothing was committed`.
@@ -259,7 +259,7 @@ python3 -m workbench add             <the same arguments>                     (o
   and the packages, rebuilds the plan and refuses a different digest. It writes
   `.workbench/local/incomplete`, the new directories, the created files, the replaced files (each
   a hash-checked whole-file replace that keeps the original's narrower mode, never setuid, and
-  0755 only for an executable), the manifest, the store's baselines, reads every written file
+  0755 only for an executable), the manifest, the store's baselines and pins, reads every written file
   back against the plan, and last removes the marker. It ends with the count of paths written, the
   conflicts and notes left as they are, and `nothing was committed; committing the result as one
   change makes it revertable`. Git is not run and no clean-tree check is made.
@@ -272,8 +272,9 @@ python3 -m workbench add             <the same arguments>                     (o
 - **`acknowledge`** (owner-run) lists every difference (path, kind, baseline hash, current hash)
   for the manifest, every file under `.workbench/` outside `local/`, and every other path with a
   baseline, with a summary of the manifest (packages, sources, refs, commits, module hashes and
-  every file entry). It asks for the first 12 characters of the digest, re-reads, and replaces
-  the baselines of exactly the listed paths in one atomic store write. It writes nothing in the
+  every file entry) and every pin it will move (an installer-made pin whose helper changed; a pin
+  typed with `pin` is not moved). It asks for the first 12 characters of the digest, re-reads, and replaces
+  the baselines of exactly the listed paths in one atomic store write and then moves the pins. It writes nothing in the
   project. A link, a directory or another non-regular file where a file is expected, and a name
   under `.workbench/` that fails the path rules (a control character, bytes that are not UTF-8,
   a colon or a backslash), cannot be acknowledged: it is listed with its reason and nothing is
@@ -316,8 +317,7 @@ and source files are ignored), committed files that differ from the manifest bey
 manifest is tracked. The checks that belong to a document module are that module's own. For `groundwork`
 they are `packages/workbench/groundwork/helper/doccheck` (the form of `docs/specs`, `docs/roadmaps` and
 `docs/decisions`: names, status, successor, candidate IDs) and `helper/refcheck` (the reference index
-`docs/references/index.json` against the tracked files), run as below once their owner has pinned each:
-`python3 -m workbench pin <project-id> <doccheck|refcheck> .workbench/workbench/groundwork/helper/<name> --root <dir> --kit 1`.
+`docs/references/index.json` against the tracked files), run as below. The installer pinned each when the install was confirmed; `python3 -m workbench pin <project-id> <doccheck|refcheck> .workbench/workbench/groundwork/helper/<name> --root <dir> --kit 1` replaces a pin by hand.
 After its own findings it runs the checks that installed modules declare (`checks` in `module.json`): each is a
 pinned kit helper started from the project root, and its `problem:` and `warning:` lines are printed under the
 module's name (`problem: <package>/<module>: <text>`). A module problem counts in "check found N problems" and
@@ -368,8 +368,13 @@ python3 -m workbench recover [<target> | --dir <path>]                    (owner
   - files all in the state after the plan and every store entry written: only the marker was
     left, and it goes;
   - `upgrade` and `add` only, files after and no store entry written: the marker goes and
-    `acknowledge` then lists exactly the written paths for the owner to accept. An `install` in
-    that state, or with a partial store, is refused with the advice to put the project back,
+    `acknowledge` then lists exactly the written paths for the owner to accept;
+  - `upgrade` and `add` only, files after and the store half written, each entry either old or new
+    (the baselines are written first, then the pins): the marker goes and the report says which entry
+    is still old. If the baselines, `acknowledge` lists the written paths; if the pins, the launcher
+    refuses each replaced helper until the owner runs `pin` for it. An entry that holds anything else
+    is refused. An `install` in
+    either state, or with a partial store, is refused with the advice to put the project back,
     run `recover` again and install again. The workbench does not repair a store.
 - **It never** writes or restores a file, removes a file other than the marker, removes a
   directory that holds anything, touches the store, or removes the target directory. More than
@@ -397,10 +402,12 @@ the code is and has no approval record; its tree hash is recorded in each projec
 
 ## Pins and the launcher
 
-A helper such as the commit helper is a file of a module, so a pulled edit could replace it. The
-owner pins it, and the launcher runs it only while its bytes still match the pin
+A helper such as the commit helper is a file of a module, so a pulled edit could replace it. It is
+pinned, by the installer in the step where the owner confirms the install, add or upgrade by digest for a
+declared command or check, or by the owner with `pin` for any other. The launcher runs it only while its
+bytes still match the pin
 (`workbench/pins.py`, `workbench/launch.py`). A pull that edits the helper changes its hash, so
-it is not run until the owner pins it again.
+it is not run until the owner acknowledges the change (`wb acknowledge` moves a pin the installer made) or pins it again.
 
 - **Pin** (owner-run, from a terminal, like `approve`):
   `python3 -m workbench pin <project-id> <name> <helper> --root <project-dir> [--kit N]`. `--kit N`

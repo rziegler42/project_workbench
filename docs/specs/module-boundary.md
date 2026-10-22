@@ -188,7 +188,10 @@ the way `launch` is: agent-safe, because it can run only a helper whose bytes ma
 because the owner, not the module, decides what is pinned.
 
 A command name that two installed modules declare is refused at install. A command whose helper is not
-pinned is refused with a message that says the owner pins it, as now.
+pinned is refused with a message that says so. The installer pins the helper of a declared command or check
+in the step where the owner confirms the install, add or upgrade by digest (`trust-and-approval.md`,
+"Pinned helpers"), so a command is unpinned only when its pin is absent, as in a project installed
+before the installer pinned.
 
 **The pin must name the declared helper.** Before it launches, the installer computes the helper's
 installed path from the declaration, `.workbench/<package>/<module>/<helper path>`, and requires the
@@ -199,12 +202,14 @@ pin answer the question "is this the declared helper", which the hash alone does
 
 **The pin also records how the helper runs.** The project holds both the manifest and each `module.json`, so
 a pulled commit can edit a declaration and recompute its hash in the manifest; the two then agree. The pin
-lives in the guarded store, so it records the `kit` number the owner pinned the helper with (`pin ... --kit N`;
-none for an `exec` helper). The launcher takes the kit from the pin, never from its caller, so `launch` and
+lives in the guarded store, so it records the `kit` number the helper was pinned with: the installer takes it
+from the declaration the owner confirmed, `pin ... --kit N` from the owner (none for an `exec` helper). The launcher takes the kit from the pin, never from its caller, so `launch` and
 `wb run` run a pinned helper the same way, and `wb run` also refuses unless the pin equals the declaration's. What a project can
 still change is the `arguments` list: it filters mistakes and is not a security boundary, so a helper must
 validate its own arguments. Whoever can write the project can rewrite a declaration together with its recorded
-hash, so the owner who pins a command's helper approves how it handles any first argument, not a closed set.
+hash, so the owner who pins a command's helper with `pin` approves how it handles any first argument, not a
+closed set. A pin the installer makes also records the declaration hash the owner confirmed, and `wb run` and
+`wb check` refuse when the manifest holds another, so a pull cannot widen `arguments` for it.
 
 The installer knows no command by name. The `code-work` entry in the agent-safe list, `dispatch.py`
 and the `code-work` branch in `cli.py` were replaced by this, and `code-work` declares its own command.

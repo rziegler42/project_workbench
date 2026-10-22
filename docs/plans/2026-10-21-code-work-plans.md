@@ -735,3 +735,29 @@ release approvals are recorded again. Two commits: the security fix (`7bea3e1`) 
   both run again. The plan's "attach, commit" steps are not part of it: the install has no git history in the
   test. Upgrade leaving plans alone was already tested. Full suite: 2421 tests in 4 roots, passing with
   `-W error`, with nothing skipped in the `claude` root.
+
+### Increment H — documentation and decisions (2026-10-22)
+
+The specs, the guide, the roadmap and two decision records now describe what was built.
+
+- **Edited:** `trust-and-approval.md` ("Pinned helpers": the installer pins on the confirmed digest, the
+  declaration hash, what `acknowledge` moves, the owner-typed pin limit in the residual risk, the pins file
+  format); `module-boundary.md` (the unpinned message, the kit and declaration the pin records);
+  `installer-interface.md` (the `pin` row, what the preview and `acknowledge` list, the `wb recover` case with
+  a half-written store); `module-contract.md` (`commands`: no naming convention); `docs/development.md`
+  (the command table, the groundwork checks no longer need a typed pin, the store entries, the pins in
+  `acknowledge`, the recover case); `harness-modules.md`, `code-work.md`, `AGENTS.md` and the roadmap
+  (`code-work-module` replaced by `code-work-approval` or `code-work-commit`, and `wb code-work` by `wb run
+  code-work`). `workbench/harnessplan.py` has no mention of `code-work-module` and was not changed.
+- **Decision records**, both `Proposed`: `2026-10-22-plan-check-in-the-shipped-helper` and
+  `2026-10-22-installer-pins-declared-helpers`; the index lists them. No accepted decision said the owner
+  pins a helper, so none is superseded. The index still lacks rows for some `2026-10-21-*` records
+  (`installer-runs-document-checks`, `reference-index-format`); not added here.
+- **Claims checked against a test or a run:** the pin listing and digest (`test_pinplan.py`,
+  `test_upgrade_pins.py`), the declaration refusal (`test_commands.py`, `test_checks.py`), the
+  acknowledge limit (`test_acknowledge_pins.py`), the recover case (`test_recover_pins.py`), and the whole
+  path (`test_codework_module.py`). Full suite: 2421 tests in 4 roots, passing with `-W error`.
+- **Left for the owner:** accepting the two records and `2026-10-21-harness-facts-from-layouts`; marking
+  the plan `Completed`. Not covered by any reviewer (increment G): hostile-tree runs against the helper, a
+  link swapped in for a project-side helper, a module removed from its package, a hostile pins file in
+  `acknowledge`, and a full upgrade after acknowledging a pulled declaration.

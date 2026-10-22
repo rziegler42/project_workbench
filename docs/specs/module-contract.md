@@ -74,7 +74,7 @@ Each module has one declaration file, `module.json`, at the root of its director
 | `fills` | Blocks the module contributes: the slot, and the source file. |
 | `writes` | The project paths the module writes, beyond its own namespace. |
 | `ships` | Executable or code-bearing items it ships, such as hooks or helper scripts. |
-| `commands` | Commands it offers, each a pinned helper it ships and the first arguments it accepts, run with `wb run`. *(built: verified, and run with `wb run`)* |
+| `commands` | Commands it offers, each a helper it ships and the first arguments it accepts, run with `wb run`. The installer pins the helper when the owner confirms the install; nothing in the name of the shipped file declares a command. *(built: verified, and run with `wb run`)* |
 | `checks` | Pinned Python helpers it contributes to `wb check`. *(built: verified, listed in the approval request, and run by `wb check`)* |
 | `layout` | Harness modules only: the layout description (see `harness-modules.md`). It is part of the declaration and its hash. |
 

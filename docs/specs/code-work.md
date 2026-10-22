@@ -364,5 +364,6 @@ installer's and is replaced on upgrade only while unedited.
 
 - How compaction guidance is delivered to opencode, once its installed version is
   known (`verify-opencode`).
-- Paths, field names and file formats remain proposals until the `code-work-module`
-  candidate writes the real schema.
+- Paths, field names and file formats remain proposals until the candidate that builds
+  each item writes the real schema: `code-work-plans` has written the plan format and its helper;
+  `code-work-commit` and `code-work-approval` write the rest.
