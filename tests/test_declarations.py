@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 from workbench import declarations as d
+from workbench import hashing
 
 FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "sample-package")
 
@@ -466,6 +467,63 @@ class ModuleTest(unittest.TestCase):
                      commands={"check.sh": {"helper": "tools/go"}}, checks=self.check_entry())
         self.refused("checks", ships=["scripts/check.sh", "tools/go"],
                      commands={"CHECK.sh": {"helper": "tools/go"}}, checks=self.check_entry())
+
+    def process(self, **changes):
+        """A process module with one command whose arguments are `region` and `check`."""
+        fields = dict(type="process", ships=["scripts/check.sh"],
+                      commands={"run-it": {"helper": "scripts/check.sh", "arguments": ["region", "check"]}})
+        fields.update(changes)
+        return fields
+
+    def test_a_module_without_an_approval_has_none(self):
+        self.assertIsNone(self.parse(module()).approval)
+        self.assertIsNone(self.parse(module(**self.process())).approval)
+
+    def test_a_process_module_may_declare_the_approval_command(self):
+        got = self.parse(module(**self.process(approval={"command": "run-it", "argument": "region"})))
+        self.assertEqual({"command": "run-it", "argument": "region"}, got.approval)
+        self.assertEqual(("run-it", "region"), (got.approval["command"], got.approval["argument"]))
+
+    def test_approval_refusals(self):
+        cases = {
+            "not an object": [],
+            "a string": "run-it",
+            "null": None,
+            "empty": {},
+            "no argument": {"command": "run-it"},
+            "no command": {"argument": "region"},
+            "an unknown key": {"command": "run-it", "argument": "region", "plan": "x"},
+            "command not a string": {"command": 1, "argument": "region"},
+            "argument not a string": {"command": "run-it", "argument": 1},
+            "a command the module does not declare": {"command": "other", "argument": "region"},
+            "a command differing in case": {"command": "Run-It", "argument": "region"},
+            "an argument the command does not list": {"command": "run-it", "argument": "evil"},
+            "an empty argument": {"command": "run-it", "argument": ""},
+            "an argument differing in case": {"command": "run-it", "argument": "Region"},
+        }
+        for label, approval in cases.items():
+            with self.subTest(label):
+                self.refused("approval", **self.process(approval=approval))
+
+    def test_approval_needs_a_command_that_lists_the_argument(self):
+        self.refused("approval", **self.process(
+            commands={"run-it": {"helper": "scripts/check.sh"}},
+            approval={"command": "run-it", "argument": "region"}))
+
+    def test_approval_is_refused_on_any_other_module_type(self):
+        approval = {"command": "run-it", "argument": "region"}
+        self.refused("approval", **self.process(type="module", approval=approval))
+        self.refused("approval", **dict(self.process(approval=approval), type=DELETE))
+        decl = copy.deepcopy(HARNESS)
+        decl["approval"] = approval
+        with self.assertRaises(d.DeclarationError) as ctx:
+            self.parse(decl)
+        self.assertEqual("approval", ctx.exception.rule)
+
+    def test_the_approval_is_part_of_the_declaration_hash_as_written(self):
+        plain = module(**self.process())
+        declared = module(**self.process(approval={"command": "run-it", "argument": "region"}))
+        self.assertNotEqual(hashing.declaration_hash(plain), hashing.declaration_hash(declared))
 
     def test_writes_path_rules(self):
         bad = ["/etc/passwd", "../x", "a/../../x", "a\\b", "C:/x", ".git/config", ".GIT/config",

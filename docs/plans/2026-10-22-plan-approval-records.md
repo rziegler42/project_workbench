@@ -309,4 +309,18 @@ round 3 fix was not reviewed.
 
 ## Result
 
-Not started.
+In progress. Increments A and B are done.
+
+- **A** (`aad363f`): the specs and the Proposed decision `2026-10-22-installer-records-plan-approval-module-computes-region`.
+- **B**: the `approval` declaration field (`workbench/declarations.py`; `Module.approval`, refused on any
+  type but `process` and for a command or argument the module does not declare), the shared pin check
+  `commands.check_pin` (`wb run` now uses it too), and `workbench/approvalcmd.py` (`resolve`, `region`,
+  `parse_report`). Tests: `tests/test_declarations.py` and the new `tests/test_approvalcmd.py`, with synthetic
+  modules only.
+  - The installer already refuses a second process module at install (`process-count`), so a project that
+    records two cannot be made by install; the resolver still refuses it, and its test simulates the second.
+  - The plan path handed to the helper must pass the path validator and may not start with `-`; this is an
+    addition to choice 7's rules, made because the helper takes the path as an argument.
+  - "Approved" in choice 5 is what `wb run` checks: the manifest records the module and its declaration hash
+    matches. The tree hash is not compared at run time, as for `wb run`; the helper's bytes are, through the pin.
+- **Next:** increment C (the record and the two commands).

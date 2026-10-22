@@ -97,6 +97,36 @@ def _arguments(command, args):
                            % (_shown(args[0]), _shown(command.name), ", ".join(allowed)))
 
 
+def check_pin(guarded, ident, found):
+    """The ``Pin`` of the declared command `found` (a ``Declared``), after it records exactly the declared
+    helper, the declaration hash the owner confirmed and the way the declaration says it runs. Raises
+    ``CommandError``; nothing has run."""
+    name, command = found.command.name, found.command
+    try:
+        pin = pins.lookup(guarded, ident, name)
+    except pins.PinError as exc:
+        raise CommandError("the command %s is not pinned (%s); its owner pins the module's helper "
+                           "with `pin`, and nothing was run" % (_shown(name), display.clean(str(exc))[:200]))
+    wanted = ".workbench/%s/%s/%s" % (found.package, found.module, command.helper)
+    if pin.path != wanted:
+        raise CommandError("the pin named %s records %s, which is not the declared helper %s; the "
+                           "owner pins the declared helper, and nothing was run"
+                           % (_shown(name), _shown(pin.path), wanted))
+    if pin.declaration is not None and pin.declaration != found.declaration:
+        raise CommandError("the declaration of %s/%s has changed since the pin named %s was made; the "
+                           "owner confirms the module's declaration with `wb upgrade`, or pins the helper "
+                           "again with `pin`, and nothing was run" % (found.package, found.module, _shown(name)))
+    kit = command.kit if command.runtime == "python" else None
+    if pin.kit != kit:
+        raise CommandError(
+            "the pin named %s records %s, but the declaration says the helper %s; the owner pins it "
+            "again with `pin`%s, and nothing was run" % (
+                _shown(name), "kit API %d" % pin.kit if pin.kit is not None else "no kit",
+                "runs through kit API %d" % kit if kit is not None else "runs directly",
+                " --kit %d" % kit if kit is not None else ""))
+    return pin
+
+
 def resolve(guarded, start, name, args, provides=None):
     """The launch request for ``wb run <name> <args>`` run from `start`, or ``CommandError``. With
     `provides`, the module that declares the command must provide that capability."""
@@ -124,29 +154,8 @@ def resolve(guarded, start, name, args, provides=None):
         raise CommandError("the module %s/%s that declares the command %s does not provide %s; nothing was run"
                            % (found.package, found.module, _shown(name), _shown(provides)))
     _arguments(command, args)
-    try:
-        pin = pins.lookup(guarded, ident, name)
-    except pins.PinError as exc:
-        raise CommandError("the command %s is not pinned (%s); its owner pins the module's helper "
-                           "with `pin`, and nothing was run" % (_shown(name), display.clean(str(exc))[:200]))
-    wanted = ".workbench/%s/%s/%s" % (found.package, found.module, command.helper)
-    if pin.path != wanted:
-        raise CommandError("the pin named %s records %s, which is not the declared helper %s; the "
-                           "owner pins the declared helper, and nothing was run"
-                           % (_shown(name), _shown(pin.path), wanted))
-    if pin.declaration is not None and pin.declaration != found.declaration:
-        raise CommandError("the declaration of %s/%s has changed since the pin named %s was made; the "
-                           "owner confirms the module's declaration with `wb upgrade`, or pins the helper "
-                           "again with `pin`, and nothing was run" % (found.package, found.module, _shown(name)))
-    kit = command.kit if command.runtime == "python" else None
-    if pin.kit != kit:
-        raise CommandError(
-            "the pin named %s records %s, but the declaration says the helper %s; the owner pins it "
-            "again with `pin`%s, and nothing was run" % (
-                _shown(name), "kit API %d" % pin.kit if pin.kit is not None else "no kit",
-                "runs through kit API %d" % kit if kit is not None else "runs directly",
-                " --kit %d" % kit if kit is not None else ""))
-    return Request(root, ident, name, args, kit)
+    pin = check_pin(guarded, ident, found)
+    return Request(root, ident, name, args, pin.kit)
 
 
 USAGE = "usage: wb run [--provides <capability>] <command> [<argument> ...]\n"
