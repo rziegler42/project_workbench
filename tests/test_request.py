@@ -169,10 +169,10 @@ class ModuleRequestTest(Base):
         self.assertIn("checks it offers (run by wb check): none", self.render("sample-notes"))
 
     def test_each_check_is_shown_with_its_helper_kit_and_pin_name(self):
-        checks = (declarations.Check("helper/doccheck", 1), declarations.Check("scripts/deep/lint", 2))
+        checks = (declarations.Check("helper/alpha", 1), declarations.Check("scripts/deep/lint", 2))
         text = request.render_module("p", module_with(checks=checks), Hashes)
-        self.assertIn("checks it offers (run by wb check): helper/doccheck runs through kit API 1; the "
-                      "owner pins it as doccheck, scripts/deep/lint runs through kit API 2; the owner "
+        self.assertIn("checks it offers (run by wb check): helper/alpha runs through kit API 1; the "
+                      "owner pins it as alpha, scripts/deep/lint runs through kit API 2; the owner "
                       "pins it as lint", text)
 
     def test_a_hostile_check_is_shown_cleaned(self):

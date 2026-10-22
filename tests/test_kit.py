@@ -5,6 +5,7 @@ import sys
 import unittest
 
 import workbench
+from tests import support_words
 from workbench import wbkit
 from workbench.wbkit import display
 
@@ -20,7 +21,7 @@ INDIRECT_MODULES = ("importlib", "runpy", "pkgutil", "imp", "zipimport")
 INDIRECT_NAMES = ("__import__", "import_module", "exec", "eval", "compile", "run_path", "run_module")
 
 # Names of things the kit must not know: the first-party modules and the harnesses.
-FORBIDDEN_WORDS = ("claude", "code-work", "codework", "groundwork", "opencode", "codex")
+FORBIDDEN_WORDS = tuple(support_words.module_names() + support_words.harness_names())
 
 
 def kit_sources():

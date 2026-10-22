@@ -499,13 +499,13 @@ class OrderTest(Base):
     def test_a_requirement_on_a_later_group_is_allowed(self):
         # A process module needing a capability that an ordinary module provides.
         path = self.package("p", {"h": HARNESS,
-                                  "code-work": {"type": "process", "requires": ["p:ground"]},
-                                  "groundwork": {"provides": ["p:ground"]}})
-        for select in (["h", "code-work", "groundwork"], ["h", "groundwork", "code-work"]):
+                                  "proc": {"type": "process", "requires": ["p:ground"]},
+                                  "plain": {"provides": ["p:ground"]}})
+        for select in (["h", "proc", "plain"], ["h", "plain", "proc"]):
             with self.subTest(select=select):
                 result = self.accepted(self.run_set(path, select))
-                self.assertEqual(result.order, (("p", "h"), ("p", "code-work"),
-                                                ("p", "groundwork")))
+                self.assertEqual(result.order, (("p", "h"), ("p", "proc"),
+                                                ("p", "plain")))
 
     def test_a_requirement_on_the_harness_orders_nothing_new(self):
         path = self.package("p", {"h": dict(HARNESS, provides=["hooks"]),

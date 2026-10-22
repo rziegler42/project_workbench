@@ -3,6 +3,7 @@ import shutil
 import tempfile
 import unittest
 
+from tests import support_words
 from workbench import base, firstparty, hashing
 
 
@@ -65,7 +66,7 @@ class BaseTest(unittest.TestCase):
         loaded = base.load_base()
         for rel, data in loaded.files.items():
             text = (rel + "\n" + data.decode("utf-8")).lower()
-            for name in ("claude", "opencode", "gemini", "cursor", "copilot", "codex", ".agents"):
+            for name in support_words.harness_names() + ["gemini", "cursor", "copilot", ".agents"]:
                 self.assertNotIn(name, text, "%s names %s" % (rel, name))
 
     def test_base_slot_markers_present_exactly_once(self):

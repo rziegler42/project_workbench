@@ -30,7 +30,7 @@ def load():
 
 
 helper = load()
-doccheck = support_doccheck.load()
+doccheck = support_doccheck.load("doccheck")
 
 GOOD = """# A plan
 

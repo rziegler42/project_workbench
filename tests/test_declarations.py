@@ -412,11 +412,11 @@ class ModuleTest(unittest.TestCase):
 
     def test_a_check_is_read(self):
         got = self.parse(module(ships=["scripts"], checks=[
-            {"helper": "scripts/doccheck", "kit": 1},
-            {"helper": "scripts/deep/refcheck", "kit": 2}])).checks
-        self.assertEqual([("scripts/doccheck", 1), ("scripts/deep/refcheck", 2)],
+            {"helper": "scripts/alpha", "kit": 1},
+            {"helper": "scripts/deep/beta", "kit": 2}])).checks
+        self.assertEqual([("scripts/alpha", 1), ("scripts/deep/beta", 2)],
                          [(c.helper, c.kit) for c in got])
-        self.assertEqual(["doccheck", "refcheck"], [c.pin_name for c in got])
+        self.assertEqual(["alpha", "beta"], [c.pin_name for c in got])
 
     def test_checks_refusals(self):
         many = [{"helper": "scripts/c%d" % n, "kit": 1} for n in range(17)]

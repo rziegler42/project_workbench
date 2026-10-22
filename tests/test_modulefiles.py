@@ -239,7 +239,7 @@ class HarnessLayoutTest(Base):
         self.assertEqual(self.check().problems, [])
 
     def test_harness_directory_only(self):
-        self.put(self.base + "/claude/skills/a.md")
+        self.put(self.base + "/fixture/skills/a.md")
         self.assertEqual(self.check().problems, [])
 
     def test_neither_neutral_nor_harness_directory(self):
@@ -266,50 +266,50 @@ class HarnessLayoutTest(Base):
 
     def test_exclusion_of_an_existing_item_is_a_warning(self):
         self.put(self.base + "/neutral/skills/a.md")
-        self.put(self.base + "/claude/manifest.json",
-                 json.dumps({"exclude": [{"item": "skills/a", "reason": "not for claude"}]}))
+        self.put(self.base + "/fixture/manifest.json",
+                 json.dumps({"exclude": [{"item": "skills/a", "reason": "not for fixture"}]}))
         result = self.check()
         self.assertEqual(result.problems, [])
         self.assertEqual(len(result.warnings), 1)
         self.assertIn("skills/a", result.warnings[0])
-        self.assertIn("not for claude", result.warnings[0])
+        self.assertIn("not for fixture", result.warnings[0])
 
     def test_exclusion_of_a_missing_item(self):
         self.put(self.base + "/neutral/skills/a.md")
-        self.put(self.base + "/claude/manifest.json",
+        self.put(self.base + "/fixture/manifest.json",
                  json.dumps({"exclude": [{"item": "skills/ghost", "reason": "r"}]}))
         self.refused("harness-layout")
 
     def test_exclusion_without_a_neutral_directory(self):
-        self.put(self.base + "/claude/manifest.json",
+        self.put(self.base + "/fixture/manifest.json",
                  json.dumps({"exclude": [{"item": "skills/a", "reason": "r"}]}))
         self.refused("harness-layout")
 
     def test_overridden_and_excluded(self):
         self.put(self.base + "/neutral/skills/a.md")
-        self.put(self.base + "/claude/skills/a.md")
-        self.put(self.base + "/claude/manifest.json",
+        self.put(self.base + "/fixture/skills/a.md")
+        self.put(self.base + "/fixture/manifest.json",
                  json.dumps({"exclude": [{"item": "skills/a", "reason": "r"}]}))
         result = self.refused("harness-layout")
         self.assertIn("both overridden and excluded", str(result.problems[0]))
 
     def test_override_without_exclusion_is_fine(self):
         self.put(self.base + "/neutral/skills/a.md")
-        self.put(self.base + "/claude/skills/a.md")
+        self.put(self.base + "/fixture/skills/a.md")
         self.assertEqual(self.check().problems, [])
 
     def test_exclusion_in_one_harness_does_not_block_override_in_another(self):
         self.put(self.base + "/neutral/skills/a.md")
-        self.put(self.base + "/claude/manifest.json",
+        self.put(self.base + "/fixture/manifest.json",
                  json.dumps({"exclude": [{"item": "skills/a", "reason": "r"}]}))
-        self.put(self.base + "/codex/skills/a.md")
+        self.put(self.base + "/other/skills/a.md")
         self.assertEqual(self.check().problems, [])
 
     def test_exclusion_reason_must_be_printable_and_short(self):
         self.put(self.base + "/neutral/skills/a.md")
         for reason in ("\x1b[2J\x1b]0;pwn\x07hi", "two\nlines", "x" * 201):
             with self.subTest(reason=reason):
-                self.put(self.base + "/claude/manifest.json",
+                self.put(self.base + "/fixture/manifest.json",
                          json.dumps({"exclude": [{"item": "skills/a", "reason": reason}]}))
                 self.refused("harness-layout")
 
@@ -325,7 +325,7 @@ class HarnessLayoutTest(Base):
                      '{"exclude": [{"item": "skills/a", "reason": "r"},'
                      ' {"item": "skills/a", "reason": "r"}]}'):
             with self.subTest(text=text):
-                self.put(self.base + "/claude/manifest.json", text)
+                self.put(self.base + "/fixture/manifest.json", text)
                 self.assertTrue(self.check().problems)
 
     def test_a_manifest_in_neutral_is_an_item_not_a_manifest(self):

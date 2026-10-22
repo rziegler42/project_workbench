@@ -42,7 +42,7 @@ def codework(helper=HELPER_V1, readme=README, index=INDEX_V1, policy=POLICY_V1, 
 class Fixture(support_install.Base):
     """A project installed as `install` writes it, from a package with the fixture modules."""
 
-    MODULES = {"h": (HARNESS, {}), "groundwork": support_install.groundwork(),
+    MODULES = {"h": (HARNESS, {}), "groundwork": support_install.docset(),
                "codework": codework()}
 
     def setUp(self):
@@ -97,8 +97,8 @@ class Verifies(Fixture):
         fields, files = codework()
         fields["provides"] = ["plans"]
         fields["requires"] = ["specs", "roadmaps", "decisions"]
-        gw_fields, gw_files = support_install.groundwork()
-        gw_fields["provides"] = list(support_install.GROUNDWORK_AREAS)
+        gw_fields, gw_files = support_install.docset()
+        gw_fields["provides"] = list(support_install.DOCSET_AREAS)
         path = self.package("workbench", {"groundwork": (gw_fields, gw_files),
                                           "code-work": (fields, files)})
         result = verify.verify_package(path, first_party=True, harness_required=False)

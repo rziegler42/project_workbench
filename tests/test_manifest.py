@@ -137,7 +137,7 @@ class ManifestTest(unittest.TestCase):
             manifest.parse("text")
 
     def test_no_harness_or_timestamp_field_allowed(self):
-        for key, value in (("harness", "claude"), ("time", "2026-01-01T00:00:00Z"),
+        for key, value in (("harness", "fixture"), ("time", "2026-01-01T00:00:00Z"),
                            ("created", 1), ("clone", "x")):
             doc = document()
             doc[key] = value

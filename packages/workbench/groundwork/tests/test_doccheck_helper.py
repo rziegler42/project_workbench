@@ -14,7 +14,7 @@ from tests import support_docs
 from tests.support_docs import DECISION, ROADMAP, SPEC
 from workbench.wbkit import safefs
 
-doccheck = support_doccheck.load()
+doccheck = support_doccheck.load("doccheck")
 
 
 class Base(support_docs.Base):

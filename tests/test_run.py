@@ -11,7 +11,7 @@ import tempfile
 import unittest
 import unittest.mock
 
-from tests import support_project
+from tests import support_project, support_words
 from tests.support_project import HELPER_PATH, tool
 from workbench import cli, commands, rules
 
@@ -196,11 +196,13 @@ class Classified(unittest.TestCase):
 
 
 class TheInstallerNamesNoModuleCommand(unittest.TestCase):
-    """The installer knows no command by name. This is the check for `code-work` only; the whole
-    boundary test belongs to plan `module-harness-paths`."""
+    """The installer knows no command by name. This is the check for the commands the modules declare;
+    the whole boundary test is `test_boundary`."""
 
-    def test_no_installer_source_names_the_code_work_command(self):
+    def test_no_installer_source_names_a_module_command(self):
         root = os.path.dirname(os.path.abspath(cli.__file__))
+        pattern = re.compile("|".join(re.escape(name) + "(?!-module)"
+                                      for name in support_words.command_names()))
         named = []
         for folder, dirs, files in os.walk(root):
             dirs[:] = [d for d in dirs if d not in ("shipped_approvals", "__pycache__")]
@@ -208,8 +210,8 @@ class TheInstallerNamesNoModuleCommand(unittest.TestCase):
                 if name.endswith(".py"):
                     path = os.path.join(folder, name)
                     with open(path, encoding="utf-8") as handle:
-                        # `code-work-module` is the name of a plan, not of the command.
-                        if re.search(r"code-work(?!-module)", handle.read()):
+                        # `<command>-module` is the name of a plan, not of the command.
+                        if pattern.search(handle.read()):
                             named.append(os.path.relpath(path, root))
         self.assertEqual([], named)
 

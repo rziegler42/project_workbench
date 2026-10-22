@@ -24,14 +24,13 @@ def forbid_real_store(case):
     case.addCleanup(finder.stop)
 
 
-STALE = ("the shipped approvals are stale until increment H of the groundwork-module plan, when "
-         "the owner runs release-approvals")
+STALE = "the shipped approvals are stale until the owner runs release-approvals"
 
 
 def released():
     """Whether the real first-party package matches its shipped approvals. It does not between
-    increment B of the groundwork-module plan, which adds a module to it, and increment H, which
-    has the owner re-record the approvals; a test that needs the real package skips meanwhile."""
+    a change to a module of it and the owner's re-recording of the approvals; a test that needs the
+    real package skips meanwhile."""
     from workbench import firstparty
     return firstparty.is_first_party(
         __import__("os").path.join(firstparty.default_distribution(), "packages", "workbench"))

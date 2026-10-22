@@ -1,6 +1,6 @@
-"""A fixture module shaped like `groundwork`, run through verify, install, attach and upgrade.
+"""A fixture module that seeds documentation directories, run through verify, install, attach and upgrade.
 
-Plan `2026-10-21-groundwork-module`, increment A. The module writes four README paths, fills the
+The module writes four README paths, fills the
 `docs-index` and `policy` slots, provides four capabilities and ships one neutral skill with a
 bundled file. These tests record what the installer already does for such a module, so the five
 decisions of the plan rest on a run and not on reading. Nothing here is the real module."""
@@ -11,7 +11,7 @@ import os
 import unittest
 import unittest.mock
 
-from tests import support_real, test_attach, test_preview as preview_tests, test_upgrade
+from tests import test_attach, test_preview as preview_tests, test_upgrade
 from workbench import approve, manifest, verify
 
 HARNESS = test_attach.HARNESS
@@ -24,7 +24,7 @@ SKILL = (b"---\nname: draft-thing\ndescription: Draft a thing from its template\
 TEMPLATE = b"# Title\n\nStatus: Draft\n"
 
 
-def groundwork(readmes=None, index=INDEX_V1, policy=POLICY_V1, version="1.0.0"):
+def docset(readmes=None, index=INDEX_V1, policy=POLICY_V1, version="1.0.0"):
     """The declaration and files of the fixture module (a `module`, no code, no helper)."""
     readmes = READMES if readmes is None else readmes
     files = {"files/" + rel: data for rel, data in readmes.items()}
@@ -44,10 +44,10 @@ def groundwork(readmes=None, index=INDEX_V1, policy=POLICY_V1, version="1.0.0"):
     return fields, files
 
 
-class Fixture(support_real.RealHarness, test_attach.Base):
+class Fixture(test_attach.Base):
     """A project installed as `install` writes it, from a package with the fixture module."""
 
-    MODULES = {"h": (HARNESS, {}), "groundwork": groundwork()}
+    MODULES = {"h": (HARNESS, {}), "docset": docset()}
 
     def setUp(self):
         test_attach.Base.setUp(self)
@@ -80,12 +80,12 @@ class Verifies(Fixture):
     def test_the_module_is_a_first_party_module_that_ships_no_code_and_needs_no_process_module(self):
         """It verifies with the unprefixed names the first-party package may provide, declares no
         `ships`, `helpers` or `requires`, and is a `module`, not a harness."""
-        fields, files = groundwork()
+        fields, files = docset()
         fields["provides"] = list(AREAS)
-        path = self.package("workbench", {"groundwork": (fields, files)})
+        path = self.package("workbench", {"docset": (fields, files)})
         result = verify.verify_package(path, first_party=True, harness_required=False)
         self.assertTrue(result.accepted, [str(p) for p in result.problems])
-        with open(os.path.join(path, "groundwork", "module.json"), "rb") as handle:
+        with open(os.path.join(path, "docset", "module.json"), "rb") as handle:
             declaration = json.loads(handle.read())
         for field in ("ships", "helpers", "requires", "slots"):
             self.assertNotIn(field, declaration)
@@ -93,25 +93,25 @@ class Verifies(Fixture):
         self.assertEqual(list(AREAS), declaration["provides"])
 
     def test_the_capabilities_must_be_prefixed_outside_the_first_party_package(self):
-        fields, files = groundwork()
+        fields, files = docset()
         fields["provides"] = list(AREAS)
-        path = self.package("p", {"groundwork": (fields, files)})
+        path = self.package("p", {"docset": (fields, files)})
         result = verify.verify_package(path, harness_required=False)
         self.assertFalse(result.accepted)
         self.assertIn("reserved for the first-party package",
                       " ".join(str(p) for p in result.problems))
 
     def test_one_module_may_fill_both_base_slots_from_sources_under_files(self):
-        path = self.package("p", {"h": (HARNESS, {}), "groundwork": groundwork()})
+        path = self.package("p", {"h": (HARNESS, {}), "docset": docset()})
         result = verify.verify_package(path, harness_required=False)
         self.assertTrue(result.accepted, [str(p) for p in result.problems])
 
     def test_a_file_under_files_that_writes_does_not_name_is_not_a_problem(self):
         """A gap, not a blocker: `files/` is reserved, so a stray file there is accounted for and
         never written. Increment B's test for 'no other file under the four areas' covers it."""
-        fields, files = groundwork()
+        fields, files = docset()
         files["files/docs/specs/stray.md"] = b"never written\n"
-        path = self.package("p", {"h": (HARNESS, {}), "groundwork": (fields, files)})
+        path = self.package("p", {"h": (HARNESS, {}), "docset": (fields, files)})
         result = verify.verify_package(path, harness_required=False)
         self.assertTrue(result.accepted, [str(p) for p in result.problems])
 
@@ -128,10 +128,10 @@ class Installed(Fixture):
     def test_both_fills_land_between_markers_in_the_base_files(self):
         self.ready()
         agents, index = self.read("AGENTS.md"), self.read("docs/README.md")
-        self.assertIn(b"<!-- BEGIN p/groundwork slot:policy -->\n" + POLICY_V1
-                      + b"<!-- END p/groundwork slot:policy -->\n", agents)
-        self.assertIn(b"<!-- BEGIN p/groundwork slot:docs-index -->\n" + INDEX_V1
-                      + b"<!-- END p/groundwork slot:docs-index -->\n", index)
+        self.assertIn(b"<!-- BEGIN p/docset slot:policy -->\n" + POLICY_V1
+                      + b"<!-- END p/docset slot:policy -->\n", agents)
+        self.assertIn(b"<!-- BEGIN p/docset slot:docs-index -->\n" + INDEX_V1
+                      + b"<!-- END p/docset slot:docs-index -->\n", index)
         self.assertIn(b"<!-- @slot: policy -->", agents)
         self.assertIn(b"<!-- @slot: docs-index -->", index)
 
@@ -142,54 +142,54 @@ class Installed(Fixture):
         self.ready()
         document = self.document()
         modules = {(p["name"], m["name"]): m for p in document["packages"] for m in p["modules"]}
-        self.assertEqual("1.0.0", modules[("p", "groundwork")]["version"])
+        self.assertEqual("1.0.0", modules[("p", "docset")]["version"])
         self.assertEqual(["declaration", "name", "tree", "version"],
-                         sorted(modules[("p", "groundwork")]))
+                         sorted(modules[("p", "docset")]))
         for rel, data in READMES.items():
             item = self.entry(rel)
             self.assertEqual("seeded", item["class"], rel)
             self.assertEqual(hashlib.sha256(data).hexdigest(), item["hash"])
         self.assertEqual("seeded", self.entry("AGENTS.md")["class"])
-        self.assertEqual("slot block", self.entry("AGENTS.md", "p/groundwork")["class"])
-        self.assertEqual("slot block", self.entry("docs/README.md", "p/groundwork")["class"])
+        self.assertEqual("slot block", self.entry("AGENTS.md", "p/docset")["class"])
+        self.assertEqual("slot block", self.entry("docs/README.md", "p/docset")["class"])
 
     def test_the_install_keeps_a_copy_of_the_module_in_the_workbench_namespace(self):
         """The module's files, the skill and its bundled file included, are copied under
         `.workbench/<package>/<module>/` as module-owned files, which is where attach reads the
         neutral items from. The block sources and the README sources are copied there too.
-        Nothing is written to `.claude` and no `templates/` directory is made under `docs/`."""
+        Nothing is written to the harness directory and no `templates/` directory is made under `docs/`."""
         self.ready()
         content = self.content()
-        base = ".workbench/p/groundwork/"
+        base = ".workbench/p/docset/"
         self.assertEqual(TEMPLATE, content[base + "harness/neutral/skills/draft-thing/template.md"])
         self.assertEqual(SKILL, content[base + "harness/neutral/skills/draft-thing/SKILL.md"])
         self.assertEqual(POLICY_V1, content[base + "files/blocks/policy.md"])
         self.assertEqual(READMES["docs/specs/README.md"],
                          content[base + "files/docs/specs/README.md"])
-        for rel in (".claude", "docs/blocks", "docs/templates", "CLAUDE.md"):
+        for rel in (".fixture", "docs/blocks", "docs/templates", "FIXTURE.md"):
             self.assertNotIn(rel, content, rel)
         for rel in ("harness/neutral/skills/draft-thing/SKILL.md", "files/docs/specs/README.md"):
             self.assertEqual("module-owned", self.entry(base + rel)["class"], rel)
 
 
 class Attached(Fixture):
-    def test_the_bundled_file_reaches_the_skill_directory_for_claude(self):
+    def test_the_bundled_file_reaches_the_skill_directory(self):
         self.ready()
         code, out, err = self.attach()
         self.assertEqual(0, code, err)
         self.assertEqual(b'---\nname: "draft-thing"\ndescription: "Draft a thing from its template"\n'
                          b'---\nCopy the template beside this file and fill it in.\n',
-                         self.read(".claude/skills/draft-thing/SKILL.md"))
-        self.assertEqual(TEMPLATE, self.read(".claude/skills/draft-thing/template.md"))
+                         self.read(".fixture/skills/draft-thing/SKILL.md"))
+        self.assertEqual(TEMPLATE, self.read(".fixture/skills/draft-thing/template.md"))
         recorded = {f["path"] for f in self.planned()["files"]}
-        self.assertIn(".claude/skills/draft-thing/template.md", recorded)
-        self.assertIn(".claude/skills/draft-thing/SKILL.md", recorded)
+        self.assertIn(".fixture/skills/draft-thing/template.md", recorded)
+        self.assertIn(".fixture/skills/draft-thing/SKILL.md", recorded)
 
     def test_the_skill_files_are_excluded_from_git_and_the_install_is_unchanged(self):
         self.ready()
         before = {rel: data for rel, data in self.content().items() if data not in ("dir",)}
         self.assertEqual(0, self.attach()[0])
-        self.assertEqual(b"/CLAUDE.md\n/.claude/\n", self.read(".git/info/exclude"))
+        self.assertEqual(b"/FIXTURE.md\n/.fixture/\n", self.read(".git/info/exclude"))
         after = self.content()
         for rel, data in before.items():
             if rel != ".git/info/exclude":
@@ -238,11 +238,11 @@ class Upgraded(Fixture):
 
     def v2(self, **kwargs):
         readmes = {rel: data.replace(b"v1", b"v2") for rel, data in READMES.items()}
-        return readmes, groundwork(readmes, version="1.1.0", **kwargs)
+        return readmes, docset(readmes, version="1.1.0", **kwargs)
 
     def test_an_unedited_slot_block_is_replaced_and_an_unedited_readme_is_left(self):
         readmes, module = self.v2(index=b"index v2\n", policy=b"policy v2\n")
-        new = self.upgraded(groundwork=module)
+        new = self.upgraded(docset=module)
         code, out, err = self.upgrade("--package", new)
         self.assertEqual((0, ""), (code, err), out)
         self.assertIn(b"policy v2\n", self.read("AGENTS.md"))
@@ -253,13 +253,13 @@ class Upgraded(Fixture):
             self.assertIn("skip %s (a newer version exists; the project's file is not touched)"
                           % rel, out)
         self.assertEqual("1.1.0", [m["version"] for p in self.document()["packages"]
-                                   for m in p["modules"] if m["name"] == "groundwork"][0])
+                                   for m in p["modules"] if m["name"] == "docset"][0])
         self.assertEqual(readmes["docs/specs/README.md"],
-                         self.read(".workbench/p/groundwork/files/docs/specs/README.md"))
+                         self.read(".workbench/p/docset/files/docs/specs/README.md"))
 
     def test_an_edited_readme_is_left_alone_and_no_conflict_is_reported(self):
         readmes, module = self.v2()
-        new = self.upgraded(groundwork=module)
+        new = self.upgraded(docset=module)
         target = "docs/specs/README.md"
         self.edit(target, lambda data: data + b"mine\n")
         test_upgrade.acknowledge_path(self, target)
@@ -271,19 +271,19 @@ class Upgraded(Fixture):
 
     def test_an_edited_slot_block_is_a_conflict_and_the_block_is_named(self):
         readmes, module = self.v2(policy=b"policy v2\n")
-        new = self.upgraded(groundwork=module)
+        new = self.upgraded(docset=module)
         self.edit("AGENTS.md", lambda data: data.replace(POLICY_V1, POLICY_V1 + b"my rule\n"))
         test_upgrade.acknowledge_path(self, "AGENTS.md")
         mine = self.read("AGENTS.md")
         code, out, err = self.upgrade("--package", new)
         self.assertEqual((0, ""), (code, err), out)
         self.assertEqual(mine, self.read("AGENTS.md"))
-        self.assertIn("conflict AGENTS.md block p/groundwork slot:policy", out)
+        self.assertIn("conflict AGENTS.md block p/docset slot:policy", out)
 
     def test_hand_written_documents_in_the_areas_are_never_changed(self):
         """The module owns no spec, roadmap, decision or reference, so an upgrade leaves them."""
         readmes, module = self.v2()
-        new = self.upgraded(groundwork=module)
+        new = self.upgraded(docset=module)
         mine = {"docs/specs/auth.md": b"# Auth\n\nStatus: Current\n",
                 "docs/roadmaps/plan.md": b"# Plan\n",
                 "docs/decisions/2026-10-21-x.md": b"# X\n\nStatus: Accepted\n",

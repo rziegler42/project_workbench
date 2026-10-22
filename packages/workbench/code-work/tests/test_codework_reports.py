@@ -333,7 +333,7 @@ class Report(Reports):
         which candidate a plan completes. (`doccheck` does not hide a heading inside an HTML comment and
         the helper does; that is the one known difference and it errs toward reporting less.)"""
         from tests import support_doccheck
-        doccheck = support_doccheck.load()
+        doccheck = support_doccheck.load("doccheck")
         corpus = [
             roadmap("alpha", "beta-two", extra="```\n### x — y\n```\n"),
             "# R\n\nStatus: Active\n\n## **Candidates**\n\n### a — A\n\n## Other\n\n### b — B\n",

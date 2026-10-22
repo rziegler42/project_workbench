@@ -4,7 +4,7 @@ A module's tests may import only `tests.support*` (see `test_module_test_imports
 installer's project, upgrade and install fixtures; a module test reaches them here and not through the
 installer's test files."""
 
-from tests import test_attach, test_groundwork_fixture, test_install, test_upgrade
+from tests import test_attach, test_docset_fixture, test_install, test_upgrade
 
 HARNESS = test_attach.HARNESS
 Base = test_attach.Base
@@ -14,5 +14,5 @@ SEED = test_install.SEED
 Typist = test_install.Typist
 correct = test_install.correct
 InstallBase = test_install.InstallBase
-groundwork = test_groundwork_fixture.groundwork
-GROUNDWORK_AREAS = test_groundwork_fixture.AREAS
+docset = test_docset_fixture.docset
+DOCSET_AREAS = test_docset_fixture.AREAS

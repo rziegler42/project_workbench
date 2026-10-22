@@ -1,4 +1,4 @@
-"""Fixtures for the groundwork helpers' tests: documents to write under a temporary project and the
+"""Fixtures for the document helpers' tests: documents to write under a temporary project and the
 directory fixture that holds them. Standard library only."""
 
 import os
