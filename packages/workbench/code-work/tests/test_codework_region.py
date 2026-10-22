@@ -11,7 +11,7 @@ import os
 import re
 import unittest
 
-from test_codework_helper import Project, helper, plan
+from test_codework_helper import Project, doccheck, helper, plan
 from tests import support_install
 
 NAME = "2026-10-22-thing.md"
@@ -188,15 +188,17 @@ class Spoofs(Region):
     def test_a_heading_ends_an_excluded_section_in_whatever_form_it_takes(self):
         for ender in ("## Other", "## other", "## OTHER", "  ## Other", "   ## Other", "# Other", "## ", "##",
                       "#", "Other\n=====", "Other\n-----", "Other\n--", "Other\n==", "---", "===",
-                      "-", "  Other\n  ---"):
+                      "-", "  Other\n  ---",
+                      "<h2>Other</h2>", "<H1 id=x>Other", "<hr>", "<hr/>", "> ## Other", "- ## Other", "- x\n    ## Other",
+                      "    ## Other", "***", "___", "* * *", "> ---", "1. # Other"):
             with self.subTest(ender):
                 content = plan() + "\n## Result\n\ngone\n\n" + ender + "\n\nhidden text\n"
                 self.assertTrue(self.hashed(content))
                 self.assertFalse(self.hashed(content, "gone"))
 
     def test_an_excluded_section_is_not_ended_by_a_deeper_heading_or_a_line_that_only_looks_like_one(self):
-        for inner in ("### Deeper", "#### Deeper", "####### Seven", "#hashtag", "#!shebang", "- item", "* * *",
-                      "1. one", "    ## indented code", "`## Other`", "text ## Other"):
+        for inner in ("### Deeper", "#### Deeper", "####### Seven", "#hashtag", "#!shebang", "- item", "* item",
+                      "1. one", "`## Other`", "text ## Other"):
             with self.subTest(inner):
                 content = plan() + "\n## Result\n\n" + inner + "\n\ngone\n"
                 self.assertFalse(self.hashed(content, "gone"))
@@ -204,6 +206,43 @@ class Spoofs(Region):
     def test_text_after_an_excluded_section_that_a_viewer_shows_as_a_section_is_hashed(self):
         content = plan() + "\n## Result\n\nfine\n\nSneaky\n------\n\nhidden text\n"
         self.assertTrue(self.hashed(content))
+
+    def test_a_heading_a_viewer_shows_is_hashed_whatever_the_helper_takes_for_a_comment_or_a_fence(self):
+        """Review round: text appended after a result must not stay unhashed because the helper reads a comment
+        or a fence where a viewer reads a heading."""
+        for hide in ("    <!--\n## Extra\nhidden text\n    -->",                 # indented opener is code to a viewer
+                     "<!-- " + "a" * 2100 + " -->\n## Extra\nhidden text\n<!-- x -->",   # past the line bound
+                     "note <!-- x\n## Extra\nhidden text\n-->",                 # opened mid-line
+                     "-      ```\n## Extra\nhidden text\n```"):                 # five spaces: code, not a fence
+            with self.subTest(hide[:20]):
+                content = plan() + "\n## Result\n\nfine\n\n" + hide + "\n"
+                self.assertTrue(self.hashed(content))
+                self.assertFalse(self.hashed(content.replace("hidden text", "gone"), "fine"))
+
+    def test_the_region_and_the_installers_document_reader_agree_on_which_result_heading_is_real(self):
+        """Plan increment D: for fences and quotes, the left-out sections are those the document check also sees as
+        headings (the document check does not read comments, which only makes it see more headings)."""
+        for body in ("## Result\n\nx\n", "```\n## Result\n```\n", "~~~\n## Result\n~~~\n", "> ## Result\n", "- ```\n  ## Result\n  ```\n", "````\n```\n## Result\n```\n````\n",
+                     "    ## Result\n"):
+            with self.subTest(body):
+                content = plan() + "\n" + body
+                seen = any(line == "## Result" and plain for _, line, plain in doccheck._lines(content))
+                real = any(line == "## Result" and plain for _, line, plain in helper.lines_of(content))
+                self.assertEqual(seen, real)
+                if seen:
+                    self.assertEqual(["Status", "Result"], json.loads(self.region_report(content))["unhashed"])
+                else:
+                    self.assertEqual(["Status"], json.loads(self.region_report(content))["unhashed"])
+
+    def region_report(self, content):
+        self.write("docs/plans/" + NAME, content)
+        code, out, err = self.region(PLAN)
+        self.assertEqual((0, ""), (code, err), out)
+        return out
+
+    def test_a_status_line_over_the_bound_is_refused(self):
+        self.refused(plan(status="Approved. " + "EVIL " * 100) + TAIL, "longer than")
+        self.hash_of(plan(status="Approved. " + "x" * 150) + TAIL)
 
     def test_a_duplicated_excluded_heading_is_refused(self):
         self.refused(text() + "\n## Result\n\nagain\n", "more than one")

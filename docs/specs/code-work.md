@@ -145,9 +145,10 @@ reader that `check` already uses, and the module declares `approval: {"command":
 `trust-and-approval.md`, "Plan approval records", states. The region is the whole plan except the status line, the
 review record and the result, with line endings, trailing whitespace and the final newline normalized. Only the
 exact headings `## Review record`, `## Second opinion` and `## Result`, outside a fence, a quotation and an HTML
-comment, start a left-out section, and any heading of level one or two, in any case or indentation, and any
-setext underline or rule, ends it, so that text a reader could take for another section is always hashed. A
-plan with a duplicated left-out heading, with no single status line before its first heading, with a fence or
+comment, start a left-out section, and any heading of level one or two (also inside a quotation or a list item,
+or as an HTML heading), and any setext underline or rule, ends it whatever the fence or comment state and in any
+case or indentation, so that text a reader could take for another section is always hashed. A
+plan with a duplicated left-out heading, with no single status line (of at most 200 characters) before its first heading, with a fence or
 comment that is never closed, or that is not UTF-8, larger than the check reads or not directly in
 `docs/plans/`, is refused rather than guessed. The owner approves with `wb approve-plan <plan>`; an agent reads `wb plan-status <plan>`; the delegated
 record waits for a `peer-review` provider.

@@ -95,7 +95,7 @@ When this plan is done:
    that `wb run` uses, with the same refusals, and a target option is not accepted. `<plan>` is a path relative to
    the current directory or absolute; it is converted to a path relative to the project root and refused if it is
    outside the root, absolute outside it, empty, holds a NUL or a `..`, or has a link in any component, the last
-   included. The installer opens nothing in the plan itself: it hands the helper the root-relative path, and the
+   included. The installer reads no content of the plan (it checks each path component with `lstat`): it hands the helper the root-relative path, and the
    helper reads it bounded and without following a link. The record names the plan by that root-relative path.
    `approve-plan` runs the command twice, once to show the hash and once after the typed answer, and writes the
    record only if both reports are equal; a plan swapped between the two runs therefore yields no record, and a
@@ -298,6 +298,62 @@ reviewed.
 The review is not an approval. The owner approved the plan on 2026-10-22, after the third round, knowing that the
 round 3 fix was not reviewed.
 
+Increment E reviews, on 2026-10-22, at the owner's request ("Do the reviews"), of the code of increments B to D.
+Both reviewers were read-only subagents of this session; their findings are untrusted and were checked here.
+
+- Security review (`security-reviewer`; it ran out of turns once and was resumed, and its list of unrun experiments
+  is below):
+  - SR-F1 (Medium, reproduced here, fixed): text appended after `## Result` stayed unhashed when a heading was
+    hidden by the helper's own fence or comment state (an indented comment opener, a comment line over the
+    2,000-character bound, a comment opened mid-line and closed later, a list item with five spaces before a
+    fence). `region_of` now ends an
+    excluded section at any heading, rule or underline in the plan's own lines whatever the fence, comment or
+    quote state, which can only hash more. Regression test: `test_a_heading_a_viewer_shows_is_hashed_...`.
+  - SR-F2 (Low, fixed): the `Status:` line could carry up to 1 MiB of unhashed text. The helper now refuses a
+    `Status:` line over 200 characters. Regression test: `test_a_status_line_over_the_bound_is_refused`.
+  - Bypass attempt on the SR-F1 fix (same reviewer, second pass, same day, at the owner's request):
+    - BP-F1 (Medium, reproduced by the reviewer, fixed): a quotation or list item holding a heading, an HTML
+      heading or rule, and a thematic break (three or more of `*`, `_`, `-`) did not end an excluded section.
+      `_starts_section` now also strips leading quote and list markers and indentation, and tests HTML headings
+      and rules; regression cases are in `test_a_heading_ends_an_excluded_section_in_whatever_form_it_takes`.
+      An indented `## ...` line and `* * *` now end an excluded section, which only hashes more.
+    - BP-F2 (Low, not changed, by design): an HTML block (`div`, `pre`, `script`) that already holds a left-out
+      heading hides what follows it from a reader; and a left-out section added after approval to a plan that had
+      none leaves the hash unchanged, because the left-out parts are not hashed. The approval screen lists the
+      left-out names. Hashing the names was tried and dropped: it made a plan with and without a review record
+      hash differently, which the normal flow (a review record added after drafting) must not do.
+    - BP-F3 (Low, not changed): the text after the status word (up to 200 characters) is unhashed, as the plan's
+      design says; a hard-break change in trailing spaces is cosmetic.
+    - BP-F4 (Low, inherent to the safe direction): a code fence inside a Result that holds a line of `#`, `---`
+      or similar ends the exclusion, so quoting shell comments in a Result after approval makes it stale.
+    - `check` reads increments only under `## Increments`, so an increment-shaped heading under a Result is text.
+    - Found sound by test with fake executables: a helper that hangs (also ignoring TERM and HUP) is stopped at the
+      timeout; a grandchild holding the pipe is killed; output over 4,096 bytes, two lines, no newline, an extra or
+      duplicate key and control-character names are refused; a plan swapped after the second run is recorded with
+      the shown hash and then reads as changed; a link or a FIFO at the record path is refused; the record is mode
+      0644 inside 0700 store directories. Variants a reader does not take for a heading (non-breaking space, form
+      feed, NEL, U+2028, NUL, tab, four spaces, full-width `#`) stay hashed.
+    - The reviewer did not run the planted-opener attacks end to end.
+  - Found sound by test: line ends and trailing white space, status-line handling, heading spoofs (case, indent,
+    tab, Cyrillic, quote), section boundaries, unclosed fences and comments, `parse_report` (extra line, NaN,
+    duplicate key, bool format, upper-case hash, extra key, control characters, 17 names), `planapprovals.parse`
+    (truncated, `..`, `.git`, 2,001 entries, 3 MiB, extra field, control characters), the terminal check.
+- Workflow review (`workflow-reviewer`): no Critical or High findings; criteria 1 to 7 met.
+  - WR-F1 (Medium): the specs and the Proposed decision say the tree hash is compared; the code compares the
+    declaration hash and the helper's bytes through the pin, as `wb run` does. Fixed at the owner's word: the
+    spec (`trust-and-approval.md`) and the Proposed decision now say so.
+  - WR-F2 (Low): increment F omits `module-contract.md`, `installer-interface.md` and three `code-work.md`
+    markers. Not edited in the increment; the owner's word was to record it. Increment F must also update
+    `module-contract.md`, `installer-interface.md` and `code-work.md` (its lines on the region and on what is not
+    built), whatever its affected-areas line says.
+  - WR-F3 (Low): no test of agreement with `check` on the sections of the region (increment D, step 1). Fixed: a test compares the region's left-out names with the document check's reader
+    for fences and quotations (that reader does not read comments).
+  - WR-F4 (Low): Choice 7's "opens nothing in the plan" and the `./-name` note in the Result are not exact.
+    Fixed at the owner's word: Choice 7 now says the installer reads no content of the plan and checks each path
+    component with `lstat`, and the note says to name such a plan from a directory below the root or rename it.
+  - WR-F5 (Low): an old approval stays valid if the text returns to it; there is no revocation. By design.
+  - WR-F6 (Low): the installer has no test of its own for plan heading names. Optional.
+
 ## Deferred work
 
 - Delegated approval, its helper and its record fields (needs `review-engine`).
@@ -329,7 +385,7 @@ In progress. Increments A, B, C and D are done.
   (now "built"). Tests: `tests/test_planapprovals.py` (35 tests; a synthetic helper that hashes the plan without
   its `Status:` line) and the rules list in `tests/test_permissions.py`.
   - A plan named by a path whose first segment starts with `-` is refused when it reaches the helper, and an
-    argument that starts with `-` is a usage error (exit 2); name such a plan as `./-name`.
+    argument that starts with `-` is a usage error (exit 2); name such a plan from a directory below the root, or rename it (from the root `./-name` is the same path).
   - `approve-plan` re-resolves the command and re-reads the report after the typed answer, and compares the
     plan path, the process declaration, the helper hash and the report; any difference writes nothing.
   - Not done here: the Claude module's `deny` rendering is driven by `OWNER_RUN`, so it follows; the
@@ -349,4 +405,19 @@ In progress. Increments A, B, C and D are done.
     policy test now allows exactly `wb approve-plan` and `wb plan-status`, and the skill names the approve-plan
     command without the `wb` prefix.
   - The module's tree hash changed, so the shipped approval of the package is stale until increment E.
-- **Next:** increment E (review and release).
+- **E (in progress, not committed):** the two reviews are done and recorded in the Review record. Fixed: SR-F1 and
+  SR-F2 in the `code-work` helper (`_starts_section` now works on the plan's own lines and ignores fence, comment
+  and quote state; `_STATUS_BOUND` of 200 characters), with regression tests in `test_codework_region.py`
+  (now 44 tests), then BP-F1 after the bypass attempt (the helper's `_WRAPPED_START`). Suites: the first full run found three failures, all from this plan's own Review record text
+  containing a literal comment opener (the helper rightly read it as an unclosed comment); the text was reworded and the
+  `code-work` root is green (189 tests, 2 skipped); the other five roots were green in the same run.
+  - Also done: the spec and decision text on the tree hash, Choice 7's wording, the agreement test, the region
+    sentence in `docs/specs/code-work.md`.
+  - Release, at the owner's word ("Run it for me"): `release-approvals` wrote 6 approvals for the one first-party
+    package, adding three record directories (`475ea557adea`, `f4030e78225d`, `f856ee6b5d74`). After a preview
+    and the owner's "remove them", the three stale directories it named (`102e1f02117f`, `1a864e564482`,
+    `b213e71ca761`) were removed with `claude-workflow remove`.
+  - Suite after the last change: 2904 tests in 6 roots, OK (tests 2186, ask-codex 90, claude 30, code-work 190,
+    groundwork 178, safe-git 230).
+  - Open: the commit.
+- **Next:** finish increment E, then F.

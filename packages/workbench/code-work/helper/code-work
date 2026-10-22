@@ -66,6 +66,10 @@ _NEAR = re.compile(r"\A[ ]{0,3}#{1,6}[ \t]+Increment\b", re.I)
 _CANDIDATE_HEAD = re.compile(r"\A[ ]{0,3}" + _ITEM + r"###[ \t]+([^\s:]+)")
 _UNDERLINE = re.compile(r"\A[ ]{0,3}(=+|-+)[ \t]*\Z")
 _LINE = 2000
+_STATUS_BOUND = 200
+# What a reader may show as a section start inside a quote or a list item, or as an HTML heading or rule.
+_WRAPPED = re.compile(r"\A(?:[ \t]+|>|[-*+](?=[ \t])|\d{1,9}[.)](?=[ \t]))*")
+_WRAPPED_START = re.compile(r"\A(?:#{1,2}(?:[ \t]|\Z)|([-*_])(?:[ \t]*\1){2,}[ \t]*\Z|<(?:h[1-6]|hr)(?:[ \t/>]|\Z))", re.I)
 _HEADING = 200
 # The hashed region: an excluded section starts at exactly one of these headings and ends at any heading,
 # of whatever form, so nothing a reader could take for another section is ever left out.
@@ -707,16 +711,18 @@ def _status_line(marked):
     return found[0]
 
 
-def _starts_section(marked, index):
+def _starts_section(whole, index):
     """Whether the line at `index` could be taken for the start of a section: a heading of level one or
-    two, a line of `=` or `-` (a rule, or the underline of a heading), or the text such an underline follows."""
-    number, line, plain = marked[index]
-    if not plain:
-        return False
+    two, a line of `=` or `-` (a rule, or the underline of a heading), or the text such an underline follows.
+    The test is made on the plan's own lines and ignores any fence, comment or quote, because a reader may not
+    see them as the helper does; a false match only hashes more."""
+    line = whole[index]
     if _BOUNDARY.match(line) or _UNDERLINE.match(line):
         return True
-    following = marked[index + 1] if index + 1 < len(marked) else None
-    return bool(line.strip() and following and following[2] and _UNDERLINE.match(following[1]))
+    if _WRAPPED_START.match(line.lstrip()) or _WRAPPED_START.match(line[_WRAPPED.match(line).end():]):
+        return True
+    following = whole[index + 1] if index + 1 < len(whole) else None
+    return bool(line.strip() and following is not None and _UNDERLINE.match(following))
 
 
 def region_of(text):
@@ -732,6 +738,8 @@ def region_of(text):
     if len(whole) != len(marked):
         raise Refused("the plan's lines cannot be read")
     status = _status_line(marked)
+    if len(whole[status - 1]) > _STATUS_BOUND:
+        raise Refused("the `Status:` line is longer than %d characters, and it is not part of the region" % _STATUS_BOUND)
     kept, names, seen, excluded = [], [], set(), False
     for index, (number, line, plain) in enumerate(marked):
         if number == status:
@@ -746,7 +754,7 @@ def region_of(text):
             names.append(head.group(1))
             excluded = True
             continue
-        if _starts_section(marked, index):
+        if _starts_section(whole, index):
             excluded = False
         if not excluded:
             kept.append(whole[index].rstrip(" \t"))

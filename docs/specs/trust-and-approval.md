@@ -361,8 +361,9 @@ prose above and this section differ in precision, this section is what the code 
 
 - **The region command.** A `process` module declares `approval: {"command", "argument"}` (`module-contract.md`).
   The installer resolves exactly one process module that declares it, from the committed manifest, and runs the
-  command as `wb run` does: the module installed and approved, its declaration and tree hash equal to the
-  manifest's, the helper pinned for that command and unchanged. It runs `<command> <argument> <plan>` with the
+  command as `wb run` does: the module installed and approved, its declaration hash equal to the
+  manifest's, the helper pinned for that command and its bytes unchanged (the tree hash is not compared at run
+  time). It runs `<command> <argument> <plan>` with the
   plan's path relative to the project root, with standard input closed, and accepts, within 4,096 bytes of
   standard output, one JSON object and a newline and nothing else:
   `{"format": 1, "region_hash": "<64 lowercase hex>", "unhashed": ["<name>", ...]}`, with at most 16 names of at

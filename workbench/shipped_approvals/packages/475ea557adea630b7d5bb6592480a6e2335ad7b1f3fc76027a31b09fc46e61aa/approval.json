@@ -13,12 +13,12 @@
     {
       "declaration_hash": "4a861f15d8bbea05d84fa3ab266e1b82f05094510d4816ed858ceb365148163d",
       "name": "claude",
-      "tree_hash": "9cd54732999e3cec746624bdb3cbec2c3e405f7aa44b18f99ef3f1caa3c9cea0"
+      "tree_hash": "f78f0bc5e4e534c1b7fde7e21e491a5e3a68f87c4c52dc9e04c7359f44bb299c"
     },
     {
-      "declaration_hash": "ff967dd4ff1cfc2c3197df1b762ad1a321abd06240a5533159a53d0e04b693db",
+      "declaration_hash": "15250d62af4f3101763b3179ddd7b2a8c40e1a5ba2c6e816ea805c195f7ffdf3",
       "name": "code-work",
-      "tree_hash": "21f20ee241cc0ddd2432fbcd086f9dd5b3563142f48c1ea91ab9690b42c6e029"
+      "tree_hash": "bc5fa20e00eba3e4fb1104a9637e429b6b5e84e2621c75705dee2d3a645f376d"
     },
     {
       "declaration_hash": "eb8f2f640ad950914c8de822f9c50fe8bc387c4938e656f339f11d092329bf3f",
@@ -33,6 +33,6 @@
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "f28f0bf5d33d7e332e325347382f1f8c0375627ac9dc1d123e759c1dc7fee97c",
+  "tree_hash": "687b6ba9d1b431ce722e4e9ed874de8e2fd9a6cd66cae2f360e07e96da326529",
   "workbench_version": "0.1.0"
 }

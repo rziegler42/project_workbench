@@ -25,8 +25,9 @@ is the owner's statement in session. Three accepted rules bound the design:
    command (a command of its own and the argument that selects the subcommand). The helper reads the plan, applies
    the module's section rules and reports the region hash and the names of the unhashed sections as one bounded
    JSON object. The installer reads no plan and holds no section name.
-3. **The command is run only as `wb run` runs a command.** The module is installed and approved, its hashes equal
-   the manifest's and the helper is pinned and unchanged. The installer treats the output as data.
+3. **The command is run only as `wb run` runs a command.** The module is installed and approved, its declaration
+   hash equals the manifest's and the helper is pinned and its bytes unchanged (the tree hash is not compared at run
+   time, as for `wb run`). The installer treats the output as data.
 4. **The record binds four things:** the plan's path relative to the root, the region hash, the process module's
    declaration hash and the helper's pinned hash. A change in any of them makes an old approval `changed since
    approval`. A new approval adds an entry; the first record of an identical approval is kept.

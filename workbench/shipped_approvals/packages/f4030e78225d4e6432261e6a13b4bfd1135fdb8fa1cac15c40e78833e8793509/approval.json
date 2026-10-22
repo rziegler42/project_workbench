@@ -1,10 +1,10 @@
 {
   "approver": "workbench-release",
-  "declaration_hash": "ff967dd4ff1cfc2c3197df1b762ad1a321abd06240a5533159a53d0e04b693db",
+  "declaration_hash": "15250d62af4f3101763b3179ddd7b2a8c40e1a5ba2c6e816ea805c195f7ffdf3",
   "format": 1,
   "kind": "module",
   "subject": "workbench/code-work",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "21f20ee241cc0ddd2432fbcd086f9dd5b3563142f48c1ea91ab9690b42c6e029",
+  "tree_hash": "bc5fa20e00eba3e4fb1104a9637e429b6b5e84e2621c75705dee2d3a645f376d",
   "workbench_version": "0.1.0"
 }
