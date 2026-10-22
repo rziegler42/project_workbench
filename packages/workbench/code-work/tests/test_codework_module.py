@@ -74,11 +74,27 @@ class Declaration(unittest.TestCase):
 
     def test_the_command_takes_the_four_reads_as_its_first_argument_and_no_change(self):
         command = declaration()["commands"]["code-work"]
-        self.assertEqual(["check", "plans", "report", "region"], command["arguments"])
+        self.assertEqual(["check", "plans", "report", "region", "active"], command["arguments"])
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
 
-    def test_it_declares_the_region_as_its_approval_command(self):
-        self.assertEqual({"command": "code-work", "argument": "region"}, declaration()["approval"])
+    def test_it_declares_the_region_and_the_active_listing_as_its_approval_command(self):
+        self.assertEqual({"command": "code-work", "argument": "region", "active": "active"},
+                         declaration()["approval"])
+
+    def test_it_declares_the_eight_checkpoints_all_stopping_by_default_and_the_three_caps(self):
+        document = declaration()
+        self.assertEqual(["approve-plan", "push-shared-branch", "submit-remote-job", "fetch-remote-output",
+                          "change-direction", "accept-decision", "acknowledge-first-tier",
+                          "acknowledge-second-tier"], document["checkpoints"])
+        self.assertEqual([("review-rounds", 3, 5), ("same-failure-retries", 1, 2), ("reviewer-exchanges", 6, 12)],
+                         [(cap["name"], cap["default"], cap["ceiling"]) for cap in document["caps"]])
+
+    def test_the_declared_names_are_the_ones_the_spec_tables_list(self):
+        with open(os.path.join(ROOT, "docs", "specs", "code-work.md"), encoding="utf-8") as handle:
+            spec = handle.read()
+        document = declaration()
+        for name in document["checkpoints"] + [cap["name"] for cap in document["caps"]]:
+            self.assertIn("`%s`" % name, spec, name)
 
     def test_every_file_is_the_declaration_the_helper_a_block_the_readme_or_the_skill(self):
         found = []
@@ -134,10 +150,17 @@ class Blocks(unittest.TestCase):
                      "run the plan check", "only with the verification that was actually run"):
             self.assertIn(rule, text)
 
-    def test_the_policy_block_names_no_checkpoint_the_module_cannot_yet_enforce(self):
+    def test_the_policy_block_names_no_rule_the_module_cannot_yet_enforce(self):
         text = block("policy")
-        for word in ("checkpoint", "loop cap", "push", "compact"):
+        for word in ("push", "compact"):
             self.assertNotIn(word, text.lower())
+
+    def test_the_policy_block_says_every_checkpoint_stops_and_a_cap_stops_a_run_and_where_to_read_them(self):
+        text = " ".join(block("policy").split())
+        for rule in ("Each checkpoint stops for the owner", "caps on review rounds, retries of the same failure "
+                     "and exchanges with a reviewer", "at a cap, stop and report", "`wb settings`"):
+            self.assertIn(rule, text)
+        self.assertNotIn("delegate", text)
 
     def test_the_policy_block_says_a_commit_goes_through_the_git_helper_and_carries_no_attribution_by_default(self):
         text = " ".join(block("policy").split())
@@ -148,10 +171,10 @@ class Blocks(unittest.TestCase):
 
     def test_the_policy_block_is_short_and_names_no_tool(self):
         text = block("policy")
-        self.assertLessEqual(len(text.splitlines()), 16)
+        self.assertLessEqual(len(text.splitlines()), 18)
         for word in ("Claude", "claude", "opencode", "Codex", "CLAUDE.md"):
             self.assertNotIn(word, text)
-        self.assertEqual({"wb approve-plan", "wb plan-status"},
+        self.assertEqual({"wb approve-plan", "wb plan-status", "wb settings"},
                          set(re.findall(r"wb [a-z-]+", text)))
 
     def test_the_index_entry_names_the_plans_area(self):

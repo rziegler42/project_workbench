@@ -346,7 +346,7 @@ class Refusals(Region):
             with self.subTest(argv):
                 code, out, err = self.check(*argv)
                 self.assertEqual((1, ""), (code, out))
-                self.assertIn("usage: code-work check|plans|report", err)
+                self.assertIn("usage: code-work check|plans|report|active", err)
 
     def test_outside_a_project(self):
         code, out, err = self.check("region", PLAN, cwd=os.path.dirname(self.place))
@@ -354,7 +354,7 @@ class Refusals(Region):
         self.assertIn("not inside a workbench project", err)
 
     def test_the_other_subcommands_still_take_no_argument(self):
-        for command in ("check", "plans", "report"):
+        for command in ("check", "plans", "report", "active"):
             code, out, err = self.check(command, PLAN)
             self.assertEqual((1, ""), (code, out))
 

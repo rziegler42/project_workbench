@@ -78,6 +78,19 @@ Classify new findings before editing the plan: add a step when the outcome is un
 an increment for a separately reviewable outcome or prerequisite; update assumptions or risks
 when no work is added; record out-of-scope work as deferred or in a roadmap.
 
+## Checkpoints and caps
+
+A checkpoint is a point where the work stops for the owner: approving a plan, pushing to a shared
+branch, submitting a remote job, fetching its output, changing a spec's or roadmap's direction,
+accepting a decision, and acknowledging changes made by someone else (two tiers). Every checkpoint
+stops until the owner's settings say otherwise, and nothing yet reads a setting to proceed.
+
+Three caps bound a run: review rounds (default 3, at most 5), retries of the same failure
+(default 1, at most 2) and exchanges with a reviewer (default 6, at most 12). A second identical
+failure stops and diagnoses instead of retrying, and reaching a cap stops the run with a report.
+The owner may lower a cap in the personal settings, never raise it above its most. `wb settings`
+prints each checkpoint and the value of each cap that applies in this project.
+
 ## Completion
 
 A plan is `Completed` only when its completion criteria are met with recorded evidence. A

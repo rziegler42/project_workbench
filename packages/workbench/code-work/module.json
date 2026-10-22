@@ -27,14 +27,43 @@
         "check",
         "plans",
         "report",
-        "region"
+        "region",
+        "active"
       ]
     }
   },
   "approval": {
     "command": "code-work",
-    "argument": "region"
+    "argument": "region",
+    "active": "active"
   },
+  "checkpoints": [
+    "approve-plan",
+    "push-shared-branch",
+    "submit-remote-job",
+    "fetch-remote-output",
+    "change-direction",
+    "accept-decision",
+    "acknowledge-first-tier",
+    "acknowledge-second-tier"
+  ],
+  "caps": [
+    {
+      "name": "review-rounds",
+      "default": 3,
+      "ceiling": 5
+    },
+    {
+      "name": "same-failure-retries",
+      "default": 1,
+      "ceiling": 2
+    },
+    {
+      "name": "reviewer-exchanges",
+      "default": 6,
+      "ceiling": 12
+    }
+  ],
   "fills": [
     {
       "slot": "slot:docs-index",

@@ -7,6 +7,9 @@
   and no increment begins until it says `approved`. A `Status:` line is informational and is
   never an approval. Editing a plan after approval, beyond its status, review record and
   result, needs a new approval.
+- Each checkpoint stops for the owner. A run is bounded by caps on review rounds, retries of the
+  same failure and exchanges with a reviewer; at a cap, stop and report rather than continue.
+  `wb settings` prints the checkpoints and the cap values that apply.
 - Draft a plan from the template of the plan-drafting skill, and run the plan check before
   asking for approval.
 - Make a commit through the git helper: it names the commit it expects and the exact

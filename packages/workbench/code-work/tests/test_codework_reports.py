@@ -351,7 +351,7 @@ class Dispatched(Reports):
     def test_unknown_arguments_name_all_three_subcommands(self):
         code, out, err = self.check("bogus")
         self.assertEqual(1, code)
-        self.assertIn("check|plans|report", err)
+        self.assertIn("check|plans|report|active", err)
 
 
 if __name__ == "__main__":
