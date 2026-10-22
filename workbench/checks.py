@@ -75,7 +75,7 @@ def _lines(data):
             left_out, None)
 
 
-def _run_one(guarded, ident, root, package, module_name, check):
+def _run_one(guarded, ident, root, package, module_name, check, declaration):
     """``(problems, warnings)`` for one check of the installed module."""
     name = check.pin_name
     shown = _shown(name, 64)
@@ -88,6 +88,10 @@ def _run_one(guarded, ident, root, package, module_name, check):
     if pin.path != wanted:
         return ["the pin named %s records %s, which is not the declared helper %s; the owner pins "
                 "the declared helper, so the check did not run" % (shown, _shown(pin.path, 120), wanted)], []
+    if pin.declaration is not None and pin.declaration != declaration:
+        return ["the declaration of %s/%s has changed since the pin named %s was made; the owner "
+                "confirms the module's declaration with `wb upgrade`, or pins the helper again with "
+                "`pin`, so the check did not run" % (package, module_name, shown)], []
     if pin.kit != check.kit:
         return ["the pin named %s records %s, but the declaration says the helper runs through kit API "
                 "%d; the owner pins it again with `pin --kit %d`, so the check did not run" % (
@@ -146,7 +150,7 @@ def run_all(guarded, root):
                 problems, warnings = [], []
                 for check in module.checks:
                     more_problems, more_warnings = _run_one(guarded, ident, root, package_name,
-                                                            module_name, check)
+                                                            module_name, check, item["declaration"])
                     problems.extend(more_problems)
                     warnings.extend(more_warnings)
                 sections.append(Section(label, problems, warnings))

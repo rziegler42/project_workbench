@@ -228,6 +228,17 @@ class Refused(Checks):
         self.assertEqual([], found["p/b"])
         self.assertEqual(["two"], self.ran())
 
+    def test_an_installer_pin_made_for_another_declaration_stops_the_check(self):
+        self.ready()
+        held = pins.load(self.guarded, self.project_id)
+        self.assertIsNotNone(held["lint"].declaration)
+        held["lint"] = held["lint"]._replace(declaration="0" * 64)
+        self.guarded.write("projects/%s/pins" % self.project_id, pins.serialize(held))
+        [section] = self.run_all()
+        self.assertEqual(1, len(section.problems))
+        self.assertIn("declaration of p/a has changed", section.problems[0])
+        self.assertEqual([], self.ran())
+
     def test_a_manifest_that_cannot_be_read_is_a_problem_not_a_silence(self):
         self.ready()
         self.edit(".workbench/manifest.json", lambda data: b"{")

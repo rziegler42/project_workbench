@@ -15,8 +15,8 @@ command is the owner's way past that refusal. It is owner-run and terminal-only,
 * after the answer the project is read again; a different digest is refused. Then the baselines
   of exactly the listed paths are replaced, in one atomic replacement of the store entry, and each
   pin that was holding the bytes last acknowledged for a listed path moves to the bytes now there.
-  A pin held at other bytes, or for another path, is not moved, and no module declaration is read:
-  the differences may include the declarations themselves. Nothing in the project is written.
+  A pin held at other bytes, for another path, or typed by the owner (it records no declaration) is
+  not moved, and no module declaration is read: the differences may include the declarations themselves. Nothing in the project is written.
 
 A path that is a link, a directory or another kind of file where a file is expected has no hash to
 accept, so it cannot be acknowledged; the owner deals with it first. The typed text is friction,
@@ -120,15 +120,16 @@ class Review:
 
 def _moves(held_pins, found, now):
     """``[(old pin, new pin)]``: each pin that holds the bytes last acknowledged for a path that now
-    holds other bytes moves to them, under the pin's own name, path and kit."""
+    holds other bytes moves to them, under the pin's own name, path, kit and declaration. A pin the
+    owner typed has no declaration, and acknowledging an edit is not permission to run it."""
     current = {d.path: d for d in found if d.current is not None and d.baseline is not None}
     moved = []
     for name in sorted(held_pins):
         old = held_pins[name]
         item = current.get(old.path)
-        if item is not None and old.sha256 == item.baseline:
+        if item is not None and old.sha256 == item.baseline and old.declaration is not None:
             moved.append((old, pins.Pin(name, old.path, item.current, "workbench acknowledge", now,
-                                        old.kit)))
+                                        old.kit, old.declaration)))
     return moved
 
 

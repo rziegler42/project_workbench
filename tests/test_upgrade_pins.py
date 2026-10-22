@@ -98,8 +98,9 @@ class Replaces(Pins):
         pins.set_pin(self.guarded, self.project_id, "tool", "scripts/other", sha(b"x"), "owner")
         code, out, err = self.preview("--package", new)
         self.assertEqual((0, ""), (code, err))
-        self.assertIn("replace pin tool: %s sha256 %s run directly (was scripts/other sha256 %s, run "
-                      "directly, made by owner)" % (TOOL, sha(HELPER2), sha(b"x")[:12]), out)
+        self.assertIn("replace pin tool: %s sha256 %s run directly, declaration " % (TOOL, sha(HELPER2)), out)
+        self.assertIn("(was scripts/other sha256 %s, run directly, declaration none, made by owner)"
+                      % sha(b"x")[:12], out)
         code, out, err = self.upgrade("--package", new)
         self.assertEqual((0, ""), (code, err), out)
         self.assertEqual((TOOL, "workbench upgrade"), (self.held()["tool"].path, self.held()["tool"].pinned_by))
@@ -161,6 +162,21 @@ class Creates(Pins):
         self.assertEqual({"tool", "lint"}, set(held))
         self.assertEqual("workbench add", held["tool"].pinned_by)
         self.assertEqual(sha(self.read(TOOL)), held["tool"].sha256)
+
+
+class Collides(Pins):
+    def test_adding_a_module_that_declares_a_pin_name_an_installed_one_holds_is_refused(self):
+        self.MODULES = {"h": (HARNESS, {}), "tool": tool()}
+        self.install(self.version())
+        richer = self.package("p", {"h": (HARNESS, {}), "tool": tool(), "tool2": tool(HELPER2)})
+        self.approve(richer)
+        self.warm(richer)
+        before = self.held()
+        code, out, err = self.run_add("--package", richer, "--select", "tool2")
+        self.assertEqual(1, code, (out, err))
+        self.assertTrue(err.startswith("refused: "), err)
+        self.assertIn("one pin name is used more than once", err)
+        self.assertEqual(before, self.held())
 
 
 class Refuses(Pins):

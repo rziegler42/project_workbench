@@ -45,6 +45,22 @@ class Moves(Pinned):
         self.assertEqual(sha(b"older"), self.held()["tool"].sha256)
         self.assertNotIn("moves the pin", out)
 
+    def test_a_pin_the_owner_typed_is_not_moved_even_when_it_holds_the_accepted_bytes(self):
+        data = self.edited()
+        pins.set_pin(self.guarded, self.project_id, "tool", TOOL, sha(HELPER), "owner")
+        code, out, err = self.run_it()
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertEqual(sha(HELPER), self.held()["tool"].sha256)
+        self.assertNotEqual(sha(data), self.held()["tool"].sha256)
+        self.assertNotIn("moves the pin", out)
+
+    def test_a_moved_pin_keeps_its_declaration(self):
+        before = self.installed_project() or self.held()["tool"].declaration
+        self.edit(TOOL, lambda data: data + b"# pulled\n")
+        self.run_it()
+        self.assertEqual(before, self.held()["tool"].declaration)
+        self.assertIsNotNone(before)
+
     def test_a_pin_for_another_path_is_not_moved(self):
         self.edited()
         pins.set_pin(self.guarded, self.project_id, "tool", "scripts/other", sha(HELPER), "owner")

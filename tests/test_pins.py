@@ -61,6 +61,14 @@ class PinFileTest(Base):
         with open(self.pins_path()) as handle:
             self.assertIn('"kit": 1,\n      "path": "tools/helper.py"', handle.read())
 
+    def test_a_pin_may_record_the_declaration_it_was_confirmed_with(self):
+        pins.set_pin(self.store, PROJECT, "py", "tools/helper.py", SHA, "owner",
+                     "2026-10-20T08:00:00Z")
+        self.assertIsNone(pins.lookup(self.store, PROJECT, "py").declaration)
+        made = pins.Pin("py", "tools/helper.py", SHA, "workbench install", "2026-10-20T08:00:00Z", 1, "d" * 64)
+        self.store.write("projects/%s/pins" % PROJECT, pins.serialize({"py": made}))
+        self.assertEqual(made, pins.lookup(self.store, PROJECT, "py"))
+
     def test_a_kit_that_is_not_a_positive_integer_cannot_be_written(self):
         for kit in (0, -1, True, 1.5, "1", 10 ** 6):
             with self.subTest(kit=kit):
@@ -115,6 +123,8 @@ class PinFileTest(Base):
                self.good(time="yesterday"), self.good(time=5), self.good(extra=1),
                self.good(kit=0), self.good(kit=True), self.good(kit=None), self.good(kit="1"),
                self.good(kit=1.5), self.good(kit=10 ** 6),
+               self.good(declaration="C" * 64), self.good(declaration="c" * 63), self.good(declaration=5),
+               self.good(declaration=None),
                {"format": 1, "pins": {"bad name": self.good()["pins"]["one"]}},
                {"format": 1, "pins": {"": self.good()["pins"]["one"]}},
                {"format": 1, "pins": {"one": {"path": "a"}}},

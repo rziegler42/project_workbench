@@ -164,6 +164,26 @@ class Refused(Resolver):
         self.rewrite_declaration(lambda command: (command.pop("runtime"), command.pop("kit")))
         self.refused("kit")
 
+    def test_a_commit_that_widens_the_arguments_and_the_manifest_is_refused_for_an_installer_pin(self):
+        """The pin the installer made records the declaration the owner confirmed."""
+        self.ready()
+        self.resolve("tool", ["check"])
+        self.rewrite_declaration(lambda command: command["arguments"].append("evil"))
+        self.refused("declaration of p/tool has changed", "tool", ["evil"])
+
+    def test_an_installer_pin_with_a_different_declaration_hash_is_refused_for_the_same_declaration(self):
+        self.ready()
+        held = commands.pins.load(self.guarded, self.project_id)
+        held["tool"] = held["tool"]._replace(declaration="0" * 64)
+        self.guarded.write("projects/%s/pins" % self.project_id, commands.pins.serialize(held))
+        self.refused("declaration of p/tool has changed")
+
+    def test_a_pin_the_owner_typed_stands_for_the_whole_module(self):
+        self.ready()
+        self.pin()
+        self.rewrite_declaration(lambda command: command["arguments"].append("evil"))
+        self.assertEqual(["evil"], self.resolve("tool", ["evil"]).arguments)
+
     def test_outside_a_project(self):
         self.ready()
         self.pin()

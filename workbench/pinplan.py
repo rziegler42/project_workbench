@@ -16,7 +16,7 @@ import collections
 
 from . import pins
 
-Wanted = collections.namedtuple("Wanted", "name path sha256 kit")
+Wanted = collections.namedtuple("Wanted", "name path sha256 kit declaration")
 # `old` is the pin that exists under the name, or None for a created pin.
 Change = collections.namedtuple("Change", "action pin old")
 
@@ -47,7 +47,7 @@ def wanted(modules, hash_of):
             path = ".workbench/%s/%s/%s" % (verified.package, verified.name, helper)
             digest = hash_of(path)
             if digest is not None:
-                found.append(Wanted(name, path, digest, kit))
+                found.append(Wanted(name, path, digest, kit, verified.declaration_hash))
     return found
 
 
@@ -59,11 +59,12 @@ def changes(held, wanted_pins, who, now, written):
     Otherwise the pin is updated (same path) or replaced (another path, such as one the owner typed)."""
     found = []
     for want in sorted(wanted_pins):
-        pin = pins.Pin(want.name, want.path, want.sha256, who, now, want.kit)
+        pin = pins.Pin(want.name, want.path, want.sha256, who, now, want.kit, want.declaration)
         old = held.get(want.name)
         if old is None:
             found.append(Change(CREATE, pin, None))
-        elif (old.path, old.sha256, old.kit) == (want.path, want.sha256, want.kit):
+        elif (old.path, old.sha256, old.kit, old.declaration) == (
+                want.path, want.sha256, want.kit, want.declaration):
             continue
         elif want.path not in written and not (old.path, old.sha256) == (want.path, want.sha256):
             continue
@@ -88,10 +89,12 @@ def fields(made):
     out = []
     for change in made:
         row = {"action": change.action, "name": change.pin.name, "path": change.pin.path,
-               "sha256": change.pin.sha256, "kit": change.pin.kit, "pinned_by": change.pin.pinned_by}
+               "sha256": change.pin.sha256, "kit": change.pin.kit, "pinned_by": change.pin.pinned_by,
+               "declaration": change.pin.declaration}
         if change.old is not None:
             row["was"] = {"path": change.old.path, "sha256": change.old.sha256,
-                          "kit": change.old.kit, "pinned_by": change.old.pinned_by}
+                          "kit": change.old.kit, "pinned_by": change.old.pinned_by,
+                          "declaration": change.old.declaration}
         out.append(row)
     return out
 
@@ -104,10 +107,14 @@ def lines(made, show):
         row = "  %s pin %s: %s sha256 %s %s" % (
             change.action, show(pin.name), show(pin.path), pin.sha256,
             "kit %d" % pin.kit if pin.kit is not None else "run directly")
+        if change.old is None or change.old.declaration != pin.declaration:
+            row += ", declaration %s" % pin.declaration[:12]
         if change.old is not None:
-            row += " (was %s sha256 %s, %s, made by %s)" % (
+            row += " (was %s sha256 %s, %s%s, made by %s)" % (
                 show(change.old.path), change.old.sha256[:12],
                 "kit %d" % change.old.kit if change.old.kit is not None else "run directly",
+                ", declaration %s" % (change.old.declaration or "none")[:12]
+                if change.old.declaration != pin.declaration else "",
                 show(change.old.pinned_by))
         out.append(row)
     return out

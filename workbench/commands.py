@@ -19,7 +19,7 @@ from . import declarations, hashing, launch, manifest, pins
 from .wbkit import display, project, safefs
 
 Request = collections.namedtuple("Request", "root project_id name arguments kit")
-Declared = collections.namedtuple("Declared", "package module command")
+Declared = collections.namedtuple("Declared", "package module command declaration")
 
 
 class CommandError(Exception):
@@ -73,7 +73,7 @@ def _declared(held, document):
                 continue
             module = installed_module(held, package, item)
             for command in module.commands:
-                found.append(Declared(package["name"], item["name"], command))
+                found.append(Declared(package["name"], item["name"], command, item["declaration"]))
     return found
 
 
@@ -122,6 +122,10 @@ def resolve(guarded, start, name, args):
         raise CommandError("the pin named %s records %s, which is not the declared helper %s; the "
                            "owner pins the declared helper, and nothing was run"
                            % (_shown(name), _shown(pin.path), wanted))
+    if pin.declaration is not None and pin.declaration != found.declaration:
+        raise CommandError("the declaration of %s/%s has changed since the pin named %s was made; the "
+                           "owner confirms the module's declaration with `wb upgrade`, or pins the helper "
+                           "again with `pin`, and nothing was run" % (found.package, found.module, _shown(name)))
     kit = command.kit if command.runtime == "python" else None
     if pin.kit != kit:
         raise CommandError(

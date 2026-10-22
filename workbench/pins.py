@@ -13,7 +13,10 @@ The file is strict JSON::
                                       "sha256": "<64 hex>", "time": "<UTC>"}}}
 
 A Python helper that runs through the kit runner also records ``"kit": <API number>``; a pin
-without it runs the helper directly. The project's own files cannot choose how a pinned helper
+without it runs the helper directly. A pin the installer makes also records ``"declaration"``, the
+hash of the ``module.json`` the owner confirmed with it: the command or check is refused when the
+manifest then holds another declaration, so a pull cannot widen what a pinned helper accepts. A pin
+the owner types has none, and the owner's act then stands for the whole module. The project's own files cannot choose how a pinned helper
 runs: the launcher takes the kit from the pin, and a module command is refused unless the pin's
 ``kit`` equals the declaration's.
 
@@ -48,9 +51,11 @@ _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}\Z")
 _HEX = re.compile(r"^[0-9a-f]{64}\Z")
 _TIME = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\Z")
 _FIELDS = ("path", "pinned_by", "sha256", "time")
+_OPTIONAL = ("kit", "declaration")
 MAX_KIT = declarations.MAX_KIT
 
-Pin = collections.namedtuple("Pin", "name path sha256 pinned_by time kit", defaults=(None,))
+Pin = collections.namedtuple("Pin", "name path sha256 pinned_by time kit declaration",
+                             defaults=(None, None))
 
 
 class PinError(Exception):
@@ -93,7 +98,7 @@ def parse(data):
     pins = {}
     for name, entry in document["pins"].items():
         check_name(name)
-        if not isinstance(entry, dict) or set(entry) not in (set(_FIELDS), set(_FIELDS) | {"kit"}):
+        if not isinstance(entry, dict) or not set(_FIELDS) <= set(entry) <= set(_FIELDS) | set(_OPTIONAL):
             raise PinError("pin %s has the wrong fields" % display.ascii_text(name)[:80])
         path = entry["path"]
         if not isinstance(path, str) or not safefs.relpath_ok(path):
@@ -108,7 +113,10 @@ def parse(data):
         kit = entry.get("kit")
         if "kit" in entry:
             check_kit(kit)
-        pins[name] = Pin(name, path, entry["sha256"], who, entry["time"], kit)
+        declaration = entry.get("declaration")
+        if "declaration" in entry and (not isinstance(declaration, str) or not _HEX.match(declaration)):
+            raise PinError("pin %s has a bad declaration hash" % display.ascii_text(name)[:80])
+        pins[name] = Pin(name, path, entry["sha256"], who, entry["time"], kit, declaration)
     return pins
 
 
@@ -122,6 +130,8 @@ def _entry(pin):
     entry = {"path": pin.path, "pinned_by": pin.pinned_by, "sha256": pin.sha256, "time": pin.time}
     if pin.kit is not None:
         entry["kit"] = pin.kit
+    if pin.declaration is not None:
+        entry["declaration"] = pin.declaration
     return entry
 
 
