@@ -1,7 +1,7 @@
 # Roadmap: workbench-v1
 
 Status: Active
-Updated: 2026-10-21
+Updated: 2026-10-22
 
 This roadmap is direction only. It does not authorize implementation and does not
 change any plan. A candidate is referred to as `workbench-v1#<id>`. Candidates are
@@ -131,7 +131,7 @@ meet here and the order matters.
 `groundwork-module`, `researcher-fetch-tool`, `code-work-plans`, `module-boundary-kit`,
 `module-commands`, `module-checks`, `module-harness-paths`, `code-work-commit`,
 `code-work-approval`, `remote-runner-module`, `peer-review-provider`, `knowledge-base-package`,
-`global-config-migration`, `self-hosting`, `remaining-modules-rename`.
+`port-superpowers`, `global-config-migration`, `self-hosting`, `remaining-modules-rename`.
 
 ## Candidates
 
@@ -397,6 +397,24 @@ generic name, provides its own capability, and is read through a read-only skill
 **Dependencies:** `claude-harness`, `groundwork-module`.
 **Boundary:** the knowledge base's own repository changes. Its name is still open.
 **Promotion trigger:** `groundwork-module` complete and the name chosen.
+
+### port-superpowers — Port the superpowers skills the owner uses into neutral skills
+
+**Outcome:** an inventory of the superpowers skills the owner's global configuration and agents
+rely on (brainstorming, planning, plan execution, code review, test-driven development, systematic
+debugging, verification before completion, worktrees and branch finishing), each recorded as used
+or not, already covered by a workbench rule or skill, or a gap; the module each ported skill belongs
+to; and the first ports as neutral skills, written in the workbench's own words, in the project's
+own locations (`docs/specs/`, `docs/plans/`), with no harness named. Brainstorming is expected to
+go to `groundwork` as a step before `draft-spec`; the rest to `code-work` or `safe-git`, unless
+the inventory shows a practice that every process shares, which would argue for a module of its own.
+**Dependencies:** `claude-harness`, `groundwork-module`, `code-work-approval` (which owns the
+increment loop, review and reviewer-agent skills).
+**Boundary:** the inventory, the placement decisions, and the skills the inventory selects first.
+Each further port is its own candidate. Whether the superpowers wording may be reused is checked
+against its licence before any text is copied, and the default is to write new text. Removing
+superpowers from the owner's `~/.claude` belongs to `global-config-migration`.
+**Promotion trigger:** `code-work-approval` complete.
 
 ### global-config-migration — Move the owner's global Claude configuration into modules
 
