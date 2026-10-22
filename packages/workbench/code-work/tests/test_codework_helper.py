@@ -106,7 +106,7 @@ class Source(unittest.TestCase):
                 names.update(alias.name.split(".")[0] for alias in node.names)
             elif isinstance(node, ast.ImportFrom):
                 names.add((node.module or "").split(".")[0])
-        self.assertEqual({"datetime", "html", "io", "itertools", "os", "re", "stat", "sys"}, names)
+        self.assertEqual({"datetime", "hashlib", "html", "io", "itertools", "json", "os", "re", "stat", "sys"}, names)
         self.assertEqual(set(), names - set(sys.stdlib_module_names))
 
     def test_the_helper_holds_no_git_code(self):

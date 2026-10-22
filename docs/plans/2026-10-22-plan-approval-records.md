@@ -309,7 +309,7 @@ round 3 fix was not reviewed.
 
 ## Result
 
-In progress. Increments A, B and C are done.
+In progress. Increments A, B, C and D are done.
 
 - **A** (`aad363f`): the specs and the Proposed decision `2026-10-22-installer-records-plan-approval-module-computes-region`.
 - **B**: the `approval` declaration field (`workbench/declarations.py`; `Module.approval`, refused on any
@@ -334,4 +334,19 @@ In progress. Increments A, B and C are done.
     plan path, the process declaration, the helper hash and the report; any difference writes nothing.
   - Not done here: the Claude module's `deny` rendering is driven by `OWNER_RUN`, so it follows; the
     `trust-and-approval.md` and `module-contract.md` "proposed" markers stay until increment F.
-- **Next:** increment D (the `code-work` side).
+- **D**: the `code-work` helper's `region <plan>` subcommand (`region_of`, `read_plan`; it adds `hashlib` and `json`
+  to the standard-library imports), `region` in the command's `arguments`, the `approval` declaration in
+  `module.json`, the policy block, the plans README and the `draft-plan` skill, and the spec sentence in
+  `docs/specs/code-work.md`. Tests: the new `test_codework_region.py` (41 tests, including every plan of this
+  repository), an end-to-end `approve-plan` then `plan-status` in an installed project
+  (`test_codework_module.py`), and the Claude module's deny rendering for `approve-plan`.
+  - The region rule is stricter than the spec text first said, in the safe direction: only the exact headings
+    `## Review record`, `## Second opinion` and `## Result` start a left-out section, and any level-one or
+    level-two heading, setext underline or rule ends it; a heading in another case or indentation is hashed.
+    A plan with an unclosed fence or comment, bad UTF-8, a size over the check's bound, a path outside
+    `docs/plans/<name>.md`, or a repeated left-out heading is refused.
+  - The policy block and the skill tests encoded "no `wb ` in the policy" and "two `wb ` lines in the skill"; the
+    policy test now allows exactly `wb approve-plan` and `wb plan-status`, and the skill names the approve-plan
+    command without the `wb` prefix.
+  - The module's tree hash changed, so the shipped approval of the package is stale until increment E.
+- **Next:** increment E (review and release).

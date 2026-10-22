@@ -26,9 +26,14 @@
       "arguments": [
         "check",
         "plans",
-        "report"
+        "report",
+        "region"
       ]
     }
+  },
+  "approval": {
+    "command": "code-work",
+    "argument": "region"
   },
   "fills": [
     {

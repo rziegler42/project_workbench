@@ -138,6 +138,16 @@ class Attached(Project):
         self.assertIn("Edit(//%s/**)" % store, permissions["deny"])
         self.assertIn("Bash(git push --force*)", permissions["ask"])
 
+    def test_the_settings_deny_approving_a_plan_in_every_spelling_and_let_the_agent_read_its_status(self):
+        self.ready()
+        self.assertEqual(0, self.attach()[0])
+        permissions = json.loads(self.read(SETTINGS))["permissions"]
+        for spelling in rules.SPELLINGS:
+            self.assertIn("Bash(%s approve-plan)" % spelling, permissions["deny"])
+            self.assertIn("Bash(%s approve-plan *)" % spelling, permissions["deny"])
+            for rule in permissions["deny"] + permissions["ask"]:
+                self.assertFalse(rule.startswith("Bash(%s plan-status" % spelling), rule)
+
 
 class Checked(Project):
     def test_a_clean_attach_has_no_problems(self):

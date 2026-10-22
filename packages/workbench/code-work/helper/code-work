@@ -2,13 +2,16 @@
 """The code-work helper: reads a project's plans and says what is wrong with them.
 
 It is one file that imports only the standard library; the launcher runs a private copy of it through the
-kit runner with nothing beside it. Its three subcommands change nothing, take no lock, run no program and
+kit runner with nothing beside it. Its four subcommands change nothing, take no lock, run no program and
 follow no link. Commits and removals are the ``safe-git`` module's.
 
     code-work check      report problems with the plans in docs/plans/ (exit 1 if there is one)
     code-work plans      list the plans that are Proposed, Approved or In Progress
     code-work report     list the roadmap candidates a Completed plan names, and the plans whose
                          Candidate: names a roadmap or candidate that is not there
+    code-work region <plan>
+                         print the hash of a plan's hashed region and the names of the parts left out of
+                         it, as one JSON object (the installer's approval command reads it)
 
 The rules are in ``docs/specs/code-work.md`` and in the README the module writes into
 ``docs/plans/``. Everything read is untrusted repository content: the number of files, the bytes in
@@ -18,9 +21,11 @@ escapes and non-ASCII characters written out.
 """
 
 import datetime
+import hashlib
 import html
 import io
 import itertools
+import json
 import os
 import re
 import stat
@@ -62,6 +67,10 @@ _CANDIDATE_HEAD = re.compile(r"\A[ ]{0,3}" + _ITEM + r"###[ \t]+([^\s:]+)")
 _UNDERLINE = re.compile(r"\A[ ]{0,3}(=+|-+)[ \t]*\Z")
 _LINE = 2000
 _HEADING = 200
+# The hashed region: an excluded section starts at exactly one of these headings and ends at any heading,
+# of whatever form, so nothing a reader could take for another section is ever left out.
+_EXCLUDED = re.compile(r"\A##[ ](Review record|Second opinion|Result)[ \t]*\Z")
+_BOUNDARY = re.compile(r"\A[ ]{0,3}#{1,2}(?:[ \t]|\Z)")
 
 
 class Refused(Exception):
@@ -658,14 +667,116 @@ def command_report(root, out, err):
     return _finish(problems, out, err)
 
 
+def read_plan(root, plan):
+    """The bytes of the plan `plan`, a path relative to `root` that names a plan directly in docs/plans/,
+    or Refused. No link is followed, and a plan larger than the check reads is refused, not cut."""
+    parts = plan.split("/")
+    if len(parts) != 3 or "/".join(parts[:2]) != PLANS or name_problem(parts[2]):
+        raise Refused("%s is not a plan: a plan is %s/YYYY-MM-DD-<topic>.md" % (shown(plan, 80), PLANS))
+    try:
+        root_fd = os.open(root, _DIR)
+        try:
+            folder = open_dir(root_fd, PLANS)
+            if folder is None:
+                raise Refused("there is no %s folder" % PLANS)
+            try:
+                data, size = read_file(folder, parts[2], MAX_DOCUMENT)
+            finally:
+                os.close(folder)
+        finally:
+            os.close(root_fd)
+    except OSError as exc:
+        raise Refused("%s cannot be read: %s" % (shown(plan, 80), shown(exc.strerror or exc)))
+    if size > MAX_DOCUMENT:
+        raise Refused("%s is larger than the %d bytes that are read" % (shown(plan, 80), MAX_DOCUMENT))
+    return data
+
+
+def _status_line(marked):
+    """The line number of the one `Status:` line in the header, or Refused."""
+    found = []
+    for number, line, plain in itertools.islice(marked, MAX_HEADER + 1):
+        if number > MAX_HEADER or (plain and _TWO.match(line)):
+            break
+        match = _FIELD.match(line) if plain else None
+        if match and match.group(1) == "Status":
+            found.append(number)
+    if len(found) != 1:
+        raise Refused("the plan has %s `Status:` line before its first heading; it needs exactly one"
+                      % ("no" if not found else "%d" % len(found)))
+    return found[0]
+
+
+def _starts_section(marked, index):
+    """Whether the line at `index` could be taken for the start of a section: a heading of level one or
+    two, a line of `=` or `-` (a rule, or the underline of a heading), or the text such an underline follows."""
+    number, line, plain = marked[index]
+    if not plain:
+        return False
+    if _BOUNDARY.match(line) or _UNDERLINE.match(line):
+        return True
+    following = marked[index + 1] if index + 1 < len(marked) else None
+    return bool(line.strip() and following and following[2] and _UNDERLINE.match(following[1]))
+
+
+def region_of(text):
+    """``(hash, unhashed)`` for the text of a plan: the SHA-256 of the plan without its status line, its review
+    record and its result, line by line with the line ends and the trailing white space normalized, and the
+    names of what was left out. Refused when the plan cannot be told apart with certainty."""
+    state = {}
+    marked = list(lines_of(text, state))
+    if state["open"] or state["comment"]:
+        raise Refused("a code fence or an HTML comment is never closed, so the plan's sections cannot be told")
+    # The text hashed is the plan's own lines; the lines `lines_of` yields are cut at a bound.
+    whole = [line.rstrip("\n") for line in io.StringIO(text, newline=None)]
+    if len(whole) != len(marked):
+        raise Refused("the plan's lines cannot be read")
+    status = _status_line(marked)
+    kept, names, seen, excluded = [], [], set(), False
+    for index, (number, line, plain) in enumerate(marked):
+        if number == status:
+            names.append("Status")
+            continue
+        head = _EXCLUDED.match(whole[index]) if plain else None
+        if head:
+            group = "Result" if head.group(1) == "Result" else "Review record"
+            if group in seen:
+                raise Refused("the plan has more than one %s section" % group.lower())
+            seen.add(group)
+            names.append(head.group(1))
+            excluded = True
+            continue
+        if _starts_section(marked, index):
+            excluded = False
+        if not excluded:
+            kept.append(whole[index].rstrip(" \t"))
+    while kept and not kept[-1]:
+        kept.pop()
+    return hashlib.sha256(("\n".join(kept) + "\n").encode("utf-8")).hexdigest(), names
+
+
+def command_region(root, plan, out, err):
+    data = read_plan(root, plan)
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise Refused("%s is not valid UTF-8, so its region cannot be hashed" % shown(plan, 80))
+    digest, names = region_of(text)
+    out.write(json.dumps({"format": 1, "region_hash": digest, "unhashed": names}) + "\n")
+    return 0
+
+
 COMMANDS = {"check": command_check, "plans": command_plans, "report": command_report}
 
 
 def main(argv, out, err, cwd):
     """Run one subcommand from `cwd`. Returns the exit code."""
     try:
+        if len(argv) == 2 and argv[0] == "region":
+            return command_region(find_root(cwd), argv[1], out, err)
         if len(argv) != 1 or argv[0] not in COMMANDS:
-            raise Refused("usage: code-work %s (no arguments)" % "|".join(sorted(COMMANDS)))
+            raise Refused("usage: code-work %s (no arguments), or code-work region <plan>"
+                          % "|".join(sorted(COMMANDS)))
         return COMMANDS[argv[0]](find_root(cwd), out, err)
     except Refused as exc:
         err.write("refused: %s\n" % exc)

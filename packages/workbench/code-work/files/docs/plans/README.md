@@ -62,6 +62,18 @@ before changing it to `Approved` or beginning implementation. Use `In Progress` 
 implementation is underway. Editing anything other than the status line, the review record
 and the result after approval needs a new approval.
 
+Approval is a record, not a status. The owner makes it with `wb approve-plan <plan>`, which
+shows the hash of the plan's hashed region and records it when the owner types the start of it
+back; `wb plan-status <plan>` reads it and prints `approved`, `changed since approval` or
+`not approved`. Do not begin an increment of a plan that is not `approved`. The `Status:` line
+is informational and never an approval.
+
+The hashed region is the whole plan except the `Status:` line, the `## Review record` section
+(or `## Second opinion`) and the `## Result` section. Write those headings exactly so, once
+each: only the exact heading starts a left-out section, and any other heading ends it. A plan
+with a repeated one, with no `Status:` line before its first heading, or with a code fence or
+comment that is never closed has no region and cannot be approved.
+
 Classify new findings before editing the plan: add a step when the outcome is unchanged; add
 an increment for a separately reviewable outcome or prerequisite; update assumptions or risks
 when no work is added; record out-of-scope work as deferred or in a roadmap.

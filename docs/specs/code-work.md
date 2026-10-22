@@ -143,10 +143,13 @@ the section names and the plan check.
 reader that `check` already uses, and the module declares `approval: {"command": "code-work", "argument":
 "region"}`. `region` prints the hash of the plan's hashed region and the names of the unhashed sections as
 `trust-and-approval.md`, "Plan approval records", states. The region is the whole plan except the status line, the
-review record and the result, with line endings, trailing whitespace and the final newline normalized. A heading
-inside a fence or a quotation, an indented one or one in another case does not start or end a section; a plan
-with a duplicated excluded heading, or with no status line before its first heading, is refused rather than
-guessed. The owner approves with `wb approve-plan <plan>`; an agent reads `wb plan-status <plan>`; the delegated
+review record and the result, with line endings, trailing whitespace and the final newline normalized. Only the
+exact headings `## Review record`, `## Second opinion` and `## Result`, outside a fence, a quotation and an HTML
+comment, start a left-out section, and any heading of level one or two, in any case or indentation, and any
+setext underline or rule, ends it, so that text a reader could take for another section is always hashed. A
+plan with a duplicated left-out heading, with no single status line before its first heading, with a fence or
+comment that is never closed, or that is not UTF-8, larger than the check reads or not directly in
+`docs/plans/`, is refused rather than guessed. The owner approves with `wb approve-plan <plan>`; an agent reads `wb plan-status <plan>`; the delegated
 record waits for a `peer-review` provider.
 
 ### Completion

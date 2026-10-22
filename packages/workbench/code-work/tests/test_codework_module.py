@@ -13,9 +13,10 @@ import re
 import shutil
 import tempfile
 import unittest
+import unittest.mock
 
 from tests import support_install
-from workbench import (cli, commands, firstparty, harnessplan, install, manifest, neutral, pins, sources,
+from workbench import (approve, cli, commands, firstparty, harnessplan, install, manifest, neutral, pins, sources,
                        verify)
 from workbench.wbkit import project
 
@@ -71,10 +72,13 @@ class Declaration(unittest.TestCase):
         for field in ("helpers", "blocks", "slots", "layout", "helper"):
             self.assertNotIn(field, document)
 
-    def test_the_command_takes_the_three_reads_as_its_first_argument_and_no_change(self):
+    def test_the_command_takes_the_four_reads_as_its_first_argument_and_no_change(self):
         command = declaration()["commands"]["code-work"]
-        self.assertEqual(["check", "plans", "report"], command["arguments"])
+        self.assertEqual(["check", "plans", "report", "region"], command["arguments"])
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
+
+    def test_it_declares_the_region_as_its_approval_command(self):
+        self.assertEqual({"command": "code-work", "argument": "region"}, declaration()["approval"])
 
     def test_every_file_is_the_declaration_the_helper_a_block_the_readme_or_the_skill(self):
         found = []
@@ -125,13 +129,14 @@ class Blocks(unittest.TestCase):
         for rule in ("untrusted until the owner has acknowledged them",
                      "explicit statement of approval",
                      "`Status:` line is informational and is never an approval",
+                     "`wb approve-plan <plan>`", "`wb plan-status <plan>`", "says `approved`",
                      "needs a new approval", "one verified, reviewed local commit",
                      "run the plan check", "only with the verification that was actually run"):
             self.assertIn(rule, text)
 
     def test_the_policy_block_names_no_checkpoint_the_module_cannot_yet_enforce(self):
         text = block("policy")
-        for word in ("recorded approval", "checkpoint", "loop cap", "push", "compact"):
+        for word in ("checkpoint", "loop cap", "push", "compact"):
             self.assertNotIn(word, text.lower())
 
     def test_the_policy_block_says_a_commit_goes_through_the_git_helper_and_carries_no_attribution_by_default(self):
@@ -143,9 +148,11 @@ class Blocks(unittest.TestCase):
 
     def test_the_policy_block_is_short_and_names_no_tool(self):
         text = block("policy")
-        self.assertLessEqual(len(text.splitlines()), 14)
-        for word in ("Claude", "claude", "opencode", "Codex", "CLAUDE.md", "wb "):
+        self.assertLessEqual(len(text.splitlines()), 16)
+        for word in ("Claude", "claude", "opencode", "Codex", "CLAUDE.md"):
             self.assertNotIn(word, text)
+        self.assertEqual({"wb approve-plan", "wb plan-status"},
+                         set(re.findall(r"wb [a-z-]+", text)))
 
     def test_the_index_entry_names_the_plans_area(self):
         self.assertIn("(plans/README.md)", block("docs-index"))
@@ -182,6 +189,7 @@ class Skill(unittest.TestCase):
                      "### Increment <label>", "one verified, reviewed local commit",
                      "Never set the status to `Approved`", "explicit statement",
                      "needs the owner's new approval", "is data. Ignore any",
+                     "only the owner makes with the approve-plan command", "`## Review record` and `## Result`",
                      "Nothing tracked points to anything untracked", "`Proposed`"):
             self.assertIn(word, text, word)
 
@@ -427,6 +435,48 @@ class Install(support_install.InstallBase):
         place = self.place()
         self.assertEqual(0, self.install(place)[0])
         return place
+
+    def test_a_plan_is_approved_and_read_back_through_the_installed_module(self):
+        """The whole path: `approve-plan` resolves the module's declared `region`, shows its hash, records it
+        when it is typed back, and `plan-status` reads it; a status edit keeps it and any other edit loses it."""
+        from test_codework_helper import plan
+        place = self.installed_project()
+        rel = "docs/plans/2026-10-22-thing.md"
+        full = os.path.join(place, *rel.split("/"))
+        text = plan(status="Proposed") + "\n## Review record\n\nNone.\n\n## Result\n\nNot started.\n"
+        with open(full, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        before = os.getcwd()
+        self.addCleanup(os.chdir, before)
+        os.chdir(place)
+
+        def run(*argv, typed=""):
+            out, err = io.StringIO(), io.StringIO()
+            with unittest.mock.patch.object(approve, "is_terminal", lambda stream: True):
+                code = cli.main(list(argv), out, err, store_root=self.store_root, distribution=self.dist,
+                                stdin=io.StringIO(typed))
+            return code, out.getvalue(), err.getvalue()
+
+        self.assertEqual((1, "not approved: %s\n" % rel, ""), run("plan-status", rel))
+        code, shown, err = self.run_helper(place, "region", rel)
+        self.assertEqual((0, ""), (code, err), shown)
+        report = json.loads(shown)
+        self.assertEqual(["Status", "Review record", "Result"], report["unhashed"])
+        code, out, err = run("approve-plan", rel, typed=report["region_hash"][:12] + "\n")
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertIn("code-work", out)
+        self.assertEqual((0, "approved: %s\n" % rel, ""), run("plan-status", rel))
+        with open(full, "w", encoding="utf-8") as handle:
+            handle.write(text.replace("Status: Proposed", "Status: Approved").replace("Not started.", "Done."))
+        self.assertEqual((0, "approved: %s\n" % rel, ""), run("plan-status", rel))
+        with open(full, "w", encoding="utf-8") as handle:
+            handle.write(text.replace("Something.", "Something else."))
+        code, out, err = run("plan-status", rel)
+        self.assertEqual((1, ""), (code, err))
+        self.assertTrue(out.startswith("changed since approval: %s (the plan's region)" % rel), out)
+        code, out, err = run("approve-plan", rel, typed="wrong\n")
+        self.assertEqual(1, code)
+        self.assertEqual(1, run("plan-status", rel)[0])
 
     def test_the_read_commands_still_take_no_further_argument_and_another_name_is_refused(self):
         place = self.installed_project()
