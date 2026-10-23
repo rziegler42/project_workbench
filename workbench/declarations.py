@@ -27,8 +27,10 @@ writes,
 ships       lists of relative paths, checked by ``safefs.validate_relpath``.
 commands    an object of at most ``MAX_COMMANDS`` entries, each a command name in the
             helper-name form mapped to ``{"helper", "runtime", "kit", "arguments"}``
-            (``module-boundary.md``, "Declaration schema"). The helper is an item of
-            ``ships`` or a file below one.
+            and optionally ``"owner"`` (``module-boundary.md``, "Declaration schema"). The
+            helper is an item of ``ships`` or a file below one. ``owner`` is a list of
+            that command's ``arguments`` that only the owner runs; a harness that provides
+            permissions denies the agent each one (``module-contract.md``).
 checks      a list of at most ``MAX_CHECKS`` objects ``{"helper", "kit"}``, both required. The
             helper is an item of ``ships`` or a file below one, and its last path segment, the
             check's pin name, is in the helper-name form (``module-boundary.md``).
@@ -99,7 +101,7 @@ Module = collections.namedtuple(
     "Module", "name version type description provides requires blocks helpers slots fills "
               "writes ships commands checks layout declaration approval checkpoints caps",
     defaults=(None, (), ()))
-Command = collections.namedtuple("Command", "name helper runtime kit arguments")
+Command = collections.namedtuple("Command", "name helper runtime kit arguments owner", defaults=((),))
 Cap = collections.namedtuple("Cap", "name default ceiling")
 
 
@@ -277,7 +279,7 @@ def _commands(check, value, ships):
             check.fail("commands", "command name %s must be letters, digits and ._+-, starting "
                                    "with a letter or digit, at most %d characters"
                        % (_shown(name), MAX_NAME_CHARS))
-        check.exact_keys(entry, "commands", ("helper",), ("runtime", "kit", "arguments"))
+        check.exact_keys(entry, "commands", ("helper",), ("runtime", "kit", "arguments", "owner"))
         helper = check.path(entry["helper"], "commands")
         helper = "/".join(helper)
         if not any("/".join(helper.split("/")[:n]) in ships
@@ -310,7 +312,15 @@ def _commands(check, value, ships):
                 check.fail("commands", "command %s: argument %s must be lowercase letters, digits "
                                        "and dashes, starting with a letter, at most %d characters"
                            % (name, _shown(argument), MAX_ARGUMENT_CHARS))
-        commands.append(Command(name, helper, runtime, kit, tuple(arguments)))
+        owner = entry.get("owner", [])
+        if not isinstance(owner, list) or any(not isinstance(item, str) for item in owner):
+            check.fail("commands", "command %s: 'owner' must be a list of strings" % name)
+        check.unique(owner, "commands")
+        for argument in owner:
+            if argument not in arguments:
+                check.fail("commands", "command %s: the owner-run argument %s is not one of its 'arguments'"
+                           % (name, _shown(argument)))
+        commands.append(Command(name, helper, runtime, kit, tuple(arguments), tuple(owner)))
     return tuple(commands)
 
 

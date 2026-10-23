@@ -74,7 +74,7 @@ Each module has one declaration file, `module.json`, at the root of its director
 | `fills` | Blocks the module contributes: the slot, and the source file. |
 | `writes` | The project paths the module writes, beyond its own namespace. |
 | `ships` | Executable or code-bearing items it ships, such as hooks or helper scripts. |
-| `commands` | Commands it offers, each a helper it ships and the first arguments it accepts, run with `wb run`. The installer pins the helper when the owner confirms the install; nothing in the name of the shipped file declares a command. *(built: verified, and run with `wb run`)* |
+| `commands` | Commands it offers, each a helper it ships and the first arguments it accepts, run with `wb run`. The installer pins the helper when the owner confirms the install; nothing in the name of the shipped file declares a command. A command may also list `owner`, the arguments only the owner runs, which a harness that provides `permissions` denies the agent (`module-boundary.md`, "Declaration schema"). *(built: verified, and run with `wb run`; `owner` built by plan `2026-10-23-review-engine`)* |
 | `checks` | Pinned Python helpers it contributes to `wb check`. *(built: verified, listed in the approval request, and run by `wb check`)* |
 | `approval` | Process modules only: the command of its own that computes the hashed region of a plan and, optionally, the argument that lists the plans under way. *(built by plans `2026-10-22-plan-approval-records` and `2026-10-22-checkpoint-settings-and-caps`)* |
 | `checkpoints` | Process modules only: the names of the checkpoints it asks the owner about. *(built by plan `2026-10-22-checkpoint-settings-and-caps`)* |

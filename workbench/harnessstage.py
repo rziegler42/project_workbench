@@ -11,7 +11,7 @@ import collections
 import hashlib
 import os
 
-from . import declarations, harnessplan, installplan, localmanifest, manifest, neutral, target
+from . import declarations, harnessplan, installplan, localmanifest, manifest, neutral, rules, target
 from .wbkit import display, safefs
 from .refusal import Refused
 
@@ -138,6 +138,19 @@ def _gated(modules):
                for item in modules)
 
 
+def owner_rules(modules):
+    """The ``deny`` rules for the owner-run arguments of the installed modules' commands, in install order.
+
+    A command declares its owner-run arguments (``declarations``); the agent's harness denies each one, as it
+    denies the installer's own owner-run commands. The rules are restrictive only. Nothing here names a module."""
+    found = []
+    for item in modules:
+        for command in item.module.commands:
+            for pattern in rules.command_owner_patterns(command.name, command.owner):
+                found.append(neutral.Rule("deny", "shell", pattern))
+    return found
+
+
 def stage(store_root, harness, modules, snaps, source, version, home, root):
     """Translate and render for `harness` (a ``verify.Verified``), over `modules` in install
     order, whose snapshots are `snaps`. `source` is where the harness package came from and
@@ -173,7 +186,7 @@ def stage(store_root, harness, modules, snaps, source, version, home, root):
                 raise harnessplan.PlanError("the home directory is not known, so the rules that "
                                             "name it cannot be written")
             data = harnessplan.render_permissions(
-                [], layout, os.path.realpath(store_root), os.path.realpath(home),
+                owner_rules(modules), layout, os.path.realpath(store_root), os.path.realpath(home),
                 hook_for=harness.name if hook else None, root=os.path.realpath(root))
             settings = harnessplan.Planned(local["path"], data, harnessplan.FILE_MODE,
                                            hashlib.sha256(data).hexdigest(), "permissions")

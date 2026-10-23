@@ -6,6 +6,9 @@ Two lists are compiled in, like the floor, so no file can shorten them:
   both spellings an agent could submit, so an agent cannot install, upgrade, approve or pin.
   ``cli.py`` routes these commands, and a test fails when it routes one that is in neither this
   list nor ``AGENT_SAFE``.
+* The owner-run arguments a module declares for its commands (``command_owner_patterns``): not
+  compiled in, because they depend on which modules are installed, but built here from the same
+  spellings, so an agent cannot run them either.
 * ``FLOOR_RULES``: for each hard stop of ``floor.FLOOR``, the ``ask`` rules that make the
   harness stop for the owner. They are a best-effort match on the command text an agent submits,
   not a sandbox (``trust-and-approval.md``). A stop with no entry here fails a test, so adding a
@@ -97,6 +100,21 @@ FLOOR_RULES = {
         ("ask", "shell", "poetry add*"),
     ),
 }
+
+
+def command_owner_patterns(command, arguments):
+    """The shell patterns that deny the agent each of a module command's owner-run `arguments`.
+
+    The launcher takes the capability option before the command name, so each argument is denied bare, with
+    further arguments, and through ``--provides``. The first argument is all a declaration can authorize;
+    the patterns are a best-effort match on the text submitted, as the rest of this file is."""
+    out = []
+    for spelling in SPELLINGS:
+        for argument in arguments:
+            for head in ("run", "run --provides *"):
+                out.append("%s %s %s %s" % (spelling, head, command, argument))
+                out.append("%s %s %s %s *" % (spelling, head, command, argument))
+    return out
 
 
 def owner_run_patterns():

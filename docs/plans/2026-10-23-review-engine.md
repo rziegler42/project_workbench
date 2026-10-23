@@ -329,4 +329,22 @@ pointed to from `terms.md` and `code-work.md`.
   bound is 1,048,576 bytes.
 - Not done: the owner's reading of the spec; no review.
 
-Increments B to G: not started.
+Increment B, 2026-10-23: a module command may declare `owner`, the arguments only the owner runs, and an attached harness
+that provides permissions denies the agent each one.
+
+- Changes: `workbench/declarations.py` (the `owner` field, a subset of `arguments`, and `Command.owner` defaulting to
+  empty so existing constructors still work), `workbench/rules.py` (`command_owner_patterns`: each argument bare, with
+  more arguments and through `--provides`, in the five spellings), `workbench/harnessstage.py` (`owner_rules`, passed to
+  `render_permissions`, which until now got an empty module rule list), `tests/test_owner_run_arguments.py` (23 tests),
+  and the specs `module-boundary.md`, `module-contract.md` and `trust-and-approval.md`.
+- Verification as run: the new tests failed first (unknown key `owner`, no `command_owner_patterns`), then passed. The
+  full suite `python3 -B -W error tests/run_all.py` ran 3185 tests in 6 roots, OK (installer 2360 with 1 skip, ask-codex
+  90, claude 32, code-work 268 with 2 skips, groundwork 178, safe-git 257); `tests.test_boundary` is green so
+  `workbench/` names no module; `doccheck`, `refcheck` and `git diff --check` print nothing. No package tree changed,
+  so no approval went stale.
+- Facts found: the rendered rules depend on the modules installed when the harness was attached, so a module added
+  later needs `wb attach` again; a harness without permissions enforces the arguments by instruction only; the
+  patterns match command text and are a mistake guard, not a boundary.
+- Not done: no review of this increment (only if the owner asks); no security pass yet (planned before close).
+
+Increments C to G: not started.

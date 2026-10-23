@@ -211,7 +211,12 @@ Rules:
   agent cannot run it: `wb install`, `wb upgrade`, `wb add`, `wb attach`, `wb acknowledge`,
   `wb recover`, `wb approve`, `wb pin`, `wb release-approvals` and `wb approve-plan`, in the `wb` spelling and
   the four interpreter spellings of `-m workbench` (`rules.SPELLINGS`). The read-only `wb preview` is not denied. The commands
-  are listed in `installer-interface.md`. *(Rendered by the Claude harness module, built by
+  are listed in `installer-interface.md`. A module command may also declare owner-run arguments
+  (`module-boundary.md`, "Declaration schema"), and the harness renders a `deny` for each as well:
+  `wb run <command> <argument>` bare, with more arguments and through `--provides`, in the same five spellings
+  (`rules.command_owner_patterns`). They are restrictive only, they depend on the modules installed when the
+  harness was attached (a module added later needs `wb attach` again), and they are the same best-effort match
+  as the rest. A harness that provides no `permissions` enforces them by instruction only. *(Rendered by the Claude harness module, built by
   `claude-harness`; the opencode module is `opencode-harness`.)* The deny is best effort: it
   matches the command text the agent submits, not what a wrapper script runs. With the edit gate's hook the
   rendered rules also deny edits to the local settings file and `.git/info/exclude`, by relative and by absolute
