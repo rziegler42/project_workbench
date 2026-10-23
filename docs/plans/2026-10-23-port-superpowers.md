@@ -1,6 +1,6 @@
 # Port the superpowers skills the owner uses into neutral skills
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-23
 Candidate: workbench-v1#port-superpowers
 Specs: code-work, groundwork, harness-modules, superpowers-ports

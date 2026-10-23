@@ -38,3 +38,4 @@ or an evidence note.
 | [`model-bridge.md`](model-bridge.md) | The contract of a thin vendor module that lets an engine ask a model one read-only question |
 | [`review-engine.md`](review-engine.md) | The review module that provides `peer-review`: rounds, findings, sealed state, the project setting |
 | [`harness-modules.md`](harness-modules.md) | How a harness module describes one AI runtime |
+| [`superpowers-ports.md`](superpowers-ports.md) | The superpowers skills the owner uses, and what became of each |
