@@ -1,6 +1,6 @@
 # Delegated plan approval
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-23
 Candidate: workbench-v1#delegated-approval
 Specs: trust-and-approval, code-work, review-engine, module-contract, installer-interface
@@ -9,10 +9,10 @@ Specs: trust-and-approval, code-work, review-engine, module-contract, installer-
 
 The owner may let a second reviewer give the verdict on a plan. The accepted record
 `2026-10-19-mandatory-review-personal-delegation` allows that only when the owner's personal setting for the checkpoint
-is `delegate`, a `peer-review` provider is installed and approved, and review converged within the round cap. Today
-none of it works: `delegate` has no effect (every checkpoint stops), the `review-engine` module gives findings and
-records no verdict, and no helper writes a delegated approval. An agent that has a converged review of a plan must
-still wait for the owner to run `wb approve-plan`.
+is `delegate`, a `peer-review` provider is installed and approved, and review converged within the round cap. Before
+this plan none of it worked: `delegate` had no effect (every checkpoint stopped), the `review-engine` module gave
+findings and no statement of whether a review had converged, and no helper wrote a delegated approval. An agent that
+had a converged review of a plan still had to wait for the owner to run `wb approve-plan`.
 
 When this plan is done:
 
@@ -469,6 +469,24 @@ The review is not an approval; the plan stays `Proposed` until the owner approve
   and hardlinked, FIFO and oversize plans beyond the shipped tests.
 - Verification after the second look: the full suite passes, 3,661 tests in 7 roots (3,656 before; 333 in `code-work`),
   the same skips.
-- Not done: the release of the stale approvals after this change (owner-run; `code-work` changed), the plan Goal
-  wording, the real-vendor hand run, and `Status: Completed`. Criterion 7 is open until the owner releases the
-  approvals.
+- Released: the owner had the approvals released after the second look (commit `fd788bc`); the stale records were
+  removed after a preview.
+- Real-vendor run: not done, and waived by the owner. The plan called it possible and not planned. Every run of
+  `wb delegate-approve-plan` used a fake process module and a fake provider installed as real pinned modules, and no
+  vendor bridge ran. A hand run, if the owner wants one, is: set `approve-plan` to `delegate`, converge a review of a
+  throwaway plan, and run `wb delegate-approve-plan <plan>`.
+- Differences from the plan, accepted by the owner:
+  - B: a review with no round, or none in its current window, is refused instead of printing `converged` false. The
+    stored round files are not re-read.
+  - C: the section runs to the next level-one or level-two heading. Any heading a reader could take for the Risks
+    section counts. A header without exactly one `Status:` line is not delegable.
+  - D: the installer reads the plan once, as bytes. The setting is checked after the process module is found.
+    `delegate` for another checkpoint reads `stop` with a note.
+  - E: the guidance is a new skill, `delegate-approval`, with a pointer in `draft-plan` and `run-increment`.
+  - F: the `delegable` answer gained `document_sha256`, and the Risks section check fails closed on markup and
+    non-ASCII text. Two of the 27 plans of this repository are no longer delegable because of it.
+- Known limits, accepted: an equal entry is not added again whoever made it, a hardlinked plan is read, a pin made
+  without a recorded declaration leaves the new manifest fields uncovered, and the provider may drift after approval.
+- Criterion 7 is met: the security pass and the second look ran, their findings are fixed or recorded, the full suite
+  passes at 3,661 tests with no new skip, and the owner released the approvals.
+- Closed: `Status: Completed`.
