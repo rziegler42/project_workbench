@@ -371,3 +371,11 @@ Increment D, 2026-10-23: the specs say what is built, the owner released the app
 - Not done: no live session was used, so behaviour in a real project is unverified; no review of increments B, C or D;
   the monotonic list, lifting the floor for a non-shared push and a one-command push stay in Deferred work; whether
   `commit`'s reads share the submodule exposure is unchecked and the owner decides if it becomes a plan.
+
+After completion, 2026-10-23: the owner approved a short read-only experiment on `commit`'s reads. A scratch script
+built a repository whose gitlink is in HEAD and not in the index, with a program named in the nested repository's
+configuration for a filter, a file system monitor, an external diff and a hooks path, and ran the real `commit`.
+No program ran in that case, `commit` refused when the index held the gitlink, and a bare `git diff --name-only -z`
+in the same setup did start the program, which shows the setup can trigger one. Recorded in `safe-git.md`
+("Push check"). Limits: one nested-repository shape and one Git version; not a review; no test was added, so the
+approvals stay released.

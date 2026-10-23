@@ -10,10 +10,10 @@ launcher, the kit and the pin in `module-boundary.md`; the authority rules in `t
 ## Purpose and scope
 
 `safe-git` is a module of type `module` that lets an agent change a repository in two bounded ways: make
-one local commit of exactly the named files, and delete exact paths the owner has approved. It also reads the
-repository for one purpose, the credential check before a push (`push-check`). It has no
+one local commit of exactly the named files, and delete exact paths the owner has approved. It has no
 process of its own. A project with a process module (`code-work`) gets it as a hard requirement; a project
-with none (a CAD or electronics project that uses `groundwork` and domain modules) can install it alone.
+with none (a CAD or electronics project that uses `groundwork` and domain modules) can install it alone. Its
+one read of the repository is the credential check before a push (`push-check`).
 
 Non-goals:
 
@@ -89,8 +89,15 @@ does not push and never contacts the remote: every ref it reads is local. It is 
 
 Limits: the patterns are a narrow list and miss encoded, split or unlisted secrets and flag false positives, such
 as the pattern names written in documents; a stale or forged tracking ref, a `push.default` or `pushRemote`
-setting can make the report differ from a real push; the contents of a changed submodule are not read. Whether
-`commit`'s own reads share the submodule exposure was not checked.
+setting can make the report differ from a real push; the contents of a changed submodule are not read.
+
+`commit` does not share the submodule exposure that `push-check` had to close, as far as one run showed
+(2026-10-23, Git as installed on the owner's machine). `commit` refuses a repository whose index holds a gitlink
+before it reads anything else, and a gitlink that only HEAD holds was not entered by its reads, with a nested
+repository whose own configuration named a program for a filter, a file system monitor, an external diff and a
+hooks path. A bare `git diff --name-only -z` on a gitlink in the index did start that program in the same setup.
+This is one nested-repository shape and one Git version, not a security review of `commit`, and no test pins
+the case that only HEAD holds.
 
 ## The attribution setting
 
@@ -110,12 +117,12 @@ and only in the argument shapes it uses. It never reads or writes the guarded st
 
 ## The skill
 
-The module ships one neutral skill, `commit-changes`. (The push routine is `code-work`'s skill `push-changes`,
-which composes `push-check` with `wb run code-work shared`.) It tells an agent to commit only when the owner has
+The module ships one neutral skill, `commit-changes`. It tells an agent to commit only when the owner has
 asked, to run the verification first, to name exact paths and the full HEAD hash, to describe the change
 only, to use `--trailer` when the project's process asks for one, to run `remove` as a preview and
 `--confirm` only after the owner approves, to stop and report a refusal rather than work around it, and
-never to push. It names no tool but the two commands.
+never to push. It names no tool but the two commands. The push routine is not this module's skill: it is
+`code-work`'s `push-changes`, which composes `push-check` with `wb run code-work shared`.
 
 ## What was and was not taken from the superpowers skills
 
