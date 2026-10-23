@@ -105,6 +105,7 @@ class Declaration(unittest.TestCase):
                 found.append(os.path.relpath(os.path.join(base, name), MODULE))
         self.assertEqual(sorted(["module.json", HELPER, "files/blocks/docs-index.md",
                                  "files/blocks/policy.md", "files/" + README,
+                                 "harness/neutral/agents/reviewer.md",
                                  "harness/neutral/skills/draft-plan/SKILL.md",
                                  "harness/neutral/skills/draft-plan/template.md"]), sorted(found))
 
@@ -187,11 +188,11 @@ class Blocks(unittest.TestCase):
 
 
 class Skill(unittest.TestCase):
-    def test_the_reader_accepts_exactly_the_skill_with_its_template(self):
-        items = neutral.read_items(neutral_tree())
-        self.assertEqual([("skill", SKILL)], [(i.kind, i.name) for i in items])
-        self.assertEqual(["template.md"], [f.rel for f in items[0].files])
-        self.assertEqual((), items[0].needs)
+    def test_the_reader_accepts_the_skill_with_its_template_and_the_reviewer_agent(self):
+        items = {(i.kind, i.name): i for i in neutral.read_items(neutral_tree())}
+        self.assertEqual([("agent", "reviewer"), ("skill", SKILL)], sorted(items))
+        self.assertEqual(["template.md"], [f.rel for f in items[("skill", SKILL)].files])
+        self.assertEqual((), items[("skill", SKILL)].needs)
 
     def test_claude_gets_the_skill_with_the_template_beside_it(self):
         with open(os.path.join(PACKAGE, "claude", "module.json"), encoding="utf-8") as handle:
@@ -199,8 +200,8 @@ class Skill(unittest.TestCase):
         planned = harnessplan.translate(neutral.read_items(neutral_tree()), claude["layout"], {},
                                         {}, provides=claude["provides"])
         self.assertEqual((), planned.reports)
-        self.assertEqual([".claude/skills/draft-plan/SKILL.md", ".claude/skills/draft-plan/template.md"],
-                         sorted(f.path for f in planned.files))
+        self.assertEqual([".claude/agents/reviewer.md", ".claude/skills/draft-plan/SKILL.md",
+                          ".claude/skills/draft-plan/template.md"], sorted(f.path for f in planned.files))
         by_path = {f.path: f.data for f in planned.files}
         self.assertEqual(neutral_tree()["skills/draft-plan/template.md"],
                          by_path[".claude/skills/draft-plan/template.md"])
@@ -233,6 +234,8 @@ class Skill(unittest.TestCase):
     def test_no_skill_file_runs_a_command_beyond_the_plan_check_or_names_a_tool(self):
         for rel, data in neutral_tree().items():
             text = data.decode("utf-8")
+            if rel.startswith("agents" + os.sep):
+                text = text.replace("\ntools: read, search\n", "\n")  # an agent's one allowlist line
             for word in ("Bash", "shell", "git ", "curl", "http://", "https://", "sudo", "WebFetch",
                          "<!--", "needs:", "tools:", "claude-workflow", "ask-codex"):
                 self.assertNotIn(word, text, (rel, word))
