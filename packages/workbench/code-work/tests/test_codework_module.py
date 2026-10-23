@@ -155,10 +155,18 @@ class Blocks(unittest.TestCase):
                      "run the plan check", "only with the verification that was actually run"):
             self.assertIn(rule, text)
 
-    def test_the_policy_block_names_no_rule_the_module_cannot_yet_enforce(self):
-        text = block("policy")
-        for word in ("push", "compact"):
-            self.assertNotIn(word, text.lower())
+    def test_the_policy_block_states_no_push_rule(self):
+        self.assertNotIn("push", block("policy").lower())
+
+    def test_the_policy_block_says_what_a_compaction_must_preserve_and_that_the_plan_is_the_state(self):
+        text = " ".join(block("policy").split())
+        for rule in ("the active plan's path and increment", "the approvals and checkpoints reached",
+                     "the files changed", "the verification actually run", "unresolved risks", "the next action",
+                     "The plan, not the conversation, is the state",
+                     "before the session is compacted or ends",
+                     "Raw logs and superseded hypotheses need not survive"):
+            self.assertIn(rule, text)
+        self.assertEqual(1, len([bullet for bullet in text.split("- ") if "compacted" in bullet]))
 
     def test_the_policy_block_says_every_checkpoint_stops_and_a_cap_stops_a_run_and_where_to_read_them(self):
         text = " ".join(block("policy").split())
@@ -176,7 +184,7 @@ class Blocks(unittest.TestCase):
 
     def test_the_policy_block_is_short_and_names_no_tool(self):
         text = block("policy")
-        self.assertLessEqual(len(text.splitlines()), 18)
+        self.assertLessEqual(len(text.splitlines()), 24)
         for word in ("Claude", "claude", "opencode", "Codex", "CLAUDE.md"):
             self.assertNotIn(word, text)
         self.assertEqual({"wb approve-plan", "wb plan-status", "wb settings"},

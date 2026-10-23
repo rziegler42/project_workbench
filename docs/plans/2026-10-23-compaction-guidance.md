@@ -1,6 +1,6 @@
 # The compaction guidance
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-23
 Candidate: workbench-v1#compaction-guidance
 Specs: code-work, harness-modules
@@ -197,4 +197,19 @@ Left for the owner: whether R1-F2 stands as rejected, whether to approve, and wh
 
 ## Result
 
-Not started.
+Increment A, 2026-10-23: the `code-work` policy block carries the compaction bullet of choice 2, word for word, between the
+commit rule and the verification rule (`packages/workbench/code-work/files/blocks/policy.md`, now 23 lines).
+
+- Verification as run: the new policy test failed first (the phrases were absent), then passed. A second failure was my
+  own assertion, a count of the word "compacted" that the bullet legitimately uses twice; I replaced it with a check
+  that one bullet states the rule. The `code-work` suite then ran 268 tests, OK, 2 skipped as before;
+  `tests.test_boundary` ran 19 tests, OK; `doccheck`, `refcheck` and `git diff --check` print nothing. The full suite
+  was not run: the `code-work` approval is stale until increment B.
+- Tests: `test_the_policy_block_names_no_rule_the_module_cannot_yet_enforce` is now
+  `test_the_policy_block_states_no_push_rule` (choice 4); a new test pins the preserved items, the plan-as-state
+  sentence and that one bullet states it; the line limit is 24 (choice 3). The existing tests that the block names no
+  harness and only the three `wb` commands pass unchanged, and the rendered `AGENTS.md` fill test carries the new text.
+- Limits: advice only; it does not steer the summary; nothing was run in a live session.
+- Not done: no review of this increment (only if the owner asks).
+
+Increment B: not started.
