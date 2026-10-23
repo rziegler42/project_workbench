@@ -304,6 +304,15 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   and not the same as `argument`. It names the argument that lists the plans under way, for the edit gate
   (`trust-and-approval.md`, "Checkpoint and cap settings, and the edit gate"). A module without it has no
   gate, no hook is rendered for its project, and `wb gate` allows every edit there.
+- `approval.delegable` *(proposed by plan `2026-10-23-delegated-approval`; not built)*: an optional field, one of the same
+  command's `arguments`, different from `argument` and `active`. It names the argument that tells the installer whether
+  a plan may be approved by a delegate (`trust-and-approval.md`, "Delegated plan approval records"). A module without it
+  has no plan that is delegable.
+- `convergence` *(proposed, not built)*: an optional object on a module whose `provides` lists `peer-review`, with
+  exactly the fields `command` (the key of one of its `commands`) and `argument` (one of that command's `arguments`). It
+  names the argument that reports whether the last review of a plan converged. It is refused on a module that does not
+  provide `peer-review`, with a command or argument the module does not declare, an unknown field or a wrong type,
+  naming the module and the field. A provider without it gives findings only.
 - `checkpoints` *(built)*: a list of at most 16 names, each lowercase kebab-case of at most 64 characters (the
   rule the personal settings already apply to a checkpoint name), none repeated. A process module only.
 - `caps` *(built)*: a list of at most 16 objects with exactly the fields `name` (the same rule, none repeated),

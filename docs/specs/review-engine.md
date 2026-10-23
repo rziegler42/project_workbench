@@ -59,6 +59,7 @@ directory, and none changes the reviewed document.
 | `reset <document>` | opens a fresh window of the default number of rounds (owner-run) |
 | `archive <document>` | closes the review: the ledger is its summary, and no further round, decision or change is taken (owner-run) |
 | `prune [--apply]` | lists, and with `--apply` deletes, closed reviews closed 90 days ago or more (owner-run) |
+| `convergence <document>` | *(proposed, not built)* prints whether the last review of a plan converged, for the installer's delegated approval (see "Convergence") |
 
 `<document>` is a path relative to the project root. It must be a regular file with no link in any component, inside
 the project, in the directory of its kind (`docs/plans/`, `docs/specs/`, `docs/roadmaps/`, `docs/decisions/`) and no
@@ -96,6 +97,22 @@ A round is one call to the bridge and, if the reply is valid, one recorded set o
   reviewer's), `reading` (the engine's), `verdict_mismatch`, `summary`, `model`, `findings` (each with its `id`,
   `severity`, `location`, `problem` and `suggestion`), `meaningful` (the number of blocker and major findings),
   `pending` (the meaningful findings of the window with no decision) and `converged`.
+
+### Convergence
+
+*(Proposed by plan `2026-10-23-delegated-approval`; not built. The declaration then also names this argument for the
+installer, `module-contract.md`.)* `convergence <document>` is read-only and agent-safe; it is not in the owner-run
+list. It answers the question the installer's delegated approval asks and records no approval and nothing else: `trust-and-approval.md`, "Delegated plan approval records", gives the object and says who reads it.
+
+- It refuses, with a `refused:` line, a document that is not a plan, has no review, or whose state is unsealed, rolled
+  back or unreadable, and it runs no model.
+- `converged` is true only when the last stored round has no `blocker` or `major` finding, no meaningful finding of the
+  current window is pending, the reviewer's verdict and the engine's reading both say `no_meaningful_changes` (a mismatch
+  is not converged), and the rounds used do not exceed the bound. It does not depend on the decisions: a rejected
+  meaningful finding of an earlier round does not make a later round clean, and the last round must itself be clean.
+- `document_sha256` is the hash of the file as that round read it, the value the round stored. The installer compares it
+  with its own hash of the file; the engine knows nothing of plan sections.
+- A closed review is answered as a closed one (`closed: true`), not refused.
 
 ### The findings schema
 

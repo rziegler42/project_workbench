@@ -168,6 +168,7 @@ says so.
 | `release-approvals` | package | nothing | the shipped first-party records in the workbench distribution | no | built |
 | `approve-plan` | project | a plan path | the guarded store: a plan approval record | yes, owner-run | built |
 | `plan-status` | project | a plan path | nothing | no | built |
+| `delegate-approve-plan` | project | a plan path | the guarded store: a delegated plan approval record | no, agent-run | proposed |
 | `settings` | project | nothing | nothing | no | built |
 | `gate` | project | a harness name, and the hook's JSON on standard input | nothing | no | built |
 
@@ -503,6 +504,16 @@ uses, with the same refusals. The behaviour, the path rules, the record, the out
 `trust-and-approval.md`, "Plan approval records". `approve-plan` is owner-run and terminal-only and a harness
 denies it to the agent; `plan-status` is read-only and agent-safe. Neither commits, pushes or edits a plan, and
 neither reads a plan itself: the process module's declared, pinned command does.
+
+### `delegate-approve-plan` *(proposed by plan `2026-10-23-delegated-approval`; not built)*
+
+`wb delegate-approve-plan <plan>` takes exactly one argument and no option and runs from anywhere inside a project, with
+the root and the ID found as `approve-plan` finds them and the same path rules. It is the command an agent runs to get
+a plan approved by a delegate when the owner's personal setting for `approve-plan` is `delegate`. It is not owner-run and
+no harness denies it. It writes only the `plan-approvals` record in the guarded store; it edits no plan and commits
+nothing. The checks, their order, the facts it reads from the process module and from a `peer-review` provider, the
+record and the exit codes are in `trust-and-approval.md`, "Delegated plan approval records". It reads no plan section
+itself: the process module's declared, pinned commands do.
 
 ### `settings` and `gate` (built by plan `2026-10-22-checkpoint-settings-and-caps`)
 

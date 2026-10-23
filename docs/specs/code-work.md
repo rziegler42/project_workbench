@@ -135,11 +135,15 @@ and `groundwork`'s completion report does nothing when no process module provide
 
 ### Plan approval
 
-The record of a plan approval, and the delegation helper that writes a delegated one,
-are implemented with this module, because the sections that are excluded from the
-hashed region (the status line, the review record and the result) are named by this
-module's plan format. `trust-and-approval.md` defines the rule; this module supplies
-the section names and the plan check.
+The record of a plan approval is written by the installer, and so is a delegated one
+(`trust-and-approval.md`, "Delegated plan approval records", proposed). This module
+supplies what only its plan format knows: the sections that are excluded from the
+hashed region (the status line, the review record and the result) and, once the
+delegated approval is built, whether a plan is delegable. `trust-and-approval.md`
+defines the rule; this module supplies the section names and the plan check. An
+earlier version of this paragraph said the delegation helper is implemented with
+this module; the decision `2026-10-23-delegated-plan-approval` (accepted) moves
+the writer to the installer, because the guarded store is the installer's.
 
 *(Built by plan `2026-10-22-plan-approval-records`.)* The module's helper has a read-only subcommand, `region <plan>`, over the
 reader that `check` already uses, and the module declares `approval: {"command": "code-work", "argument":
@@ -153,7 +157,7 @@ case or indentation, so that text a reader could take for another section is alw
 plan with a duplicated left-out heading, with no single status line (of at most 200 characters) before its first heading, with a fence or
 comment that is never closed, or that is not UTF-8, larger than the check reads or not directly in
 `docs/plans/`, is refused rather than guessed. The owner approves with `wb approve-plan <plan>`; an agent reads `wb plan-status <plan>`; the delegated
-record is not built. A `peer-review` provider now exists (`review-engine.md`) and gives findings only.
+record is not built. A `peer-review` provider now exists (`review-engine.md`); it stores findings as data and records no approval.
 
 ### Completion
 
@@ -210,7 +214,8 @@ step without a recorded outcome.
   findings. It may give the verdict only when the owner has delegated that checkpoint
   and the provider is installed and approved.
 - Without an installed provider, the owner reviews, or the run stops. The first-party provider is the review engine
-  (`review-engine.md`, built: the module `review-engine` gives findings and records no verdict).
+  (`review-engine.md`, built: the module `review-engine` stores findings, the reviewer's verdict and its reading as
+  data, and records no approval).
 - A plan review checks the plan against its candidate and its specs. Drift from
   either is a finding.
 - The outcome is written to the plan's review record: the reviewer, the model, the
@@ -236,7 +241,19 @@ step without a recorded outcome.
 
 The setting names are what the module declares in `checkpoints` and what the owner writes under `checkpoints` in
 the personal settings (`trust-and-approval.md`). Setting `delegate` has no effect until `delegated-approval`:
-every checkpoint stops, whatever the setting says. `wb settings` reports the effective values.
+every checkpoint stops, whatever the setting says. `wb settings` reports the effective values. *(Proposed, not built:
+once `delegated-approval` is built, `delegate` takes effect for `approve-plan` only, and every other checkpoint
+stops whatever its setting says.)*
+
+Delegability *(proposed, not built)*. The module's helper gets a read-only argument that tells the installer whether a
+plan may be approved by a delegate (`approval.delegable`; `module-contract.md`). A plan is delegable when it has exactly
+one Risks section, the one headed `## Risks and sensitive actions` outside a fence, a quotation and an HTML comment,
+and that section has no line that begins, after any list marker and emphasis, with `Hard stop:` (case-sensitive). Text
+outside that section cannot change the answer. A plan with no Risks section, more than one, a heading in another
+case, an unreadable file, a link, a file larger than the check reads or a path outside `docs/plans/` is not delegable.
+The marker is a convention of this module and defence in depth only (`trust-and-approval.md`); a plan that omits it is
+still stopped at the action. The convention is not a keyword search: a Risks section that says "no push, no install"
+is delegable.
 
 Not checkpoints inside an approved plan: starting the next increment, a local commit
 after a passing review, archiving a plan, pushing a branch that is not shared (the harness still asks, see

@@ -71,11 +71,11 @@ owner's personal settings.
 - The owner records an approval by running a command themselves, from a prompt the
   agent does not control (for example a harness's user-shell prefix). The agent's
   command permissions deny that command.
-- Delegated approval is performed only by a small helper (see "Delegated
-  approval"), which the agent may call and which checks before it writes. The
-  helper and the launcher in "Pinned helpers" are components of the workbench
-  itself: the installer installs them when it initializes the store. They are not
-  shipped by any module.
+- Delegated approval is performed only by a small command of the installer
+  (`wb delegate-approve-plan`; see "Delegated approval"), which the agent may call
+  and which checks before it writes. That command and the launcher in "Pinned
+  helpers" are components of the workbench itself: the installer installs them when
+  it initializes the store. They are not shipped by any module.
 - **Initialization.** Every workbench command first ensures the store exists,
   idempotently, and seeds the personal settings if they are missing, before any
   approval check runs. No command depends on an earlier "first run".
@@ -159,9 +159,12 @@ A new teammate with no settings gets `stop` for every checkpoint.
 - A delegate may issue the verdict for a checkpoint only when the personal setting
   for that checkpoint is `delegate` and the `peer-review` capability is provided
   by an installed, approved module. The first-party provider is the module
-  `review-engine` (`review-engine.md`). It gives findings only: it records no
-  verdict and no delegated approval, and nothing in it asks for one. The delegated
-  record is not built.
+  `review-engine` (`review-engine.md`). It stores findings, the reviewer's verdict
+  and its own reading as data, and it records no approval and grants no authority;
+  nothing in it asks for one. The delegated
+  record is designed (plan `2026-10-23-delegated-approval`, decision
+  `2026-10-23-delegated-plan-approval`, accepted) and not built; "Delegated plan
+  approval records" below states it.
 - A reviewer may always give findings without delegation. The verdict is the part
   that needs authority.
 - For plan approval, the delegate's verdict requires that review converged with no
@@ -174,8 +177,11 @@ A new teammate with no settings gets `stop` for every checkpoint.
 - A plan whose risks section lists any hard-stop action is not delegable. This is
   defence in depth only: a hostile plan can omit the section, so the real control is
   that hard stops stop at the time of the action whatever the plan says.
-- The helper is the only writer of delegated approvals. Its integrity is pinned (see
-  "Pinned helpers").
+- The installer's `delegate-approve-plan` command is the only writer of delegated
+  approvals. It writes the same record as the owner's `approve-plan`, from facts that
+  declared, pinned commands report; a module never writes a plan approval record.
+  A module's other writes to the store, such as the review engine's seal key and
+  marks, are not approvals and are unchanged.
 
 ### Hard stops and the floor
 
@@ -409,6 +415,80 @@ prose above and this section differ in precision, this section is what the code 
   authority on what the region is, as far as its owner-approved bytes go, and a helper that misreports it defeats
   the approval; the record binds the helper's hash so that an edit of it is a change.
 
+### Delegated plan approval records
+
+*(Designed by plan `2026-10-23-delegated-approval` and the decision `2026-10-23-delegated-plan-approval`, which the
+owner accepted on 2026-10-23; nothing here is built yet.)*
+
+- **The command.** `wb delegate-approve-plan <plan>` takes one argument and no option, runs from anywhere inside the
+  project, and finds the root, the ID and the plan path as `approve-plan` does, with the same path rules. It is not
+  owner-run: the agent may run it, and no harness denies it. It prints one line, `approved: <plan> (delegated, <n> of
+  <bound> rounds)` or `already approved: <plan>`, or a `refused:` line on standard error and nothing on standard
+  output. Exit codes: 0 recorded or already recorded, 1 refused with nothing written, 2 usage error.
+- **What it checks, in this order, and stops at the first failure.**
+  1. The effective value of the checkpoint `approve-plan` is `delegate` ("Checkpoint and cap settings", below). The
+     value is read from the owner's personal settings in the guarded store and from nowhere else.
+  2. Exactly one process module declares `approval` (as for `approve-plan`) and exactly one installed module provides
+     `peer-review` and declares `convergence` ("Declaration" in `module-contract.md`). Each is installed, approved, has
+     its declaration hash equal to the manifest's, and has its helper pinned and unchanged, as `wb run` requires. None
+     or more than one is a refusal.
+  3. The plan file is read once, with no link followed and within the bound the region reader uses, and its SHA-256
+     is taken (`H1`).
+  4. The region command runs as for `approve-plan` and reports the region hash.
+  5. The process module's `delegable` argument runs; the plan must be delegable.
+  6. The provider's `convergence` argument runs; the review must be of kind `plan`, converged, and its
+     `document_sha256` must equal `H1`.
+  7. The plan is read and hashed again and must equal `H1`, and the region command's report must equal the first. A
+     difference is a refusal.
+  8. One entry is written, then read back; it is not written if an entry equal in plan, region hash, declaration hash
+     and helper hash exists, whoever made it.
+- **The facts the commands report.** Each is run with standard input closed, as `region` is, with the plan's
+  project-relative path as its last argument, and each answers with one JSON object and a newline and nothing else
+  within its bound; a non-zero exit, a timeout, a `refused:` line, a second line or a field not listed is no approval.
+  The output is data: validated, never followed.
+  - `delegable` (the process module's argument named by `approval.delegable`, at most 1,024 bytes):
+    `{"format": 1, "delegable": true | false, "reason": "<at most 200 printable characters>"}`.
+  - `convergence` (the provider's argument, at most 4,096 bytes): `{"format": 1, "kind": "plan", "converged": true |
+    false, "document_sha256": "<64 lowercase hex>", "rounds_used": <1 to 5>, "bound": <1 to 5>, "bridge": "<name of at
+    most 64 characters>", "model": "<at most 200 printable characters>" | null, "review": "plan-<16 lowercase hex>",
+    "closed": true | false}`. The provider reads its own sealed state and refuses with a `refused:` line when the
+    review is missing, unsealed, rolled back or unreadable, or is not of a plan. `converged` is true only when the last
+    round has no `blocker` or `major` finding, no meaningful finding of the window has no decision, the reviewer's
+    verdict and the provider's reading both say no meaningful changes, and the rounds used do not exceed the bound.
+    A rejected finding does not make a review converge, because the last round must itself be clean. A closed
+    (archived) review counts.
+- **The same-bytes rule and its order.** The review's `document_sha256` is the hash of the plan file as the reviewer
+  read it, so the approval is only given while the file is byte-for-byte what was reviewed. The review record the agent
+  writes after a review changes the file, so the agent asks for the delegated approval after the converging round and
+  before it writes the record. If it asks later the command refuses, saying that the file differs from the reviewed
+  one; the agent runs another round or the owner approves. The status line, the review record and the result can change
+  after the approval without invalidating it, because the approval binds the region.
+- **The record.** The `plan-approvals` file moves to `format: 2`. The reader accepts formats 1 and 2 and the writer
+  writes 2; an older workbench refuses a format-2 file, which fails closed. An entry of either format has the fields of
+  "Plan approval records". A format-2 entry may also have `delegate`, an object with exactly: `provider` (the module
+  name), `provider_declaration_hash`, `provider_helper_sha256`, `bridge`, `model` (text or null), `rounds_used`,
+  `bound`, `review` and `document_sha256`. An entry with `delegate` is a delegated approval; `approver` is still the
+  account's name from the operating system and grants nothing. The four values that decide `approved` are unchanged, so
+  `plan-status` and the edit gate read a delegated approval as they read an owner's, and a change of the region, the
+  process declaration or the helper makes it `changed since approval` in the same way.
+- **While the setting stands.** An entry with `delegate` counts only while the effective value of `approve-plan` is
+  `delegate` when it is read. A setting that is `stop`, missing or damaged withdraws it: `plan-status` prints `not
+  approved: <plan> (delegated approval withdrawn: approve-plan is not delegate)`, the gate refuses with that reason, and
+  the owner's `approve-plan` is how to approve. An entry without `delegate` is never affected by the setting. The
+  provider's hashes in the entry are provenance and are not checked when the entry is read.
+- **Delegable.** A plan is delegable when it has exactly one Risks section and that section has no line that begins,
+  after any list marker and emphasis, with `Hard stop:` (case-sensitive). A plan with no Risks section, more than one,
+  or one that cannot be read is not delegable. The marker is a convention the process module documents. It is defence
+  in depth only: a hostile plan can omit it, and the real control is that hard stops stop at the time of the action.
+- **Limits.** A delegated approval is weaker than the owner's. A plan written to steer the reviewer can get a clean
+  review, the reviewer and the author can share a blind spot, and the gate stops a mistaken agent and not a hostile
+  one. The seal key and the rollback mark of the review sit in the guarded store under the harness's deny rule, which
+  is a mistake guard. A review that was not sealed on this machine gives no delegated approval until the owner resets it.
+  The model may be unknown (null). The record states the delegate; it does not say that the reviewer was good.
+  A provider that is changed, replaced or removed after the approval does not withdraw it (an accepted risk, decision
+  `2026-10-23-delegated-plan-approval`): what was approved is bound by the region and the process module's helper, and
+  the owner turns delegation off or approves the plan again to withdraw it.
+
 ### Checkpoint and cap settings, and the edit gate
 
 *(Built by plan `2026-10-22-checkpoint-settings-and-caps`. The names are in `code-work.md`; the declaration fields are
@@ -421,7 +501,10 @@ in `module-contract.md`; the decision that the installer owns the gate is
   because the key is additive; a workbench that predates it reports the key as unknown and ignores it. A missing
   `caps` is empty.
 - **Effective values.** A checkpoint is `delegate` only when the owner set exactly `delegate` for a name the
-  module declares, and `stop` otherwise; `delegate` has no effect until `delegated-approval` reads it. A cap is the
+  module declares, and `stop` otherwise; `delegate` has no effect until `delegated-approval` reads it. *(Proposed, not
+  built: once built, `delegate` takes effect for the checkpoint `approve-plan` only, which `delegate-approve-plan`
+  reads. For any other name, `delegate` stays `stop`, and `wb settings` prints `stop` with a `settings:` note that
+  delegation of that name has no effect.)* A cap is the
   owner's value when that is a JSON integer from 1 to the module's ceiling (a boolean, zero, a negative
   number or a larger number is not; a number with a fraction or an exponent makes the strict loader treat the
   whole file as damaged), and the module's default otherwise. A checkpoint or cap entry for a name the

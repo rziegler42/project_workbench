@@ -1,6 +1,6 @@
 # Delegated plan approval
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-23
 Candidate: workbench-v1#delegated-approval
 Specs: trust-and-approval, code-work, review-engine, module-contract, installer-interface
@@ -93,15 +93,26 @@ When this plan is done:
    converge a review, because the last round must itself be clean.
 4. **Delegability is the process module's judgement.** `trust-and-approval.md` makes a plan whose risks list a
    hard-stop action not delegable. Only the plan format knows what the Risks section is, so `code-work` answers it
-   through an `approval.delegable` argument. It is defence in depth, as the spec says; the real control is that hard
-   stops stop at the time of the action.
+   through an `approval.delegable` argument. A plan declares a hard stop with a line in its Risks section that begins
+   `Hard stop:`; a keyword match is not used, because Risks sections routinely say "no push, no install". It is
+   defence in depth, as the spec says; the real control is that hard stops stop at the time of the action.
 5. **The approvals file moves to `format: 2`.** An entry gains an optional `delegate` object. The reader accepts
    formats 1 and 2 and writes 2; an older workbench refuses a format-2 file, which fails closed. The four values that
    decide `approved` (plan, region hash, declaration hash, helper hash) are unchanged.
 6. **`delegate` takes effect for `approve-plan` only.** The effective-values rule changes for that one name and stays
-   `stop` for every other; `wb settings` says which.
+   `stop` for every other. `wb settings` prints `checkpoint <name>: stop` for any other name the owner set to
+   `delegate`, with a `settings:` note that delegation of that name has no effect (today it prints `delegate`). This
+   changes the output of a built command.
 7. **A closed (archived) review still counts**, provided its state is sealed and its last round converged. Archiving is
    the owner's act and says nothing against the verdict.
+8. **A delegated entry counts only while the setting stands.** `wb plan-status` and the edit gate treat an entry that
+   has a `delegate` object as an approval only while the owner's personal setting for `approve-plan` reads `delegate`
+   at that moment; a setting that is `stop`, missing or damaged withdraws it (the plan reads `not approved`, and the
+   line says why), and the owner's own `wb approve-plan` is then the way to approve. The record's provider hashes are
+   provenance and are not checked when the entry is read: a provider that is changed, replaced or removed afterwards
+   leaves the approval valid, because what was approved is bound by the region and the process module's helper and not
+   by the reviewer. This is an accepted risk and the spec and the decision record say so. (Added after round 3 of the
+   decision record's review, at the owner's choice.)
 
 ## Completion criteria
 
@@ -119,8 +130,8 @@ When this plan is done:
    plan is delegable; the file's hash equals the review's last round; the file did not change during the check; and it
    writes one record that holds the delegate, rounds and review pointer. Every refusal writes nothing.
 5. `wb plan-status` and the edit gate read a delegated approval as `approved`, and `changed since approval` when the
-   region, the process declaration or the helper differs, exactly as for an owner approval. A tampered record is no
-   approval.
+   region, the process declaration or the helper differs, exactly as for an owner approval, and only while the
+   personal setting for `approve-plan` is `delegate` (choice 8). A tampered record is no approval.
 6. No other checkpoint is affected by a `delegate` setting; a missing, project-supplied or malformed setting is
    `stop`.
 7. A `security-review` pass with adversarial verification has run, its findings are fixed or recorded, and the specs say
@@ -181,12 +192,13 @@ approval is stale until increment F.
 `docs/specs/code-work.md`; the contract check for the field.
 **Steps:**
 1. Tests first: the argument prints one JSON object (`delegable`, a reason of at most 200 printable characters);
-   a plan whose Risks section lists a hard-stop action is not delegable; a plan with no Risks section, an
-   unreadable one, a duplicated one or one in an odd place is not delegable (fail closed); text outside the Risks
-   section cannot make a plan delegable or not; a link, an oversize file or a path outside `docs/plans/` is refused;
+   a plan whose Risks section has a line beginning `Hard stop:` (after any list marker and emphasis, case-sensitive) is
+   not delegable, and one whose Risks section says "no push, no install, no secret" is delegable; a plan with no Risks
+   section, an unreadable one, a duplicated one or one in an odd place is not delegable (fail closed); text outside the
+   Risks section cannot make a plan delegable or not; a link, an oversize file or a path outside `docs/plans/` is refused;
    the field is accepted only as one of the declared command's arguments.
-2. Implement over the reader `region` already uses. The hard-stop words are the floor identifiers' plain meanings,
-   listed in the spec; a plan that names none still stops at the action.
+2. Implement over the reader `region` already uses. The marker is the one the spec states (`code-work.md`,
+   "Delegability"); a plan that omits it still stops at the action.
 **Verification:** the module tests; contract tests; `tests.test_boundary`; document checks.
 **Evidence:** the one local commit, trailer `Plan: 2026-10-23-delegated-approval#C`. The package tree changes, so its
 approval is stale until increment F.
@@ -205,7 +217,9 @@ approval is stale until increment F.
    converged, a hash that differs, a rolled-back or unsealed review, a plan that changes between the first hash and the
    last check, a link or an oversize plan); a delegate record is written once, holds the delegate and the rounds and
    the review pointer, and a second call writes nothing; `plan-status` and the gate read it as `approved`, and as
-   `changed since approval` after any change; format 1 files are read and a format-2 file is written; a tampered
+   `changed since approval` after any change; the same entry reads `not approved` with its reason once the setting is
+   `stop`, missing or damaged, and `approved` again when it is `delegate`, while an owner entry is unaffected by the
+   setting; a provider changed or removed after the approval does not change the reading; format 1 files are read and a format-2 file is written; a tampered
    or truncated file is no approval; `wb settings` shows `delegate` only for `approve-plan`; the command is not in the
    owner-run list and its rendering is pinned by the drift test; the boundary test passes with no module word.
 2. Implement the command, the reader and writer for format 2, and the rule.
@@ -286,6 +300,10 @@ this plan's Result.
 - No push, no install into a project, no real vendor call, no secret, and no deletion beyond stale approval records.
 
 ## Review record
+
+Increment A's own decision record, `2026-10-23-delegated-plan-approval`, was reviewed in three rounds of
+`ask-codex review-adr` and accepted by the owner on 2026-10-23; its Review record has the findings. The review of this
+plan follows.
 
 Round 1 of 3, 2026-10-23, `ask-codex review-plan`, model `gpt-5.6-luna`, effort medium (asked for by the owner).
 Outcome: changes needed; one major finding, applied. No second round was run.
