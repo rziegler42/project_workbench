@@ -1,6 +1,6 @@
 # The compaction guidance
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-23
 Candidate: workbench-v1#compaction-guidance
 Specs: code-work, harness-modules
@@ -212,4 +212,21 @@ commit rule and the verification rule (`packages/workbench/code-work/files/block
 - Limits: advice only; it does not steer the summary; nothing was run in a live session.
 - Not done: no review of this increment (only if the owner asks).
 
-Increment B: not started.
+Increment B, 2026-10-23: the specs and the roadmap candidate now say what is built.
+
+- `code-work.md` ("Context across increments", "Decided points that were open", "As built", "Not built") and
+  `harness-modules.md` (the Claude layout table row, "Hooks", the acceptance line) no longer promise a generated
+  "Compact Instructions" section. They say the guidance is a policy bullet, cite the four documentation pages with
+  retrieval date and hashes, and record the section as unconfirmed and not built and the `SessionStart` `compact`
+  hook and the rendered section as deferred. The opencode open item is unchanged. The roadmap candidate is edited in
+  exactly the three places of choice 5 (Current state sentence, Outcome, Boundary).
+- Approvals: the owner ran `release-approvals` ("Run it for me"), which wrote 6 approvals and flagged two stale
+  records; after a preview and "remove them", both were removed.
+- Verification as run: the full suite `python3 -B -W error tests/run_all.py` ran 3162 tests in 6 roots, OK (installer
+  2337 with 1 skip, ask-codex 90, claude 32 with no skip, code-work 268 with 2 skips, groundwork 178, safe-git 257);
+  `doccheck`, `refcheck` and `git diff --check` print nothing; a search of the docs found no remaining promise of the
+  rendered section outside earlier plans, which are history.
+- Limits: advice only; no live session was used; no review of this plan's increments was run. The review of the plan
+  (round 1 of 3) is not archived.
+
+All four completion criteria have their evidence.

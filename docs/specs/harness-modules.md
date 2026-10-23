@@ -137,14 +137,14 @@ Claude Code 2.1.305 (see "Evidence" below):
 
 | kind or file | path |
 |---|---|
-| root file | `CLAUDE.md`: an `@AGENTS.md` pointer only. The generated "Compact Instructions" section is added once a module supplies the neutral preservation guidance (`compaction-guidance`) |
+| root file | `CLAUDE.md`: an `@AGENTS.md` pointer only. The preservation guidance for a compaction is a bullet of the `code-work` policy block, which Claude loads through the pointer; Claude's documentation names no "Compact Instructions" section, so none is generated (`code-work.md`, "Context across increments") |
 | skill | `.claude/skills/<name>/SKILL.md`; bundled files beside it |
 | agent | `.claude/agents/<name>.md` (`name`, `description`, `tools` as an allowlist, optional `model`) |
 | command | `.claude/commands/<name>.md` (`description`, `argument-hint`; `$ARGUMENTS`) |
 | local permissions and hooks | `.claude/settings.local.json`, which Claude merges over the committed settings and which holds `permissions` and `hooks` |
 
-- A hook that re-injects text after a compaction ships only as a `harness/claude/`
-  override.
+- A hook that re-injects text after a compaction (a `SessionStart` hook with the `compact` matcher) ships only as
+  a `harness/claude/` override. None is built.
 - Excluded from git by `.git/info/exclude`: the root file and everything under
   `.claude/`. Claude does not ignore a settings file that was created by hand; it adds
   its own ignore entry to the user's global git excludes only the first time it writes
@@ -409,7 +409,6 @@ area, therefore does not get a shell. It is given a **dedicated tool**.
   the command that records an approval, for a harness that provides `permissions`.
 - A hook appears only if the module ships it under `harness/<name>/`, and it is listed
   at approval.
-- The Claude root file contains the pointer, and the generated Compact Instructions
-  section once a module supplies the neutral guidance. The opencode harness writes no
+- The Claude root file contains the pointer only. The opencode harness writes no
   root file.
 - A generated file edited after attach is reported by the check.

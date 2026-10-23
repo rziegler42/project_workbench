@@ -108,8 +108,8 @@ meet here and the order matters.
   read-only `wb check` (harness drift, strays, other harnesses' files, tracked output and pointers,
   the manifest), which reads `.git/index` itself and runs no git. An adversarial security pass found
   nothing above Low unresolved. The hand run in a live `claude` session was not done. The plan's Result
-  and `harness-modules.md` ("As built, and its limits") list the limits. Compact Instructions waits
-  for `compaction-guidance`.
+  and `harness-modules.md` ("As built, and its limits") list the limits. The compaction guidance is
+  a policy bullet from `compaction-guidance`; no Compact Instructions section is rendered.
 - `groundwork-module` is implemented (plan `2026-10-21-groundwork-module`, increments A to I; its
   completion is derived from that plan): the first-party module `groundwork` in
   `packages/workbench/` with the four READMEs, the `docs-index` and policy blocks and three skills
@@ -429,11 +429,10 @@ rendered as a rule the harness enforces.
 
 ### compaction-guidance — The compaction guidance
 
-**Outcome:** the neutral preservation guidance for compaction and the Claude "Compact Instructions" section it
-renders.
+**Outcome:** the preservation guidance for compaction, as a bullet of the `code-work` policy block.
 **Dependencies:** `claude-harness`.
-**Boundary:** the guidance text and its rendering. No hook and no wrapper that triggers compaction from outside a
-session.
+**Boundary:** the guidance text in the policy block. No rendered "Compact Instructions" section (Claude's
+documentation names none), no hook and no wrapper that triggers compaction from outside a session.
 **Promotion trigger:** the owner chooses to begin it.
 
 ### remote-runner-module — `remote-runner` as a generic module

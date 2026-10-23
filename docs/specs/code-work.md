@@ -322,15 +322,37 @@ and its status, review record and result are updated as work proceeds.
   needs a wrapper and is not an agent action, so it is out of scope here.
 - The module ships neutral guidance on what a compaction must preserve: the active
   plan's path and current increment, the approvals and checkpoints reached, the files
-  changed, the verification results, and the next action. How a harness receives it
+  changed, the verification results, unresolved risks and the next action, and that the
+  plan, not the conversation, is the state. It is one bullet of the policy block in
+  `AGENTS.md` (`compaction-guidance`). It is advice: it steers nothing by itself, and
+  it does not shape the summary a compaction writes. How a harness receives it
   differs:
-  - Claude reads a "Compact Instructions" section of `CLAUDE.md`, and a
-    `SessionStart` hook with the `compact` matcher can re-inject text after a
-    compaction. Hooks have no neutral form, so any such hook ships only as a
-    `harness/claude/` override and is shown at approval.
+  - Claude Code's documentation says the project-root `CLAUDE.md` "survives
+    compaction: after `/compact`, Claude re-reads it from disk and re-injects it", and
+    that `@path` imports are expanded and loaded alongside it, so the policy bullet
+    reaches the agent again through the `@AGENTS.md` pointer. It says `/compact` takes
+    focus instructions, and lists `compact` among the `SessionStart` hook matchers. A
+    hook with that matcher could re-inject text after a compaction; hooks have no
+    neutral form, so any such hook ships only as a `harness/claude/` override and is
+    shown at approval. None is built.
+  - The documentation names no "Compact Instructions" section of `CLAUDE.md`: the
+    phrase appears in none of the four pages. The section is unconfirmed and not
+    built.
   - opencode's compaction hook is experimental and version-dependent, and its
     project-level configuration is unverified, so no opencode rendering is specified
     until it is checked against the installed version.
+  - Sources, all under `https://code.claude.com/docs/en/`, retrieved 2026-10-23 with
+    `curl` and hashed as fetched (SHA-256); the pages carry no version and can change:
+
+    | page | hash |
+    |---|---|
+    | `memory.md` | `82d60341354924ee8658de0fcde297c2ac37b237dcc931aa4a83329b2c7bb6e7` |
+    | `context-window.md` | `f2cf7463cb14b4dc9607ee235b26267ed5cc6ca17ad7abd45fe83924130cdbd9` |
+    | `hooks.md` | `c6ef9d211e8c4dc870add6302c47971f5fec316888993143011716f78b9862d8` |
+    | `hooks-guide.md` | `004ded2fd87af2deee93d4ce7f47216a82b5e22fc76f345ea654eeb51b2bee3c` |
+
+    The documentation does not say whether an agent can trigger a compaction, so the
+    statement above stands on the 2026-10-19 check.
 - Automatic compaction stays on. A harness that stops compacting after repeated
   refills is treated as a failed run and stops with a report.
 - Pushing, compacting and drafting the next plan between plans is the owner's habit
@@ -395,11 +417,13 @@ installer's and is replaced on upgrade only while unedited.
   branch is always shared. The earlier rule that committed configuration may add and not remove is not built
   (see "Push").
 
-- The Claude harness module's root file is the `@AGENTS.md` pointer plus a generated
-  "Compact Instructions" section built from the neutral preservation guidance. This
-  replaces the earlier pointer-only root file, because Claude reads that section from
-  `CLAUDE.md` itself and honoring it through an import is unverified. The file is
-  per-clone and uncommitted, so the committed repository stays harness-neutral.
+- The Claude harness module's root file stays the `@AGENTS.md` pointer only. An earlier
+  decision added a generated "Compact Instructions" section built from the neutral
+  guidance; it is withdrawn, because the documentation names no such section and
+  documents that `CLAUDE.md` and its `@` imports are loaded again after a compaction.
+  The preservation guidance is a bullet of the policy block instead. A rendered root-file
+  section, which needs a neutral guidance kind, and a `SessionStart` `compact` hook are
+  deferred.
 
 ## As built, and its limits
 
@@ -439,9 +463,12 @@ installer's and is replaced on upgrade only while unedited.
   a test pins for the rendered Claude settings; the harness asks on a push to a branch that is not shared too;
   the list is not monotonic; the scan is the owner's narrow pattern list and a heuristic; nothing was run in a
   live session.
-- Not built: the compaction guidance
-  (`compaction-guidance`) and the delegated approval (`delegated-approval`). These came from the roadmap candidate
-  `code-work-approval`, which is split into them.
+- Built, from plan `2026-10-23-compaction-guidance`: the compaction bullet of the policy block, and a test that pins
+  the items it names. Limits: it is advice; it relies on the documented re-reading of `CLAUDE.md` and its imports
+  after a compaction and does not shape the summary; no "Compact Instructions" section, no rendered root-file
+  section, no `SessionStart` hook and no opencode delivery exist; nothing was run in a live session.
+- Not built: the delegated approval (`delegated-approval`). It came from the roadmap candidate
+  `code-work-approval`, which is split into it and `compaction-guidance`.
 - The helper reads untrusted plans and is bounded; the limits are in the plan `2026-10-21-code-work-plans`.
 
 ## Open items
