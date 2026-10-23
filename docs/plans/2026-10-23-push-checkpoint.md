@@ -257,6 +257,9 @@ whether to ask for a further round.
 ## Deferred work
 
 - Lifting the floor's `ask` for a non-shared push, which needs the owner's decision on the floor.
+- A monotonic shared-branch list, so that removing a declared branch has no effect. It needs the earlier committed
+  list from git, more git shapes in `safe-git`, and rules for a first commit, a rebase and a missing remote branch
+  (choice 2).
 - A project-level lowering of a checkpoint, and `delegate` (`delegated-approval`).
 - A stronger scanner, or the owner's own pattern list in configuration.
 - A `push` subcommand with the check built in, if the owner wants one command.
