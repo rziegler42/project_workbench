@@ -65,7 +65,7 @@ class Declaration(unittest.TestCase):
 
     def test_the_command_takes_the_two_changes_as_its_first_argument(self):
         command = declaration()["commands"]["safe-git"]
-        self.assertEqual(["commit", "remove"], command["arguments"])
+        self.assertEqual(["commit", "remove", "push-check"], command["arguments"])
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
         self.assertEqual(["safe-git"], list(declaration()["commands"]))
 

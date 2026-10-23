@@ -16,7 +16,8 @@
       "kit": 1,
       "arguments": [
         "commit",
-        "remove"
+        "remove",
+        "push-check"
       ]
     }
   }

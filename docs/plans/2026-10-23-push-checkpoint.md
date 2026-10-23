@@ -1,6 +1,6 @@
 # The shared-branch push checkpoint
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-23
 Candidate: workbench-v1#push-checkpoint
 Specs: code-work, safe-git, harness-modules
@@ -254,6 +254,31 @@ Outcome: changes needed; two major findings and one minor, all applied before ap
 Nothing rejected. Left for the owner: choice 2 (authoritative file or a monotonic mechanism), whether to approve, and
 whether to ask for a further round.
 
+Security review of increment A, 2026-10-23, the `security-reviewer` agent (asked for by the owner), before the
+increment was committed. It ran experiments in scratch repositories and changed nothing in the tree. Its findings
+are advice; each was reproduced by a failing test before it was acted on.
+
+- S-F1 high, applied. A changed submodule with `diff.submodule=diff` started the program named in the nested
+  repository's own configuration, while the index held no gitlink. Both diffs and the log now pass
+  `--ignore-submodules=all`; the test builds that case and checks that no program ran.
+- S-F2 medium, applied. A secret added and then removed inside the range was not reported though a push sends both
+  commits. The check now reads each non-merge commit (`git log -p`) as well as the net diff, which still covers what
+  a merge brought in.
+- S-F3 medium/low, applied. Files marked `-diff` or `binary` and files holding NUL bytes were not scanned. The patch
+  calls now pass `--text`.
+- S-F4 low, applied. A tag with the branch's short name made `rev-parse --abbrev-ref` print `heads/<name>` and
+  the check refuse. The branch is now read with `symbolic-ref -q HEAD`.
+- S-F6 low, applied. On the deadline or the cap only git was killed; its process group is now. A test proves that a
+  child git started is gone, and fails without the group kill.
+- S-F7 low, applied. A cut `-z` name list was cut at a newline and lost its names; it is now cut at the last NUL.
+- S-F5 low, recorded and not changed. `target` is the current branch and the base comes from local tracking refs, so
+  a stale or forged ref, or a `push.default` or `pushRemote` setting, can make the report differ from a real push.
+  This is inherent to local refs only; increment D says so in the spec.
+- Not verified by the reviewer, and not checked here: whether `commit` and the staged-name reads have the same
+  submodule exposure for a gitlink that only HEAD holds. It is outside this plan; the owner decides whether it
+  becomes its own plan. Also unchecked: merge commits with alternates, a hostile `refs/remotes/<remote>/HEAD` run,
+  other git versions.
+
 ## Deferred work
 
 - Lifting the floor's `ask` for a non-shared push, which needs the owner's decision on the floor.
@@ -267,4 +292,26 @@ whether to ask for a further round.
 
 ## Result
 
-Not started.
+Increment A, 2026-10-23: `wb run safe-git push-check` is built in `packages/workbench/safe-git/helper/safe-git`
+(`command_push_check`, `run_capped`, `scan_patch`) with 27 new tests in `test_safegit_pushcheck.py`.
+
+- Verification as run: the first tests failed (25 failures and 2 errors, because the command did not exist), then
+  passed. After the security review (Review record, S-F1 to S-F7) six more tests were added and failed on the
+  behaviour they name, and then passed. The whole `safe-git` suite ran 257 tests, OK; `tests.test_boundary` ran 19
+  tests, OK; `git diff --check` prints nothing; a search of the new helper code and test file for the scan's own
+  patterns finds nothing. The full suite was not run: the `safe-git` approvals are stale until increment D.
+- What it does that the plan left open: it adds the git shapes `show-ref --verify --hash`, `symbolic-ref -q HEAD`
+  and `symbolic-ref -q --short refs/remotes/<remote>/HEAD`, `rev-list --count`, and a `log` of patches, and lets `diff`
+  take one `<40 hex>..HEAD` range last with `-U0`, `--no-color`, `--text`, `--ignore-submodules=all`,
+  `--diff-filter=d` and fixed prefixes. It reads output through `run_capped` (8 MiB, a deadline, no thread, git in its
+  own process group). `changed_paths` lists paths that still exist at HEAD, leaves out deleted paths and a changed
+  submodule's path is not scanned; it is cut at 500, findings at 100, and either cut sets `truncated`. The base is
+  local refs only: `--base`, else the branch's own remote-tracking ref, else the default branch's, else a refusal;
+  the default branch comes from `refs/remotes/<remote>/HEAD` and is null when that is not set.
+- Limits: the patterns are the owner's narrow list and miss anything else; a report can differ from a real push
+  when a tracking ref is stale or a push setting names another target (S-F5); the contents of a changed submodule are
+  not read.
+- Not done: no independent review beyond the security review above, no live session; the package approvals are stale
+  until the owner's release in increment D; the same submodule exposure may exist in `commit`'s reads (not tested).
+
+Increments B, C and D: not started.

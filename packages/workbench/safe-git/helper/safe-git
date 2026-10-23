@@ -6,6 +6,7 @@ private copy of it through the kit runner with nothing beside it.
 
     safe-git commit     make one local commit of exactly the named files (see `parse_commit`)
     safe-git remove     preview, and with --confirm delete, exact paths of the repository
+    safe-git push-check report, read-only, what a push of the current branch would send (see `command_push_check`)
 
 The rules are in ``docs/specs/safe-git.md``. It starts one program, ``git``, found on a PATH entry
 outside the repository, with an environment built here, and only in one of the shapes listed in
@@ -49,9 +50,22 @@ FALLBACK_PATH = ["/usr/bin", "/bin"]
 GIT_TIMEOUT = 120
 MAX_REF = 200
 MAX_GITLINK_FINDINGS = 5
+MAX_SCAN = 8 * 1024 * 1024
+MAX_FINDINGS = 100
+MAX_CHANGED = 500
 _KEPT = ("HOME", "XDG_CONFIG_HOME", "USER", "LOGNAME", "LANG", "TZ", "TERM", "TMPDIR")
 _BRANCH = re.compile(r"\Arefs/heads/[A-Za-z0-9._][A-Za-z0-9._/-]*\Z")
-_DIFF_FLAGS = ("--cached", "--name-only", "-z", "--check", "--no-ext-diff", "--no-textconv", "--no-renames")
+_TRACKING = re.compile(r"\Arefs/remotes/[A-Za-z0-9_][A-Za-z0-9._-]{0,63}/[A-Za-z0-9._][A-Za-z0-9._/-]*\Z")
+_REMOTE_HEAD = re.compile(r"\Arefs/remotes/[A-Za-z0-9_][A-Za-z0-9._-]{0,63}/HEAD\Z")
+_REMOTE_NAME = re.compile(r"\A[A-Za-z0-9_][A-Za-z0-9._-]{0,63}\Z")
+_RANGE = re.compile(r"\A[0-9a-f]{40}\.\.HEAD\Z")
+_DIFF_FLAGS = ("--cached", "--name-only", "-z", "--check", "--no-ext-diff", "--no-textconv", "--no-renames",
+               "--no-color", "-U0", "--diff-filter=d", "--src-prefix=a/", "--dst-prefix=b/", "--text",
+               "--ignore-submodules=all")
+# A log of patches for `push-check`: these flags, and every one of the first group.
+_LOG_REQUIRED = {"--no-merges", "-p", "--format=", "--no-show-signature", "--no-ext-diff", "--no-textconv",
+                 "--ignore-submodules=all"}
+_LOG_FLAGS = _LOG_REQUIRED | {"--no-renames", "--no-color", "-U0", "--src-prefix=a/", "--dst-prefix=b/", "--text"}
 # Repository settings shaped like "a program or command to run": the shape decides and not a list of
 # names, because a list kept missing keys. A key is lower-cased before it is matched.
 EXEC_KEY = re.compile(
@@ -134,10 +148,19 @@ def git_environment(entries, extra=None):
     return env
 
 
-def _branch_ref(ref):
-    return (isinstance(ref, str) and len(ref) <= MAX_REF + 11 and _BRANCH.match(ref) is not None
+def _plain_ref(ref, pattern):
+    return (isinstance(ref, str) and len(ref) <= MAX_REF + 11 and pattern.match(ref) is not None
             and ".." not in ref and "//" not in ref and not ref.endswith(("/", ".")) and "@{" not in ref
             and all(not part.startswith(".") and not part.endswith(".lock") for part in ref.split("/")))
+
+
+def _branch_ref(ref):
+    return _plain_ref(ref, _BRANCH)
+
+
+def _scan_ref(ref):
+    """A local branch or a remote-tracking branch, written out in full."""
+    return _plain_ref(ref, _BRANCH) or _plain_ref(ref, _TRACKING)
 
 
 def _paths_ok(paths):
@@ -164,6 +187,8 @@ def _diff_shape(rest):
     for index, item in enumerate(rest):
         if item == "--":
             return _flags_ok(flags) and _after_dashes(rest, index)
+        if index == len(rest) - 1 and _RANGE.match(item):   # `<40 hex>..HEAD`, last, and no paths after it
+            return _flags_ok(flags)
         if item not in _DIFF_FLAGS:
             return False
         flags.append(item)
@@ -186,6 +211,12 @@ _SHAPES = {
                                        ["HEAD"], ["--verify", "HEAD"], ["HEAD^@"])
     or (len(rest) == 3 and rest[:2] == ["--verify", "-q"] and _branch_ref(rest[2])),
     "diff": _diff_shape,
+    "show-ref": lambda rest: len(rest) == 3 and rest[:2] == ["--verify", "--hash"] and _scan_ref(rest[2]),
+    "symbolic-ref": lambda rest: rest == ["-q", "HEAD"] or (
+        len(rest) == 3 and rest[:2] == ["-q", "--short"] and _plain_ref(rest[2], _REMOTE_HEAD)),
+    "log": lambda rest: bool(rest) and _RANGE.match(rest[-1]) is not None and len(set(rest[:-1])) == len(rest) - 1
+    and set(rest[:-1]) <= _LOG_FLAGS and _LOG_REQUIRED <= set(rest[:-1]),
+    "rev-list": lambda rest: len(rest) == 2 and rest[0] == "--count" and _RANGE.match(rest[1]) is not None,
     "ls-files": lambda rest: (rest[:2] == ["--error-unmatch", "--"] and _paths_ok(rest[2:]))
     or rest == ["-s", "-z"] or (rest[:3] == ["-s", "-z", "--"] and _paths_ok(rest[3:])),
     "add": lambda rest: _after_dashes(rest, 0),
@@ -210,11 +241,8 @@ def git_shape_ok(argv):
     return shape is not None and bool(shape(argv[2:]))
 
 
-def run(argv, cwd, check=True, timeout=GIT_TIMEOUT, env_extra=None):
-    """Run `argv` (``git`` and a command in an allowed shape) in `cwd`; return the finished process.
-    Raises ``Refused`` for a shape that is not allowed, a missing git, a timeout, or (with `check`) a
-    nonzero exit."""
-    import subprocess   # the one program this helper starts; imported here, below the read-only part
+def _resolve_git(argv, cwd):
+    """The path of the trusted ``git`` and the PATH entries it runs with, after checking the shape of `argv`."""
     if not git_shape_ok(argv):
         raise Refused("this helper does not run that git command: %s"
                       % display.ascii_text(" ".join(str(item)[:60] for item in argv[:3]))[:200])
@@ -223,6 +251,15 @@ def run(argv, cwd, check=True, timeout=GIT_TIMEOUT, env_extra=None):
     found = trusted_which("git", boundary, entries)
     if found is None:
         raise Refused("git was not found in an absolute PATH entry outside the repository")
+    return found, entries
+
+
+def run(argv, cwd, check=True, timeout=GIT_TIMEOUT, env_extra=None):
+    """Run `argv` (``git`` and a command in an allowed shape) in `cwd`; return the finished process.
+    Raises ``Refused`` for a shape that is not allowed, a missing git, a timeout, or (with `check`) a
+    nonzero exit."""
+    import subprocess   # the one program this helper starts; imported here, below the read-only part
+    found, entries = _resolve_git(argv, cwd)
     try:
         result = subprocess.run([found] + argv[1:], cwd=cwd, capture_output=True, text=True,
                                 encoding="utf-8", errors="surrogateescape", check=False,
@@ -235,6 +272,55 @@ def run(argv, cwd, check=True, timeout=GIT_TIMEOUT, env_extra=None):
         detail = (result.stderr or result.stdout or "no message").strip()[-300:]
         raise Refused("git %s failed (%d): %s" % (argv[1], result.returncode, display.ascii_text(detail)))
     return result
+
+
+def run_capped(argv, cwd, limit, timeout=None, separator="\n"):
+    """Run `argv` like `run`, reading at most `limit` bytes of its output. Returns ``(text, truncated)``:
+    when the output is longer, git and anything it started are stopped and the text ends at the last
+    `separator`. Standard error is discarded. Raises ``Refused`` for a shape that is not allowed, a missing git, a
+    timeout or a nonzero exit of a run that was not cut."""
+    import select       # read below the cap, with a deadline, and no thread
+    import signal
+    import subprocess   # the same one program as `run`
+    import time
+    found, entries = _resolve_git(argv, cwd)
+    deadline = time.monotonic() + (GIT_TIMEOUT if timeout is None else timeout)
+    try:
+        child = subprocess.Popen([found] + argv[1:], cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                 stderr=subprocess.DEVNULL, env=git_environment(entries), start_new_session=True)
+    except OSError as exc:
+        raise Refused("git %s could not be started (%s)" % (argv[1], display.ascii_text(exc.strerror or "error")))
+    chunks, size, truncated = [], 0, False
+    try:
+        fd = child.stdout.fileno()
+        while True:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                raise Refused("git %s did not finish within %d seconds" % (argv[1], timeout))
+            if not select.select([fd], [], [], min(left, 1.0))[0]:
+                continue
+            data = os.read(fd, 65536)
+            if not data:
+                break
+            if size + len(data) > limit:
+                chunks.append(data[:limit - size])
+                truncated = True
+                break
+            chunks.append(data)
+            size += len(data)
+    finally:
+        try:
+            os.killpg(child.pid, signal.SIGKILL)   # git has its own process group, so what it started goes too
+        except OSError:
+            pass
+        child.stdout.close()
+        child.wait()
+    if not truncated and child.returncode:
+        raise Refused("git %s failed (%d)" % (argv[1], child.returncode))
+    text = b"".join(chunks).decode("utf-8", "surrogateescape")
+    if truncated:
+        text = text[:text.rfind(separator) + 1]
+    return text, truncated
 
 
 def git_root(path):
@@ -1092,7 +1178,189 @@ def command_remove(argv, cwd, out, err):
         os.close(root_fd)
 
 
-COMMANDS = {"commit": command_commit, "remove": command_remove}
+# --- push-check ----------------------------------------------------------------------------------
+
+# The narrow list of patterns the owner has used by hand, as a guard against a mistake and not as a scanner.
+# Written in pieces where a whole pattern would match itself.
+_RULES = (
+    ("private-key", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY")),
+    ("aws-access-key-id", re.compile(r"AKIA[0-9A-Z]{16}")),
+    ("github-token", re.compile(r"ghp_[A-Za-z0-9]{20}|github" "_pat_[A-Za-z0-9_]{20}")),
+    ("sk-key", re.compile(r"sk-[A-Za-z0-9]{20}")),
+    ("slack-token", re.compile(r"xox[bp]-[0-9A-Za-z-]{10}")),
+    ("jwt-shaped", re.compile(r"eyJ[A-Za-z0-9_-]{20,}\.")),
+)
+_HUNK = re.compile(r"@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+_ESCAPES = {"a": 7, "b": 8, "f": 12, "n": 10, "r": 13, "t": 9, "v": 11, '"': 34, "\\": 92}
+
+
+def _unquote(text):
+    """A path as git quotes it (C-style, in double quotes, octal for other bytes); the text if it is not quoted."""
+    if len(text) < 2 or text[0] != '"' or text[-1] != '"':
+        return text
+    body, out, index = text[1:-1], bytearray(), 0
+    while index < len(body):
+        char = body[index]
+        if char != "\\":
+            out += char.encode("utf-8", "surrogateescape")
+            index += 1
+        elif body[index + 1:index + 2] in _ESCAPES:
+            out.append(_ESCAPES[body[index + 1]])
+            index += 2
+        elif re.fullmatch(r"[0-7]{3}", body[index + 1:index + 4]):
+            out.append(int(body[index + 1:index + 4], 8) & 0xFF)
+            index += 4
+        else:
+            out += b"\\"
+            index += 1
+    return out.decode("utf-8", "surrogateescape")
+
+
+def _patch_path(text):
+    """The path a `+++ ` line names, or None for a deletion."""
+    if text.endswith("\t"):
+        text = text[:-1]
+    if text == "/dev/null":
+        return None
+    path = _unquote(text)
+    return path[2:] if path.startswith("b/") else path
+
+
+def scan_patch(text, limit):
+    """The credential-looking added lines of a patch made with ``-U0``: ``(findings, cut)`` where each finding
+    is ``{"path", "line", "rule"}`` and never holds the line. Hunk counts decide where a hunk ends, so an added
+    line that starts like a header is read as a line."""
+    findings, path, old_left, new_left, number = [], None, 0, 0, 0
+    for raw in text.split("\n"):
+        if old_left > 0 or new_left > 0:
+            if raw.startswith("+"):
+                new_left -= 1
+                for rule, pattern in _RULES:
+                    if path is not None and pattern.search(raw, 1):
+                        if len(findings) >= limit:
+                            return findings, True
+                        findings.append({"path": display.ascii_text(path)[:200], "line": number, "rule": rule})
+                number += 1
+                continue
+            if raw.startswith("-"):
+                old_left -= 1
+                continue
+            if raw.startswith("\\"):
+                continue
+            old_left = new_left = 0
+        if raw.startswith("diff --git "):
+            path = None
+        elif raw.startswith("+++ "):
+            path = _patch_path(raw[4:])
+        elif raw.startswith("@@"):
+            found = _HUNK.match(raw)
+            if found is not None:
+                old_left = 1 if found.group(1) is None else int(found.group(1))
+                new_left = 1 if found.group(3) is None else int(found.group(3))
+                number = int(found.group(2))
+    return findings, False
+
+
+def secret_name(path):
+    base = path.rsplit("/", 1)[-1]
+    return base in (".env", "id_rsa") or base.endswith(".pem")
+
+
+def parse_push_check(argv):
+    """``(remote, base ref or None)`` from ``[--remote NAME] [--base REF]``, each at most once."""
+    remote, base, index = "origin", None, 0
+    seen = set()
+    while index < len(argv):
+        option = argv[index]
+        if option not in ("--remote", "--base") or option in seen or index + 1 >= len(argv):
+            raise Refused("usage: safe-git push-check [--remote NAME] [--base refs/heads/NAME|refs/remotes/R/NAME]")
+        seen.add(option)
+        value = argv[index + 1]
+        if option == "--remote":
+            if _REMOTE_NAME.match(value) is None:
+                raise Refused("--remote must be a remote name of letters, digits and . _ - (at most 64)")
+            remote = value
+        else:
+            if not _scan_ref(value):
+                raise Refused("--base must be a full branch ref, refs/heads/NAME or refs/remotes/REMOTE/NAME")
+            base = value
+        index += 2
+    return remote, base
+
+
+def _resolved(root, ref):
+    """The commit a full ref names, or None. Reads local refs only."""
+    shown = run(["git", "show-ref", "--verify", "--hash", ref], root, check=False)
+    value = shown.stdout.strip()
+    return value if shown.returncode == 0 and _HEX40.match(value) else None
+
+
+def command_push_check(argv, cwd, out, err):
+    """Report what a push of the current branch would send, from local refs only; it never contacts a remote and
+    changes nothing. One JSON line: ``remote``, ``branch``, ``target`` (the branch a push of HEAD would update),
+    ``default_branch`` (or null), ``base``, ``ahead``, ``changed_paths``, ``findings`` and ``truncated``."""
+    remote, explicit = parse_push_check(argv)
+    root = git_root(cwd)
+    found = repo_program_findings(root)
+    if found:
+        raise Refused("this repository would make git run a program (%s); check by hand" % ", ".join(found[:10]))
+    if tip(root) is None:
+        raise Refused("the current branch has no commit yet, so there is nothing to send")
+    named_head = run(["git", "symbolic-ref", "-q", "HEAD"], root, check=False)
+    if named_head.returncode:
+        raise Refused("HEAD is detached; switch to the branch to push")
+    full = named_head.stdout.strip()
+    branch = full[len("refs/heads/"):]
+    if not full.startswith("refs/heads/") or not _branch_ref(full):
+        raise Refused("the branch name is not one this helper reads (ASCII letters, digits and . _ - /)")
+    default = None
+    named = run(["git", "symbolic-ref", "-q", "--short", "refs/remotes/%s/HEAD" % remote], root, check=False)
+    text = named.stdout.strip()
+    if named.returncode == 0 and text.startswith(remote + "/") and _branch_ref("refs/heads/" + text[len(remote) + 1:]):
+        default = text[len(remote) + 1:]
+    candidates = [explicit] if explicit else ["refs/remotes/%s/%s" % (remote, branch)]
+    if not explicit and default is not None:
+        candidates.append("refs/remotes/%s/%s" % (remote, default))
+    base = next((value for value in (_resolved(root, ref) for ref in candidates) if value), None)
+    if base is None:
+        raise Refused("no base to compare with; tried %s" % ", ".join(candidates))
+    span = base + "..HEAD"
+    ahead = run(["git", "rev-list", "--count", span], root).stdout.strip()
+    names_text, cut_names = run_capped(["git", "diff", "--name-only", "-z", "--no-renames", "--diff-filter=d", span],
+                                       root, MAX_SCAN, separator="\0")
+    shape = ["--no-ext-diff", "--no-textconv", "--no-renames", "--no-color", "-U0", "--text",
+             "--ignore-submodules=all", "--src-prefix=a/", "--dst-prefix=b/"]
+    # Each commit on its own, so a secret added and taken out again inside the range is still seen, and the net
+    # change, which also holds what a merge brought in. A changed submodule is not entered: that would start
+    # the program its own configuration names.
+    history, cut_history = run_capped(["git", "log", "--no-merges", "-p", "--format=", "--no-show-signature"]
+                                      + shape + [span], root, MAX_SCAN)
+    patch, cut_patch = run_capped(["git", "diff"] + shape + [span], root, MAX_SCAN)
+    paths = [item for item in names_text.split("\0") if item]
+    findings, cut_findings = scan_patch(history, MAX_FINDINGS)
+    more, cut_more = scan_patch(patch, MAX_FINDINGS)
+    for item in more:
+        if item not in findings:
+            if len(findings) >= MAX_FINDINGS:
+                cut_findings = True
+                break
+            findings.append(item)
+    cut_findings = cut_findings or cut_more
+    for item in paths:
+        if secret_name(item):
+            if len(findings) >= MAX_FINDINGS:
+                cut_findings = True
+                break
+            findings.append({"path": display.ascii_text(item)[:200], "line": None, "rule": "secret-file-name"})
+    report = {"remote": remote, "branch": branch, "target": branch, "default_branch": default, "base": base,
+              "ahead": int(ahead), "changed_paths": [display.ascii_text(item)[:200] for item in paths[:MAX_CHANGED]],
+              "findings": findings, "truncated": bool(cut_names or cut_history or cut_patch or cut_findings
+                                or len(paths) > MAX_CHANGED)}
+    out.write(json.dumps(report) + "\n")
+    return 0
+
+
+COMMANDS = {"commit": command_commit, "remove": command_remove, "push-check": command_push_check}
 
 
 def main(argv, out, err, cwd):
