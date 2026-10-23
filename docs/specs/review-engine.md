@@ -303,7 +303,7 @@ Built by plan `2026-10-23-review-engine`, increments C to G (the module `review-
   `wbkit.call.run_command` with `provides` `model-bridge`, `--timeout 600` and an engine limit of 660 seconds. The
   bridge's answer and the reply are validated again; a failure prints a `refused:` line and stores nothing but
   `schema.json`. Tested with the real launcher and the real first-party bridge against a fake vendor program; no real
-  vendor, session or network call was used.
+  vendor, session or network call was used in the tests (a hand run against a real Codex is recorded below).
 - The prompt names the document by path, kind and hash and never embeds it. Earlier findings are quoted in it, one line
   each, cut to 300 characters, with their decisions; when they do not fit in 65,536 bytes the oldest are left out and
   the prompt says so. A finding that was model output is therefore model input to the next round, which is why the
@@ -347,7 +347,16 @@ Built by plan `2026-10-23-review-engine`, increments C to G (the module `review-
 Limits found while building:
 
 - The reply schema file asks for the four fields and nothing more (no length bounds): bounds are checked by the engine,
-  and whether a real vendor accepts the schema is untested until the first hand run against a real bridge.
+  and a real vendor accepted it in the hand run (below).
+- Run once by hand against a real Codex on 2026-10-23 (`codex-cli 0.163.0`, bridge `ask-codex`, no model named, in a
+  scratch project): `review-plan` of a short plan with planted flaws returned `changes_needed` with four findings (the
+  logged token as blocker, the unbounded retry, the vague completion criterion and a missing script as major), with
+  line numbers that matched the file, so the vendor read the document from the path in the prompt. The reading agreed
+  with the verdict, the seal stayed `ok`, one round was spent, a second round was refused while the four findings had
+  no decision, two `decide` calls were recorded and `status` showed `request` `same`. A round is refused before
+  anything runs unless `wb` is on `PATH` (the bridge's limits say how). The ledger says "model unknown" because the
+  bridge reported no model. Not tried: a second round with a decided finding, `--effort`, a sign-in failure and a
+  malformed reply from a real vendor.
 - A meaningful finding blocks the next round only inside the current window, so `reset` clears the way; the finding
   stays in the earlier rounds and in the ledger of the prompt.
 - The retention of 90 days, and archive as a final act, are the engine's own choices, not the owner's; both are one

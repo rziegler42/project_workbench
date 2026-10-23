@@ -211,7 +211,8 @@ or High finding; the fixes carry regression tests and were not reviewed a second
 
 The first engine to call it is the review engine (`review-engine.md`, plan `2026-10-23-review-engine`). It runs a
 bridge only through `wbkit.call.run_command` with `provides` `model-bridge`, names the bridge from the project's
-setting and tries no other. It was tested against this bridge and a fake vendor program, not a real vendor.
+setting and tries no other. It was tested against this bridge and a fake vendor program, and then run once by hand
+against a real Codex (2026-10-23, `codex-cli 0.163.0`; see the limits below).
 
 How it meets the contract:
 
@@ -239,16 +240,27 @@ Limits:
   is in a session of its own. A grandchild that starts yet another session survives the bridge's group kill and
   can hold the output pipes open until the timeout. An engine's own time limit must therefore exceed the
   bridge's `--timeout`, so that the bridge can report `timeout` and clean up first.
-- **Not checked against a real Codex.** The flags above (`--ephemeral`, `--ignore-user-config`, `--ignore-rules`,
-  `--output-last-message`, `--output-schema`, `--cd`, and the `model_reasoning_effort` setting) and the mapping of
-  error text to classes were written from the contract and tested against a fake. The first hand run starts with
-  `codex exec --help` and checks each flag against what the installed version accepts.
+- **Checked against a real Codex once, by hand, on 2026-10-23 (`codex-cli 0.163.0`).** `codex exec --help` lists every
+  flag the bridge passes. A prompt of one word returned `ok` with the reply `pong`. An unknown `--model` gave
+  `model_unavailable` (not retryable) and a `--timeout` of 2 seconds on a long request gave `timeout` (retryable). A
+  review round of the review engine through this bridge, with `--output-schema`, returned a reply of the engine's
+  schema that the engine accepted; the model read the document from its working directory. Not tried against a real
+  Codex: `--effort`, a sign-in that is missing or expired (`not_signed_in`), `effort_unsupported`, a reply that does not
+  match the schema, and a run on another version.
+- **The model and the total are not reported.** With no `--model` the success object has `model` null, so a stored
+  round says "model unknown", and `total_tokens` is null; the event stream of this version did not give the bridge
+  either. Pass `--model` to name the model.
+- **The launcher must be on `PATH`.** A caller finds `wb` only in an absolute `PATH` entry outside the project, and
+  nothing adds `~/.config/project-workbench/bin` there; without it a round is refused before anything runs, and no
+  round is spent.
+- **A timeout is shown, not the process tree.** The hand run showed that the bridge reports `timeout`; it did not
+  check that no `codex` process was left running afterwards.
 - **The vendor reads the repository.** The program may also read the repository's own instruction files (an
   `AGENTS.md`, a `.codex` directory); the bridge does not stop it.
 - **No depth limit across `wb run`.** Each hop is an approved, pinned command and each call has a time limit, which
   ends a loop; nothing counts the depth.
 - **Linux, and a virtual-environment `sys.executable`,** were not run.
-- **No end-to-end run** with a real vendor, a sign-in or a live session has been done.
+- **No live session.** The hand run above is the only run with a real vendor; no harness session has called a bridge.
 
 ## Acceptance criteria
 

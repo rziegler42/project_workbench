@@ -542,3 +542,20 @@ until E.
 - Open for the owner: push (the commits are local), `ask-codex archive` for this plan's review, whether `decide` should
   be owner-run, and the places where the spec is narrower than the plan (no default bridge; the prompt names the
   document and does not embed it).
+
+### After close — hand run against a real Codex (2026-10-23)
+
+Run by the owner in a terminal, step by step, in a scratch project; nothing here changed a package or an approval.
+
+- `codex exec --help` (`codex-cli 0.163.0`) lists every flag the bridge passes. The bridge returned `ok` for a one-word
+  prompt, `model_unavailable` for an unknown model and `timeout` for a 2-second limit.
+- A `review-plan` round through `wb run`, the launcher and the bridge returned four findings on a plan with planted
+  flaws, in the engine's schema, with matching line numbers; the seal stayed `ok`, the second round was refused until
+  the findings were decided, and two `decide` calls and `status` behaved as specified. The ledger shows the decisions.
+- The first attempt was refused because `wb` was not on `PATH`; the refusal named the cause and spent no round. The
+  documented fix (`~/.config/project-workbench/bin` on `PATH`) worked.
+- Findings, recorded in the specs: the bridge reports no model name and no token total with this version when no
+  `--model` is given; the process tree after a timeout was not checked; `--effort`, a missing sign-in and a malformed
+  real reply were not tried. No code or test changed.
+- This replaces "a hand run against a real Codex is not done" above. The other open items for the owner stand, except
+  the push, which was done.

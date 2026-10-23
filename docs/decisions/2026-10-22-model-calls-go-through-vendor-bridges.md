@@ -176,6 +176,12 @@ Note, 2026-10-23 (plan `2026-10-23-review-engine`): the review engine of decisio
 vendor program, and refuses a bridge that is not installed, pinned or a `model-bridge`. It has not been run against a
 real vendor or a live session. The entry for the engine above is left as written.
 
+Note, 2026-10-23, later: the owner ran the bridge and the review engine by hand against a real Codex (`codex-cli
+0.163.0`). The bridge's flags were accepted, a round returned findings the engine accepted, and the error classes
+`model_unavailable` and `timeout` were shown. The hand run named in the entry for a bridge above is therefore done for
+one vendor; a live harness session, `--effort`, a sign-in failure and a second vendor are not. The results and limits
+are in `docs/specs/model-bridge.md` and `docs/specs/review-engine.md`.
+
 ## Related files and decisions
 
 - `docs/specs/code-work.md`, `docs/specs/trust-and-approval.md`, `docs/specs/module-boundary.md`,
