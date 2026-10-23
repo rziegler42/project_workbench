@@ -18,7 +18,7 @@
     {
       "declaration_hash": "793fce658b16662e31a356a52441f281079f33feb6e95bceb5fea4960ff9f8dd",
       "name": "code-work",
-      "tree_hash": "79d59e4130450d7492d4dc43a06be1c5d5ae150ace76230adbf63f321049c537"
+      "tree_hash": "d68689c4228c7c7f062b9b2b8be97d8b05e70e1657d78e23a8aa220b2e5cb36e"
     },
     {
       "declaration_hash": "eb8f2f640ad950914c8de822f9c50fe8bc387c4938e656f339f11d092329bf3f",
@@ -33,6 +33,6 @@
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "670825ae115f1cf2b73c8c7ec32c4264a1032a3768b1ed1415710332bc289459",
+  "tree_hash": "0f62c1d563029bb8acbe48994e2b9f207f3acc44df474b2e2e68dc77a806e2ed",
   "workbench_version": "0.1.0"
 }

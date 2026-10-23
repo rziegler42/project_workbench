@@ -380,7 +380,8 @@ area, therefore does not get a shell. It is given a **dedicated tool**.
 2. **Verifying formats and tool exposure.** The Claude formats were verified on
    2026-10-20 against 2.1.305 (see "Evidence"). Still open: the opencode formats
    (`verify-opencode`), and whether either harness can hand a specific tool to a
-   specific agent (`increment-loop-and-review-skills`, `researcher-fetch-tool`).
+   specific agent (`researcher-fetch-tool`). The read-only reviewer of `code-work` needs no tool handed to it,
+   only an allowlist, which the Claude layout renders.
 
 ## Deferred
 

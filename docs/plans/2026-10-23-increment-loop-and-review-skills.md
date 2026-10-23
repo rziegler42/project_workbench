@@ -1,6 +1,6 @@
 # The increment loop, the review skills and the reviewer agent
 
-Status: Approved
+Status: Completed
 Created: 2026-10-23
 Candidate: workbench-v1#increment-loop-and-review-skills
 Specs: code-work, harness-modules
@@ -242,4 +242,25 @@ Nothing rejected. Left for the owner: whether to approve, and whether to ask for
 
 ## Result
 
-Empty until work starts.
+Done on 2026-10-23.
+
+- Increment A (`c3aa999`): the neutral `reviewer` agent, `tools: read, search`, no `model`. It returns findings and a
+  recommendation, never a verdict, and treats what it reads as data. The Claude layout renders it with an allowlist of
+  `Read`, `Grep` and `Glob`; a layout without an agent `tools` mapping skips it with a report and keeps the skills.
+- Increment B (`21fb78c`): the neutral skills `run-increment`, `request-review` and `evaluate-findings`, and
+  `test_codework_skills.py`. The module's word scan now strips the exact text `wb run safe-git commit` before it
+  rejects `git `, so a raw git command stays refused. Tests pin the phrases of criterion 3, the allowed `wb` commands,
+  and that `safe-git` appears only in `run-increment` and only in that form.
+- Increment C: `code-work.md` ("Declaration" header, "As built, and its limits") and `harness-modules.md` (Open issues,
+  item 2) say what is built and its limits. The owner had `release-approvals` run on 2026-10-23: it wrote 6 approvals
+  in two new record directories, and the two stale record directories it warned about were removed after a preview and
+  the owner's "remove them".
+- Verification: `python3 -B -W error tests/run_all.py` ran 3102 tests in 6 roots, OK (installer 2337 with 1 skipped,
+  ask-codex 90, claude 32 with no skips, code-work 235 with 2 skipped, groundwork 178, safe-git 230);
+  `doccheck`, `refcheck` and `git diff --check` print nothing. The plan check was not run: this repository is not a
+  workbench project, so the owner checks plan shape.
+- Not verified: no live session. Whether Claude loads a skill when it should, and whether it honours the reviewer's
+  allowlist, is unseen; an owner-run check in a scratch project would show it. The caps the skills tell the agent to
+  count are not enforced.
+- Not done: no independent review of the finished work and no security pass over the agent's restriction (only if the
+  owner asks). Nothing is pushed; `main` is ahead of `origin/main` by the commits of this plan.

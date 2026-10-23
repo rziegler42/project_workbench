@@ -1,7 +1,7 @@
 # code-work
 
 Status: Current. Approved by the owner on 2026-10-19. The plan format, the read subcommands, the
-plan approval record, the commit rules, the checkpoint and cap declarations and the `active` subcommand are built; the delegation, review, reading of the caps and push parts are not (see "As built"). Paths, field
+plan approval record, the commit rules, the checkpoint and cap declarations, the `active` subcommand, the increment-loop and review skills and the reviewer agent are built; the delegation, the reading of the caps and the push parts are not (see "As built"). Paths, field
 names and file formats not yet built are proposals; the rules are the substance. Open items are listed at
 the end.
 
@@ -410,8 +410,17 @@ installer's and is replaced on upgrade only while unedited.
   hostile one, covers only file-editing tools, and was seen working in a live Claude session on 2026-10-22 (Claude
   Code 2.1.307) with one gap found, the relative deny on the rendered settings file not holding from a subdirectory, which absolute
   patterns now cover, as the owner's recheck on 2026-10-23 showed (`harness-modules.md`, "The edit gate hook").
-- Not built: the increment-loop and review skills and the reviewer agent
-  (`increment-loop-and-review-skills`), the push checkpoint (`push-checkpoint`), the compaction guidance
+- Built, from plan `2026-10-23-increment-loop-and-review-skills`: the neutral skills `run-increment`,
+  `request-review` and `evaluate-findings`, and the neutral agent `reviewer` with `tools` of `read` and `search`, which
+  the Claude layout renders as an allowlist of `Read`, `Grep` and `Glob`. The reviewer gives findings and a
+  recommendation, never a verdict, so the loop stops after review and the owner's word is the verdict until
+  `delegated-approval`; the loop commits only when the owner asks, through `wb run safe-git commit`, and never
+  pushes. Limits: the skills are advice, and nothing forces an agent to load one, count a round or stop; the caps
+  they tell the agent to count are not enforced; a harness that cannot restrict an agent skips the reviewer with a
+  report and keeps the skills, and the owner then reviews; the reviewer's restriction was shown by tests on the
+  rendered file and not in a live session; there is no implementer in a fresh context and no command that starts
+  the loop.
+- Not built: the push checkpoint (`push-checkpoint`), the compaction guidance
   (`compaction-guidance`) and the delegated approval (`delegated-approval`). These came from the roadmap candidate
   `code-work-approval`, which is split into them.
 - The helper reads untrusted plans and is bounded; the limits are in the plan `2026-10-21-code-work-plans`.
