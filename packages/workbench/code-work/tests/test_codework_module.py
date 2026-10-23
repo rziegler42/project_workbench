@@ -107,7 +107,10 @@ class Declaration(unittest.TestCase):
                                  "files/blocks/policy.md", "files/" + README,
                                  "harness/neutral/agents/reviewer.md",
                                  "harness/neutral/skills/draft-plan/SKILL.md",
-                                 "harness/neutral/skills/draft-plan/template.md"]), sorted(found))
+                                 "harness/neutral/skills/draft-plan/template.md",
+                                 "harness/neutral/skills/evaluate-findings/SKILL.md",
+                                 "harness/neutral/skills/request-review/SKILL.md",
+                                 "harness/neutral/skills/run-increment/SKILL.md"]), sorted(found))
 
     def test_only_the_helper_is_larger_than_prose_and_no_other_file_is_executable(self):
         for base, dirs, files in os.walk(MODULE):
@@ -188,9 +191,10 @@ class Blocks(unittest.TestCase):
 
 
 class Skill(unittest.TestCase):
-    def test_the_reader_accepts_the_skill_with_its_template_and_the_reviewer_agent(self):
+    def test_the_reader_accepts_the_skill_with_its_template_the_reviewer_agent_and_the_three_loop_skills(self):
         items = {(i.kind, i.name): i for i in neutral.read_items(neutral_tree())}
-        self.assertEqual([("agent", "reviewer"), ("skill", SKILL)], sorted(items))
+        self.assertEqual([("agent", "reviewer"), ("skill", SKILL), ("skill", "evaluate-findings"),
+                          ("skill", "request-review"), ("skill", "run-increment")], sorted(items))
         self.assertEqual(["template.md"], [f.rel for f in items[("skill", SKILL)].files])
         self.assertEqual((), items[("skill", SKILL)].needs)
 
@@ -201,7 +205,9 @@ class Skill(unittest.TestCase):
                                         {}, provides=claude["provides"])
         self.assertEqual((), planned.reports)
         self.assertEqual([".claude/agents/reviewer.md", ".claude/skills/draft-plan/SKILL.md",
-                          ".claude/skills/draft-plan/template.md"], sorted(f.path for f in planned.files))
+                          ".claude/skills/draft-plan/template.md", ".claude/skills/evaluate-findings/SKILL.md",
+                          ".claude/skills/request-review/SKILL.md", ".claude/skills/run-increment/SKILL.md"],
+                         sorted(f.path for f in planned.files))
         by_path = {f.path: f.data for f in planned.files}
         self.assertEqual(neutral_tree()["skills/draft-plan/template.md"],
                          by_path[".claude/skills/draft-plan/template.md"])
@@ -236,6 +242,7 @@ class Skill(unittest.TestCase):
             text = data.decode("utf-8")
             if rel.startswith("agents" + os.sep):
                 text = text.replace("\ntools: read, search\n", "\n")  # an agent's one allowlist line
+            text = text.replace("wb run safe-git commit", "")  # the one route to a commit; a raw git command stays refused
             for word in ("Bash", "shell", "git ", "curl", "http://", "https://", "sudo", "WebFetch",
                          "<!--", "needs:", "tools:", "claude-workflow", "ask-codex"):
                 self.assertNotIn(word, text, (rel, word))
