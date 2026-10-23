@@ -424,10 +424,23 @@ nothing.
 
 **Limits and open items.**
 
-- The hook has not been seen working in a live Claude session. Criterion 9 is the owner's, in a scratch project; it
-  would also check the facts `harness-modules.md` lists as unverified (`notebook_path`, `MultiEdit`, `PATH` for `wb`,
-  `CLAUDE_PROJECT_DIR`, project against local precedence, and whether the relative `Edit(...)` deny patterns
-  resolve from a subdirectory).
+- **The live check (criterion 9) was made by the owner on 2026-10-22, with Claude Code 2.1.307 in auto mode,** in a
+  scratch project installed with `claude`, `code-work`, `safe-git` and `groundwork` and a plan of status
+  `In Progress`. Seen: with the plan not approved, `Write`, `Edit` and `NotebookEdit` of other files were each refused
+  by the hook (`PreToolUse:<tool> hook error: [wb gate claude || exit 2]: refused: the plan ... is not approved; the
+  owner approves it with `wb approve-plan ...``), so exit 2 blocks, and `notebook_path` is the key a `NotebookEdit`
+  hook receives. An `Edit` of the plan itself was allowed. The hook ran, and the gate found the project, when Claude
+  was started in a subdirectory. After `wb approve-plan` the same `Write` was allowed. `wb` was found because the shell
+  that started Claude had its launcher directory on `PATH`. Not verified: `MultiEdit`, `CLAUDE_PROJECT_DIR`, the
+  `PATH` of a hook when Claude is started another way, and precedence against a committed project settings file.
+- **Found by the check: the rendered `Edit(...)` deny does not hold from a subdirectory.** With Claude started at
+  the project root, an `Edit` of `.claude/settings.local.json` was denied by the permission rule. Started in a
+  subdirectory and aimed at `../.claude/settings.local.json`, the same edit was not stopped by the rule: the hook
+  ran first and, once the plan was approved, only the auto mode classifier ("Self-Modification") stopped it. The
+  relative patterns are matched from the directory Claude started in. Without that classifier an agent started in a
+  subdirectory could edit the hook out, and the same holds for `.git/info/exclude`. The smallest correction is to
+  render the two patterns as absolute paths of the project (`//<root>/.claude/settings.local.json`) as the store's
+  deny already is. It is not made; it is a new change after this plan was archived and needs the owner's direction.
 - Input over 65,536 bytes is refused, so with the hook installed a `Write` of more than about 64 KiB is refused
   even when no plan is under way. Skipping the bound when no plan is under way would change the approved spec and is
   the owner's call.
@@ -441,4 +454,4 @@ nothing.
   older plan's text and was left alone.
 - The owner archived the plan (status `Completed`) on 2026-10-23, after `ask-codex archive` closed the Codex review:
   2 of 3 rounds, 3 decisions applied, 0 rejected, outcome "not converged" because round 2's major finding was applied
-  and round 3 was not run. The owner's live check (criterion 9) had not been made when the plan was archived.
+  and round 3 was not run. The owner's live check (criterion 9) was made after the plan was archived, on the same day (above).

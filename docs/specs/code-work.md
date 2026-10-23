@@ -407,7 +407,9 @@ installer's and is replaced on upgrade only while unedited.
   and cap settings, and the edit gate"). Limits: `delegate` has no effect and every checkpoint stops; nothing yet
   reads a cap, so a cap is declared, set and reported and not enforced; a project cannot lower a cap (that waits
   for a project setting the installer can read without naming a module); the gate stops a mistaken agent and not a
-  hostile one, covers only file-editing tools, and has not been seen working in a live Claude session.
+  hostile one, covers only file-editing tools, and was seen working in a live Claude session on 2026-10-22 (Claude
+  Code 2.1.307) with one gap found: the deny on the rendered settings file does not hold from a subdirectory
+  (`harness-modules.md`, "The edit gate hook").
 - Not built: the increment-loop and review skills and the reviewer agent
   (`increment-loop-and-review-skills`), the push checkpoint (`push-checkpoint`), the compaction guidance
   (`compaction-guidance`) and the delegated approval (`delegated-approval`). These came from the roadmap candidate

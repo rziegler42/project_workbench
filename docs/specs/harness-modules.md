@@ -185,8 +185,12 @@ session; the documentation is silent).
 
 Hook facts, read from `code.claude.com/docs/en/hooks`, `hooks-guide`, `tools-reference` and `permissions` on
 2026-10-22 (the pages show no version; the installed version is 2.1.305 as above, and the hook behaviour is
-not yet tested on it). The use built on them is in "The edit gate hook"; the owner's live check (criterion 9 of
-plan `2026-10-22-checkpoint-settings-and-caps`) has not been made.
+not yet tested on it). The use built on them is in "The edit gate hook". The owner's live check of the hook (criterion
+9 of plan `2026-10-22-checkpoint-settings-and-caps`) was made on 2026-10-22 on Claude Code 2.1.307: exit 2 from the hook
+blocked `Write`, `Edit` and `NotebookEdit`; `notebook_path` is the key `NotebookEdit` receives; a hook started from a
+subdirectory ran and found the project; and a `Write` was allowed once the plan was approved. Still not verified:
+`MultiEdit`, `CLAUDE_PROJECT_DIR`, the hook's `PATH` when Claude is not started from a shell that has the launcher on
+it, and project against local settings precedence.
 
 - **Input.** A `PreToolUse` hook gets one JSON object on standard input with `session_id`, `transcript_path`,
   `cwd`, `permission_mode`, `hook_event_name`, `tool_name`, `tool_input` and `tool_use_id`. For the file tools
@@ -286,8 +290,9 @@ hook. The rendered entry is fixed by the layout and not chosen by any module. Th
 - **Why `|| exit 2`.** Claude treats exit 2 as the only blocking code, so a `wb` that is missing from `PATH` (exit
   127) or a gate that fails for any reason would let the call through. The shell's `||` turns every non-zero exit
   into 2. The harness name is checked against `[a-z0-9][a-z0-9_-]{0,63}` before it is put in the command. A hook
-  whose command cannot start in the shell at all is not covered; the owner's check, criterion 9 of the plan, is
-  what shows it.
+  whose command cannot start in the shell at all is not covered. The live check started Claude from a shell that had the
+  launcher directory on `PATH`; whether a hook finds `wb` otherwise is not verified, and if it does not, every edit is
+  blocked.
 - **Why `timeout: 20`.** A timed-out command hook does not block the call. The gate stops itself after 10
   seconds and refuses, and the harness's limit is set above that. `onFailure: "block"` exists in the current
   documentation and is not rendered, because it is unverified on the installed version.
@@ -300,10 +305,12 @@ hook. The rendered entry is fixed by the layout and not chosen by any module. Th
 - **The deny.** With a hook, the rendered deny list also covers edits to `.claude/settings.local.json` and
   `.git/info/exclude`, each spelled from the project root and with a `**/` prefix (the owner edits both by hand),
   so an agent cannot delete the hook. It is one function in the renderer and rendered only with a hook, so it can
-  be dropped alone. Whether the relative `Edit(...)` patterns resolve from a subdirectory is not verified.
+  be dropped alone. The relative patterns do not resolve from a subdirectory (see "As built, and its limits" below).
 - **As built, and its limits.** The gate is in `trust-and-approval.md`, "Checkpoint and cap settings, and the edit
-  gate". The Claude hook is not tested in a live session (criterion 9 of the plan is the owner's). Project and
-  local settings precedence, `PATH` for `wb`, and `CLAUDE_PROJECT_DIR` are as listed under "Evidence".
+  gate". **The rendered `Edit(...)` deny does not hold from a subdirectory** (live check, 2026-10-22): the patterns are matched
+  from the directory Claude started in, so a session started below the root and aimed at
+  `../.claude/settings.local.json` is not stopped by the rule. The correction is absolute patterns; it is not made.
+  Project and local settings precedence, `PATH` for `wb`, and `CLAUDE_PROJECT_DIR` are as listed under "Evidence".
 
 ## The opencode harness module
 

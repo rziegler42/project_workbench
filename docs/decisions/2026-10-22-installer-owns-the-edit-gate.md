@@ -44,11 +44,16 @@ Plan `2026-10-22-checkpoint-settings-and-caps`, increments E and F, and its crit
 rendered hook in a scratch project with the installed Claude. Accepting this decision is the owner's act, after
 that evidence.
 
+The owner's live check was made on 2026-10-22 with Claude Code 2.1.307: the rendered hook blocked `Write`, `Edit` and
+`NotebookEdit` with exit 2 while a plan was not approved and allowed a `Write` after approval. It found one gap, in the
+deny on the rendered settings file, which does not hold from a subdirectory; it is recorded in
+`docs/specs/harness-modules.md` and not corrected.
+
 Built, by increments B to G: the declaration fields and the `caps` setting, `wb settings`, `code-work active`, the
 gate (`workbench/gate_hook.py`, with a total deadline of 10 seconds and refusal on any doubt, and with links followed
 so an alias of the project root is not a way out), the layout's `hooks` description, the Claude module providing
 `hooks`, the rendered hook and the deny on the rendered settings file and `.git/info/exclude`. Not built: the owner's
-live check, an effect of `delegate`, a project-level lowering of a cap, and a hook for another harness.
+an effect of `delegate`, a project-level lowering of a cap, and a hook for another harness.
 
 ## Related files and decisions
 

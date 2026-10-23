@@ -151,8 +151,9 @@ meet here and the order matters.
   under way is not approved, rendered into the Claude harness as a `PreToolUse` hook (the Claude module now provides
   `hooks`) together with a deny on edits to the rendered settings file. The tool-to-field table is the harness
   layout's, not the installer's, which departs from the wording of the plan. `delegate` still has no effect, nothing
-  reads a cap yet, a project cannot lower one, and the hook has not been seen working in a live Claude session (the
-  owner's check, criterion 9 of the plan). The decision `2026-10-22-installer-owns-the-edit-gate` is Proposed. A
+  reads a cap yet, a project cannot lower one, and the hook was seen working in a live Claude session on 2026-10-22 (Claude Code 2.1.307; the owner's check,
+  criterion 9 of the plan), which also found that the deny on the rendered settings file does not hold from a
+  subdirectory (not yet corrected). The decision `2026-10-22-installer-owns-the-edit-gate` is Proposed. A
   project-level setting that the installer can read without naming a module, so that a project may lower a cap, is
   not a candidate yet; add one if the owner wants it. A security review found one Medium finding, fixed; the fixes had
   no second reviewer.
