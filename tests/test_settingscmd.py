@@ -14,9 +14,9 @@ from tests import support_project
 from tests.support_project import tool
 from workbench import approvalcmd, cli, commands, manifest, rules, settingscmd
 
-CHECKPOINTS = ["alpha", "beta"]
+CHECKPOINTS = ["approve-plan", "beta"]
 CAPS = [{"name": "rounds", "default": 3, "ceiling": 5}, {"name": "tries", "default": 1, "ceiling": 2}]
-DEFAULTS = "checkpoint alpha: stop\ncheckpoint beta: stop\ncap rounds: 3\ncap tries: 1\n"
+DEFAULTS = "checkpoint approve-plan: stop\ncheckpoint beta: stop\ncap rounds: 3\ncap tries: 1\n"
 
 
 def process_module(**fields):
@@ -78,15 +78,23 @@ class Printed(Settings):
         self.assertEqual((0, DEFAULTS, ""), self.settings(cwd=below))
 
     def test_the_owners_values_apply(self):
-        self.owner({"version": 1, "checkpoints": {"beta": "delegate"}, "caps": {"rounds": 5, "tries": 2}})
-        self.assertEqual((0, "checkpoint alpha: stop\ncheckpoint beta: delegate\ncap rounds: 5\ncap tries: 2\n", ""),
+        self.owner({"version": 1, "checkpoints": {"approve-plan": "delegate"}, "caps": {"rounds": 5, "tries": 2}})
+        self.assertEqual((0, "checkpoint approve-plan: delegate\ncheckpoint beta: stop\ncap rounds: 5\ncap tries: 2\n", ""),
                          self.settings())
 
+    def test_delegate_takes_effect_for_approve_plan_only(self):
+        self.owner({"version": 1, "checkpoints": {"beta": "delegate"}})
+        code, out, err = self.settings()
+        self.assertEqual((0, ""), (code, err))
+        self.assertTrue(out.startswith("checkpoint approve-plan: stop\ncheckpoint beta: stop\n"), out)
+        self.assertIn("settings: settings set the checkpoint beta to delegate; delegation has no effect for it, "
+                      "so it stops\n", out)
+
     def test_anything_but_exactly_delegate_stops(self):
-        self.owner({"version": 1, "checkpoints": {"alpha": "Delegate", "beta": "yes"}})
+        self.owner({"version": 1, "checkpoints": {"approve-plan": "Delegate", "beta": "yes"}})
         code, out, _ = self.settings()
         self.assertEqual(0, code)
-        self.assertTrue(out.startswith("checkpoint alpha: stop\ncheckpoint beta: stop\n"), out)
+        self.assertTrue(out.startswith("checkpoint approve-plan: stop\ncheckpoint beta: stop\n"), out)
         self.assertEqual(2, out.count("settings: "))
 
     def test_a_cap_outside_its_range_uses_the_default_and_says_so(self):
@@ -164,7 +172,7 @@ class Refused(Settings):
 
     def test_a_declaration_changed_since_install(self):
         path = ".workbench/p/tool/module.json"
-        self.edit(path, lambda data: data.replace(b'"alpha"', b'"omega"'))
+        self.edit(path, lambda data: data.replace(b'"approve-plan"', b'"omega"'))
         self.refused("has changed since it was installed")
 
     def test_an_argument_is_a_usage_error(self):
@@ -175,7 +183,7 @@ class Refused(Settings):
 
 class Writes(Settings):
     def test_the_project_and_the_store_are_byte_identical_after_a_run(self):
-        self.owner({"version": 1, "checkpoints": {"alpha": "delegate"}})
+        self.owner({"version": 1, "checkpoints": {"approve-plan": "delegate"}})
         before = snapshot(self.real), snapshot(self.store_root)
         self.assertEqual(0, self.settings()[0])
         self.assertEqual(before, (snapshot(self.real), snapshot(self.store_root)))

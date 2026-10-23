@@ -4,9 +4,9 @@ Status: Current. Approved by the owner on 2026-10-19. The guarded store, the per
 records, first-party shipped approvals, the approval request and gate, the owner-run `approve` and `pin`
 commands, the inert download and the launcher are built (`module-approvals`), and "Concrete formats" records what
 the code does. Acknowledgement (the baseline check and `wb acknowledge`) is built (`ownership-and-upgrade`). The rendering into the Claude harness is built (`claude-harness`). Plan approval records (`2026-10-22-plan-approval-records`) are built. The `caps` setting, `wb settings` and the
-edit gate (`2026-10-22-checkpoint-settings-and-caps`) are built. Delegation
-and the opencode rendering are not built yet, and their record formats and setting names
-remain proposals. The rules are the substance.
+edit gate (`2026-10-22-checkpoint-settings-and-caps`) are built. The delegated plan approval
+(`2026-10-23-delegated-approval`) is built in the installer from its increment D; the opencode rendering is not built
+yet, and its record formats and setting names remain proposals. The rules are the substance.
 
 Terms are defined in `terms.md`. Places and manifests are defined in
 `repository-boundary.md`. Declarations are defined in `module-contract.md`.
@@ -418,7 +418,9 @@ prose above and this section differ in precision, this section is what the code 
 ### Delegated plan approval records
 
 *(Designed by plan `2026-10-23-delegated-approval` and the decision `2026-10-23-delegated-plan-approval`, which the
-owner accepted on 2026-10-23; nothing here is built yet.)*
+owner accepted on 2026-10-23. The provider's `convergence` argument is built by its increment B, the process module's
+`delegable` argument by increment C, and the installer's command, the format-2 record and the reading rule by
+increment D; the skill guidance and the security pass are increments E and F.)*
 
 - **The command.** `wb delegate-approve-plan <plan>` takes one argument and no option, runs from anywhere inside the
   project, and finds the root, the ID and the plan path as `approve-plan` does, with the same path rules. It is not
@@ -488,6 +490,15 @@ owner accepted on 2026-10-23; nothing here is built yet.)*
   A provider that is changed, replaced or removed after the approval does not withdraw it (an accepted risk, decision
   `2026-10-23-delegated-plan-approval`): what was approved is bound by the region and the process module's helper, and
   the owner turns delegation off or approves the plan again to withdraw it.
+- **As built (increment D).** The code is `workbench/delegation.py` (the command), `workbench/approvalcmd.py` (the
+  resolution of the provider and the two commands, `delegable` and `convergence`), `workbench/planapprovals.py` (the
+  format-2 record and the reading rule) and `workbench/settings.py` (`delegate` for `approve-plan` only). The
+  installer reads the plan file once, as bytes, for its hash (`MAX_PLAN` is 1 MiB, the bound of the helpers), and
+  again at step 7; it reads no section. The second look at step 7 also resolves both modules again and compares their
+  declaration and helper hashes. An entry with a delegate that no longer counts is invisible to the reading, except
+  that an entry equal in all four values reads `not approved` with the reason; a delegated entry that differs from the
+  plan now reads like any other entry that does not count. The gate prints the same reason. Nothing in the reading
+  checks the provider (an accepted risk, above).
 
 ### Checkpoint and cap settings, and the edit gate
 
@@ -501,10 +512,10 @@ in `module-contract.md`; the decision that the installer owns the gate is
   because the key is additive; a workbench that predates it reports the key as unknown and ignores it. A missing
   `caps` is empty.
 - **Effective values.** A checkpoint is `delegate` only when the owner set exactly `delegate` for a name the
-  module declares, and `stop` otherwise; `delegate` has no effect until `delegated-approval` reads it. *(Proposed, not
-  built: once built, `delegate` takes effect for the checkpoint `approve-plan` only, which `delegate-approve-plan`
-  reads. For any other name, `delegate` stays `stop`, and `wb settings` prints `stop` with a `settings:` note that
-  delegation of that name has no effect.)* A cap is the
+  module declares, and `stop` otherwise. *(Built by plan `2026-10-23-delegated-approval`, increment D:)* `delegate`
+  takes effect for the checkpoint `approve-plan` only, which `delegate-approve-plan` and the reading of a plan's
+  record read. For any other name, `delegate` stays `stop`, and `wb settings` prints `stop` with a `settings:` note
+  that delegation of that name has no effect. A cap is the
   owner's value when that is a JSON integer from 1 to the module's ceiling (a boolean, zero, a negative
   number or a larger number is not; a number with a fraction or an exponent makes the strict loader treat the
   whole file as damaged), and the module's default otherwise. A checkpoint or cap entry for a name the
@@ -555,7 +566,7 @@ in `module-contract.md`; the decision that the installer owns the gate is
   `Write` of more than about 64 KiB is allowed when none is, and refused while one is. Input of more than 16 MiB is
   refused in every state, so the read is always bounded; a `Write` of that size is refused with the hook installed.
   A harness that renders no hook, or whose layout describes none, has no gate, and attach says so.
-- **As built.** `delegate` has no effect: every checkpoint stops. There is no project-level setting that lowers a
+- **As built.** `delegate` takes effect for `approve-plan` only; every other checkpoint stops. There is no project-level setting that lowers a
   cap; `code-work.md` says a project may lower and not raise, and that waits for a generic project setting the
   installer can read ("Deferred work" of the plan). Only the Claude harness renders a hook.
 

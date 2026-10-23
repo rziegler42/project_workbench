@@ -187,11 +187,12 @@ def _approved(guarded, found, plans, deadline):
     for plan in plans:
         rel = planapprovals.plan_path(found.root, found.root, plan)
         report = approvalcmd.region(guarded, found, rel, timeout=min(approvalcmd.TIMEOUT, _remaining(deadline)))
-        state = planapprovals.status(entries, rel, report.region_hash, found.declaration, found.helper_sha256)
+        state = planapprovals.status(entries, rel, report.region_hash, found.declaration, found.helper_sha256,
+                                     planapprovals.delegating(guarded, found))
         if state.state != planapprovals.APPROVED:
+            detail = ", ".join(state.differs) if state.differs else planapprovals.WITHDRAWN if state.withdrawn else ""
             raise Refusal("the plan %s is %s%s; the owner approves it with `wb approve-plan %s`" % (
-                display.ascii_text(rel), state.state, " (%s)" % ", ".join(state.differs) if state.differs else "",
-                display.ascii_text(rel)))
+                display.ascii_text(rel), state.state, " (%s)" % detail if detail else "", display.ascii_text(rel)))
 
 
 def decide(guarded, table, cwd, tool, given, deadline, size=0):

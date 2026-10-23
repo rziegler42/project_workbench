@@ -20,6 +20,11 @@ helper's report; what the region is belongs to the helper (``2026-10-22-plan-che
 ["<root-relative path>", ...]}`` of at most ``MAX_ACTIVE`` paths of at most ``MAX_ACTIVE_PATH`` characters, each
 passing the path rules, none repeated. The edit gate reads it (``gate_hook.py``).
 
+``resolve_delegation`` also finds the one installed module that provides ``peer-review`` and declares ``convergence``,
+held to the same pin rules, and ``delegable`` and ``convergence`` run the two commands a delegated approval reads
+(``docs/specs/trust-and-approval.md``, "Delegated plan approval records"), each within its bound, and accept exactly
+one JSON object and a newline.
+
 Nothing here writes to the project or to the guarded store. Every refusal is an ``ApprovalError``.
 """
 
@@ -36,13 +41,25 @@ MAX_NAME = 64
 MAX_ACTIVE_REPORT = 8192
 MAX_ACTIVE = 32
 MAX_ACTIVE_PATH = 240
+MAX_DELEGABLE_REPORT = 1024
+MAX_CONVERGENCE_REPORT = 4096
+MAX_REASON = 200
+MAX_BRIDGE = 64
+MAX_MODEL = 200
+MAX_ROUNDS = 5
 
 Resolved = collections.namedtuple(
-    "Resolved", "root project_id package module declaration helper_sha256 command argument kit active",
-    defaults=(None,))
+    "Resolved", "root project_id package module declaration helper_sha256 command argument kit active checkpoints "
+    "delegable", defaults=(None, (), None))
+Provider = collections.namedtuple(
+    "Provider", "root project_id package module declaration helper_sha256 command argument kit")
 Report = collections.namedtuple("Report", "region_hash unhashed")
+Delegability = collections.namedtuple("Delegability", "delegable reason")
+Convergence = collections.namedtuple(
+    "Convergence", "converged document_sha256 rounds_used bound bridge model review closed")
 
 _HASH = re.compile(r"[0-9a-f]{64}\Z")
+_REVIEW = re.compile(r"plan-[0-9a-f]{16}\Z")
 
 
 class ApprovalError(Exception):
@@ -77,17 +94,56 @@ def installed_modules(start):
     return root, ident, found
 
 
-def resolve(guarded, start):
-    """The ``Resolved`` approval command of the project that holds the directory `start`, or ``ApprovalError``.
-    Nothing is started."""
-    root, ident, found = installed_modules(start)
+def _names(items):
+    return ", ".join(sorted("%s/%s" % (item.package, item.module.name) for item in items))
+
+
+def _approving(found):
+    """The one ``Installed`` module of `found` that declares ``approval``, or ``ApprovalError``."""
     declaring = [item for item in found if item.module.approval is not None]
     if not declaring:
         raise ApprovalError("no installed module declares an approval command; nothing was run")
     if len(declaring) > 1:
         raise ApprovalError("more than one installed module declares an approval command: %s; nothing was run"
-                            % ", ".join(sorted("%s/%s" % (item.package, item.module.name) for item in declaring)))
-    return resolved(guarded, root, ident, declaring[0])
+                            % _names(declaring))
+    return declaring[0]
+
+
+def resolve(guarded, start):
+    """The ``Resolved`` approval command of the project that holds the directory `start`, or ``ApprovalError``.
+    Nothing is started."""
+    root, ident, found = installed_modules(start)
+    return resolved(guarded, root, ident, _approving(found))
+
+
+def resolve_delegation(guarded, start, *, check=None):
+    """``(Resolved, Provider)``: the approval command and the one installed module that provides ``peer-review`` and
+    declares ``convergence``, each with its pin held to the rules of ``wb run``, or ``ApprovalError``. `check`, when
+    given, is called with the ``Resolved`` before the provider is looked for and may raise ``ApprovalError``. Nothing
+    is started."""
+    root, ident, found = installed_modules(start)
+    process = resolved(guarded, root, ident, _approving(found))
+    if check is not None:
+        check(process)
+    if not process.delegable:
+        raise ApprovalError("the approval command of %s/%s declares no delegability argument; nothing was run"
+                            % (process.package, process.module))
+    providers = [item for item in found if "peer-review" in item.module.provides and item.module.convergence]
+    what = "installed module provides peer-review with a convergence argument"
+    if not providers:
+        raise ApprovalError("no %s; nothing was run" % what)
+    if len(providers) > 1:
+        raise ApprovalError("more than one %s: %s; nothing was run" % (what, _names(providers)))
+    item = providers[0]
+    module = item.module
+    command = next(c for c in module.commands if c.name == module.convergence["command"])
+    declared = commands.Declared(item.package, module.name, command, item.declaration, tuple(module.provides))
+    try:
+        pin = commands.check_pin(guarded, ident, declared)
+    except commands.CommandError as exc:
+        raise ApprovalError(str(exc))
+    return process, Provider(root, ident, item.package, module.name, item.declaration, pin.sha256, command.name,
+                             module.convergence["argument"], pin.kit)
 
 
 def resolved(guarded, root, ident, item):
@@ -101,7 +157,8 @@ def resolved(guarded, root, ident, item):
     except commands.CommandError as exc:
         raise ApprovalError(str(exc))
     return Resolved(root, ident, item.package, module.name, item.declaration, pin.sha256, command.name,
-                    module.approval["argument"], pin.kit, module.approval.get("active"))
+                    module.approval["argument"], pin.kit, module.approval.get("active"), tuple(module.checkpoints),
+                    module.approval.get("delegable"))
 
 
 def _plan_argument(plan):
@@ -121,20 +178,20 @@ def _cleaned_end(data):
     return _shown(lines[-1].strip(), 200) if lines else ""
 
 
-def _capture(guarded, found, args, limit, timeout):
-    """The standard output of the approval command run with `args`, or ``ApprovalError``."""
+def _capture(guarded, found, args, limit, timeout, what="the approval command"):
+    """The standard output of the command `found` run with `args`, or ``ApprovalError`` naming `what`."""
     try:
         done = launch.launch_captured(guarded, found.project_id, found.command, found.root, args, limit=limit,
                                       timeout=timeout, kit=found.kit, cwd=found.root)
     except launch.LaunchError as exc:
         raise ApprovalError(_shown(exc, 300))
     if done.over:
-        raise ApprovalError("the approval command printed more than %d bytes and was stopped" % limit)
+        raise ApprovalError("%s printed more than %d bytes and was stopped" % (what, limit))
     if done.timed_out:
-        raise ApprovalError("the approval command did not finish within %g seconds and was stopped" % timeout)
+        raise ApprovalError("%s did not finish within %g seconds and was stopped" % (what, timeout))
     if done.code != 0:
         said = _cleaned_end(done.stderr) or _cleaned_end(done.stdout)
-        raise ApprovalError("the approval command failed (exit %d)%s" % (done.code, ": " + said if said else ""))
+        raise ApprovalError("%s failed (exit %d)%s" % (what, done.code, ": " + said if said else ""))
     return done.stdout
 
 
@@ -201,3 +258,85 @@ def parse_report(data):
             raise ApprovalError("the approval command's unhashed holds a name that is not one to %d printable "
                                 "characters" % MAX_NAME)
     return Report(digest, tuple(names))
+
+
+def delegable(guarded, found, plan, *, timeout=None):
+    """The ``Delegability`` the approval command's ``delegable`` argument gives for the root-relative path `plan`, or
+    ``ApprovalError``."""
+    if not found.delegable:
+        raise ApprovalError("the approval command declares no delegability argument")
+    plan = _plan_argument(plan)
+    what = "the delegability command"
+    return parse_delegable(_capture(guarded, found, [found.delegable, plan], MAX_DELEGABLE_REPORT,
+                                    timeout or TIMEOUT, what))
+
+
+def convergence(guarded, provider, plan, *, timeout=None):
+    """The ``Convergence`` the provider's ``convergence`` argument gives for the root-relative path `plan`, or
+    ``ApprovalError``."""
+    plan = _plan_argument(plan)
+    return parse_convergence(_capture(guarded, provider, [provider.argument, plan], MAX_CONVERGENCE_REPORT,
+                                      timeout or TIMEOUT, "the convergence command"))
+
+
+def _object(data, what, limit, fields):
+    """The one JSON object in the bytes `data` a command printed, which must hold exactly `fields`."""
+    if not data.endswith(b"\n") or data.count(b"\n") != 1:
+        raise ApprovalError("%s's report is not one line ending in a newline" % what)
+    try:
+        report = jsonstrict.parse_object(data[:-1], limit)
+    except ValueError as exc:
+        raise ApprovalError("%s's report is not one JSON object: %s" % (what, _shown(exc, 80)))
+    if set(report) != set(fields):
+        raise ApprovalError("%s's report must hold exactly %s" % (what, ", ".join(fields)))
+    if type(report["format"]) is not int or report["format"] != 1:
+        raise ApprovalError("%s's report has a format this workbench does not read" % what)
+    return report
+
+
+def _flag(report, what, key):
+    if type(report[key]) is not bool:
+        raise ApprovalError("%s's %s is not true or false" % (what, key))
+    return report[key]
+
+
+def _text(report, what, key, limit, *, empty=False):
+    value = report[key]
+    if not isinstance(value, str) or len(value) > limit or (not value and not empty) or not value.isprintable():
+        raise ApprovalError("%s's %s is not %s printable characters" % (
+            what, key, "text of at most %d" % limit if empty else "one to %d" % limit))
+    return value
+
+
+def _count(report, what, key):
+    value = report[key]
+    if type(value) is not int or not 1 <= value <= MAX_ROUNDS:
+        raise ApprovalError("%s's %s is not a number from 1 to %d" % (what, key, MAX_ROUNDS))
+    return value
+
+
+def parse_delegable(data):
+    """The ``Delegability`` in the bytes `data` a delegability command printed, or ``ApprovalError``."""
+    what = "the delegability command"
+    report = _object(data, what, MAX_DELEGABLE_REPORT, ("format", "delegable", "reason"))
+    return Delegability(_flag(report, what, "delegable"), _text(report, what, "reason", MAX_REASON, empty=True))
+
+
+def parse_convergence(data):
+    """The ``Convergence`` in the bytes `data` a convergence command printed, or ``ApprovalError``."""
+    what = "the convergence command"
+    report = _object(data, what, MAX_CONVERGENCE_REPORT, (
+        "format", "kind", "converged", "document_sha256", "rounds_used", "bound", "bridge", "model", "review",
+        "closed"))
+    if report["kind"] != "plan":
+        raise ApprovalError("%s's report is not of a plan" % what)
+    digest = report["document_sha256"]
+    if not isinstance(digest, str) or not _HASH.match(digest):
+        raise ApprovalError("%s's document_sha256 is not 64 lowercase hexadecimal characters" % what)
+    review = report["review"]
+    if not isinstance(review, str) or not _REVIEW.match(review):
+        raise ApprovalError("%s's review is not plan- and 16 lowercase hexadecimal characters" % what)
+    model = None if report["model"] is None else _text(report, what, "model", MAX_MODEL)
+    return Convergence(_flag(report, what, "converged"), digest, _count(report, what, "rounds_used"),
+                       _count(report, what, "bound"), _text(report, what, "bridge", MAX_BRIDGE), model, review,
+                       _flag(report, what, "closed"))

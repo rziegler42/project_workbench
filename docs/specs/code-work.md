@@ -136,7 +136,7 @@ and `groundwork`'s completion report does nothing when no process module provide
 ### Plan approval
 
 The record of a plan approval is written by the installer, and so is a delegated one
-(`trust-and-approval.md`, "Delegated plan approval records", proposed). This module
+(`trust-and-approval.md`, "Delegated plan approval records"). This module
 supplies what only its plan format knows: the sections that are excluded from the
 hashed region (the status line, the review record and the result) and, once the
 delegated approval is built, whether a plan is delegable. `trust-and-approval.md`
@@ -156,8 +156,7 @@ or as an HTML heading), and any setext underline or rule, ends it whatever the f
 case or indentation, so that text a reader could take for another section is always hashed. A
 plan with a duplicated left-out heading, with no single status line (of at most 200 characters) before its first heading, with a fence or
 comment that is never closed, or that is not UTF-8, larger than the check reads or not directly in
-`docs/plans/`, is refused rather than guessed. The owner approves with `wb approve-plan <plan>`; an agent reads `wb plan-status <plan>`; the delegated
-record is not built. A `peer-review` provider now exists (`review-engine.md`); it stores findings as data and records no approval.
+`docs/plans/`, is refused rather than guessed. The owner approves with `wb approve-plan <plan>`; an agent reads `wb plan-status <plan>`; the installer writes a delegated record with `wb delegate-approve-plan <plan>` when the owner's setting allows it. A `peer-review` provider (`review-engine.md`) stores findings as data and records no approval.
 
 ### Completion
 
@@ -240,10 +239,9 @@ step without a recorded outcome.
 | acknowledge changes made by someone else, second tier | `acknowledge-second-tier` | stop | delegable |
 
 The setting names are what the module declares in `checkpoints` and what the owner writes under `checkpoints` in
-the personal settings (`trust-and-approval.md`). Setting `delegate` has no effect until `delegated-approval`:
-every checkpoint stops, whatever the setting says. `wb settings` reports the effective values. *(Proposed, not built:
-once `delegated-approval` is built, `delegate` takes effect for `approve-plan` only, and every other checkpoint
-stops whatever its setting says.)*
+the personal settings (`trust-and-approval.md`). Setting `delegate` takes effect for `approve-plan` only
+(built by `delegated-approval`, increment D); every other checkpoint stops, whatever the setting says. `wb settings`
+reports the effective values.
 
 Delegability *(built by plan `2026-10-23-delegated-approval`, increment C; the installer's use of it is increment D)*.
 The module's helper has a read-only subcommand, `delegable <plan>`, that tells the installer whether a plan may be
@@ -496,9 +494,12 @@ installer's and is replaced on upgrade only while unedited.
   section, no `SessionStart` hook and no opencode delivery exist; nothing was run in a live session.
 - Built, from plan `2026-10-23-delegated-approval`, increment C: the helper's `delegable` subcommand and the
   `approval.delegable` declaration (`"delegable": "delegable"`). Limits: the marker is a convention and defence in depth
-  only; the installer does not use the answer until increment D; the package's shipped approval is stale until
-  increment F.
-- Not built: the installer's delegated approval (`delegated-approval`, increments D to F). It came from the roadmap candidate
+  only; the package's shipped approval is stale until increment F.
+- Built, from plan `2026-10-23-delegated-approval`, increment D, in the installer: `wb delegate-approve-plan`, the
+  format-2 record and the rule that `delegate` takes effect for `approve-plan` only (`trust-and-approval.md`,
+  `installer-interface.md`).
+- Not built: the skill guidance and the security pass of the delegated approval (`delegated-approval`, increments E
+  and F). It came from the roadmap candidate
   `code-work-approval`, which is split into it and `compaction-guidance`.
 - The helper reads untrusted plans and is bounded; the limits are in the plan `2026-10-21-code-work-plans`.
 

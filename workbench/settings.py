@@ -32,6 +32,8 @@ from .wbkit import safefs
 SETTINGS = "settings"
 VERSION = 1
 STOP, DELEGATE = "stop", "delegate"
+# The one checkpoint for which ``delegate`` has an effect (``wb delegate-approve-plan``); any other name stops.
+APPROVE_PLAN = "approve-plan"
 
 _Settings = collections.namedtuple("_Settings", "checkpoints problems caps")
 Effective = collections.namedtuple("Effective", "checkpoints caps notes")
@@ -118,7 +120,8 @@ def load(store):
 def effective(loaded, checkpoints, caps):
     """The values that apply to a process module that declares ``checkpoints`` (names) and ``caps``.
 
-    A checkpoint is ``delegate`` only when declared and set to exactly that. A cap is the owner's
+    A checkpoint is ``delegate`` only when declared, set to exactly that and named ``approve-plan``: delegation
+    takes effect for no other checkpoint, which stops with a note. A cap is the owner's
     value when it is an integer from 1 to the ceiling, otherwise the default. Each ignored or
     replaced entry adds a note; the loader's own problems are not repeated here.
     """
@@ -128,7 +131,13 @@ def effective(loaded, checkpoints, caps):
         if name not in declared:
             notes.append("settings set a checkpoint the process module does not declare: %s; it is ignored"
                          % declarations._shown(name))
-    values = {name: loaded.checkpoint(name) for name in checkpoints}
+    values = {}
+    for name in checkpoints:
+        values[name] = loaded.checkpoint(name)
+        if values[name] == DELEGATE and name != APPROVE_PLAN:
+            values[name] = STOP
+            notes.append("settings set the checkpoint %s to delegate; delegation has no effect for it, so it stops"
+                         % declarations._shown(name))
     known = {cap.name for cap in caps}
     for name in sorted(loaded.caps):
         if name not in known:

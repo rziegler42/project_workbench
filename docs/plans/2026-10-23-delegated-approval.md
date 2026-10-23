@@ -387,3 +387,27 @@ The review is not an approval; the plan stays `Proposed` until the owner approve
   header without exactly one `Status:` line is not delegable. All three are in the spec.
 - Not done: the installer's command and record (D), guidance (E), the security pass and release (F). The package
   approval of `code-work` is stale until F, as is `review-engine`'s.
+
+### Increment D — The installer's command and record
+
+- One local commit, trailer `Plan: 2026-10-23-delegated-approval#D` (find it with `git log --grep`).
+- Built: `wb delegate-approve-plan <plan>` (`workbench/delegation.py`, routed in `cli.py`, in `rules.AGENT_SAFE` and not
+  owner-run); in `approvalcmd.py` the resolution of the one `peer-review` provider that declares `convergence` (held to
+  the pin rules of `wb run`), the two commands `delegable` and `convergence` and their strict readers (1,024 and 4,096
+  bytes); in `planapprovals.py` the format-2 record (formats 1 and 2 read, 2 written, an optional `delegate` object with
+  exactly nine fields) and the reading rule (a delegated entry counts only while the personal `approve-plan` setting
+  reads `delegate`; otherwise `not approved (delegated approval withdrawn: ...)`, the same reason at the gate); in
+  `settings.py` the rule that `delegate` takes effect for `approve-plan` only (any other name stops, with a note in
+  `wb settings`); the specs (`trust-and-approval.md`, `installer-interface.md`, `code-work.md`).
+- Tests: 74 new in `tests/test_delegation.py` (a fake process module and a fake provider installed as real pinned
+  modules, as the existing tests do), one new in `test_settingscmd.py`, two changed there (the checkpoint names) and
+  one case changed in `test_planapprovals.py` (format 2 is now valid; formats 0 and 3 are the damaged ones). The full
+  suite passes, 3,643 tests in 7 roots (3,568 before), the same skips. Document checks print nothing. Thirty-two
+  changes to the rules in turn each failed a test; four first survived and led to better tests (the provider's hashes
+  now differ from the process module's, a read-back test, and oversize answers that are otherwise valid).
+- Differs from the plan: the installer reads the plan file once, as bytes, for its hash (the provider names the file it
+  reviewed by that hash); the setting is checked after the process module is found, since the module declares the
+  checkpoints; a project is never given two process modules by the install check, so the test for two uses a patched
+  listing; `delegate` for another checkpoint reads `stop` with a note.
+- Not done: guidance for the agent (E), the security pass, the release of the approvals and the close (F). The shipped
+  approvals of the installer, `code-work` and `review-engine` are stale until F.

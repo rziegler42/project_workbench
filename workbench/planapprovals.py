@@ -4,9 +4,15 @@ The installer records what the project's declared approval command reports for a
 itself (``approvalcmd.py``; ``docs/specs/trust-and-approval.md``, "Plan approval records"). The record is
 ``projects/<id>/plan-approvals`` in the guarded store, strict JSON::
 
-    {"format": 1, "approvals": [{"plan": "<path in the project>", "region_hash": "<64 hex>",
+    {"format": 2, "approvals": [{"plan": "<path in the project>", "region_hash": "<64 hex>",
                                  "declaration_hash": "<64 hex>", "helper_sha256": "<64 hex>",
                                  "approver": "<user>", "time": "<UTC>", "workbench_version": "<text>"}, ...]}
+
+The file is ``format: 2`` when written; a ``format: 1`` file is read (it has no delegated entries). A format-2 entry
+may also hold ``delegate``, an object that says which provider found the review converged (``delegation.py``;
+"Delegated plan approval records"). Such an entry counts only while the owner's personal setting for the
+checkpoint ``approve-plan`` reads ``delegate`` when it is read; an entry without ``delegate`` is never affected by
+the setting.
 
 A plan is ``approved`` when an entry equals all four of its path, the region hash the command reports now, the
 process module's declaration hash and the helper's pinned SHA-256. If only some other entry names the plan it is
@@ -26,25 +32,30 @@ import os
 import re
 import stat
 
-from . import __version__, approvalcmd, approvals, approve
+from . import __version__, approvalcmd, approvals, approve, settings
 from .wbkit import display, jsonstrict, safefs
 
-FORMAT = 1
+FORMAT = 2
+FORMATS = (1, 2)
 MAX_ENTRIES = 2000
 CONFIRM_CHARS = 12
 MAX_FILE_BYTES = 2 * 1024 * 1024
 
 _HEX = re.compile(r"[0-9a-f]{64}\Z")
 _TIME = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\Z")
+_REVIEW = re.compile(r"plan-[0-9a-f]{16}\Z")
 _FIELDS = ("plan", "region_hash", "declaration_hash", "helper_sha256", "approver", "time", "workbench_version")
+_DELEGATE = ("provider", "provider_declaration_hash", "provider_helper_sha256", "bridge", "model", "rounds_used",
+             "bound", "review", "document_sha256")
 
-Approval = collections.namedtuple("Approval", " ".join(_FIELDS))
-Status = collections.namedtuple("Status", "state differs")
+Approval = collections.namedtuple("Approval", " ".join(_FIELDS + ("delegate",)), defaults=(None,))
+Status = collections.namedtuple("Status", "state differs withdrawn", defaults=(False,))
 
 APPROVED, CHANGED, NOT_APPROVED = "approved", "changed since approval", "not approved"
 
 STATUS_USAGE = "usage: wb plan-status <plan>\n"
 APPROVE_USAGE = "usage: wb approve-plan <plan>   (owner-run, terminal only)\n"
+WITHDRAWN = "delegated approval withdrawn: approve-plan is not delegate"
 
 
 class PlanApprovalError(Exception):
@@ -65,6 +76,25 @@ def _text(entry, key, limit=64):
     return value
 
 
+def _delegate(value):
+    """`value`, the ``delegate`` object of an entry, as a dict, or ``PlanApprovalError``."""
+    if not isinstance(value, dict) or set(value) != set(_DELEGATE):
+        raise PlanApprovalError("a plan approval has a bad delegate")
+    for key in ("provider", "bridge"):
+        _text(value, key)
+    if value["model"] is not None:
+        _text(value, "model", 200)
+    for key in ("provider_declaration_hash", "provider_helper_sha256", "document_sha256"):
+        if not isinstance(value[key], str) or not _HEX.match(value[key]):
+            raise PlanApprovalError("a plan approval has a bad delegate %s" % key)
+    for key in ("rounds_used", "bound"):
+        if type(value[key]) is not int or not 1 <= value[key] <= 5:
+            raise PlanApprovalError("a plan approval has a bad delegate %s" % key)
+    if not isinstance(value["review"], str) or not _REVIEW.match(value["review"]):
+        raise PlanApprovalError("a plan approval has a bad delegate review")
+    return {key: value[key] for key in _DELEGATE}
+
+
 def parse(data):
     """The entries of a plan approvals file as a list of ``Approval``, or ``PlanApprovalError``."""
     try:
@@ -72,13 +102,14 @@ def parse(data):
     except ValueError as exc:
         raise PlanApprovalError("the plan approvals file is not valid (%s)" % display.ascii_text(str(exc))[:80])
     if set(document) != {"format", "approvals"} or type(document["format"]) is not int \
-            or document["format"] != FORMAT or not isinstance(document["approvals"], list):
+            or document["format"] not in FORMATS or not isinstance(document["approvals"], list):
         raise PlanApprovalError("the plan approvals file does not have the expected format")
     if len(document["approvals"]) > MAX_ENTRIES:
         raise PlanApprovalError("the plan approvals file holds more than %d approvals" % MAX_ENTRIES)
     found = []
     for entry in document["approvals"]:
-        if not isinstance(entry, dict) or set(entry) != set(_FIELDS):
+        allowed = [set(_FIELDS), set(_FIELDS) | {"delegate"}] if document["format"] == 2 else [set(_FIELDS)]
+        if not isinstance(entry, dict) or set(entry) not in allowed:
             raise PlanApprovalError("a plan approval has the wrong fields")
         plan = entry["plan"]
         if not isinstance(plan, str) or not safefs.relpath_ok(plan):
@@ -89,12 +120,19 @@ def parse(data):
         if not isinstance(entry["time"], str) or not _TIME.match(entry["time"]):
             raise PlanApprovalError("a plan approval has a bad time")
         found.append(Approval(plan, entry["region_hash"], entry["declaration_hash"], entry["helper_sha256"],
-                              _text(entry, "approver"), entry["time"], _text(entry, "workbench_version")))
+                              _text(entry, "approver"), entry["time"], _text(entry, "workbench_version"),
+                              _delegate(entry["delegate"]) if "delegate" in entry else None))
     return found
 
 
 def serialize(entries):
-    document = {"format": FORMAT, "approvals": [entry._asdict() for entry in entries]}
+    listed = []
+    for entry in entries:
+        item = entry._asdict()
+        if item["delegate"] is None:
+            del item["delegate"]
+        listed.append(item)
+    document = {"format": FORMAT, "approvals": listed}
     return (json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n").encode("ascii")
 
 
@@ -135,13 +173,25 @@ def add(store, project_id, approval):
     return True
 
 
-def status(entries, plan, region_hash, declaration_hash, helper_sha256):
+def delegating(guarded, found):
+    """Whether the owner's personal setting for the checkpoint ``approve-plan`` reads ``delegate`` now, for the
+    process module `found` (a ``Resolved``). A missing, damaged or other value reads as not delegating."""
+    effective = settings.effective(settings.load(guarded), found.checkpoints, ())
+    return effective.checkpoints.get(settings.APPROVE_PLAN) == settings.DELEGATE
+
+
+def status(entries, plan, region_hash, declaration_hash, helper_sha256, delegating=False):
     """The ``Status`` of `plan` against the values computed now. ``differs`` names what is not the same as in
-    the newest entry for the plan, and is empty unless the state is ``changed since approval``."""
+    the newest entry for the plan, and is empty unless the state is ``changed since approval``. An entry with a
+    delegate counts only when `delegating` is true; when it is not and such an entry equals all four values, the
+    state is ``not approved`` and ``withdrawn`` is true."""
     wanted = Approval(plan, region_hash, declaration_hash, helper_sha256, "", "", "")
-    if any(_same(entry, wanted) for entry in entries):
+    counted = [entry for entry in entries if entry.delegate is None or delegating]
+    if any(_same(entry, wanted) for entry in counted):
         return Status(APPROVED, ())
-    named = [entry for entry in entries if entry.plan == plan]
+    if any(_same(entry, wanted) for entry in entries):
+        return Status(NOT_APPROVED, (), True)
+    named = [entry for entry in counted if entry.plan == plan]
     if not named:
         return Status(NOT_APPROVED, ())
     newest = named[-1]
@@ -223,7 +273,8 @@ def plan_status(guarded, tokens, out, err, *, cwd=None):
         entries = load(guarded, resolved.project_id)
     except (PlanApprovalError, approvalcmd.ApprovalError) as exc:
         return _refuse(err, str(exc))
-    found = status(entries, plan, report.region_hash, resolved.declaration, resolved.helper_sha256)
+    found = status(entries, plan, report.region_hash, resolved.declaration, resolved.helper_sha256,
+                   delegating(guarded, resolved))
     shown = display.ascii_text(plan)
     if found.state == APPROVED:
         out.write("approved: %s\n" % shown)
@@ -231,7 +282,7 @@ def plan_status(guarded, tokens, out, err, *, cwd=None):
     if found.state == CHANGED:
         out.write("changed since approval: %s (%s)\n" % (shown, ", ".join(found.differs)))
     else:
-        out.write("not approved: %s\n" % shown)
+        out.write("not approved: %s%s\n" % (shown, " (%s)" % WITHDRAWN if found.withdrawn else ""))
     return 1
 
 

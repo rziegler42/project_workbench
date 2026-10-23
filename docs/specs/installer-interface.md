@@ -168,7 +168,7 @@ says so.
 | `release-approvals` | package | nothing | the shipped first-party records in the workbench distribution | no | built |
 | `approve-plan` | project | a plan path | the guarded store: a plan approval record | yes, owner-run | built |
 | `plan-status` | project | a plan path | nothing | no | built |
-| `delegate-approve-plan` | project | a plan path | the guarded store: a delegated plan approval record | no, agent-run | proposed |
+| `delegate-approve-plan` | project | a plan path | the guarded store: a delegated plan approval record | no, agent-run | built |
 | `settings` | project | nothing | nothing | no | built |
 | `gate` | project | a harness name, and the hook's JSON on standard input | nothing | no | built |
 
@@ -505,7 +505,7 @@ uses, with the same refusals. The behaviour, the path rules, the record, the out
 denies it to the agent; `plan-status` is read-only and agent-safe. Neither commits, pushes or edits a plan, and
 neither reads a plan itself: the process module's declared, pinned command does.
 
-### `delegate-approve-plan` *(proposed by plan `2026-10-23-delegated-approval`; not built)*
+### `delegate-approve-plan` *(built by plan `2026-10-23-delegated-approval`, increment D)*
 
 `wb delegate-approve-plan <plan>` takes exactly one argument and no option and runs from anywhere inside a project, with
 the root and the ID found as `approve-plan` finds them and the same path rules. It is the command an agent runs to get
