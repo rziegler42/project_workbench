@@ -11,10 +11,11 @@ The installer knows no plan format. The process module's declared ``active`` com
 (``approvalcmd.active_plans``) and its ``region`` command gives each plan's hash, which is compared with the plan
 approval records (``planapprovals``), the same split ``approve-plan`` uses. In order:
 
-1. The input is one JSON object of at most ``MAX_INPUT`` bytes with a string ``cwd``, a string ``tool_name`` and an
-   object ``tool_input``. The project is found from ``cwd``; none is a refusal.
+1. The input is one JSON object of at most ``MAX_TRANSPORT`` bytes with a string ``cwd``, a string ``tool_name`` and
+   an object ``tool_input``. The project is found from ``cwd``; none is a refusal.
 2. A project with no installed process module that declares ``approval.active`` is allowed; more than one is refused.
-3. ``active`` is run. No plan under way is an allow; a command that fails is a refusal.
+3. ``active`` is run. No plan under way is an allow, whatever the size of the input; a command that fails is a
+   refusal. With a plan under way, an input of more than ``MAX_INPUT`` bytes is a refusal.
 4. The targets are read from ``tool_input`` by the table the harness module's layout declares under
    ``hooks.targets`` (``layout.py``); the installer holds no tool name. A tool outside it, a missing, empty or
    non-string field, a NUL and an overlong path are refusals. Every target is judged.
@@ -39,6 +40,7 @@ from . import approvalcmd, planapprovals
 from .wbkit import display, jsonstrict
 
 MAX_INPUT = 65536
+MAX_TRANSPORT = 16 * 1024 * 1024
 DEADLINE = 10.0
 MAX_TARGET = 4096
 
@@ -58,18 +60,18 @@ class _Deadline(BaseException):
 
 def _read(stdin):
     stream = getattr(stdin, "buffer", stdin)
-    data = stream.read(MAX_INPUT + 1)
+    data = stream.read(MAX_TRANSPORT + 1)
     if isinstance(data, str):
         data = data.encode("utf-8", "surrogatepass")
     try:
-        document = jsonstrict.parse_object(data, MAX_INPUT)
+        document = jsonstrict.parse_object(data, MAX_TRANSPORT)
     except ValueError as exc:
         raise Refusal("the hook input is not one JSON object within %d bytes (%s)"
-                      % (MAX_INPUT, display.ascii_text(str(exc))[:80]))
+                      % (MAX_TRANSPORT, display.ascii_text(str(exc))[:80]))
     cwd, tool, given = document.get("cwd"), document.get("tool_name"), document.get("tool_input")
     if not isinstance(cwd, str) or not isinstance(tool, str) or not isinstance(given, dict):
         raise Refusal("the hook input needs a string cwd, a string tool_name and an object tool_input")
-    return cwd, tool, given
+    return cwd, tool, given, len(data)
 
 
 # --- placing a target -------------------------------------------------------------------------
@@ -192,10 +194,10 @@ def _approved(guarded, found, plans, deadline):
                 display.ascii_text(rel)))
 
 
-def decide(guarded, table, cwd, tool, given, deadline):
+def decide(guarded, table, cwd, tool, given, deadline, size=0):
     """Return when the call may go ahead; raise ``Refusal`` otherwise. `table` maps each tool the hook covers to the
     fields of its input that name a file it writes; a tool outside it is refused. `deadline` is a
-    ``time.monotonic`` value."""
+    ``time.monotonic`` value and `size` the number of bytes of the input, which a plan under way bounds."""
     _check_cwd(cwd)
     try:
         root, ident, installed = approvalcmd.installed_modules(cwd)
@@ -214,6 +216,8 @@ def decide(guarded, table, cwd, tool, given, deadline):
         raise Refusal(str(exc))
     if not plans:
         return
+    if size > MAX_INPUT:
+        raise Refusal("the hook input is larger than %d bytes while a plan is under way" % MAX_INPUT)
     fields = table.get(tool)
     if fields is None:
         raise Refusal("the tool %s is not one the gate reads a target from" % display.ascii_text(tool)[:40])
@@ -260,8 +264,8 @@ def run(stdin, err, prepare, *, deadline=DEADLINE):
             previous = _arm(deadline)
             started = time.monotonic()
             guarded, table = prepare()
-            cwd, tool, given = _read(stdin)
-            decide(guarded, table, cwd, tool, given, started + deadline)
+            cwd, tool, given, size = _read(stdin)
+            decide(guarded, table, cwd, tool, given, started + deadline, size)
         except Refusal as exc:
             reason = str(exc)
         except _Deadline:

@@ -138,6 +138,11 @@ class Gated(support_project.Project):
         return self.gate(self.payload(tool_name, **{field: rel if rel.startswith("/") else self.path(rel)}),
                          **kwargs)
 
+    def big(self, rel="src/x.py", extra=1, **more):
+        head = self.payload(file_path=self.path(rel), content="", **more)
+        return self.payload(file_path=self.path(rel), content="y" * (gate_hook.MAX_INPUT - len(head.encode()) + extra),
+                            **more)
+
     def allowed(self, result):
         self.assertEqual((0, ""), result)
 
@@ -516,6 +521,81 @@ class Hostile(Gated):
                                  lambda: (self.guarded, TABLE))
         self.assertEqual((2, ""), (code, out.getvalue()))
         self.assertEqual(1, err.getvalue().count("\n"))
+
+
+class LargeInput(Gated):
+    """The 65,536 byte bound applies only while a plan is under way; a larger limit is always applied."""
+
+    def test_a_large_input_is_allowed_when_no_plan_is_under_way(self):
+        self.plan(status="Proposed")
+        text = self.big(extra=1)
+        self.assertEqual(gate_hook.MAX_INPUT + 1, len(text.encode()))
+        self.allowed(self.gate(text))
+        self.allowed(self.gate(self.big(extra=200000)))
+        self.assertEqual([["active"], ["active"]], self.helper_calls())
+
+    def test_a_large_input_is_refused_while_a_plan_is_under_way_whether_or_not_it_is_approved(self):
+        self.plan()
+        err = self.refused(self.gate(self.big(extra=1)), "65536")
+        self.assertNotIn("approve-plan", err)
+        self.record()
+        self.refused(self.gate(self.big(extra=1)), "65536")
+        self.refused(self.gate(self.big(extra=200000)), "65536")
+
+    def test_an_input_at_the_bound_is_decided_as_before_in_both_states(self):
+        self.plan(status="Proposed")
+        self.allowed(self.gate(self.big(extra=0)))
+        self.plan()
+        self.refused(self.gate(self.big(extra=0)), "approve-plan")
+        self.record()
+        self.allowed(self.gate(self.big(extra=0)))
+
+    def test_an_input_over_the_transport_limit_is_refused_in_both_states(self):
+        limit = gate_hook.MAX_INPUT * 2
+        with unittest.mock.patch.object(gate_hook, "MAX_TRANSPORT", limit):
+            self.plan(status="Proposed")
+            self.allowed(self.gate(self.big(extra=limit - gate_hook.MAX_INPUT)))
+            self.refused(self.gate(self.big(extra=limit - gate_hook.MAX_INPUT + 1)), str(limit))
+            self.plan()
+            self.refused(self.gate(self.big(extra=limit - gate_hook.MAX_INPUT + 1)), str(limit))
+
+    def test_the_transport_limit_is_larger_than_the_bound(self):
+        self.assertGreater(gate_hook.MAX_TRANSPORT, gate_hook.MAX_INPUT)
+
+    def test_a_large_input_that_is_not_one_good_object_is_refused_with_no_plan_under_way(self):
+        self.plan(status="Proposed")
+        pad = "y" * (gate_hook.MAX_INPUT + 10)
+        nested = '{"cwd": "%s", "tool_name": "Edit", "tool_input": {"file_path": "/x", "z": %s, "c": "%s"}}' % (
+            self.real, "[" * 40 + "]" * 40, pad)
+        duplicate = '{"cwd": "%s", "cwd": "%s", "tool_name": "Edit", "tool_input": {"c": "%s"}}' % (
+            self.real, self.real, pad)
+        for name, text in (("nested", nested), ("duplicate", duplicate), ("array", "[" + pad + "]"),
+                           ("garbage", self.big() + "x"), ("untyped", '{"cwd": 7, "c": "%s"}' % pad)):
+            with self.subTest(name):
+                self.refused(self.gate(text))
+        class Bytes:
+            buffer = io.BytesIO(b'{"cwd": "\xff", "c": "' + pad.encode() + b'"}')
+        self.refused(self.gate("", stdin=Bytes()))
+
+    def test_a_large_input_cannot_get_a_slow_parse_past_the_deadline(self):
+        self.plan(status="Proposed")
+        started = time.monotonic()
+        with unittest.mock.patch.object(gate_hook.time, "monotonic", side_effect=[0.0, 100.0, 100.0, 100.0, 100.0]):
+            self.refused(self.gate(self.big(extra=5000)))
+        self.assertLess(time.monotonic() - started, 5)
+
+
+class LargeInputWithoutAGate(Gated):
+    INSTALL = False
+
+    def test_a_large_input_is_allowed_when_the_project_has_no_process_module(self):
+        self.ready()
+        self.allowed(self.gate(self.big(extra=5000)))
+
+    def test_a_large_input_is_allowed_when_the_module_declares_no_active_command(self):
+        self.use(approval={"command": "listing", "argument": "region"})
+        self.allowed(self.gate(self.big(extra=5000)))
+        self.assertEqual([], self.helper_calls())
 
 
 class Writes(Gated):
