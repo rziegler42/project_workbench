@@ -449,7 +449,9 @@ increment D, the skill guidance (`delegate-approval` in `code-work`) by incremen
   within its bound; a non-zero exit, a timeout, a `refused:` line, a second line or a field not listed is no approval.
   The output is data: validated, never followed.
   - `delegable` (the process module's argument named by `approval.delegable`, at most 1,024 bytes):
-    `{"format": 1, "delegable": true | false, "reason": "<at most 200 printable characters>"}`.
+    `{"format": 1, "delegable": true | false, "reason": "<at most 200 printable characters>", "document_sha256":
+    "<64 lowercase hex>"}`. The installer refuses unless the hash equals the one it took of the plan, so the answer is
+    bound to the bytes that were reviewed, as `convergence` is.
   - `convergence` (the provider's argument, at most 4,096 bytes): `{"format": 1, "kind": "plan", "converged": true |
     false, "document_sha256": "<64 lowercase hex>", "rounds_used": <1 to 5>, "bound": <1 to 5>, "bridge": "<name of at
     most 64 characters>", "model": "<at most 200 printable characters>" | null, "review": "plan-<16 lowercase hex>",
@@ -479,7 +481,7 @@ increment D, the skill guidance (`delegate-approval` in `code-work`) by incremen
   the owner's `approve-plan` is how to approve. An entry without `delegate` is never affected by the setting. The
   provider's hashes in the entry are provenance and are not checked when the entry is read.
 - **Delegable.** A plan is delegable when it has exactly one Risks section and that section has no line that begins,
-  after any list marker and emphasis, with `Hard stop:` (case-sensitive). A plan with no Risks section, more than one,
+  after any list marker and emphasis, with `Hard stop:` (any case, a space or a hyphen between the words). A plan with no Risks section, more than one,
   or one that cannot be read is not delegable. The marker is a convention the process module documents. It is defence
   in depth only: a hostile plan can omit it, and the real control is that hard stops stop at the time of the action.
 - **Limits.** A delegated approval is weaker than the owner's. A plan written to steer the reviewer can get a clean

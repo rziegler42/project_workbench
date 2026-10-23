@@ -54,7 +54,7 @@ Resolved = collections.namedtuple(
 Provider = collections.namedtuple(
     "Provider", "root project_id package module declaration helper_sha256 command argument kit")
 Report = collections.namedtuple("Report", "region_hash unhashed")
-Delegability = collections.namedtuple("Delegability", "delegable reason")
+Delegability = collections.namedtuple("Delegability", "delegable reason document_sha256")
 Convergence = collections.namedtuple(
     "Convergence", "converged document_sha256 rounds_used bound bridge model review closed")
 
@@ -318,8 +318,11 @@ def _count(report, what, key):
 def parse_delegable(data):
     """The ``Delegability`` in the bytes `data` a delegability command printed, or ``ApprovalError``."""
     what = "the delegability command"
-    report = _object(data, what, MAX_DELEGABLE_REPORT, ("format", "delegable", "reason"))
-    return Delegability(_flag(report, what, "delegable"), _text(report, what, "reason", MAX_REASON, empty=True))
+    report = _object(data, what, MAX_DELEGABLE_REPORT, ("format", "delegable", "reason", "document_sha256"))
+    digest = report["document_sha256"]
+    if not isinstance(digest, str) or not _HASH.match(digest):
+        raise ApprovalError("%s's document_sha256 is not 64 lowercase hexadecimal characters" % what)
+    return Delegability(_flag(report, what, "delegable"), _text(report, what, "reason", MAX_REASON, empty=True), digest)
 
 
 def parse_convergence(data):

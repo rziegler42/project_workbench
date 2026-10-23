@@ -37,7 +37,8 @@ if arg == "region":
     body = b"\\n".join(line for line in data.split(b"\\n") if not line.startswith(b"Status:"))
     payload = {"format": 1, "region_hash": hashlib.sha256(body).hexdigest(), "unhashed": ["Status"]}
 elif arg == "delegable":
-    payload = {"format": 1, "delegable": True, "reason": "one Risks section"}
+    payload = {"format": 1, "delegable": True, "reason": "one Risks section",
+               "document_sha256": hashlib.sha256(data).hexdigest()}
 else:
     payload = {"format": 1, "kind": "plan", "converged": True, "document_sha256": hashlib.sha256(data).hexdigest(),
                "rounds_used": 2, "bound": 3, "bridge": "bridge-one", "model": "model-one",
@@ -387,22 +388,28 @@ class Resolution(Delegated):
         self.assertEqual(0, self.status()[0])
 
 
+DIGEST = hashlib.sha256(TEXT).hexdigest()
+GOOD = '{"format": 1, "delegable": true, "reason": "x", "document_sha256": "%s"}' % DIGEST
 BAD_DELEGABLE = {
     "not json": "nothing\n",
-    "two lines": '{"format": 1, "delegable": true, "reason": "x"}\n{}\n',
-    "no newline": '{"format": 1, "delegable": true, "reason": "x"}',
-    "an extra field": '{"format": 1, "delegable": true, "reason": "x", "more": 1}\n',
-    "a missing field": '{"format": 1, "delegable": true}\n',
-    "format 2": '{"format": 2, "delegable": true, "reason": "x"}\n',
-    "format as a boolean": '{"format": true, "delegable": true, "reason": "x"}\n',
-    "a string for the answer": '{"format": 1, "delegable": "true", "reason": "x"}\n',
-    "a number for the answer": '{"format": 1, "delegable": 1, "reason": "x"}\n',
-    "a reason that is not text": '{"format": 1, "delegable": true, "reason": 1}\n',
-    "a reason of 201 characters": '{"format": 1, "delegable": true, "reason": "%s"}\n' % ("x" * 201),
-    "a reason with a control character": '{"format": 1, "delegable": true, "reason": "a\\u0001b"}\n',
-    "a repeated key": '{"format": 1, "delegable": true, "delegable": true, "reason": "x"}\n',
+    "two lines": GOOD + "\n{}\n",
+    "no newline": GOOD,
+    "an extra field": GOOD[:-1] + ', "more": 1}\n',
+    "a missing field": '{"format": 1, "delegable": true, "document_sha256": "%s"}\n' % DIGEST,
+    "no document hash": '{"format": 1, "delegable": true, "reason": "x"}\n',
+    "a document hash in capitals": GOOD.replace(DIGEST, DIGEST.upper()) + "\n",
+    "a short document hash": GOOD.replace(DIGEST, DIGEST[:63]) + "\n",
+    "a document hash that is not text": GOOD.replace('"%s"' % DIGEST, "1") + "\n",
+    "format 2": GOOD.replace('"format": 1', '"format": 2') + "\n",
+    "format as a boolean": GOOD.replace('"format": 1', '"format": true') + "\n",
+    "a string for the answer": GOOD.replace("true", '"true"') + "\n",
+    "a number for the answer": GOOD.replace("true", "1") + "\n",
+    "a reason that is not text": GOOD.replace('"x"', "1") + "\n",
+    "a reason of 201 characters": GOOD.replace('"x"', '"%s"' % ("x" * 201)) + "\n",
+    "a reason with a control character": GOOD.replace('"x"', '"a\\u0001b"') + "\n",
+    "a repeated key": GOOD.replace('"delegable": true,', '"delegable": true, "delegable": true,') + "\n",
     "an array": '[1]\n',
-    "more than 1,024 bytes": '{"format": 1, "delegable": true, "reason": "x"%s}\n' % (" " * 1100),
+    "more than 1,024 bytes": GOOD[:-1] + " " * 1100 + "}\n",
 }
 
 
@@ -414,6 +421,12 @@ class Delegability(Delegated):
                 self.refuses("delegab")
                 self.assertEqual([["region", PLAN], ["delegable", PLAN]], self.calls())
                 os.remove(os.path.join(self.real, "calls.log"))
+
+    def test_an_answer_about_other_bytes_is_refused_and_nothing_is_recorded(self):
+        self.control(delegable={"set": {"document_sha256": hashlib.sha256(b"other").hexdigest()}})
+        self.refuses("changed while the checks ran")
+        self.assertEqual([["region", PLAN], ["delegable", PLAN]], self.calls())
+        self.assertEqual([], self.recorded())
 
     def test_a_plan_that_is_not_delegable_is_refused_with_the_reason(self):
         self.control(delegable={"set": {"delegable": False, "reason": "the Risks section lists a hard stop"}})

@@ -2,10 +2,11 @@
 
 Plan `2026-10-23-delegated-approval`, increment C. A plan is delegable when it has exactly one Risks section, the one
 headed `## Risks and sensitive actions` outside a fence, a quotation and an HTML comment, and that section has no line
-that begins, after any list marker and emphasis, with `Hard stop:` (case-sensitive). Text outside the section cannot
+that begins, after any list marker and emphasis, with `Hard stop:` (any case, a space or hyphen between the words, a heading or checkbox prefix). Text outside the section cannot
 change the answer, and whatever leaves the answer uncertain is not delegable. A path that is not a plan, a link and a
 file larger than the check reads are refused. The helper is loaded by its path and run in process."""
 
+import hashlib
 import json
 import os
 import unittest
@@ -30,7 +31,8 @@ class Delegable(Project):
         code, out, err = self.check("delegable", "docs/plans/" + name)
         self.assertEqual((0, ""), (code, err), out)
         report = json.loads(out)
-        self.assertEqual(["delegable", "format", "reason"], sorted(report))
+        self.assertEqual(["delegable", "document_sha256", "format", "reason"], sorted(report))
+        self.assertEqual(hashlib.sha256(content.encode()).hexdigest(), report["document_sha256"])
         self.assertEqual(1, report["format"])
         self.assertIsInstance(report["delegable"], bool)
         self.assertTrue(0 < len(report["reason"]) <= 200, report["reason"])
@@ -61,7 +63,8 @@ class Answer(Delegable):
         code, out, err = self.check("delegable", PLAN)
         self.assertEqual((0, ""), (code, err))
         self.assertTrue(out.endswith("\n") and out.count("\n") == 1, out)
-        self.assertEqual(["delegable", "format", "reason"], sorted(json.loads(out)))
+        self.assertEqual(["delegable", "document_sha256", "format", "reason"], sorted(json.loads(out)))
+        self.assertEqual(hashlib.sha256(text().encode()).hexdigest(), json.loads(out)["document_sha256"])
 
     def test_a_section_that_says_it_stops_at_every_action_is_delegable(self):
         self.yes(text("The plan stops at: no push, no install, no secret.\n"))
@@ -79,19 +82,21 @@ class Answer(Delegable):
         lines = ["- Hard stop: x", "* Hard stop: x", "+ Hard stop: x", "1. Hard stop: x", "2) Hard stop: x",
                  "**Hard stop:** x", "__Hard stop:__ x", "- **Hard stop:** x", "- *Hard stop*: x",
                  "  - Hard stop: nested", "    - 1. **Hard stop:** nested", "- `Hard stop:` x",
-                 "\tHard stop: tab", "Hard stop:", "Hard stop:x"]
+                 "\tHard stop: tab", "Hard stop:", "Hard stop:x", "### Hard stop: x", "- [ ] Hard stop: x",
+                 "- [x] **Hard stop:** x"]
         for line in lines:
             with self.subTest(line):
                 self.no(text(SAFE + line + "\n"), "Hard stop")
 
-    def test_the_marker_is_case_sensitive(self):
-        for line in ("hard stop: x", "HARD STOP: x", "Hard Stop: x", "Hard-stop: x"):
+    def test_the_marker_ignores_case_spacing_and_a_hyphen(self):
+        for line in ("hard stop: x", "HARD STOP: x", "Hard Stop: x", "Hard-stop: x", "Hard  stop: x", "Hard stop : x",
+                     "**Hard stop** : x"):
             with self.subTest(line):
-                self.yes(text(SAFE + line + "\n"))
+                self.no(text(SAFE + line + "\n"), "Hard stop")
 
     def test_text_that_only_mentions_the_marker_is_not_a_marker(self):
         for line in ("There is no Hard stop: here.", "Hard stops: none.", "Hard stop none.", "A Hard stop: is not",
-                     "Hard  stop: x", "Hard stop", "-Hard stop: x"):
+                     "Hard stop", "-Hard stop: x", "Hardstop: x"):
             with self.subTest(line):
                 self.yes(text(SAFE + line + "\n"))
 
@@ -268,6 +273,7 @@ class Agreement(Delegable):
         one = self.ask(text())
         two = self.ask(text().replace("Status: Approved", "Status: In Progress", 1)
                        .replace("None yet.", "A long review.\nHard stop: x").replace("Not started.", "Done."))
+        self.assertNotEqual(one.pop("document_sha256"), two.pop("document_sha256"))
         self.assertEqual(one, two)
 
 

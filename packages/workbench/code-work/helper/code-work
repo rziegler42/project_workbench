@@ -95,7 +95,8 @@ _BOUNDARY = re.compile(r"\A[ ]{0,3}#{1,2}(?:[ \t]|\Z)")
 _RISKS = "risks and sensitive actions"
 _RISKS_HEADING = re.compile(r"\A## Risks and sensitive actions[ \t]*\Z")
 _ATX = re.compile(r"\A[ ]{0,3}#{1,6}(?:[ \t]+(.*))?\Z")
-_HARD = re.compile(r"\A[ \t]*(?:(?:[-*+]|[0-9]{1,9}[.)])[ \t]+)*[*_`~]*Hard stop[*_`~]*:")
+_HARD = re.compile(r"\A[ \t]*(?:#{3,6}[ \t]+)?(?:(?:[-*+]|[0-9]{1,9}[.)])[ \t]+)*(?:\[[ xX]\][ \t]+)?[*_`~]*"
+                   r"Hard[ \t-]+stop[*_`~]*[ \t]*:", re.IGNORECASE)
 
 
 class Refused(Exception):
@@ -854,7 +855,8 @@ def command_delegable(root, plan, out, err):
         delegable, reason = False, "the plan is not valid UTF-8, so its sections cannot be told"
     else:
         delegable, reason = delegable_of(text)
-    out.write(json.dumps({"format": 1, "delegable": delegable, "reason": reason}) + "\n")
+    out.write(json.dumps({"format": 1, "delegable": delegable, "reason": reason,
+                          "document_sha256": hashlib.sha256(data).hexdigest()}) + "\n")
     return 0
 
 

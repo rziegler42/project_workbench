@@ -1,7 +1,7 @@
 # code-work
 
 Status: Current. Approved by the owner on 2026-10-19. The plan format, the read subcommands, the
-plan approval record, the commit rules, the checkpoint and cap declarations, the `active` subcommand, the increment-loop and review skills, the reviewer agent and the push checkpoint are built; the delegation and the reading of the caps are not (see "As built"). Paths, field
+plan approval record, the commit rules, the checkpoint and cap declarations, the `active` subcommand, the increment-loop and review skills, the reviewer agent and the push checkpoint are built; the delegated approval of a plan is built, other delegation and the reading of the caps are not (see "As built"). Paths, field
 names and file formats not yet built are proposals; the rules are the substance. Open items are listed at
 the end.
 
@@ -246,13 +246,15 @@ reports the effective values.
 Delegability *(built by plan `2026-10-23-delegated-approval`, increment C; the installer's use of it is increment D)*.
 The module's helper has a read-only subcommand, `delegable <plan>`, that tells the installer whether a plan may be
 approved by a delegate (`approval.delegable`; `module-contract.md`). It prints one JSON object,
-`{"format": 1, "delegable": true | false, "reason": "<at most 200 printable ASCII characters>"}`, and exits 0 for
+`{"format": 1, "delegable": true | false, "reason": "<at most 200 printable ASCII characters>", "document_sha256": "<64 lowercase hex>"}`, where the
+hash is of the bytes the answer was made from, and exits 0 for
 every answer, including "not delegable". A path that is not a plan, a link, a file that cannot be opened or one larger
 than the check reads is refused (exit 1, nothing on standard output).
 
 A plan is delegable when it has exactly one Risks section, the one headed `## Risks and sensitive actions` outside a
 fence, a quotation and an HTML comment, and that section has no line that begins, after any list marker and emphasis,
-with `Hard stop:` (case-sensitive). Text outside that section cannot change the answer. A plan with no Risks section,
+with `Hard stop:` (any case, a space or a hyphen between the words, a space before the colon, and an optional
+heading or checkbox prefix). Text outside that section cannot change the answer. A plan with no Risks section,
 more than one, a heading in another case, a file that is not UTF-8, a code fence or comment that is never closed or a
 header without exactly one `Status:` line is not delegable. Any heading a reader could take for the section (any
 level, any case, a closing `#`, a trailing `:` or `.`, an underlined heading) counts as a Risks section, so a second

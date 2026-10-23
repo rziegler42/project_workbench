@@ -81,6 +81,8 @@ def delegate_approve_plan(guarded, tokens, out, err, *, cwd=None):
         first = hashlib.sha256(_bytes(process.root, plan)).hexdigest()
         report = approvalcmd.region(guarded, process, plan)
         verdict = approvalcmd.delegable(guarded, process, plan)
+        if verdict.document_sha256 != first:
+            return _refuse(err, "the plan %s changed while the checks ran; nothing was recorded" % shown)
         if not verdict.delegable:
             return _refuse(err, "the plan %s is not delegable: %s" % (shown, display.ascii_text(verdict.reason)))
         review = approvalcmd.convergence(guarded, provider, plan)

@@ -431,3 +431,26 @@ The review is not an approval; the plan stays `Proposed` until the owner approve
   The skill is advice: the installer's command is what gives or refuses the approval.
 - Not done: the security pass, the release of the approvals, the "as built" updates and the close (F). The shipped
   approvals of the installer, `code-work` and `review-engine` are stale until F.
+
+### Increment F — Security pass, record, release and close
+
+- Not yet committed; the commit will carry the trailer `Plan: 2026-10-23-delegated-approval#F`.
+- Security pass (owner's word given in session): an adversarial `security-reviewer` run over B to D on scratch copies.
+  It ended partial: the hostile-helper-output experiments, an end-to-end run with fake executables that record what
+  they receive, and the forged-record and race experiments did not run beyond the shipped tests (`tests.test_delegation`
+  passed, 74 tests). Read-only checks and the shipped tests found the setting source, the pins, the record formats,
+  the plan reader (FIFO, symlink, `..`, oversize) and the reading rule sound.
+- Fixed, each with a regression test: (Medium) the `delegable` answer was not bound to the bytes it judged, so a plan
+  swapped between the checks could be judged on other bytes; the answer now holds `document_sha256` and the installer
+  refuses unless it equals the plan's hash; (Low) the `Hard stop:` marker was evaded by case, spacing, a hyphen, a
+  heading or checkbox prefix; it now ignores those. Specs `code-work.md` and `trust-and-approval.md` say so; the
+  `code-work` status line no longer says the delegation is unbuilt.
+- Not fixed, for the owner: (Low) an equal entry is not added again whoever made it (the accepted decision's words), so
+  after the setting is withdrawn the owner's own `approve-plan` for a plan with a delegated entry prints "already
+  approved" and writes nothing, while the gate reads it as withdrawn; it fails safe, and a change contradicts the
+  decision. (Low) a hardlinked plan is read. (Low) a pin made without a recorded declaration leaves the new manifest
+  fields uncovered, as for every `wb run` field.
+- Verification: the full suite passes, 3,656 tests in 7 roots (3,655 before), the same skips. Document checks and
+  `git diff --check` print nothing.
+- Not done: the release of the stale approvals (owner-run), the plan Goal wording, the real-vendor hand run, and
+  `Status: Completed`. Criterion 7 is open until the owner releases the approvals.
