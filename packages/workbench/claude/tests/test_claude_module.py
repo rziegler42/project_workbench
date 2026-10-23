@@ -32,7 +32,10 @@ EXPECTED_LAYOUT = {
         "actions": {"deny": "permissions.deny", "ask": "permissions.ask"},
         "rules": {"shell": "Bash({pattern})", "read": "Read({path})", "write": "Edit({path})"},
         "absolute": "//"},
-    "hooks": "none",
+    "hooks": {
+        "settings_key": "hooks", "event": "PreToolUse", "timeout": 20, "block_code": 2,
+        "targets": {"Edit": ["file_path"], "MultiEdit": ["file_path"], "NotebookEdit": ["notebook_path"],
+                    "Write": ["file_path"]}},
     "exclude": ["CLAUDE.md", ".claude/"],
     "notes": [],
 }
@@ -118,15 +121,13 @@ class Changed(unittest.TestCase):
 
 
 class Declaration(unittest.TestCase):
-    def test_it_is_a_harness_that_provides_the_five_capabilities_it_renders(self):
+    def test_it_is_a_harness_that_provides_the_six_capabilities_it_renders(self):
         document = declaration()
         self.assertEqual(document["type"], "harness")
         self.assertEqual(document["name"], "claude")
-        # Hooks are not provided: nothing renders them yet (the layout says `none`).
         self.assertEqual(document["provides"],
-                         ["instructions", "skills", "agents", "commands", "permissions"])
-        self.assertNotIn("hooks", document["provides"])
-        self.assertEqual(document["layout"]["hooks"], "none")
+                         ["instructions", "skills", "agents", "commands", "hooks", "permissions"])
+        self.assertEqual(document["layout"]["hooks"], EXPECTED_LAYOUT["hooks"])
         for key in ("writes", "fills", "ships", "helpers", "requires", "blocks", "slots"):
             self.assertNotIn(key, document)
 
@@ -188,13 +189,30 @@ class Rendering(unittest.TestCase):
         command = next(f for f in self.plan().files if f.path == ".claude/commands/ship.md")
         self.assertIn(b'argument-hint: "[target]"\n', command.data)
 
-    def test_an_item_that_needs_hooks_is_skipped_because_hooks_are_not_provided(self):
+    def test_an_item_that_needs_hooks_is_skipped_because_a_hook_has_no_neutral_form(self):
         from workbench import neutral
         text = SKILL.replace(b"A sample skill\n", b"A sample skill\nneeds: hooks\n")
         found = neutral.read_items(tree(**{"skills/sample/SKILL.md": text}))
         result = self.plan(found)
         self.assertNotIn(".claude/skills/sample/SKILL.md", [f.path for f in result.files])
         self.assertTrue(any(r.level == "skipped" and "hooks" in r.message for r in result.reports))
+
+    def test_the_hook_it_renders_is_the_one_the_documentation_describes(self):
+        layout = declaration()["layout"]
+        document = json.loads(harnessplan.render_permissions([], layout, "/Users/t/.config/project-workbench",
+                                                             "/Users/t", hook_for="claude"))
+        self.assertEqual({"PreToolUse": [{
+            "matcher": "Edit|MultiEdit|NotebookEdit|Write",
+            "hooks": [{"type": "command", "command": "wb gate claude || exit 2", "timeout": 20}]}]},
+            document["hooks"])
+
+    def test_the_hook_comes_with_a_deny_for_the_settings_file_and_the_exclude_file(self):
+        layout = declaration()["layout"]
+        deny = json.loads(harnessplan.render_permissions([], layout, "/Users/t/.config/project-workbench",
+                                                         "/Users/t", hook_for="claude"))["permissions"]["deny"]
+        for path in (".claude/settings.local.json", ".git/info/exclude"):
+            self.assertIn("Edit(%s)" % path, deny)
+            self.assertIn("Edit(**/%s)" % path, deny)
 
     def test_the_permissions_it_renders_are_claudes_syntax(self):
         layout = declaration()["layout"]

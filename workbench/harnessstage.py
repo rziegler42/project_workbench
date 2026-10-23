@@ -131,6 +131,13 @@ def check_paths(files):
         raise Refused(["the harness files are too large (over %d bytes)" % MAX_WRITE_BYTES])
 
 
+def _gated(modules):
+    """Whether an installed process module names the command that lists the plans under way, which is what the
+    edit gate asks; with none there is nothing for the gate to guard and no hook is rendered."""
+    return any(item.type == "process" and item.module.approval and item.module.approval.get("active")
+               for item in modules)
+
+
 def stage(store_root, harness, modules, snaps, source, version, home):
     """Translate and render for `harness` (a ``verify.Verified``), over `modules` in install
     order, whose snapshots are `snaps`. `source` is where the harness package came from and
@@ -148,6 +155,14 @@ def stage(store_root, harness, modules, snaps, source, version, home):
         files = [harnessplan.render_root(layout)] + list(done.files)
         files = [item for item in files if item is not None]
         settings = None
+        hook = _gated(modules)
+        if hook and not ("hooks" in harness.module.provides and harnessplan.hook_described(layout)):
+            if "hooks" in harness.module.provides:
+                raise harnessplan.PlanError("the module provides hooks but its layout does not describe the hook "
+                                            "(it needs targets, event, timeout and block_code)")
+            warnings.append("this harness renders no edit gate hook, so a plan under way is not stopped from "
+                            "edits except by instruction")
+            hook = False
         if "permissions" in harness.module.provides:
             local = layout.get("local_settings", "none")
             if local == "none":
@@ -157,7 +172,8 @@ def stage(store_root, harness, modules, snaps, source, version, home):
                 raise harnessplan.PlanError("the home directory is not known, so the rules that "
                                             "name it cannot be written")
             data = harnessplan.render_permissions(
-                [], layout, os.path.realpath(store_root), os.path.realpath(home))
+                [], layout, os.path.realpath(store_root), os.path.realpath(home),
+                hook_for=harness.name if hook else None)
             settings = harnessplan.Planned(local["path"], data, harnessplan.FILE_MODE,
                                            hashlib.sha256(data).hexdigest(), "permissions")
             files.append(settings)

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "harness",
   "description": "The Claude Code harness: skills, agents, commands, the root file and local permissions.",
-  "provides": ["instructions", "skills", "agents", "commands", "permissions"],
+  "provides": ["instructions", "skills", "agents", "commands", "hooks", "permissions"],
   "layout": {
     "root": {"file": "CLAUDE.md", "import": "AGENTS.md"},
     "kinds": {
@@ -24,7 +24,11 @@
       "rules": {"shell": "Bash({pattern})", "read": "Read({path})", "write": "Edit({path})"},
       "absolute": "//"
     },
-    "hooks": "none",
+    "hooks": {
+      "settings_key": "hooks", "event": "PreToolUse", "timeout": 20, "block_code": 2,
+      "targets": {"Edit": ["file_path"], "MultiEdit": ["file_path"], "NotebookEdit": ["notebook_path"],
+                  "Write": ["file_path"]}
+    },
     "exclude": ["CLAUDE.md", ".claude/"],
     "tolerated": [".claude/settings.json"],
     "notes": ["Restart the Claude session to load the new settings."]

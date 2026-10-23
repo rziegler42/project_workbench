@@ -165,8 +165,14 @@ class Needs(unittest.TestCase):
         return neutral.read_items({"skills/sample/SKILL.md": text})
 
     def test_met_needs_install(self):
-        result = run(found=self.found(b"hooks"))
+        result = run(found=self.found(b"permissions"))
         self.assertIn(".fixture/skills/sample/SKILL.md", by_path(result))
+
+    def test_a_need_for_hooks_is_never_met_because_a_hook_has_no_neutral_form(self):
+        result = run(found=self.found(b"hooks"),
+                     provides=("instructions", "skills", "agents", "commands", "hooks", "permissions"))
+        self.assertEqual(by_path(result), {})
+        self.assertIn("hooks", levels(result, "skipped")[0].message)
 
     def test_unmet_needs_skip_with_a_warning(self):
         result = run(found=self.found(b"hooks"),

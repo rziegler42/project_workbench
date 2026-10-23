@@ -15,7 +15,8 @@ description such as ``a: b`` stays the text the author wrote. A neutral value is
 (``neutral``), which a JSON string quotes into the same text as a YAML double-quoted one.
 
 ``render_permissions`` (below) builds the local settings file from the neutral rules, the floor and
-the owner-run commands of ``rules``.
+the owner-run commands of ``rules``, and, when asked, the one hook the installer renders, the edit gate's
+(``render_hook``).
 
 An override replaces the translation of one item, by kind and name, with files the module author
 wrote in the harness's own format. Apart from an agent, which must still name a tools allowlist
@@ -66,8 +67,11 @@ def translate(items, harness_layout, overrides, excludes, provides=declarations.
     ``overrides`` maps ``(kind, name)`` to ``{relative path: bytes}``: for a skill the files below
     its directory (``SKILL.md`` is required), for an agent or a command the one ``<name>.md``.
     ``excludes`` maps ``(kind, name)`` to the reason it is not installed. ``provides`` is the
-    set of capabilities the harness module declares. Raises ``PlanError``.
+    set of capabilities the harness module declares. A hook has no neutral form, so an item that
+    needs hooks is skipped even when the harness provides the installer's own hook. Raises
+    ``PlanError``.
     """
+    provides = tuple(name for name in provides if name != "hooks")
     found = layout.problems(harness_layout)
     if found:
         raise PlanError("the layout is refused: " + "; ".join(found))
@@ -364,7 +368,45 @@ def _path_pattern(prefix, pattern, home):
     return pattern
 
 
-def render_permissions(rules, harness_layout, store_root, home):
+_HARNESS_NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}\Z")
+# The file git reads the clone's own ignore lines from, which the edit gate's hook is protected along with.
+GIT_EXCLUDE = ".git/info/exclude"
+
+
+def hook_described(harness_layout):
+    """Whether the layout carries the whole description of the one hook the installer renders."""
+    hooks = harness_layout.get("hooks", "none")
+    return isinstance(hooks, dict) and all(key in hooks for key in ("targets",) + layout.HOOK_RENDER)
+
+
+def render_hook(harness_layout, harness_name):
+    """``(settings key, value)`` of the edit gate's hook for the harness named `harness_name`.
+
+    The event, the tools whose calls it covers, the time limit and the exit code that blocks all come from the
+    layout; the command is ``wb gate <harness> || exit <code>``. The ``|| exit`` turns a missing program or any
+    other failure of the gate into the code the harness takes as a block. Raises ``PlanError``."""
+    found = layout.problems(harness_layout)
+    if found:
+        raise PlanError("the layout is refused: " + "; ".join(found))
+    if not hook_described(harness_layout):
+        raise PlanError("this layout does not describe a hook (it needs targets, event, timeout and block_code)")
+    if not isinstance(harness_name, str) or not _HARNESS_NAME.match(harness_name):
+        raise PlanError("the harness name %r is not one the gate command takes" % (harness_name,))
+    hooks = harness_layout["hooks"]
+    command = "wb gate %s || exit %d" % (harness_name, hooks["block_code"])
+    entry = {"matcher": "|".join(sorted(hooks["targets"])),
+             "hooks": [{"type": "command", "command": command, "timeout": hooks["timeout"]}]}
+    return hooks["settings_key"], {hooks["event"]: [entry]}
+
+
+def _protected(settings):
+    """The patterns of the files the hook is kept in: the settings file and git's exclude file, spelled from the
+    project root and from any directory below it. The agent may not write them; the owner edits them by hand.
+    This is the one rule beyond the hook itself, and it is rendered here and nowhere else."""
+    return [spelled + path for path in (settings["path"], GIT_EXCLUDE) for spelled in ("", "**/")]
+
+
+def render_permissions(rules, harness_layout, store_root, home, hook_for=None):
     """Return the bytes of the local settings file for ``rules`` plus what is always rendered.
 
     Always rendered: a deny for writes to the guarded store at ``store_root``, a deny for every
@@ -373,6 +415,9 @@ def render_permissions(rules, harness_layout, store_root, home):
     layout validator ties the two output keys to ``deny`` and ``ask``, and only those are built.
     ``home`` and ``store_root`` are absolute paths; the output has no clock and no ordering
     that depends on the input.
+
+    ``hook_for`` is the name of the harness to render the edit gate's hook for, or None for no hook. A hook
+    comes with a deny for the files it is kept in (``_protected``).
     """
     found = layout.problems(harness_layout)
     if found:
@@ -417,6 +462,9 @@ def render_permissions(rules, harness_layout, store_root, home):
             wanted[action].add(render(tool, pattern))
     for rule in rules:
         wanted[rule.action].add(render(rule.tool, rule.pattern))
+    hook = render_hook(harness_layout, hook_for) if hook_for is not None else None
+    if hook:
+        wanted["deny"].update(render("write", pattern) for pattern in _protected(settings))
     wanted["ask"] -= wanted["deny"]
     document = {}
     for action in ("deny", "ask"):
@@ -425,4 +473,6 @@ def render_permissions(rules, harness_layout, store_root, home):
         for part in parents:
             node = node.setdefault(part, {})
         node[last] = sorted(wanted[action])
+    if hook:
+        document[hook[0]] = hook[1]
     return (json.dumps(document, indent=2, sort_keys=True) + "\n").encode("utf-8")

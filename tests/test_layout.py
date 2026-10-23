@@ -294,6 +294,25 @@ class Refused(unittest.TestCase):
             with self.subTest(bad):
                 self.bad(edit(["hooks"], {"settings_key": "hooks", "targets": bad}), "hooks.targets")
 
+    def test_the_hook_description_is_checked_as_data(self):
+        table = {"Edit": ["file_path"], "NotebookEdit": ["notebook_path"]}
+        whole = {"settings_key": "hooks", "targets": table, "event": "PreToolUse", "timeout": 20, "block_code": 2}
+        self.assertEqual([], layout.problems(edit(["hooks"], whole)))
+        for key in ("event", "timeout", "block_code"):
+            with self.subTest("without " + key):
+                self.bad(edit(["hooks"], {k: v for k, v in whole.items() if k != key}), "event, timeout and block_code")
+        for key, bad in (("event", "Pre Tool"), ("event", ""), ("event", 3), ("event", "a;b"), ("event", "A" * 33),
+                         ("timeout", 0), ("timeout", 601), ("timeout", -1), ("timeout", True), ("timeout", 2.5),
+                         ("timeout", "20"), ("block_code", 0), ("block_code", 256), ("block_code", True),
+                         ("block_code", "2"), ("block_code", -2)):
+            with self.subTest((key, bad)):
+                self.bad(edit(["hooks"], dict(whole, **{key: bad})), "layout.hooks")
+
+    def test_the_hook_facts_are_unchanged_by_the_description(self):
+        table = {"Edit": ["file_path"]}
+        whole = {"settings_key": "hooks", "targets": table, "event": "PreToolUse", "timeout": 20, "block_code": 2}
+        self.assertEqual((("Edit", ("file_path",)),), layout.facts(edit(["hooks"], whole))["hook_targets"])
+
     def test_exclude_paths(self):
         for entry in ("/abs", "../x", "a/../x", ".git", ".git/", ".GIT/info", ".workbench",
                       ".workbench/local/", ".config/project-workbench/", "*.md", ".fixture/*",

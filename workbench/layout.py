@@ -26,7 +26,9 @@ Keys, all optional (an absent key means ``none`` or empty):
     ``"none"``, or ``{"settings_key": "<key>"}`` with, optionally, ``"targets"``: for each file-editing tool the
     harness's hook can be given, the fields of that tool's input that name a file it writes
     (``{"<Tool>": ["<field>", ...]}``). The edit gate reads the table (``gate_hook.py``) and reads no tool name
-    of its own. No hook is rendered yet.
+    of its own. With ``"event"`` (a word), ``"timeout"`` (seconds, 1 to 600) and ``"block_code"`` (the exit code
+    the harness takes as a block, 1 to 255), all three or none, and ``targets``, the layout describes the one hook
+    the installer renders, the edit gate (``harnessplan.render_hook``); its matcher is the tools of ``targets``.
 ``exclude``
     The literal paths written to ``.git/info/exclude`` (a trailing ``/`` marks a directory). No
     glob, no space, nothing under ``.workbench`` and not the guarded store.
@@ -165,11 +167,12 @@ def problems(layout):
         written += _settings(settings, out)
     hooks = layout.get("hooks", "none")
     if hooks != "none":
-        if out.keys(hooks, "layout.hooks", ("settings_key", "targets"), ("settings_key",)):
+        if out.keys(hooks, "layout.hooks", ("settings_key", "targets") + HOOK_RENDER, ("settings_key",)):
             if not (isinstance(hooks["settings_key"], str) and _WORD.match(hooks["settings_key"])):
                 out.add("layout.hooks", "settings_key must be a plain word")
             if "targets" in hooks:
                 _hook_targets(hooks["targets"], out)
+            _hook_render(hooks, out)
     hook_key = hooks["settings_key"] if isinstance(hooks, dict) \
         and isinstance(hooks.get("settings_key"), str) else None
     actions = settings.get("actions") if isinstance(settings, dict) else None
@@ -191,6 +194,8 @@ def problems(layout):
     return out.messages
 
 
+HOOK_RENDER = ("event", "timeout", "block_code")
+MAX_HOOK_TIMEOUT = 600
 MAX_HOOK_TOOLS = 16
 MAX_HOOK_FIELDS = 4
 _HOOK_TOOL = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,39}\Z")
@@ -211,6 +216,24 @@ def _hook_targets(targets, out):
                 or not all(isinstance(f, str) and _HOOK_FIELD.match(f) for f in fields) \
                 or len(set(fields)) != len(fields):
             out.add(where, "%r must map to one to %d different lowercase field names" % (tool, MAX_HOOK_FIELDS))
+
+
+def _hook_render(hooks, out):
+    """The three values the renderer writes into a hook: its event, its time limit in seconds and the exit
+    code the harness takes as a block. They come together or not at all."""
+    where = "layout.hooks"
+    given = [key for key in HOOK_RENDER if key in hooks]
+    if not given:
+        return
+    if len(given) != len(HOOK_RENDER):
+        out.add(where, "event, timeout and block_code are given together")
+        return
+    if not (isinstance(hooks["event"], str) and _WORD.match(hooks["event"])):
+        out.add(where, "event must be a plain word")
+    for key, high in (("timeout", MAX_HOOK_TIMEOUT), ("block_code", 255)):
+        value = hooks[key]
+        if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= high:
+            out.add(where, "%s must be a whole number from 1 to %d" % (key, high))
 
 
 ROOT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*\.md")
