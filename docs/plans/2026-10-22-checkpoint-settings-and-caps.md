@@ -1,6 +1,6 @@
 # The checkpoint settings, the loop caps and the gate that refuses work on an unapproved plan
 
-Status: Approved
+Status: Completed
 Created: 2026-10-22
 Candidate: workbench-v1#checkpoint-settings-and-caps
 Specs: code-work, trust-and-approval, module-contract, harness-modules, installer-interface
@@ -439,4 +439,6 @@ nothing.
   `~/.claude` rules still match the old tools (`global-config-migration`).
 - `docs/specs/repository-boundary.md` still says plan approvals "are not built yet" in a store listing; that is an
   older plan's text and was left alone.
-- The plan's status line is still `Approved`; the owner completes and archives it.
+- The owner archived the plan (status `Completed`) on 2026-10-23, after `ask-codex archive` closed the Codex review:
+  2 of 3 rounds, 3 decisions applied, 0 rejected, outcome "not converged" because round 2's major finding was applied
+  and round 3 was not run. The owner's live check (criterion 9) had not been made when the plan was archived.
