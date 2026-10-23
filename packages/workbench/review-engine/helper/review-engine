@@ -1076,6 +1076,20 @@ def describe(document, loaded):
     return found
 
 
+def request_standing(root, state):
+    """How the setting now compares with what the last round asked: ``none`` (no round yet), ``same``, ``changed``
+    or ``unreadable``. It reads the setting and changes nothing; a refusal of the setting is not `status`'s."""
+    if not state["rounds"]:
+        return "none"
+    try:
+        setting = read_setting(root)
+    except Refused:
+        return "unreadable"
+    last = state["rounds"][-1]
+    asked = (last["bridge"], last["requested"]["model"], last["requested"]["effort"])
+    return "same" if asked == (setting.bridge, setting.model, setting.effort) else "changed"
+
+
 def emit(out, found):
     out.write(json.dumps(found, sort_keys=True) + "\n")
     return 0
@@ -1112,7 +1126,10 @@ def run(argv, cwd, out):
         loaded = load(root, guarded, document)
         if loaded is None:
             raise Refused("there is no review of %s (init makes one)" % shown(document.path))
-        return emit(out, describe(document, loaded))
+        found = describe(document, loaded)
+        if loaded.state is not None:
+            found["request"] = request_standing(root, loaded.state)
+        return emit(out, found)
     with guarded.locked():
         if load(root, guarded, document) is not None:
             raise Refused("a review of %s already exists (status shows it)" % shown(document.path))

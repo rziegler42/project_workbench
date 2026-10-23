@@ -468,4 +468,31 @@ until E.
   new commands (`reset` lowering the mark, `prune` deleting files) have had no independent look; no run against a real
   Codex.
 
-Increments F and G: not started.
+### Increment F — The setting, the refusals and the skill
+
+- Most of F's first step was already built and tested in D: the strict, bounded `.workbench/review.json`, the refusal
+  of a bridge that is not installed, not pinned, not a `model-bridge` or edited since the pin, no other vendor tried,
+  and the model and effort reaching the bridge only as its options (`test_review_setting.py`, `test_review_round.py`).
+  F added what was missing.
+- Changes: `status` prints a `request` field when the state could be used: `none` (no round yet), `same`, `changed`
+  (the bridge, model or effort differs from the last round's request) or `unreadable` (the setting is refused; `status`
+  does not refuse). Tests: `ChangedRequest` in `test_review_commands.py` (6 tests). The neutral skill `peer-review`
+  (`harness/neutral/skills/peer-review/SKILL.md`) and its tests in `test_review_module.py` (a `Skill` class of 7
+  tests: the reader accepts exactly the skill, the front matter, Claude's harness plan, no harness, vendor or tool
+  named, exactly the four commands it runs and no other `wb` use, the rules, and every declared argument mentioned).
+  The spec's status line and "As built" were updated.
+- Verification as run: the module tests, 274 in all, pass. The full suite `python3 -B -W error tests/run_all.py` ran
+  3459 tests in 7 roots, OK on the second run (installer 2360 with 1 skip, ask-codex 90, claude 32 with 12 skips for
+  the stale shipped approvals until G, code-work 268 with 2 skips, groundwork 178, review-engine 274, safe-git 257).
+  The first run had one failure in the installer root, `test_gate_hook.Tools.test_the_other_tools_field_is_not_read`
+  ("the active command's report is not one line"); the whole `tests.test_gate_hook` module passed alone and the second
+  full run passed, so it was not reproduced and its cause is not known. `doccheck`, `refcheck` and `git diff --check`
+  print nothing. Five weakenings of `request_standing` and its use in `status` were tried and each made a test fail.
+- Decisions made in the code, for the owner to accept or overturn: (1) the changed request is a field of `status` only,
+  not of `init` or the owner commands, with four values. (2) The plan's "a missing file means the one installed
+  `model-bridge`" was not built: there is no default bridge, as D decided and the spec says, since the kit cannot list
+  installed bridges. (3) The skill lets the agent run `init`, `status`, a round and `decide`, and names the five owner
+  commands only as the owner's.
+- Not done: no review of E or F, and no security pass after C and D; no run against a real vendor.
+
+Increment G: not started.

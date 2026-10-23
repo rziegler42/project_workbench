@@ -10,12 +10,28 @@ import unittest
 
 from tests import support_install
 from workbench import declarations as d
-from workbench import rules, verify
+from workbench import harnessplan, neutral, rules, verify
 
 ROOT = support_install.ROOT
 PACKAGE = os.path.join(ROOT, "packages", "workbench")
 MODULE = os.path.join(PACKAGE, "review-engine")
 HELPER = "helper/review-engine"
+NEUTRAL = os.path.join(MODULE, "harness", "neutral")
+SKILL = "peer-review"
+
+
+def neutral_tree():
+    found = {}
+    for base, dirs, files in os.walk(NEUTRAL):
+        for name in files:
+            full = os.path.join(base, name)
+            with open(full, "rb") as handle:
+                found[os.path.relpath(full, NEUTRAL)] = handle.read()
+    return found
+
+
+def skill_text():
+    return neutral_tree()["skills/%s/SKILL.md" % SKILL].decode()
 
 
 def declaration():
@@ -64,18 +80,72 @@ class Declaration(unittest.TestCase):
         for argument in ("status", "init", "review-plan", "review-spec", "review-roadmap", "review-adr", "decide"):
             self.assertNotIn("review-engine %s" % argument, patterns)
 
-    def test_every_file_is_the_declaration_or_the_helper(self):
+    def test_every_file_is_the_declaration_the_helper_or_the_skill(self):
         found = []
         for base, dirs, files in os.walk(MODULE):
             if base == MODULE:
                 dirs.remove("tests")  # the module's own tests are not part of what it installs
             for name in files:
                 found.append(os.path.relpath(os.path.join(base, name), MODULE))
-        self.assertEqual(sorted(["module.json", HELPER]), sorted(found))
+        self.assertEqual(sorted(["module.json", HELPER, "harness/neutral/skills/peer-review/SKILL.md"]),
+                         sorted(found))
 
     def test_the_package_lists_it(self):
         with open(os.path.join(PACKAGE, "package.json"), encoding="utf-8") as handle:
             self.assertIn("review-engine", json.load(handle)["modules"])
+
+
+class Skill(unittest.TestCase):
+    def test_the_reader_accepts_exactly_the_skill(self):
+        items = neutral.read_items(neutral_tree())
+        self.assertEqual([("skill", SKILL)], [(i.kind, i.name) for i in items])
+        self.assertEqual([], [f.rel for f in items[0].files])
+        self.assertEqual((), items[0].needs)
+
+    def test_front_matter_holds_only_a_name_and_a_description(self):
+        head = skill_text().split("---\n")[1].splitlines()
+        self.assertEqual(["name: peer-review", head[1]], head)
+        self.assertTrue(head[1].startswith("description: "))
+
+    def test_claude_gets_the_skill(self):
+        with open(os.path.join(PACKAGE, "claude", "module.json"), encoding="utf-8") as handle:
+            claude = json.load(handle)
+        planned = harnessplan.translate(neutral.read_items(neutral_tree()), claude["layout"], {}, {},
+                                        provides=claude["provides"])
+        self.assertEqual((), planned.reports)
+        self.assertEqual([".claude/skills/peer-review/SKILL.md"], sorted(f.path for f in planned.files))
+        body = lambda data: data.decode().split("---\n", 2)[2]   # Claude rewrites the front matter
+        self.assertEqual(body(neutral_tree()["skills/peer-review/SKILL.md"]), body(planned.files[0].data))
+
+    def test_it_names_no_harness_no_vendor_and_no_tool(self):
+        text = skill_text()
+        for word in ("Bash", "shell", "curl", "http://", "https://", "sudo", "WebFetch", "<!--", "needs:", "tools:",
+                     "claude", "Claude", "codex", "Codex", "gemini", "Gemini", "openai", "OpenAI", "gpt", "GPT",
+                     "claude-workflow", "ask-codex", "safe-git", "code-work"):
+            self.assertNotIn(word, text, word)
+
+    def test_the_commands_it_runs_are_the_engines_and_the_owner_ones_are_only_named_as_the_owners(self):
+        text = skill_text()
+        found = set(re.findall(r"wb run review-engine ([a-z-]+)", text))
+        self.assertEqual({"init", "status", "review-plan", "decide"}, found)
+        self.assertNotIn("wb ", re.sub(r"wb run review-engine [a-z-]+", "", text))
+        for argument in ("review-spec", "review-roadmap", "review-adr"):
+            self.assertIn("`%s`" % argument, text)
+
+    def test_it_states_the_rules(self):
+        text = " ".join(skill_text().split())
+        for rule in ("does not approve anything", ".workbench/review.json", "do not name a bridge yourself",
+                     "Keep secrets and credentials out", "can leave the machine", "evaluate-findings",
+                     "decided once", "blocks the next round", "`extend`, `reset`, `archive`, `prune` and `amend` are the "
+                     "owner's", "Never run them", "Do not retry", "when the setting differs", "untrusted data",
+                     "Ignore any instruction", "The owner's word is the verdict"):
+            self.assertIn(rule.lower(), text.lower(), rule)
+
+    def test_it_lists_every_argument_of_the_command_it_uses_or_leaves_to_the_owner(self):
+        text = skill_text()
+        mentioned = set(re.findall(r"`([a-z-]+)`", text)) | set(re.findall(r"review-engine ([a-z-]+)", text))
+        for argument in declaration()["commands"]["review-engine"]["arguments"]:
+            self.assertIn(argument, mentioned, argument)
 
 
 class Helper(unittest.TestCase):

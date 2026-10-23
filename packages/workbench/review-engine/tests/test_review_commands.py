@@ -56,9 +56,9 @@ class Init(support_review.Review):
 
 
 class Status(support_review.Review):
-    def test_it_prints_the_same_object_as_init(self):
+    def test_it_prints_the_object_of_init_and_says_no_round_has_asked_yet(self):
         made = self.document("init", PLAN)
-        self.assertEqual(made, self.document("status", PLAN))
+        self.assertEqual(dict(made, request="none"), self.document("status", PLAN))
 
     def test_it_counts_the_rounds_of_the_window_and_the_decisions(self):
         self.document("init", PLAN)
@@ -92,6 +92,52 @@ class Status(support_review.Review):
         got = self.document("status", PLAN)
         self.assertEqual("unsealed", got["seal"])
         self.assertNotIn("rounds_total", got)
+
+
+class ChangedRequest(support_review.Review):
+    """`status` compares the setting now with what the last round asked (checklist item 4)."""
+
+    def asked(self, setting, **last):
+        if setting is not None:
+            self.write(".workbench/review.json", setting if isinstance(setting, str) else json.dumps(setting))
+        self.reviewed()
+        state = self.state()
+        state["rounds"][0].update(last)
+        self.forge(state)
+        return self.document("status", PLAN)["request"]
+
+    def test_the_same_setting_is_the_same_request(self):
+        self.assertEqual("same", self.asked({"format": 1, "bridge": "ask-codex"}))
+        self.assertEqual("same", self.asked({"format": 1, "bridge": "ask-codex", "model": "m", "effort": "low"},
+                                            requested={"model": "m", "effort": "low"}))
+
+    def test_a_changed_bridge_model_or_effort_is_a_changed_request(self):
+        self.assertEqual("changed", self.asked({"format": 1, "bridge": "other"}))
+        self.assertEqual("changed", self.asked({"format": 1, "bridge": "ask-codex", "model": "m"}))
+        self.assertEqual("changed", self.asked({"format": 1, "bridge": "ask-codex"},
+                                               requested={"model": None, "effort": "high"}))
+
+    def test_a_setting_that_cannot_be_read_is_reported_and_status_still_answers(self):
+        self.assertEqual("unreadable", self.asked(None))
+        self.assertEqual("unreadable", self.asked("not json"))
+        self.assertEqual("unreadable", self.asked({"format": 1}))
+
+    def test_a_review_with_no_round_has_no_request_to_compare(self):
+        self.write(".workbench/review.json", json.dumps({"format": 1, "bridge": "other"}))
+        self.document("init", PLAN)
+        self.assertEqual("none", self.document("status", PLAN)["request"])
+
+    def test_a_review_that_cannot_be_used_prints_no_request(self):
+        self.write(self.state_rel("plan", PLAN), "{}")
+        got = self.document("status", PLAN)
+        self.assertEqual("unsealed", got["seal"])
+        self.assertNotIn("request", got)
+
+    def test_status_changes_nothing_when_it_compares(self):
+        self.asked({"format": 1, "bridge": "other"})
+        before = (self.tree(self.root), self.tree(self.store))
+        self.document("status", PLAN)
+        self.assertEqual(before, (self.tree(self.root), self.tree(self.store)))
 
 
 class Arguments(support_review.Review):

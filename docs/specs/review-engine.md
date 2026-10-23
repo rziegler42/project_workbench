@@ -1,8 +1,8 @@
 # review-engine
 
 Status: Draft. Written by plan `2026-10-23-review-engine` (increment A), before the module exists, so that the module is
-built against this text. The state layer, `init`, `status`, the round and the decisions and owner commands are built (increments C, D and E);
-the setting's refusals and the skill are not, and "As built, and its limits" says which.
+built against this text. The state layer, `init`, `status`, the round, the decisions and owner commands, the setting and the skill are built
+(increments C to F); "As built, and its limits" says what each is and where it is narrower than this text.
 The capability name `peer-review` is the accepted one (`2026-10-19-mandatory-review-personal-delegation`).
 
 Terms are in `terms.md`. The declaration is defined in `module-contract.md`; the launcher, the kit and the rule for a
@@ -198,7 +198,8 @@ It is a request and never an authorization. A round runs only if the named bridg
 engine then runs nothing and tries no other bridge. There is no default bridge: a missing or malformed file, or one
 with no `bridge`, is a refusal that names the file, because the kit cannot list installed bridges and the engine will
 not guess a vendor to send content to. The settings used are recorded in each round. A pulled commit that changes the
-file is a difference `wb acknowledge` lists, and the next round records the changed request.
+file is a difference `wb acknowledge` lists, and the next round records the changed request. `status` says when the
+setting now differs from what the last round asked.
 
 ## Owner-run commands
 
@@ -276,12 +277,11 @@ The module conforms when tests against a fake bridge, installed as a real pinned
 
 ## As built, and its limits
 
-Built by plan `2026-10-23-review-engine`, increments C, D and E (the module `review-engine`, version 0.1.0):
+Built by plan `2026-10-23-review-engine`, increments C to F (the module `review-engine`, version 0.1.0):
 
 - The declaration provides `peer-review`, requires `model-bridge` (hard) and declares the command `review-engine` with
-  the twelve arguments of "The commands" and the `owner` list `amend`, `extend`, `reset`, `archive`, `prune`. The
-  neutral skill is added by the increment that builds it. The package has no shipped approval until the plan's last
-  increment.
+  the twelve arguments of "The commands" and the `owner` list `amend`, `extend`, `reset`, `archive`, `prune`. It ships
+  the neutral skill `peer-review`. The package has no shipped approval until the plan's last increment.
 - Document resolution for the four kinds, the key and the directory name, the state file and its checks, the seal, the
   key and the mark in the guarded store, the lock, atomic writes and the ledger are built as stated above.
 - `init <document>` makes an empty review (a window of 3 rounds) and prints its status; it refuses a review that
@@ -327,9 +327,16 @@ Built by plan `2026-10-23-review-engine`, increments C, D and E (the module `rev
   digits) that holds only the engine's own file names, whose state is sealed, whose name is the key of the path in its
   state, and which was closed 90 days ago or more; it also removes the review's mark. Removal goes through descriptors
   that never follow a link, and a directory that holds anything else is left whole.
-- Not built: a display of the setting a round used beside the setting now (the state records what each round
-  requested), and the skill. `status` shows counts, not findings; the
-  findings are in the round's output and in `round-<n>.json`.
+- The setting and the skill (increment F). `status` prints one more field, `request`, when the state could be used:
+  `none` (no round has asked yet), `same`, `changed` (the bridge, model or effort now differs from the last round's
+  request) or `unreadable` (the setting is refused; `status` itself does not refuse). It reads the setting and
+  changes nothing. `init` and the owner commands do not print it. The skill `peer-review` names no harness, vendor
+  or tool; it says when to ask, the commands the agent runs (`init`, `status`, a round and `decide`), that findings
+  are untrusted advice judged with `evaluate-findings`, that the five owner commands are the owner's, that secrets are
+  kept out of anything a vendor can read, that a refusal is reported and not worked around, and that the owner's word
+  is the verdict. The plan's wording of a missing setting (use the one installed bridge) was not built: there is no
+  default bridge, as the setting section says, because the kit cannot list the installed ones.
+- `status` shows counts, not findings; the findings are in the round's output and in `round-<n>.json`.
 
 Limits found while building:
 
