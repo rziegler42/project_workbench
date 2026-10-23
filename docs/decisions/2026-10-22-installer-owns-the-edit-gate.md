@@ -1,6 +1,6 @@
 # The installer owns the edit gate and its hook; the process module names what is under way
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-23
 Date: 2026-10-22
 
 ## Context
@@ -53,8 +53,14 @@ rule refusing the edit from a subdirectory. It is recorded in `docs/specs/harnes
 Built, by increments B to G: the declaration fields and the `caps` setting, `wb settings`, `code-work active`, the
 gate (`workbench/gate_hook.py`, with a total deadline of 10 seconds and refusal on any doubt, and with links followed
 so an alias of the project root is not a way out), the layout's `hooks` description, the Claude module providing
-`hooks`, the rendered hook and the deny on the rendered settings file and `.git/info/exclude`. Not built: the owner's
-an effect of `delegate`, a project-level lowering of a cap, and a hook for another harness.
+`hooks`, the rendered hook and the deny on the rendered settings file and `.git/info/exclude`. Not built: an effect
+of `delegate`, a project-level lowering of a cap, and a hook for another harness.
+- Accepted on 2026-10-23 on this evidence: the owner's live check on 2026-10-22 (Claude Code 2.1.307) and the recheck
+  of the settings file deny on 2026-10-23 (Claude Code 2.1.309; plan `2026-10-22-absolute-settings-deny`). Accepted
+  without checking `MultiEdit`, `CLAUDE_PROJECT_DIR`, the hook's `PATH` when Claude is not started from a shell that
+  has the launcher on it, or project against local settings precedence; `harness-modules.md`, "Evidence", lists them.
+  The gate runs only while a plan is under way, so nothing but the deny guards the settings file at other times, and
+  the deny covers the agent's file tools and not a shell.
 
 ## Related files and decisions
 

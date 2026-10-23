@@ -267,7 +267,7 @@ review or in the security pass:
 ### The edit gate hook
 
 *(Built by plan `2026-10-22-checkpoint-settings-and-caps`. The decision that the installer owns the gate is
-`docs/decisions/2026-10-22-installer-owns-the-edit-gate.md`, Proposed.)*
+`docs/decisions/2026-10-22-installer-owns-the-edit-gate.md`, accepted.)*
 
 The installer, not a module, renders one hook into the same per-clone file as the permission rules, under the
 layout's `hooks` key. The layout's `hooks` object carries `settings_key`, `targets`, `event`, `timeout` and

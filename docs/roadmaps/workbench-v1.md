@@ -154,7 +154,7 @@ meet here and the order matters.
   reads a cap yet, a project cannot lower one, and the hook was seen working in a live Claude session on 2026-10-22 (Claude Code 2.1.307; the owner's check,
   criterion 9 of the plan), which also found that the deny on the rendered settings file does not hold from a
   subdirectory (corrected by plan `2026-10-22-absolute-settings-deny`, which renders the absolute patterns; the owner's
-  recheck on 2026-10-23 confirmed it). The decision `2026-10-22-installer-owns-the-edit-gate` is Proposed. A
+  recheck on 2026-10-23 confirmed it). The decision `2026-10-22-installer-owns-the-edit-gate` is Accepted. A
   project-level setting that the installer can read without naming a module, so that a project may lower a cap, is
   not a candidate yet; add one if the owner wants it. A security review found one Medium finding, fixed; the fixes had
   no second reviewer.

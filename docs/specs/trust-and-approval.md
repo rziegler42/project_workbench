@@ -405,7 +405,7 @@ prose above and this section differ in precision, this section is what the code 
 
 *(Built by plan `2026-10-22-checkpoint-settings-and-caps`. The names are in `code-work.md`; the declaration fields are
 in `module-contract.md`; the decision that the installer owns the gate is
-`docs/decisions/2026-10-22-installer-owns-the-edit-gate.md`, Proposed.)*
+`docs/decisions/2026-10-22-installer-owns-the-edit-gate.md`, accepted.)*
 
 - **What the module declares.** A process module declares `checkpoints`, `caps` and `approval.active`. The
   installer treats every name as opaque text and knows no plan: it never reads one.

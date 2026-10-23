@@ -77,4 +77,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-22-git-work-in-its-own-module](2026-10-22-git-work-in-its-own-module.md) | Git work (`commit`, `remove`) lives in its own module, not in `code-work` or `groundwork` | Accepted |
 | [2026-10-22-model-calls-go-through-vendor-bridges](2026-10-22-model-calls-go-through-vendor-bridges.md) | Model calls go through thin vendor bridges; review and action review are separate engines | Accepted |
 | [2026-10-22-installer-records-plan-approval-module-computes-region](2026-10-22-installer-records-plan-approval-module-computes-region.md) | The installer records and gates plan approval; the process module's pinned helper computes the hashed region | Accepted |
-| [2026-10-22-installer-owns-the-edit-gate](2026-10-22-installer-owns-the-edit-gate.md) | The installer owns the edit gate and its hook; the process module names what is under way | Proposed |
+| [2026-10-22-installer-owns-the-edit-gate](2026-10-22-installer-owns-the-edit-gate.md) | The installer owns the edit gate and its hook; the process module names what is under way | Accepted by the owner on 2026-10-23 |
