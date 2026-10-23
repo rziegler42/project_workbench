@@ -180,6 +180,9 @@ def stage(store_root, harness, modules, snaps, source, version, home):
         else:
             warnings.append("this harness provides no permissions, so the hard stops and the "
                             "guarded store are enforced only by instruction")
+            if hook:
+                warnings.append("this harness renders no edit gate hook, because the hook is written into the "
+                                "permissions file it does not provide")
     except (neutral.NeutralError, harnessplan.PlanError) as exc:
         raise Refused([str(exc)])
     files.sort(key=lambda planned: planned.path.encode("utf-8"))

@@ -282,6 +282,11 @@ class Refused(unittest.TestCase):
         self.bad(edit(["hooks"], "all"), "hooks")
         self.assertEqual(layout.problems(edit(["hooks"], {"settings_key": "hooks"})), [])
 
+    def test_the_hook_key_may_not_differ_from_the_permission_key_only_by_case(self):
+        for key in ("permissions", "Permissions", "PERMISSIONS"):
+            with self.subTest(key):
+                self.bad(edit(["hooks"], {"settings_key": key}), "same top-level key")
+
     def test_hook_targets(self):
         table = {"Edit": ["file_path"], "NotebookEdit": ["notebook_path"], "Both": ["a", "b"]}
         good = edit(["hooks"], {"settings_key": "hooks", "targets": table})

@@ -325,6 +325,29 @@ class Placing(Gated):
             with self.subTest(rel):
                 self.refused(self.target(rel), "symbolic link")
 
+    def test_a_target_spelled_through_an_alias_of_the_root_is_judged_where_it_lands(self):
+        alias = os.path.join(self.outside, "alias")
+        os.symlink(self.real, alias)
+        os.symlink(os.path.join(self.real, "src"), os.path.join(self.outside, "src-alias"))
+        for spelled in (alias + "/src/x.py", alias + "/x.py", alias, alias + "/new/dir/x.py",
+                        alias + "/docs/../src/x.py", self.outside + "/src-alias/x.py"):
+            with self.subTest(spelled):
+                self.refused(self.target(spelled), PLAN)
+        self.refused(self.gate(self.payload(file_path="../%s/alias/src/x.py" % os.path.basename(self.outside))), PLAN)
+
+    def test_a_target_through_an_alias_that_lands_outside_or_on_the_plan_is_judged_there(self):
+        os.symlink(self.outside, os.path.join(self.outside, "self"))
+        self.allowed(self.target(self.outside + "/self/x"))
+        alias = os.path.join(self.outside, "alias")
+        os.symlink(self.real, alias)
+        self.allowed(self.target(alias + "/docs/plans/a.md"))
+        self.refused(self.target(alias + "/docs/plans/A.md"), "another way")
+
+    def test_a_target_through_a_link_loop_is_refused(self):
+        os.symlink(os.path.join(self.outside, "b"), os.path.join(self.outside, "a"))
+        os.symlink(os.path.join(self.outside, "a"), os.path.join(self.outside, "b"))
+        self.refused(self.target(self.outside + "/a/x"))
+
     def test_a_link_to_a_plan_is_not_the_plan(self):
         os.symlink(os.path.join(self.real, PLAN), os.path.join(self.real, "plan-link.md"))
         self.refused(self.target("plan-link.md"), "symbolic link")

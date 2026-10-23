@@ -177,7 +177,8 @@ def problems(layout):
         and isinstance(hooks.get("settings_key"), str) else None
     actions = settings.get("actions") if isinstance(settings, dict) else None
     if hook_key and isinstance(actions, dict) and any(
-            isinstance(v, str) and v.split(".")[0] == hook_key for v in actions.values()):
+            isinstance(v, str) and v.split(".")[0].casefold() == hook_key.casefold()
+            for v in actions.values()):
         out.add("layout.hooks", "settings_key is the same top-level key as the permission lists")
     excluded = _exclude(layout.get("exclude", []), out)
     _notes(layout.get("notes", []), out)

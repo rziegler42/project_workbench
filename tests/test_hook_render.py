@@ -216,6 +216,15 @@ class Attached(test_gate_hook.Gated):
         self.assertNotIn("hooks", self.settings())
         self.assertIn("warning: this harness renders no edit gate hook", err)
 
+    def test_a_module_that_provides_hooks_but_not_permissions_says_it_renders_no_hook(self):
+        self.use()
+        provides = [name for name in support_harness.PROVIDES if name != "permissions"] + ["hooks"]
+        dist = distribution(os.path.join(self.root, "nopermissions"), hooked(), provides)
+        code, out, err = self.attach(dist=dist, package=os.path.join(dist, "packages", support_harness.PACKAGE))
+        self.assertEqual(0, code, err)
+        self.assertIn("renders no edit gate hook", err)
+        self.assertFalse(os.path.exists(os.path.join(self.place, *SETTINGS.split("/"))))
+
     def test_a_module_that_provides_hooks_needs_a_layout_that_describes_one(self):
         self.use()
         dist = distribution(os.path.join(self.root, "lying"), support_harness.SYNTHETIC,

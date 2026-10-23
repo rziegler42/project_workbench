@@ -355,6 +355,30 @@ major finding, applied. No finding was rejected. The round 2 fix has not been re
   exception, criteria 3 and 5 say "nothing but the bootstrap", and increments C and E compare the project and the store
   before and after, including a store with no `settings`.
 
+Security review of the gate and the hook rendering (`security-reviewer` subagent, at the owner's request, 2026-10-22,
+against commits `7888314` and `23e33ad`). It stopped at its turn limit once and was resumed once for its report, so
+the review is partial: it did not run the real subprocess with closed streams, NFC/NFD on a case-insensitive volume,
+two process modules, damaged settings or records, a helper with non-UTF-8 or over-long output, or a `setsid`
+grandchild. Its findings are untrusted input; each was reproduced or checked before it was acted on.
+
+- S1 (medium, applied): a target spelled through a link to the project root (or `/var` for `/private/var`) was judged
+  outside by its spelling and allowed. A target that is outside as spelled is now followed through its links and
+  judged where it lands, the root is compared with its links followed, and a loop or an unresolvable path is a refusal
+  (`os.path.ALLOW_MISSING`, which fails on a loop). Regression tests in `tests/test_gate_hook.py`, class `Placing`.
+- S2 (low, applied): a harness that provides `hooks` but not `permissions` rendered no hook and said nothing about it.
+  Attach now warns. Test in `tests/test_hook_render.py`.
+- S3 (low, partly applied): the layout check compared the hook's `settings_key` with the permission key by exact
+  case; it now folds case (test in `tests/test_layout.py`). Not applied: tying the event to `PreToolUse` and the code
+  to 2 in the validator. The layout is part of the harness module the owner approves, and the validator names no
+  harness; the owner's live check (criterion 9) is what shows that Claude blocks on the rendered pair.
+- Observations kept: each gate run may rewrite the launcher under the store's `bin` (the documented bootstrap); whether
+  a project `.claude/settings.json` can turn hooks off, and whether a re-attach renders the hook after a process
+  module is added later, were not tested (the first is within the stated limit).
+- The fixes have not been tried against a second reviewer. Sound and tested by the reviewer: hostile JSON of every
+  shape it tried, a working directory that is not plain, links and `..` inside the root, case and Unicode spellings of
+  the root and the plan, forged or malformed helper output, the 1 second deadline, and `wb gate claude || exit 2` under
+  `sh` for exits 0, 1, 2, 3, 127, SIGKILL, SIGTERM and a missing `wb`.
+
 ## Deferred work
 
 - A project-level setting that lowers a cap (and, later, adds a shared branch), read by the installer without naming a

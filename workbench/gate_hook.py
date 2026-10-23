@@ -127,11 +127,31 @@ def _target_text(tool, given, field):
     return value
 
 
+def _within(root_parts, parts):
+    return len(parts) >= len(root_parts) and [_fold(p) for p in parts[:len(root_parts)]] == root_parts
+
+
+def _resolved(parts):
+    """The components of the path `parts` with every link in it followed, as far as it exists. A loop or a
+    path that cannot be resolved is a refusal."""
+    mode = getattr(os.path, "ALLOW_MISSING", None)
+    if mode is None:
+        raise Refusal("this Python cannot resolve a path that may not exist yet")
+    try:
+        return [piece for piece in os.path.realpath("/" + "/".join(parts), strict=mode).split("/") if piece]
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise Refusal("a target cannot be resolved: %s" % display.ascii_text(str(exc))[:80])
+
+
 def _judge(root_parts, plans, cwd, target):
-    """``"outside"``, ``"plan"`` or ``"inside"`` for the path `target`, or ``Refusal``."""
+    """``"outside"``, ``"plan"`` or ``"inside"`` for the path `target`, or ``Refusal``. `root_parts` are the folded
+    components of the project root with its links followed. A target that lies outside as spelled is followed
+    through its links, and is judged where it lands: an alias of the root is not a way out of the gate."""
     parts = _components(cwd, target)
-    if len(parts) < len(root_parts) or [_fold(p) for p in parts[:len(root_parts)]] != root_parts:
-        return "outside"
+    if not _within(root_parts, parts):
+        parts = _resolved(parts)
+        if not _within(root_parts, parts):
+            return "outside"
     here = "/" + "/".join(parts[:len(root_parts)])
     for part in parts[len(root_parts):]:
         here = here.rstrip("/") + "/" + part
@@ -198,7 +218,7 @@ def decide(guarded, table, cwd, tool, given, deadline):
     if fields is None:
         raise Refusal("the tool %s is not one the gate reads a target from" % display.ascii_text(tool)[:40])
     targets = [_target_text(tool, given, field) for field in fields]
-    root_parts = [_fold(p) for p in root.split("/") if p]
+    root_parts = [_fold(p) for p in _resolved([p for p in root.split("/") if p])]
     places = [_judge(root_parts, plans, cwd, target) for target in targets]
     if all(place != "inside" for place in places):
         return
