@@ -1,6 +1,6 @@
 # The shared-branch push checkpoint
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-23
 Candidate: workbench-v1#push-checkpoint
 Specs: code-work, safe-git, harness-modules
@@ -352,4 +352,22 @@ and the one `git push <remote> <branch>` span of this skill.
   the owner's answer to that prompt decides. The skill cannot tell a secret from a false positive.
 - Not done: no review and no security pass on this increment (only if the owner asks); not run in a live session.
 
-Increment D: not started.
+Increment D, 2026-10-23: the specs say what is built, the owner released the approvals, and the full suite ran.
+
+- Specs: `code-work.md` (header, declaration, "Push" rewritten for choice 2 and the floor's `ask` on every push, the
+  `shared` subcommand, acceptance line, decided points, "As built" with its limits) and `safe-git.md` (purpose and
+  non-goal, declaration, a "Push check" section with the patterns, caps and limits including S-F5, the skill note,
+  "As built", acceptance). `harness-modules.md` needed no edit. A search of the specs finds no statement that the push
+  checkpoint is not built.
+- Approvals: on the owner's "Run it for me" I ran `release-approvals`; it wrote 6 approvals and warned of 3 stale
+  records, which I previewed and removed on "remove them". The 3 new records and the 3 removals are in this commit.
+- Verification as run: `python3 -B -W error tests/run_all.py` ran 3161 tests in 6 roots, OK (installer 2337, 1
+  skip; ask-codex 90; claude 32; code-work 267, 2 skips; groundwork 178; safe-git 257). The skips are the ones
+  that were there before this plan. `doccheck`, `refcheck` and `git diff --check` print nothing.
+- Criteria: 1 by `test_safegit_pushcheck.py`; 2 by `test_codework_shared.py`; 3 and 4 by `test_codework_pushskill.py`
+  and the module tests; 5 by this increment.
+- One departure from choice 4: the skill runs the check for every push, not only a shared one. That is stricter and
+  costs the agent one more command; the harness asks either way.
+- Not done: no live session was used, so behaviour in a real project is unverified; no review of increments B, C or D;
+  the monotonic list, lifting the floor for a non-shared push and a one-command push stay in Deferred work; whether
+  `commit`'s reads share the submodule exposure is unchecked and the owner decides if it becomes a plan.

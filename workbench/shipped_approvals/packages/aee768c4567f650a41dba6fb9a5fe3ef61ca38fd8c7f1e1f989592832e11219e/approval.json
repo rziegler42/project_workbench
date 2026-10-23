@@ -16,9 +16,9 @@
       "tree_hash": "a9f7f779df156678aff3791377166ab4f924ec286a6f7bda5888aa38d5b41955"
     },
     {
-      "declaration_hash": "793fce658b16662e31a356a52441f281079f33feb6e95bceb5fea4960ff9f8dd",
+      "declaration_hash": "5c3b57311bc9694dd284fa8f7b44d4149e5b4b0694a7b16218baeca2ddb5e88a",
       "name": "code-work",
-      "tree_hash": "d68689c4228c7c7f062b9b2b8be97d8b05e70e1657d78e23a8aa220b2e5cb36e"
+      "tree_hash": "7e38da3c4df33b500ce361393c5ec1104b53185815ef8755ba0850898abe51d6"
     },
     {
       "declaration_hash": "eb8f2f640ad950914c8de822f9c50fe8bc387c4938e656f339f11d092329bf3f",
@@ -26,13 +26,13 @@
       "tree_hash": "8cc2fed0ce156e4dfa5fdc739afe51e6555f21f7ca05212eb42aa51ea13c771f"
     },
     {
-      "declaration_hash": "bccb1c58ac073f7230ae3c54ff7620cabead85fd5cd90eefb4f2254e2bda75cb",
+      "declaration_hash": "021e910c7d733949b50a496fc46ac1ba91b5ec312f7a74642da6b7aea772c059",
       "name": "safe-git",
-      "tree_hash": "a7258040835a713304a0e5cf59f2ae968e5f5b494329e6a41617f1554338be98"
+      "tree_hash": "8acce40ab778ac1350bfe7a6ef9e81a9ea11838c53924b10ce73eadd9ee2bb37"
     }
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "0f62c1d563029bb8acbe48994e2b9f207f3acc44df474b2e2e68dc77a806e2ed",
+  "tree_hash": "64f302e0c321440143a25ff1d6ca8128246b4b6d482225d51c0e3fd8324422fc",
   "workbench_version": "0.1.0"
 }

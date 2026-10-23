@@ -1,7 +1,7 @@
 # code-work
 
 Status: Current. Approved by the owner on 2026-10-19. The plan format, the read subcommands, the
-plan approval record, the commit rules, the checkpoint and cap declarations, the `active` subcommand, the increment-loop and review skills and the reviewer agent are built; the delegation, the reading of the caps and the push parts are not (see "As built"). Paths, field
+plan approval record, the commit rules, the checkpoint and cap declarations, the `active` subcommand, the increment-loop and review skills, the reviewer agent and the push checkpoint are built; the delegation and the reading of the caps are not (see "As built"). Paths, field
 names and file formats not yet built are proposals; the rules are the substance. Open items are listed at
 the end.
 
@@ -36,12 +36,12 @@ Non-goals:
 | blocks | nothing beyond the one-process rule of the type |
 | fills | the policy slot in `AGENTS.md`; the `docs-index` slot |
 | writes | `docs/plans/` and its README |
-| ships | one helper (code-bearing, shown at approval) with the subcommands `check`, `plans`, `report`, `region` and `active`; the `wb` launcher is a workbench component and not shipped by this module |
+| ships | one helper (code-bearing, shown at approval) with the subcommands `check`, `plans`, `report`, `region`, `active` and `shared`; the `wb` launcher is a workbench component and not shipped by this module |
 | approval | `region` computes a plan's hashed region; `active` lists the plans under way |
 | checkpoints, caps | the eight checkpoint names and three caps under "Checkpoints" and "Loop caps" (built by plan `2026-10-22-checkpoint-settings-and-caps`) |
 
 It also ships neutral items: skills for drafting a plan, running the increment loop,
-and reviewing; and a read-only reviewer agent. Templates stay in the module; no
+reviewing, and pushing; and a read-only reviewer agent. Templates stay in the module; no
 placeholder plan is installed.
 
 ## Lifecycle
@@ -238,18 +238,26 @@ the personal settings (`trust-and-approval.md`). Setting `delegate` has no effec
 every checkpoint stops, whatever the setting says. `wb settings` reports the effective values.
 
 Not checkpoints inside an approved plan: starting the next increment, a local commit
-after a passing review, archiving a plan, pushing a branch that is not shared, and
-deleting in scratch or temporary directories.
+after a passing review, archiving a plan, pushing a branch that is not shared (the harness still asks, see
+"Push"), and deleting in scratch or temporary directories.
 
 Hard stops are the floor defined in `trust-and-approval.md` and always stop. This
 module adds none of its own.
 
 ## Push
 
-- The project declares its shared branches in this module's configuration under
-  `.workbench/`. If it declares none, the repository's default branch is shared.
-  Committed configuration may add shared branches and may not remove one.
-- A push to a shared branch is a checkpoint. A push to any other branch is not.
+- The project declares its shared branches in `.workbench/shared-branches.json`,
+  `{"format": 1, "shared": ["name", ...]}`, which `wb run code-work shared` prints. The repository's default branch
+  is always shared, whether or not it is listed. The current file is authoritative: nothing compares it with an
+  earlier version, so deleting a declared branch other than the default narrows the process checkpoint for it.
+  A monotonic list (committed configuration may add and not remove) is deferred work.
+- A push to a shared branch is a checkpoint. A push to any other branch is not a checkpoint of this module, but
+  the harness still asks: the floor renders an `ask` on every `git push` and on each force form
+  (`trust-and-approval.md`), and a module cannot lower the floor.
+- Before a push the agent runs `wb run safe-git push-check` (`safe-git.md`, "Push check") and reports the
+  commits to be sent, the changed paths and every finding; it stops on a finding or a refusal until the owner
+  decides. The neutral skill `push-changes` carries this routine. It is advice: what stops a push is the
+  harness's `ask`, which tests pin for the Claude layout, and the owner's word is what the agent waits for.
 - The usual rhythm is to push the shared branch once a plan is archived and before the
   next plan is drafted.
 - A remote job needs the committed revision to be reachable from the remote. That is
@@ -271,7 +279,11 @@ module adds none of its own.
   `wb run code-work report` (candidate completion, derived from work records). They change
   nothing, and run no program. A fifth, `wb run code-work active`, lists the plans whose `Status:` is
   `Approved` or `In Progress` as `{"format": 1, "plans": [...]}` for the edit gate, with the same reader and
-  limits as `region`.
+  limits as `region`. A sixth, `wb run code-work shared`, prints the declared shared branches (see "Push"). It
+  reads `.workbench/shared-branches.json` without following a link; an absent file is an empty list; a link, a
+  malformed file, a duplicate key, NaN, a wrong type, an extra or missing key, more than 64 names, a name that is
+  not a plain ASCII branch name of at most 200 bytes, a repeated name or a file over 8192 bytes is refused. It
+  holds no git code and does not know the default branch.
 - A commit that completes an increment ends with the trailer `Plan: <plan stem>#<label>`.
 - A commit never authorizes a push.
 
@@ -356,8 +368,8 @@ installer's and is replaced on upgrade only while unedited.
   any other section invalidates it.
 - The agent does not begin an increment of a plan whose approval is absent or invalid.
 - A reviewer that returns no verdict stops the run.
-- A push to a shared branch stops for the owner when no setting says otherwise, and a
-  push to a non-shared branch does not.
+- A push to a shared branch stops for the owner when no setting says otherwise. A push to a non-shared branch is
+  not a checkpoint of this module, and the harness still asks.
 - A plan that lists a decision to be recorded is not reported complete until the
   decision record exists, whichever commit supplied it.
 - The commit is made through the `safe-git` helper, is local, and is not followed by a push.
@@ -378,9 +390,10 @@ installer's and is replaced on upgrade only while unedited.
 - Committed policy states only rules the project depends on, written as behavior.
   Commit messages carry no tool attribution by default, as a committed setting that a
   project may switch off. Personal habits stay in the owner's settings.
-- The project's shared-branch list lives in this module's configuration under
-  `.workbench/`, not in the manifest. Committed configuration may add shared branches
-  and may not remove one.
+- The project's shared-branch list lives in `.workbench/shared-branches.json`, not in the manifest and not in
+  `.workbench/code-work.json`, which once held the attribution setting and is read by nothing. The default
+  branch is always shared. The earlier rule that committed configuration may add and not remove is not built
+  (see "Push").
 
 - The Claude harness module's root file is the `@AGENTS.md` pointer plus a generated
   "Compact Instructions" section built from the neutral preservation guidance. This
@@ -420,7 +433,13 @@ installer's and is replaced on upgrade only while unedited.
   report and keeps the skills, and the owner then reviews; the reviewer's restriction was shown by tests on the
   rendered file and not in a live session; there is no implementer in a fresh context and no command that starts
   the loop.
-- Not built: the push checkpoint (`push-checkpoint`), the compaction guidance
+- Built, from plan `2026-10-23-push-checkpoint`: `wb run safe-git push-check` (`safe-git.md`, "Push check"), the
+  helper's `shared` subcommand, the file `.workbench/shared-branches.json`, and the neutral skill `push-changes`.
+  Limits: the skill is advice and no rule is added, so the enforced stop is the floor's `ask` on every push, which
+  a test pins for the rendered Claude settings; the harness asks on a push to a branch that is not shared too;
+  the list is not monotonic; the scan is the owner's narrow pattern list and a heuristic; nothing was run in a
+  live session.
+- Not built: the compaction guidance
   (`compaction-guidance`) and the delegated approval (`delegated-approval`). These came from the roadmap candidate
   `code-work-approval`, which is split into them.
 - The helper reads untrusted plans and is bounded; the limits are in the plan `2026-10-21-code-work-plans`.

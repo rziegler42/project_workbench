@@ -10,15 +10,16 @@ launcher, the kit and the pin in `module-boundary.md`; the authority rules in `t
 ## Purpose and scope
 
 `safe-git` is a module of type `module` that lets an agent change a repository in two bounded ways: make
-one local commit of exactly the named files, and delete exact paths the owner has approved. It has no
+one local commit of exactly the named files, and delete exact paths the owner has approved. It also reads the
+repository for one purpose, the credential check before a push (`push-check`). It has no
 process of its own. A project with a process module (`code-work`) gets it as a hard requirement; a project
 with none (a CAD or electronics project that uses `groundwork` and domain modules) can install it alone.
 
 Non-goals:
 
-- Any other git operation. There is no push, branch, worktree, merge, rebase, reset or tag. A push is a
-  checkpoint that a process module builds (`code-work.md`, "Push"); merging into a shared branch is outside
-  the agent.
+- Any other git operation. There is no push, branch, worktree, merge, rebase, reset or tag, and the only
+  reads are the fixed shapes `push-check` uses. A push is a checkpoint that a process module builds
+  (`code-work.md`, "Push") and the owner decides; merging into a shared branch is outside the agent.
 - Review, plans or approval. The module commits what it is told to commit; whether the work was reviewed is
   the process's business.
 - Writing the acknowledgement baselines (`2026-10-22-commit-helper-leaves-baselines-to-the-owner`).
@@ -32,9 +33,9 @@ Non-goals:
 | requires | nothing |
 | fills, writes | nothing |
 | ships | one helper, `helper/safe-git`, and one neutral skill, `commit-changes` |
-| commands | `safe-git`, whose first argument is `commit` or `remove` (kit 1) |
+| commands | `safe-git`, whose first argument is `commit`, `remove` or `push-check` (kit 1) |
 
-It is run as `wb run safe-git commit` and `wb run safe-git remove`. The installer pins the helper when the
+It is run as `wb run safe-git commit`, `wb run safe-git remove` and `wb run safe-git push-check`. The installer pins the helper when the
 owner confirms the install; an edited helper is not run until the change is acknowledged. `code-work`
 requires the capability `commit`, so installing it without this module stops with the hard-requirement
 message.
@@ -63,6 +64,34 @@ them. It refuses Git metadata, nested repositories, the repository root, links a
 follows no link. A deletion needs the owner's approval of the previewed list; the skill tells the agent to
 stop for it.
 
+## Push check
+
+`wb run safe-git push-check [--remote <name>] [--base <40 hex>]` reads the repository and prints one JSON line:
+`remote`, `branch`, `target`, `default_branch`, `base`, `ahead`, `changed_paths`, `findings` and `truncated`. It
+does not push and never contacts the remote: every ref it reads is local. It is read-only and changes nothing.
+
+- The branch is the current one, read with `symbolic-ref`; a detached HEAD and an unborn branch are refused.
+  `target` is the branch a push of HEAD would update, taken to be the current branch. The default branch comes
+  from `refs/remotes/<remote>/HEAD` and is null when that is not set.
+- The base is `--base` if given, else `refs/remotes/<remote>/<branch>`, else `refs/remotes/<remote>/<default
+  branch>`, else a refusal that names what was tried. The range is `<base>..HEAD`.
+- The scan reads the patch of each commit in the range (merges excluded) and the net diff, added lines only, so a
+  secret added and removed inside the range is still reported. It treats every file as text and ignores
+  submodules (`--ignore-submodules=all`), with external diff and text conversion off. Patterns: a private-key
+  header, an AWS access key id, `ghp_` and `github_pat_` tokens, an `sk-` key, `xoxb-` and `xoxp-` Slack tokens
+  and a JWT-shaped string; and the file names `.env`, `*.pem` and `id_rsa`.
+- A finding is `{path, line, rule}`; `line` is the line in the new file, or null for a file-name finding. No
+  matched text is printed, so a finding is not itself a leak. Output is read through a cap of 8 MiB and a
+  deadline, with git in its own process group; at most 500 changed paths and 100 findings are listed, and
+  either cut sets `truncated`.
+- It refuses a repository that selects a program (as `commit` does), a base it cannot resolve, and any argument
+  it does not allow.
+
+Limits: the patterns are a narrow list and miss encoded, split or unlisted secrets and flag false positives, such
+as the pattern names written in documents; a stale or forged tracking ref, a `push.default` or `pushRemote`
+setting can make the report differ from a real push; the contents of a changed submodule are not read. Whether
+`commit`'s own reads share the submodule exposure was not checked.
+
 ## The attribution setting
 
 The message carries no tool attribution unless `.workbench/safe-git.json`
@@ -81,7 +110,8 @@ and only in the argument shapes it uses. It never reads or writes the guarded st
 
 ## The skill
 
-The module ships one neutral skill, `commit-changes`. It tells an agent to commit only when the owner has
+The module ships one neutral skill, `commit-changes`. (The push routine is `code-work`'s skill `push-changes`,
+which composes `push-check` with `wb run code-work shared`.) It tells an agent to commit only when the owner has
 asked, to run the verification first, to name exact paths and the full HEAD hash, to describe the change
 only, to use `--trailer` when the project's process asks for one, to run `remove` as a preview and
 `--confirm` only after the owner approves, to stop and report a refusal rather than work around it, and
@@ -93,8 +123,8 @@ never to push. It names no tool but the two commands.
 looked at here:
 
 - `using-git-worktrees`: not ported. A worktree needs git subcommands this helper deliberately does not run.
-- `finishing-a-development-branch`: not ported. Merging, pushing and cleanup are outside the agent or are a
-  push checkpoint that `push-checkpoint` builds.
+- `finishing-a-development-branch`: not ported. Merging and cleanup are outside the agent; pushing is the
+  checkpoint that `push-checkpoint` built, with `push-check` here and the `push-changes` skill in `code-work`.
 - The commit rules (exact paths, no attribution, one commit per request) were already the owner's own and
   are written new in `commit-changes`; no superpowers text is copied.
 
@@ -109,6 +139,8 @@ looked at here:
   the repository is run; the look-alike letters of the attribution check are a list that cannot be
   complete; a repository that selects a program (a hook, a filter, a file system monitor, signing) is
   committed to by hand.
+- Built, from plan `2026-10-23-push-checkpoint`: `push-check` and its git shapes, with an adversarial security
+  pass whose findings were fixed and tested. See "Push check" for its limits.
 - Tests that run git need it and skip with a reason without it.
 - No end-to-end run in a live session has been done.
 
@@ -123,3 +155,5 @@ looked at here:
 - The `code-work` helper contains no git code and starts no program.
 - A pin recorded for one command lets no other command run.
 - The skill is accepted by the neutral reader and names no tool beyond the two commands.
+- `push-check` prints the fields above, never contacts the remote, prints no matched text and refuses a
+  repository that selects a program, a detached HEAD, an unborn branch and an unresolved base.
