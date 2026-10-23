@@ -313,8 +313,10 @@ hook. The rendered entry is fixed by the layout and not chosen by any module. Th
   gate". **The relative `Edit(...)` deny did not hold from a subdirectory** (live check, 2026-10-22): the patterns are matched
   from the directory Claude started in, so a session started below the root and aimed at
   `../.claude/settings.local.json` was stopped only by the auto mode classifier. Plan
-  `2026-10-22-absolute-settings-deny` adds the absolute patterns, built and tested; the owner's recheck that the
-  permission rule, and not the classifier, now stops the edit is not yet made. Limits that remain: a project that is
+  `2026-10-22-absolute-settings-deny` adds the absolute patterns. The owner's recheck on 2026-10-23 (Claude Code 2.1.309)
+  started Claude in a subdirectory of a new project and aimed an `Edit` at `../.claude/settings.local.json`: it was
+  refused with "File is in a directory that is denied by your permission settings", in auto mode and again in manual
+  mode. Limits that remain: a project that is
   moved keeps stale absolute rules; a clone that already holds a rendered settings file is not migrated (attach treats a
   different file as a conflict); the hook, and so the gate, runs only while a plan is under way, so nothing but the deny
   guards the file at other times; the deny covers the agent's file tools and not a shell.

@@ -409,7 +409,7 @@ installer's and is replaced on upgrade only while unedited.
   for a project setting the installer can read without naming a module); the gate stops a mistaken agent and not a
   hostile one, covers only file-editing tools, and was seen working in a live Claude session on 2026-10-22 (Claude
   Code 2.1.307) with one gap found, the relative deny on the rendered settings file not holding from a subdirectory, which absolute
-  patterns now cover, pending the owner's recheck (`harness-modules.md`, "The edit gate hook").
+  patterns now cover, as the owner's recheck on 2026-10-23 showed (`harness-modules.md`, "The edit gate hook").
 - Not built: the increment-loop and review skills and the reviewer agent
   (`increment-loop-and-review-skills`), the push checkpoint (`push-checkpoint`), the compaction guidance
   (`compaction-guidance`) and the delegated approval (`delegated-approval`). These came from the roadmap candidate

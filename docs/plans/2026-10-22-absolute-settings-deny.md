@@ -1,6 +1,6 @@
 # Make the deny on the rendered settings file hold from any directory Claude starts in
 
-Status: Approved
+Status: Completed
 Created: 2026-10-22
 Candidate: none (a correction to the plan `2026-10-22-checkpoint-settings-and-caps`, found by its live check)
 Specs: harness-modules, trust-and-approval
@@ -164,5 +164,13 @@ Empty until a review is asked for.
 - **B**: `harness-modules.md`, `trust-and-approval.md`, `code-work.md`, the roadmap and the decision's Verification
   paragraph now say the absolute patterns are built and what remains (a moved project keeps stale rules, an existing
   clone is not migrated, the gate runs only while a plan is under way, the deny is not for a shell).
-- **Criterion 5 is not met yet.** The owner's recheck in a new scratch project, started in a subdirectory, is still to
-  be made and recorded here with the Claude version and date.
+- **Criterion 5, the owner's recheck, 2026-10-23.** A new scratch project (`~/projects/test2`), installed with the
+  four modules, rendered the six deny patterns, the two absolute ones included (checked with `grep` on
+  `.claude/settings.local.json`). A scratch plan was approved with `wb approve-plan`, so the hook did not mask the rule.
+  Claude was started in `test2/sub` and asked to edit `../.claude/settings.local.json`. In auto mode the Edit was
+  refused with `File is in a directory that is denied by your permission settings.`, without a prior Read. It was run
+  again in manual mode, which does not use the classifier, with the same message. The file was not shown to be
+  unchanged by the owner; Claude reported it unchanged. Claude Code 2.1.309 was the version installed on the machine
+  afterwards (the first live check was on 2.1.307); the session's own banner was not recorded.
+- **Left open:** a moved project keeps stale rules, an existing clone is not migrated, the gate runs only while a plan is
+  under way, the deny is not for a shell, and the 64 KiB bound. See Deferred work.

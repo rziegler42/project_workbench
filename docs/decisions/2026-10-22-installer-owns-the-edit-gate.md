@@ -47,8 +47,8 @@ that evidence.
 The owner's live check was made on 2026-10-22 with Claude Code 2.1.307: the rendered hook blocked `Write`, `Edit` and
 `NotebookEdit` with exit 2 while a plan was not approved and allowed a `Write` after approval. It found one gap, in the
 deny on the rendered settings file, which did not hold from a subdirectory; plan
-`2026-10-22-absolute-settings-deny` renders the absolute patterns as well, and the owner's recheck of that is pending.
-It is recorded in `docs/specs/harness-modules.md`.
+`2026-10-22-absolute-settings-deny` renders the absolute patterns as well, and the owner's recheck on 2026-10-23 (Claude Code 2.1.309) showed the permission
+rule refusing the edit from a subdirectory. It is recorded in `docs/specs/harness-modules.md`.
 
 Built, by increments B to G: the declaration fields and the `caps` setting, `wb settings`, `code-work active`, the
 gate (`workbench/gate_hook.py`, with a total deadline of 10 seconds and refusal on any doubt, and with links followed
