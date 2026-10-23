@@ -1,6 +1,6 @@
 # Apply the edit gate's 64 KiB input bound only while a plan is under way
 
-Status: Approved
+Status: Completed
 Created: 2026-10-23
 Candidate: none (a change the owner chose to a limit recorded in the plan `2026-10-22-checkpoint-settings-and-caps`)
 Specs: trust-and-approval
@@ -135,4 +135,19 @@ Empty until a review is asked for.
 
 ## Result
 
-Empty until work starts.
+Done on 2026-10-23.
+
+- Increment A (`4cfe623`): `workbench/gate_hook.py` reads at most `MAX_TRANSPORT` (16 MiB) and refuses more in every
+  state. The 65,536 byte bound is checked in `decide` only after `active` reports a plan under way. New tests in
+  `tests/test_gate_hook.py` failed before the change and pass after it.
+- Increment B: `trust-and-approval.md` ("`wb gate <harness>`" and "Limits") now says this, and the sentence that
+  called skipping the bound "the owner's call" is gone. A search of `docs` finds no current document that says the
+  bound applies with no plan under way; older plans keep their own wording as history.
+- Verification: `python3 -B -W error tests/run_all.py` ran 3087 tests in 6 roots, OK (installer 2337 with 1
+  skipped, ask-codex 90, claude 32 with no skips, code-work 220 with 2 skipped, groundwork 178, safe-git 230);
+  `doccheck`, `refcheck` and `git diff --check` print nothing. Nothing under `packages/` changed, so no approval
+  release was needed.
+- Not explained: the gate test module stalled once, around its 24th test, during increment A, and was stopped by
+  hand. Reruns of that module and of the full suite passed. The cause was not found; investigate if it recurs.
+- Not done: no live recheck and no independent security review of the read and parse path (both only if the owner
+  asks). Nothing is pushed.

@@ -429,7 +429,8 @@ in `module-contract.md`; the decision that the installer owns the gate is
   passing the path validator, none repeated. Anything else, a non-zero exit, a timeout or a `refused:` line is a
   failure of the helper. The output is data and is validated, never followed.
 - **`wb gate <harness>`** (the edit gate; the hook's command, `wb gate claude` for the Claude harness). It reads one JSON object from standard input,
-  at most 65,536 bytes, and decides one tool call. It prints nothing and exits 0 to allow, and prints one `refused:`
+  at most 16 MiB (16,777,216 bytes; more is a refusal), and decides one tool call. While a plan is under way the
+  object may be at most 65,536 bytes. It prints nothing and exits 0 to allow, and prints one `refused:`
   line on standard error and exits 2 to refuse. Every other outcome, a crash included, is a refusal. A total
   deadline of 10 seconds covers everything including the helper runs, and its expiry is a refusal. In order:
   1. The object must carry a string `cwd`, a string `tool_name` and an object `tool_input`. The project is found
@@ -459,10 +460,10 @@ in `module-contract.md`; the decision that the installer owns the gate is
   can edit it; a shell command writes any file without passing a file-editing tool; a plan that no listed
   status marks as under way is not seen; and the hook runs only where the owner's local settings carry it.
   `Bash` and commit-time gates are deferred (`2026-10-22-checkpoint-settings-and-caps`, "Deferred work").
-  Input of more than 65,536 bytes is refused before anything else is decided, so while the hook is installed it
-  refuses a `Write` of more than about 64 KiB even when no plan is under way. Skipping the bound when no plan is
-  under way would change this spec and is the owner's call. A harness that renders no hook, or whose layout
-  describes none, has no gate, and attach says so.
+  Input of more than 65,536 bytes is refused only once the `active` command has reported a plan under way, so a
+  `Write` of more than about 64 KiB is allowed when none is, and refused while one is. Input of more than 16 MiB is
+  refused in every state, so the read is always bounded; a `Write` of that size is refused with the hook installed.
+  A harness that renders no hook, or whose layout describes none, has no gate, and attach says so.
 - **As built.** `delegate` has no effect: every checkpoint stops. There is no project-level setting that lowers a
   cap; `code-work.md` says a project may lower and not raise, and that waits for a generic project setting the
   installer can read ("Deferred work" of the plan). Only the Claude harness renders a hook.
