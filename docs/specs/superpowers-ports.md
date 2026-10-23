@@ -1,7 +1,7 @@
 # superpowers-ports
 
-Status: Draft. Written by plan `2026-10-23-port-superpowers`, increment A. The placement rule (increment B) and the status
-column (increment G) are not yet final.
+Status: Draft. Written by plan `2026-10-23-port-superpowers`, increments A and B. The placement rule awaits the owner's
+acceptance of its decision record, and the status column is final at increment G.
 
 Terms are defined in `terms.md`. The neutral item format and its translation are in `harness-modules.md`; the modules
 that receive the ports are `code-work.md`, `groundwork.md` and `safe-git.md`.
@@ -116,10 +116,28 @@ only; it is not a line-by-line audit.
 
 ## Where a skill goes when it belongs in more than one module
 
-*(To be settled by increment B of the plan, with a decision record and a test.)* The fact it has to respect: a skill name is
-one path, so two modules that ship a skill of the same name make the whole attach fail. The inventory above gives each
-skill exactly one owner module; a practice with domain parts is recorded as **split**, the general part owned by `code-work`
-and the domain parts owned by the domain modules that do not exist yet.
+A skill name is one path in a harness, so two modules that ship a skill of the same name make the attach fail (the
+installer refuses a neutral path two modules both supply). The rule, proposed in
+`docs/decisions/2026-10-23-one-owner-per-skill-name.md` (Proposed until the owner accepts it):
+
+1. A skill, agent or command name has exactly one owner module, and no two first-party packages ship the same name.
+2. A practice that spans modules is **split** into separate skills with separate names. The general part goes to the module
+   every process shares (`code-work` for the first ports). A domain form is a different skill in the domain's module. It
+   names the general skill it extends and says its own rules take precedence in its domain; it does not copy the text.
+3. A module whose skill extends another module's skill `requires`, as hard, a capability the owner module provides: an
+   existing core name where one fits, otherwise a new core name that the first such domain module's plan adds to a
+   specification. Nothing is added until a domain module exists.
+4. The owner of each ported skill is the Owner column of the inventory; a test checks every row marked built.
+
+Two worked examples, both planned:
+
+- **Test first.** `test-first` is general and owned by `code-work`; its text names no language or runner and says the
+  plan's verification line gives the command. A hardware-description module would later ship a differently named skill, for
+  example one about writing the testbench first, that extends `test-first` and requires the capability `code-work`
+  provides.
+- **Verification.** `verify-before-claiming` is general and owned by `code-work`: run the command that shows the claim and
+  report what was run and not run. A domain module that has its own checks (a simulation, a proof, a model check) ships a
+  skill that says which runs count as evidence in that domain, and extends the general one.
 
 ## Acceptance criteria
 
@@ -127,6 +145,7 @@ and the domain parts owned by the domain modules that do not exist yet.
 2. Every row marked built names a skill that the owner module ships; every row marked planned is built by the plan
    `2026-10-23-port-superpowers` or is marked not ported or gap.
 3. Nothing in the spec points at the plugin's path or at `~/.claude` as a source for a requirement.
+4. No two first-party packages ship a skill, agent or command of the same name (`tests/test_skill_names.py`).
 
 ## Related
 
