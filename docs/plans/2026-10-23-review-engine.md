@@ -1,6 +1,6 @@
 # The review engine
 
-Status: Approved
+Status: Completed
 Created: 2026-10-23
 Candidate: workbench-v1#review-engine
 Specs: review-engine, model-bridge, module-contract, trust-and-approval, code-work
@@ -516,4 +516,29 @@ until E.
   32 with 12 skips, code-work 268 with 2 skips, groundwork 178, review-engine 283, safe-git 257); `doccheck`,
   `refcheck` and `git diff --check` print nothing (see the run below).
 
-Increment G: not started.
+### Increment G — Record, release and close
+
+- Specs: `review-engine.md` (status line, "As built" through G, the approval shipped, the result of the install check),
+  `trust-and-approval.md` (`peer-review` is provided and gives findings only; the delegated record is not built),
+  `code-work.md` (two lines), `model-bridge.md` (the review engine is the first engine to call the bridge), and a dated
+  note in the decision record's Verification list, leaving its body as written.
+- Approval: the owner said "Run it for me" and I ran `release-approvals`: 7 approvals for the package. Four stale
+  records were previewed and removed on "remove them". The suite then found one test in the `claude` package that
+  pinned the install order to five modules; I added `review-engine` to it, which changed the package hash, so
+  `release-approvals` ran a second time (on "run it for me") and two more stale records were removed on "remove them".
+  The `claude` root now runs its 12 tests that were skipped while its approvals were stale.
+- Full suite after the last change: 3468 tests in 7 roots, OK (installer 2360 with 1 skip, ask-codex 90, claude 32
+  with no skip, code-work 268 with 2 skips, groundwork 178, review-engine 283, safe-git 257). `doccheck`, `refcheck`
+  and `git diff --check` print nothing.
+- Real install, run by the owner in a scratch project (modules `review-engine`, `ask-codex`, `claude`): `install`,
+  `init` and `status` of a review, `check`, `preview upgrade`, `upgrade`. The review stayed `ok` and its `state.json`
+  kept the same hash. Finding: the installer treats the review's two files as changes made by others, so
+  `preview upgrade` was refused until `wb acknowledge`; this is recorded in the spec's limits. The upgrade was a no-op
+  (the package had not changed), so a changed package version over an existing review was not tried.
+- No real vendor, sign-in or live session was used anywhere: every round ran against a fake vendor program. A hand run
+  against a real Codex is not done. The engine's package approval and the installer's plan checks are shown; the
+  security pass of C and D and the one of E and F found nothing critical or high, and their fixes have had no
+  independent review.
+- Open for the owner: push (the commits are local), `ask-codex archive` for this plan's review, whether `decide` should
+  be owner-run, and the places where the spec is narrower than the plan (no default bridge; the prompt names the
+  document and does not embed it).

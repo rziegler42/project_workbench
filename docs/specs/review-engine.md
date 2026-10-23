@@ -2,7 +2,7 @@
 
 Status: Draft. Written by plan `2026-10-23-review-engine` (increment A), before the module exists, so that the module is
 built against this text. The state layer, `init`, `status`, the round, the decisions and owner commands, the setting and the skill are built
-(increments C to F); "As built, and its limits" says what each is and where it is narrower than this text.
+(increments C to F), and increment G records them; "As built, and its limits" says what each is and where it is narrower than this text.
 The capability name `peer-review` is the accepted one (`2026-10-19-mandatory-review-personal-delegation`).
 
 Terms are in `terms.md`. The declaration is defined in `module-contract.md`; the launcher, the kit and the rule for a
@@ -277,11 +277,11 @@ The module conforms when tests against a fake bridge, installed as a real pinned
 
 ## As built, and its limits
 
-Built by plan `2026-10-23-review-engine`, increments C to F (the module `review-engine`, version 0.1.0):
+Built by plan `2026-10-23-review-engine`, increments C to G (the module `review-engine`, version 0.1.0):
 
 - The declaration provides `peer-review`, requires `model-bridge` (hard) and declares the command `review-engine` with
   the twelve arguments of "The commands" and the `owner` list `amend`, `extend`, `reset`, `archive`, `prune`. It ships
-  the neutral skill `peer-review`. The package has no shipped approval until the plan's last increment.
+  the neutral skill `peer-review`. The package approval is shipped (`workbench/shipped_approvals/`), released by the owner at increment G.
 - Document resolution for the four kinds, the key and the directory name, the state file and its checks, the seal, the
   key and the mark in the guarded store, the lock, atomic writes and the ledger are built as stated above.
 - `init <document>` makes an empty review (a window of 3 rounds) and prints its status; it refuses a review that
@@ -380,5 +380,7 @@ Limits found while building:
 - The module is named `review-engine`, not `review`: the installer's boundary test refuses any module, command or helper
   name as a substring in `workbench/` and `tests/`, and `review` is an ordinary word there.
 - A review's directory is inside the module's namespace, `.workbench/workbench/review-engine/`, beside the installed
-  helper. Whether an upgrade or `wb check` leaves a file there alone is checked when the package is installed (the
-  plan's last increment).
+  helper. Checked by hand on a real install (the owner ran it, 2026-10-23): an `upgrade` and `wb check` leave a
+  review's files alone and a review stays `ok` and byte for byte the same. The installer counts the files of a new
+  or changed review as changes made by others, so the next `upgrade` is refused until the owner runs `wb acknowledge`.
+  The same applies after every round or decision.

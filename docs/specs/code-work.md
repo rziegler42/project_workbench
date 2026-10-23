@@ -153,7 +153,7 @@ case or indentation, so that text a reader could take for another section is alw
 plan with a duplicated left-out heading, with no single status line (of at most 200 characters) before its first heading, with a fence or
 comment that is never closed, or that is not UTF-8, larger than the check reads or not directly in
 `docs/plans/`, is refused rather than guessed. The owner approves with `wb approve-plan <plan>`; an agent reads `wb plan-status <plan>`; the delegated
-record waits for a `peer-review` provider.
+record is not built. A `peer-review` provider now exists (`review-engine.md`) and gives findings only.
 
 ### Completion
 
@@ -210,7 +210,7 @@ step without a recorded outcome.
   findings. It may give the verdict only when the owner has delegated that checkpoint
   and the provider is installed and approved.
 - Without an installed provider, the owner reviews, or the run stops. The first-party provider is the review engine
-  (`review-engine.md`).
+  (`review-engine.md`, built: the module `review-engine` gives findings and records no verdict).
 - A plan review checks the plan against its candidate and its specs. Drift from
   either is a finding.
 - The outcome is written to the plan's review record: the reviewer, the model, the

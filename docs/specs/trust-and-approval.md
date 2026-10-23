@@ -158,7 +158,10 @@ A new teammate with no settings gets `stop` for every checkpoint.
 
 - A delegate may issue the verdict for a checkpoint only when the personal setting
   for that checkpoint is `delegate` and the `peer-review` capability is provided
-  by an installed, approved module.
+  by an installed, approved module. The first-party provider is the module
+  `review-engine` (`review-engine.md`). It gives findings only: it records no
+  verdict and no delegated approval, and nothing in it asks for one. The delegated
+  record is not built.
 - A reviewer may always give findings without delegation. The verdict is the part
   that needs authority.
 - For plan approval, the delegate's verdict requires that review converged with no

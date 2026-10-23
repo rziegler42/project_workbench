@@ -209,6 +209,10 @@ the checklist against a fake `codex` program, and a synthetic engine in its test
 `wb run --provides model-bridge`. An independent security pass and a workflow review of the plan found no Critical
 or High finding; the fixes carry regression tests and were not reviewed a second time.
 
+The first engine to call it is the review engine (`review-engine.md`, plan `2026-10-23-review-engine`). It runs a
+bridge only through `wbkit.call.run_command` with `provides` `model-bridge`, names the bridge from the project's
+setting and tries no other. It was tested against this bridge and a fake vendor program, not a real vendor.
+
 How it meets the contract:
 
 - **The command line.** `codex exec --sandbox read-only --ephemeral --ignore-user-config --ignore-rules --color

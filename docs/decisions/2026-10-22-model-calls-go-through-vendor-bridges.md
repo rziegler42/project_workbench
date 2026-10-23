@@ -171,6 +171,11 @@ installer naming no engine or bridge.
 - **The engines' project setting and the owner's personal setting (decision 5):** not yet.
 - **A second vendor (`ask-claude`, `ask-gemini`):** not yet.
 
+Note, 2026-10-23 (plan `2026-10-23-review-engine`): the review engine of decision 3 is built as the module
+`review-engine` (`docs/specs/review-engine.md`). It passes its checklist against the first-party bridge and a fake
+vendor program, and refuses a bridge that is not installed, pinned or a `model-bridge`. It has not been run against a
+real vendor or a live session. The entry for the engine above is left as written.
+
 ## Related files and decisions
 
 - `docs/specs/code-work.md`, `docs/specs/trust-and-approval.md`, `docs/specs/module-boundary.md`,
