@@ -74,7 +74,7 @@ class Declaration(unittest.TestCase):
 
     def test_the_command_takes_the_four_reads_as_its_first_argument_and_no_change(self):
         command = declaration()["commands"]["code-work"]
-        self.assertEqual(["check", "plans", "report", "region", "active"], command["arguments"])
+        self.assertEqual(["check", "plans", "report", "region", "active", "shared"], command["arguments"])
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
 
     def test_it_declares_the_region_and_the_active_listing_as_its_approval_command(self):

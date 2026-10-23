@@ -28,7 +28,8 @@
         "plans",
         "report",
         "region",
-        "active"
+        "active",
+        "shared"
       ]
     }
   },

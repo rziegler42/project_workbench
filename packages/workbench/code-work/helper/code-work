@@ -2,7 +2,7 @@
 """The code-work helper: reads a project's plans and says what is wrong with them.
 
 It is one file that imports only the standard library; the launcher runs a private copy of it through the
-kit runner with nothing beside it. Its five subcommands change nothing, take no lock, run no program and
+kit runner with nothing beside it. Its six subcommands change nothing, take no lock, run no program and
 follow no link. Commits and removals are the ``safe-git`` module's.
 
     code-work check      report problems with the plans in docs/plans/ (exit 1 if there is one)
@@ -14,6 +14,8 @@ follow no link. Commits and removals are the ``safe-git`` module's.
                          it, as one JSON object (the installer's approval command reads it)
     code-work active     print the plans that are Approved or In Progress, as one JSON object (the
                          installer's edit gate reads it)
+    code-work shared     print the branches `.workbench/shared-branches.json` declares as shared, as one
+                         JSON object
 
 The rules are in ``docs/specs/code-work.md`` and in the README the module writes into
 ``docs/plans/``. Everything read is untrusted repository content: the number of files, the bytes in
@@ -44,6 +46,10 @@ MAX_ACTIVE = 32
 MAX_ACTIVE_PATH = 240
 MAX_CANDIDATES = 2000
 MAX_DEPTH = 64
+SHARED = ".workbench/shared-branches.json"
+MAX_SHARED_FILE = 8192
+MAX_SHARED = 64
+MAX_BRANCH = 200
 WARN_INCREMENTS = 15
 LIMIT_INCREMENTS = 26
 
@@ -811,7 +817,77 @@ def command_active(root, out, err):
     return 0
 
 
-COMMANDS = {"check": command_check, "plans": command_plans, "report": command_report, "active": command_active}
+_BRANCH_NAME = re.compile(r"\A[A-Za-z0-9._][A-Za-z0-9._/-]*\Z")
+
+
+def _branch_name(name):
+    """Whether `name` is a plain branch name of ASCII letters, digits and . _ - / that git would accept."""
+    return (type(name) is str and len(name) <= MAX_BRANCH and _BRANCH_NAME.match(name) is not None
+            and ".." not in name and "//" not in name and not name.endswith(("/", "."))
+            and all(not part.startswith(".") and not part.endswith(".lock") for part in name.split("/")))
+
+
+def _no_repeat(pairs):
+    keys = [key for key, _ in pairs]
+    if len(set(keys)) != len(keys):
+        raise ValueError("a key appears more than once")
+    return dict(pairs)
+
+
+def _no_constant(name):
+    raise ValueError("%s is not allowed" % name)
+
+
+def command_shared(root, out, err):
+    """The shared branches the project declares, as ``{"format": 1, "shared": [name, ...]}`` in file order. No
+    file is an empty list. The answer is read as the branches a push stops for, so whatever is not exactly
+    ``{"format": 1, "shared": [<branch name>, ...]}`` is refused, never partly read: a link or another kind of file,
+    one over the bound, text that is not UTF-8 JSON, a repeated key, an extra key, more than the bound of names,
+    a name that is not a plain branch name and a repeated name."""
+    label = shown(SHARED)
+    try:
+        root_fd = os.open(root, _DIR)
+        try:
+            folder = open_dir(root_fd, os.path.dirname(SHARED))
+            if folder is None:
+                return _write_shared([], out)
+            try:
+                data, size = read_file(folder, os.path.basename(SHARED), MAX_SHARED_FILE)
+            except FileNotFoundError:
+                return _write_shared([], out)
+            finally:
+                os.close(folder)
+        finally:
+            os.close(root_fd)
+    except OSError as exc:
+        raise Refused("%s cannot be read: %s" % (label, shown(exc.strerror or exc)))
+    if size > MAX_SHARED_FILE:
+        raise Refused("%s is larger than the %d bytes that are read" % (label, MAX_SHARED_FILE))
+    try:
+        value = json.loads(data.decode("utf-8"), object_pairs_hook=_no_repeat, parse_constant=_no_constant)
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
+        raise Refused("%s is not valid JSON text: %s" % (label, shown(exc, 80)))
+    if type(value) is not dict or set(value) != {"format", "shared"} or type(value["format"]) is not int \
+            or value["format"] != 1 or type(value["shared"]) is not list:
+        raise Refused('%s must be {"format": 1, "shared": [<branch name>, ...]}' % label)
+    names = value["shared"]
+    if len(names) > MAX_SHARED:
+        raise Refused("%s names more than %d branches" % (label, MAX_SHARED))
+    for name in names:
+        if not _branch_name(name):
+            raise Refused("%s holds a name that is not a plain branch name: %s" % (label, shown(name, 60)))
+    if len(set(names)) != len(names):
+        raise Refused("%s names a branch more than once" % label)
+    return _write_shared(names, out)
+
+
+def _write_shared(names, out):
+    out.write(json.dumps({"format": 1, "shared": names}) + "\n")
+    return 0
+
+
+COMMANDS = {"check": command_check, "plans": command_plans, "report": command_report, "active": command_active,
+            "shared": command_shared}
 
 
 def main(argv, out, err, cwd):

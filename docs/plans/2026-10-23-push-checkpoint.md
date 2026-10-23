@@ -314,4 +314,22 @@ Increment A, 2026-10-23: `wb run safe-git push-check` is built in `packages/work
 - Not done: no independent review beyond the security review above, no live session; the package approvals are stale
   until the owner's release in increment D; the same submodule exposure may exist in `commit`'s reads (not tested).
 
-Increments B, C and D: not started.
+Increment B, 2026-10-23: `wb run code-work shared` is built in `packages/workbench/code-work/helper/code-work`
+(`command_shared`) with 20 new tests in `test_codework_shared.py`, and `shared` is in the module's `arguments`.
+
+- Verification as run: the new tests failed first (the command did not exist), then passed. The `code-work` suite then
+  ran 255 tests, OK, 2 skipped as before; `tests.test_boundary` ran 19 tests, OK; `git diff --check` prints nothing.
+  The existing source tests (standard library imports only, no git code, no program, no write) cover the new code
+  because they read the whole helper file; the helper's imports are unchanged. The full suite was not run: the
+  `code-work` approvals are stale until increment D.
+- What it does: reads `.workbench/shared-branches.json` without following a link (a missing file is an empty list)
+  and prints `{"format": 1, "shared": [...]}` in file order. It refuses, never partly reads, a link or other kind of
+  file, a file over 8192 bytes, text that is not UTF-8 JSON, a repeated key, NaN, an extra or missing key, a
+  `format` that is not the integer 1, more than 64 names, a name that is not a plain branch name (ASCII, at most
+  200 bytes, git's own rules for `..`, `//`, a leading dot, a trailing dot or slash and `.lock`) and a repeated
+  name.
+- Limits: it reads only the committed file as it is; it does not compare it with an earlier version (choice 2); it
+  does not know the default branch, which `push-check` reports.
+- Not done: no review and no security pass on this increment (only if the owner asks); not run in a live session.
+
+Increments C and D: not started.
