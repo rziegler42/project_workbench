@@ -326,4 +326,20 @@ The review is not an approval; the plan stays `Proposed` until the owner approve
 
 ## Result
 
-Not started.
+### Increment A — Specification and decision record
+
+- Committed as `c73837d`, trailer `Plan: 2026-10-23-delegated-approval#A`. Documents only; no package changed, so no
+  approval is stale.
+- Written: the decision record `2026-10-23-delegated-plan-approval`, reviewed in three rounds of `ask-codex review-adr`
+  (four findings, all applied; the third round's fix was not re-checked, the bound being used) and accepted by the owner
+  on 2026-10-23; the spec sections in `trust-and-approval.md` ("Delegated plan approval records"), `code-work.md`
+  (delegability, the writer's move to the installer), `review-engine.md` ("Convergence"), `module-contract.md` (the
+  fields `approval.delegable` and `convergence`) and `installer-interface.md` (the command); the decisions index.
+- Plan edits made at the owner's approval during A: increment C's marker (`Hard stop:`) replaces a keyword list, choice
+  6 states the `wb settings` output change, and choice 8, criterion 5 and increment D's tests add the rule that a
+  delegated entry counts only while the setting reads `delegate` (the provider-drift risk is accepted).
+- Wording found by review and corrected in the specs: the review engine records the reviewer's verdict and its reading
+  as data and records no approval; a module writes to the store (the review engine's key, marks and lock) but never a
+  plan approval record. The Goal above still says "records no verdict" and was not reworded.
+- Not done: any code. The ADR review is not archived (owner's `ask-codex archive`). No security pass yet (increment F).
+- Next: increment B, the review engine's `convergence` argument, when the owner says "start".
