@@ -39,6 +39,9 @@ approval    process modules only: ``{"command", "argument"}``, the key of one of
             another of that command's arguments. It names the command the installer runs to
             learn a plan's hashed region and, with ``active``, the plans under way
             (``trust-and-approval.md``).
+convergence a module that provides ``peer-review``: ``{"command", "argument"}``, the key of one of the
+            module's ``commands`` and one of that command's ``arguments``. It names the argument that
+            reports whether the last review of a plan converged (``trust-and-approval.md``).
 checkpoints process modules only: a list of at most ``MAX_CHECKPOINTS`` checkpoint names, each
             lowercase kebab-case of at most 64 characters, none repeated.
 caps        process modules only: a list of at most ``MAX_CAPS`` objects ``{"name", "default",
@@ -49,7 +52,7 @@ layout      present exactly for a harness module: an object whose keys come from
             that belongs to the harness specification.
 
 Optional fields (``type``, ``provides``, ``requires``, ``blocks``, ``helpers``,
-``slots``, ``fills``, ``writes``, ``ships``, ``commands``, ``checks``, ``approval``, ``checkpoints``,
+``slots``, ``fills``, ``writes``, ``ships``, ``commands``, ``checks``, ``approval``, ``convergence``, ``checkpoints``,
 ``caps``) default to ``module`` and empty. The
 declaration hash covers the declaration as written, never the defaults.
 
@@ -78,7 +81,7 @@ LAYOUT_KEYS = ("root", "kinds", "local_settings", "hooks", "exclude", "tolerated
 PACKAGE_FIELDS = ("name", "version", "contract", "modules")
 MODULE_FIELDS = ("name", "version", "type", "description", "provides", "requires", "blocks",
                  "helpers", "slots", "fills", "writes", "ships", "commands", "checks", "approval", "checkpoints",
-                 "caps", "layout")
+                 "caps", "layout", "convergence")
 
 _NAME = re.compile(r"^[a-z][a-z0-9-]*\Z")
 _VERSION = re.compile(r"^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){0,3}\Z")
@@ -99,8 +102,8 @@ RUNTIMES = ("python", "exec")
 Package = collections.namedtuple("Package", "name version contract modules declaration")
 Module = collections.namedtuple(
     "Module", "name version type description provides requires blocks helpers slots fills "
-              "writes ships commands checks layout declaration approval checkpoints caps",
-    defaults=(None, (), ()))
+              "writes ships commands checks layout declaration approval checkpoints caps convergence",
+    defaults=(None, (), (), None))
 Command = collections.namedtuple("Command", "name helper runtime kit arguments owner", defaults=((),))
 Cap = collections.namedtuple("Cap", "name default ceiling")
 
@@ -386,6 +389,22 @@ def _approval(check, value, mtype, commands):
     return approval
 
 
+def _convergence(check, value, provides, commands):
+    """The ``convergence`` field as ``{"command", "argument"}``, or a refusal naming the field."""
+    if "peer-review" not in provides:
+        check.fail("convergence", "only a module that provides peer-review declares a convergence argument")
+    check.exact_keys(value, "convergence", ("command", "argument"))
+    command, argument = value["command"], value["argument"]
+    if not isinstance(command, str) or not isinstance(argument, str):
+        check.fail("convergence", "'command' and 'argument' must be strings")
+    found = {c.name: c for c in commands}.get(command)
+    if found is None:
+        check.fail("convergence", "the command %s is not one of this module's commands" % _shown(command))
+    if argument not in found.arguments:
+        check.fail("convergence", "%s is not an argument of the command %s" % (_shown(argument), _shown(command)))
+    return {"command": command, "argument": argument}
+
+
 def _owned_name(check, value, field, what):
     """A checkpoint or cap name: the form the personal settings accept."""
     if not isinstance(value, str) or len(value) > MAX_NAME_CHARS or not _NAME.match(value):
@@ -543,6 +562,8 @@ def parse_module(data, package_name, expected_name, first_party=False):
     commands = _commands(check, declaration.get("commands", {}), ships)
     checks = _checks(check, declaration.get("checks", []), ships, commands)
     approval = _approval(check, declaration["approval"], mtype, commands) if "approval" in declaration else None
+    convergence = (_convergence(check, declaration["convergence"], provides, commands)
+                   if "convergence" in declaration else None)
     checkpoints = _checkpoints(check, declaration["checkpoints"], mtype) if "checkpoints" in declaration else ()
     caps = _caps(check, declaration["caps"], mtype) if "caps" in declaration else ()
 
@@ -561,7 +582,8 @@ def parse_module(data, package_name, expected_name, first_party=False):
 
     return Module(name, version, mtype, description, tuple(provides), tuple(requires),
                   tuple(blocks), tuple(helpers), tuple(slots), tuple(fills), tuple(writes),
-                  tuple(ships), commands, checks, layout, declaration, approval, checkpoints, caps)
+                  tuple(ships), commands, checks, layout, declaration, approval, checkpoints, caps,
+                  convergence)
 
 
 # --- from a directory ------------------------------------------------------------------------

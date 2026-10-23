@@ -636,6 +636,63 @@ class ModuleTest(unittest.TestCase):
             with self.subTest(label):
                 self.assertNotEqual(base, hashing.declaration_hash(module(**self.declared(**changes))))
 
+    def provider(self, **changes):
+        """A first-party module that provides `peer-review` with one command whose arguments name `convergence`."""
+        fields = dict(provides=["peer-review"], ships=["scripts/check.sh"],
+                      commands={"review": {"helper": "scripts/check.sh", "arguments": ["status", "convergence"]}},
+                      convergence={"command": "review", "argument": "convergence"})
+        fields.update(changes)
+        return fields
+
+    def test_a_provider_may_declare_the_convergence_argument(self):
+        got = self.parse(module(**self.provider()), first_party=True)
+        self.assertEqual({"command": "review", "argument": "convergence"}, got.convergence)
+
+    def test_a_module_without_convergence_has_none(self):
+        self.assertIsNone(self.parse(module()).convergence)
+        self.assertIsNone(self.parse(module(**self.provider(convergence=DELETE)), first_party=True).convergence)
+        self.assertIsNone(self.parse(module(**self.process())).convergence)
+
+    def test_convergence_refusals(self):
+        cases = {
+            "not an object": [],
+            "a string": "review",
+            "null": None,
+            "empty": {},
+            "no argument": {"command": "review"},
+            "no command": {"argument": "convergence"},
+            "an unknown key": {"command": "review", "argument": "convergence", "plan": "x"},
+            "command not a string": {"command": 1, "argument": "convergence"},
+            "argument not a string": {"command": "review", "argument": 1},
+            "a command the module does not declare": {"command": "other", "argument": "convergence"},
+            "a command differing in case": {"command": "Review", "argument": "convergence"},
+            "an argument the command does not list": {"command": "review", "argument": "evil"},
+            "an empty argument": {"command": "review", "argument": ""},
+            "an argument differing in case": {"command": "review", "argument": "Convergence"},
+        }
+        for label, convergence in cases.items():
+            with self.subTest(label):
+                self.refused("convergence", first_party=True, **self.provider(convergence=convergence))
+
+    def test_convergence_is_refused_on_a_module_that_does_not_provide_peer_review(self):
+        convergence = {"command": "review", "argument": "convergence"}
+        self.refused("convergence", **self.provider(provides=["sample:notes"]))
+        self.refused("convergence", **self.provider(provides=DELETE))
+        self.refused("convergence", **self.provider(provides=["sample:peer-review"]))
+        self.refused("convergence", **self.process(
+            commands={"review": {"helper": "scripts/check.sh", "arguments": ["status", "convergence"]}},
+            convergence=convergence))
+        decl = copy.deepcopy(HARNESS)
+        decl["convergence"] = convergence
+        with self.assertRaises(d.DeclarationError) as ctx:
+            self.parse(decl)
+        self.assertEqual("convergence", ctx.exception.rule)
+
+    def test_convergence_is_part_of_the_declaration_hash(self):
+        plain = hashing.declaration_hash(module(**self.provider(convergence=DELETE)))
+        declared = hashing.declaration_hash(module(**self.provider()))
+        self.assertNotEqual(plain, declared)
+
     def test_writes_path_rules(self):
         bad = ["/etc/passwd", "../x", "a/../../x", "a\\b", "C:/x", ".git/config", ".GIT/config",
                ".git./config", "GIT~1/config", "a/.git/x", "link/../x", ".config/project-workbench/s",

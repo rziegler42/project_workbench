@@ -5,6 +5,8 @@ It is one file that imports the standard library and the workbench kit (``wbkit`
 private copy of it through the kit runner with nothing beside it.
 
     review-engine status <document>      show a review
+    review-engine convergence <document> say whether the last review of a plan converged (read-only; the
+                                         installer asks it for a delegated plan approval)
     review-engine init <document>        make an empty review; no model is asked
     review-engine review-plan|review-spec|review-roadmap|review-adr <document>
                                          run one round: ask a model, through the bridge the project names,
@@ -52,7 +54,8 @@ CEILING = 5
 KEY_BYTES = 32
 NAMESPACE = ".workbench/workbench/review-engine"
 STORE_NAME = "review-engine"
-USAGE = ("usage: review-engine status|init|review-plan|review-spec|review-roadmap|review-adr|reset|archive <document>, "
+USAGE = ("usage: review-engine status|init|convergence|review-plan|review-spec|review-roadmap|review-adr|reset|archive "
+         "<document>, "
          "decide|amend <document> <finding> applied|rejected [--reason <text>], extend <document> <1 to 5>, "
          "or prune [--apply]")
 FIELDS = {"format", "kind", "path", "window", "rounds", "decisions", "closed", "generation", "seal"}
@@ -1118,6 +1121,36 @@ def request_standing(root, state):
     return "same" if asked == (setting.bridge, setting.model, setting.effort) else "changed"
 
 
+def convergence(root, project_id, argument, out):
+    """What the installer's delegated plan approval asks of a review (`docs/specs/review-engine.md`, "Convergence"):
+    whether the last round of the plan's review converged, with the hash of the file that round read. It is read
+    from the sealed state alone and writes nothing; a plan with no review, a review that is not sealed here, or one
+    with no round in its window is refused, and nothing is printed that the state does not say."""
+    document = resolve(root, argument, "plan")
+    loaded = load(root, Guarded(project_id), document)
+    if loaded is None:
+        raise Refused("there is no review of %s (init makes one)" % shown(document.path))
+    if loaded.state is None or loaded.seal != "ok":
+        raise Refused("the review of %s is %s (%s) and gives no convergence" % (
+            shown(document.path), standing(loaded), loaded.reason))
+    state = loaded.state
+    window = state["window"]
+    used = len(state["rounds"]) - (window["first"] - 1)
+    if used < 1:
+        raise Refused("the review of %s has no round in this window and gives no convergence" % shown(document.path))
+    if used > CEILING:
+        raise Refused("the review of %s has more rounds than any window holds" % shown(document.path))
+    last = state["rounds"][-1]
+    model = plain(last["model"])[:200] or None if last["model"] is not None else None
+    clean = last["verdict"] == last["reading"] == "no_meaningful_changes" and not any(
+        item["severity"] in MEANINGFUL for item in last["findings"])
+    return emit(out, {"format": FORMAT, "kind": document.kind, "converged": clean and not pending(state)
+                      and used <= window["bound"], "document_sha256": last["document_sha256"],
+                      "rounds_used": used, "bound": window["bound"], "bridge": last["bridge"],
+                      "model": model,
+                      "review": document.key, "closed": state["closed"] is not None})
+
+
 def emit(out, found):
     out.write(json.dumps(found, sort_keys=True) + "\n")
     return 0
@@ -1131,7 +1164,7 @@ def run(argv, cwd, out):
         fits = len(argv) == 4 or (len(argv) == 6 and argv[4] == "--reason")
     elif command == "extend":
         fits = len(argv) == 3
-    elif command in ("status", "init", "reset", "archive") or command in ROUND_COMMANDS:
+    elif command in ("status", "init", "convergence", "reset", "archive") or command in ROUND_COMMANDS:
         fits = len(argv) == 2
     else:
         fits = False
@@ -1144,6 +1177,8 @@ def run(argv, cwd, out):
         raise Refused(shown(exc))
     if command in ROUND_COMMANDS:
         return run_round(root, project_id, ROUND_COMMANDS[command], argv[1], out)
+    if command == "convergence":
+        return convergence(root, project_id, argv[1], out)
     commands = {"decide": decide, "amend": decide, "extend": extend, "reset": reset, "archive": archive,
                 "prune": prune}
     if command in commands:

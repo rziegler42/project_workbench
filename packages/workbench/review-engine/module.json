@@ -29,7 +29,8 @@
         "extend",
         "reset",
         "archive",
-        "prune"
+        "prune",
+        "convergence"
       ],
       "owner": [
         "amend",
@@ -39,5 +40,9 @@
         "prune"
       ]
     }
+  },
+  "convergence": {
+    "command": "review-engine",
+    "argument": "convergence"
   }
 }

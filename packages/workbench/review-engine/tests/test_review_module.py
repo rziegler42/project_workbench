@@ -60,11 +60,11 @@ class Declaration(unittest.TestCase):
         for field in ("writes", "fills", "checks", "helpers", "blocks", "slots", "layout"):
             self.assertNotIn(field, document)
 
-    def test_the_command_has_its_own_name_and_the_twelve_arguments(self):
+    def test_the_command_has_its_own_name_and_the_thirteen_arguments(self):
         self.assertEqual(["review-engine"], list(declaration()["commands"]))
         command = declaration()["commands"]["review-engine"]
         self.assertEqual(["status", "init", "review-plan", "review-spec", "review-roadmap", "review-adr", "decide",
-                          "amend", "extend", "reset", "archive", "prune"], command["arguments"])
+                          "amend", "extend", "reset", "archive", "prune", "convergence"], command["arguments"])
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
 
     def test_amend_extend_reset_archive_and_prune_are_owner_run_and_the_others_are_not(self):
@@ -73,11 +73,19 @@ class Declaration(unittest.TestCase):
         parsed = d.parse_module(json.dumps(declaration()).encode("utf-8"), "workbench", "review-engine", first_party=True).commands[0]
         self.assertEqual(("amend", "extend", "reset", "archive", "prune"), parsed.owner)
 
+    def test_it_declares_the_convergence_argument_for_the_installer_and_an_agent_may_run_it(self):
+        self.assertEqual({"command": "review-engine", "argument": "convergence"}, declaration()["convergence"])
+        parsed = d.parse_module(json.dumps(declaration()).encode("utf-8"), "workbench", "review-engine", first_party=True)
+        self.assertEqual({"command": "review-engine", "argument": "convergence"}, parsed.convergence)
+        self.assertNotIn("convergence", parsed.commands[0].owner)
+        self.assertIn("convergence", parsed.commands[0].arguments)
+
     def test_the_installer_denies_each_owner_argument_and_none_of_the_others(self):
         patterns = " ".join(rules.command_owner_patterns("review-engine", ("amend", "extend", "reset", "archive", "prune")))
         for argument in ("amend", "extend", "reset", "archive", "prune"):
             self.assertIn("run review-engine %s" % argument, patterns)
-        for argument in ("status", "init", "review-plan", "review-spec", "review-roadmap", "review-adr", "decide"):
+        for argument in ("status", "init", "review-plan", "review-spec", "review-roadmap", "review-adr", "decide",
+                         "convergence"):
             self.assertNotIn("review-engine %s" % argument, patterns)
 
     def test_every_file_is_the_declaration_the_helper_or_the_skill(self):
@@ -154,6 +162,8 @@ class Skill(unittest.TestCase):
         text = skill_text()
         mentioned = set(re.findall(r"`([a-z-]+)`", text)) | set(re.findall(r"review-engine ([a-z-]+)", text))
         for argument in declaration()["commands"]["review-engine"]["arguments"]:
+            if argument == "convergence":
+                continue   # the installer asks it for a delegated plan approval; the skill's guidance is increment E
             self.assertIn(argument, mentioned, argument)
 
 

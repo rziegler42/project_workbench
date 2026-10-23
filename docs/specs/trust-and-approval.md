@@ -452,7 +452,7 @@ owner accepted on 2026-10-23; nothing here is built yet.)*
     false, "document_sha256": "<64 lowercase hex>", "rounds_used": <1 to 5>, "bound": <1 to 5>, "bridge": "<name of at
     most 64 characters>", "model": "<at most 200 printable characters>" | null, "review": "plan-<16 lowercase hex>",
     "closed": true | false}`. The provider reads its own sealed state and refuses with a `refused:` line when the
-    review is missing, unsealed, rolled back or unreadable, or is not of a plan. `converged` is true only when the last
+    review is missing, unsealed, rolled back or unreadable, has no round in its current window, or is not of a plan. `converged` is true only when the last
     round has no `blocker` or `major` finding, no meaningful finding of the window has no decision, the reviewer's
     verdict and the provider's reading both say no meaningful changes, and the rounds used do not exceed the bound.
     A rejected finding does not make a review converge, because the last round must itself be clean. A closed

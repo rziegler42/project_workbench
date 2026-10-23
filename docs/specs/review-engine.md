@@ -37,9 +37,11 @@ Non-goals:
 | ships | `helper/review-engine` and the neutral skill `peer-review` |
 | commands | `review-engine`, with `helper` `helper/review-engine`, `runtime` `python`, `kit` 1 and the first `arguments` below |
 | owner-run arguments | `amend`, `extend`, `reset`, `archive`, `prune` (see "Owner-run commands") |
+| convergence | `{"command": "review-engine", "argument": "convergence"}`, the argument the installer asks for a delegated plan approval (see "Convergence") |
 
-The first arguments are `status`, `init`, `review-plan`, `review-spec`, `review-roadmap`, `review-adr`, `decide`,
-`amend`, `extend`, `reset`, `archive` and `prune`. The engine is run as `wb run review-engine <argument> [...]`.
+The arguments are `status`, `init`, `review-plan`, `review-spec`, `review-roadmap`, `review-adr`, `decide`,
+`amend`, `extend`, `reset`, `archive`, `prune` and `convergence`. The engine is run as
+`wb run review-engine <argument> [...]`.
 
 ## The commands
 
@@ -59,7 +61,7 @@ directory, and none changes the reviewed document.
 | `reset <document>` | opens a fresh window of the default number of rounds (owner-run) |
 | `archive <document>` | closes the review: the ledger is its summary, and no further round, decision or change is taken (owner-run) |
 | `prune [--apply]` | lists, and with `--apply` deletes, closed reviews closed 90 days ago or more (owner-run) |
-| `convergence <document>` | *(proposed, not built)* prints whether the last review of a plan converged, for the installer's delegated approval (see "Convergence") |
+| `convergence <document>` | prints whether the last review of a plan converged, for the installer's delegated approval (read-only; see "Convergence") |
 
 `<document>` is a path relative to the project root. It must be a regular file with no link in any component, inside
 the project, in the directory of its kind (`docs/plans/`, `docs/specs/`, `docs/roadmaps/`, `docs/decisions/`) and no
@@ -100,12 +102,16 @@ A round is one call to the bridge and, if the reply is valid, one recorded set o
 
 ### Convergence
 
-*(Proposed by plan `2026-10-23-delegated-approval`; not built. The declaration then also names this argument for the
+*(Built by plan `2026-10-23-delegated-approval`, increment B. The declaration also names this argument for the
 installer, `module-contract.md`.)* `convergence <document>` is read-only and agent-safe; it is not in the owner-run
 list. It answers the question the installer's delegated approval asks and records no approval and nothing else: `trust-and-approval.md`, "Delegated plan approval records", gives the object and says who reads it.
 
-- It refuses, with a `refused:` line, a document that is not a plan, has no review, or whose state is unsealed, rolled
-  back or unreadable, and it runs no model.
+- It prints one object with exactly `format` (1), `kind` (`plan`), `converged`, `document_sha256`, `rounds_used`,
+  `bound`, `bridge`, `model` (text of at most 200 characters, or null), `review` (the review's key, `plan-` and 16
+  lowercase hex digits) and `closed`. `rounds_used` and `bound` are those of the current window, from 1 to 5.
+- It refuses, with a `refused:` line, a document that is not a plan, has no review, has no round in its current window
+  (so there is no hash to report), or whose state is unsealed, rolled back or unreadable, and it runs no model, takes
+  no lock and writes nothing, in the project or in the guarded store.
 - `converged` is true only when the last stored round has no `blocker` or `major` finding, no meaningful finding of the
   current window is pending, the reviewer's verdict and the engine's reading both say `no_meaningful_changes` (a mismatch
   is not converged), and the rounds used do not exceed the bound. It does not depend on the decisions: a rejected
@@ -273,6 +279,11 @@ The module conforms when tests against a fake bridge, installed as a real pinned
 12. The reviewed document and every other project file are byte for byte the same before and after every case, and the
     only files written are the review's own directory and the guarded store's key, mark and lock.
 13. Every case prints exactly one object that obeys the field rules, or a `refused:` line and nothing on standard output.
+14. `convergence` prints the documented object and writes nothing. It reports `converged` false for a meaningful finding
+    in the last round (decided or not), a meaningful finding of the window with no decision, a verdict and a reading that
+    differ, more rounds than the bound, and true for a clean last round with every earlier meaningful finding decided; it
+    follows the last round and the current window. It refuses a document that is not a plan, a plan with no review or no
+    round in the window, and a state that is unsealed, rolled back or unreadable. It is not in the owner-run list.
 
 ## Acceptance criteria
 
@@ -299,6 +310,9 @@ Built by plan `2026-10-23-review-engine`, increments C to G (the module `review-
 - The declaration provides `peer-review`, requires `model-bridge` (hard) and declares the command `review-engine` with
   the twelve arguments of "The commands" and the `owner` list `amend`, `extend`, `reset`, `archive`, `prune`. It ships
   the neutral skill `peer-review`. The package approval is shipped (`workbench/shipped_approvals/`), released by the owner at increment G.
+  Plan `2026-10-23-delegated-approval` adds the thirteenth argument, `convergence`, and the declaration field that names
+  it (increment B, below); that edit makes the shipped approval stale until the owner releases it again in that plan's
+  last increment.
 - Document resolution for the four kinds, the key and the directory name, the state file and its checks, the seal, the
   key and the mark in the guarded store, the lock, atomic writes and the ledger are built as stated above.
 - `init <document>` makes an empty review (a window of 3 rounds) and prints its status; it refuses a review that
@@ -359,6 +373,17 @@ Built by plan `2026-10-23-review-engine`, increments C to G (the module `review-
   kept out of anything a vendor can read, that a refusal is reported and not worked around, and that the owner's word
   is the verdict. The plan's wording of a missing setting (use the one installed bridge) was not built: there is no
   default bridge, as the setting section says, because the kit cannot list the installed ones.
+- `convergence` (plan `2026-10-23-delegated-approval`, increment B). The thirteenth argument and the declaration field
+  `convergence` that names it. It resolves the document as a plan, loads the state as `status` does (no lock, no write,
+  no key made) and prints the object of "Convergence". `converged` is true when the last round's verdict and the
+  engine's reading both say no meaningful changes, the last round names no `blocker` or `major` finding, no meaningful
+  finding of the window is without a decision, and the rounds of the window do not exceed its bound. A review with no
+  round in its current window is refused, because there is then no hash of a read file to report (the plan listed
+  "no round" as a `converged` false answer; the object cannot carry one). The stored round files are not read: the
+  answer comes from the sealed state, which names each round by hash. The skill `peer-review` does not mention the
+  argument yet; the guidance is increment E of that plan. Tested with forged sealed states and by changing each rule in
+  turn (dropping the pending check, the bound, the verdict and reading check, the meaningful check, the window, the
+  seal, and reading the first round instead of the last each fail a test).
 - `status` shows counts, not findings; the findings are in the round's output and in `round-<n>.json`.
 
 Limits found while building:

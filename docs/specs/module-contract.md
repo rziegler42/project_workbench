@@ -308,7 +308,7 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   command's `arguments`, different from `argument` and `active`. It names the argument that tells the installer whether
   a plan may be approved by a delegate (`trust-and-approval.md`, "Delegated plan approval records"). A module without it
   has no plan that is delegable.
-- `convergence` *(proposed, not built)*: an optional object on a module whose `provides` lists `peer-review`, with
+- `convergence` *(built by plan `2026-10-23-delegated-approval`, increment B)*: an optional object on a module whose `provides` lists `peer-review`, with
   exactly the fields `command` (the key of one of its `commands`) and `argument` (one of that command's `arguments`). It
   names the argument that reports whether the last review of a plan converged. It is refused on a module that does not
   provide `peer-review`, with a command or argument the module does not declare, an unknown field or a wrong type,

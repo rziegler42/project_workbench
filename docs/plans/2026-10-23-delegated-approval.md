@@ -342,4 +342,25 @@ The review is not an approval; the plan stays `Proposed` until the owner approve
   as data and records no approval; a module writes to the store (the review engine's key, marks and lock) but never a
   plan approval record. The Goal above still says "records no verdict" and was not reworded.
 - Not done: any code. The ADR review is not archived (owner's `ask-codex archive`). No security pass yet (increment F).
-- Next: increment B, the review engine's `convergence` argument, when the owner says "start".
+- Next: increment B (below).
+
+### Increment B — The provider's convergence argument
+
+- One local commit, trailer `Plan: 2026-10-23-delegated-approval#B` (find it with `git log --grep`).
+- Built: `review-engine convergence <document>` (helper, read-only, no lock, no write); the `convergence` declaration
+  field and its check in `workbench/declarations.py` (refused on a module that does not provide `peer-review`, with a
+  command or argument the module does not declare, an unknown key or a wrong type; part of the declaration hash); the
+  module's `module.json` (thirteenth argument, not owner-run, and the field); the specs (`review-engine.md`,
+  `module-contract.md`, `trust-and-approval.md`).
+- Tests: 41 new in `test_review_convergence.py`, one new and two changed in `test_review_module.py`, six new in
+  `tests/test_declarations.py`. The full suite passes, 3,515 tests in 7 roots (3,468 before). Document checks print
+  nothing. Eight changes to the rules in turn (no pending check, no bound check, no verdict and reading check, no
+  meaningful-finding check, the first round instead of the last, all rounds counted as used, an unsealed state
+  accepted, no check of a window with no round) each failed a test; the two that first survived led to a better test.
+- Differs from the plan's test list: a review with no round, or none in its current window, is refused and does not
+  print `converged` false, because the object needs the hash of a file a round read. The stored round files are not
+  re-read; the sealed state names each round by hash. The skill `peer-review` does not mention the argument and its
+  test excepts it until increment E.
+- Not done: the process module's `delegable` (C), the installer (D), guidance (E), any security pass or release (F). The
+  package approval of `review-engine` is stale until F, so `wb run review-engine` will not run in an installed project
+  until then.
