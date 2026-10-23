@@ -13,8 +13,9 @@ named there decides how much approving a module covers.
 
 ## Decision
 
-The gate is the installer's command, `wb gate claude`, and the Claude harness layout renders one fixed hook that runs
-it as `wb gate claude || exit 2`. The process module declares, in data, which checkpoints and caps it has and which
+The gate is the installer's command, `wb gate <harness>`, and the harness layout renders one fixed hook that runs
+it, for Claude as `wb gate claude || exit 2`. The table of tools the hook covers and the input field that names each
+one's file is the harness layout's data, under `hooks.targets`, and the installer holds no tool name. The process module declares, in data, which checkpoints and caps it has and which
 of its command's arguments lists the plans under way; its pinned helper answers that question. The installer asks
 the plan records whether each listed plan is approved. It reads no plan and names no module.
 
@@ -28,6 +29,8 @@ the plan records whether each listed plan is approved. It reads no plan and name
 
 ## Consequences
 
+- The tool table lives in the harness layout, so a harness is added by data and not by an installer change (this
+  departs from the first wording of the plan, which put the table in the installer).
 - The installer gains two commands, `wb settings` and `wb gate`, and the settings file a `caps` key.
 - Another harness needs its own `wb gate <harness>` input shape and its own hook form; none is built here.
 - The gate stops a mistaken agent and not a hostile one: it is advice against shell writes and a `Status:` edit.
@@ -40,6 +43,12 @@ the plan records whether each listed plan is approved. It reads no plan and name
 Plan `2026-10-22-checkpoint-settings-and-caps`, increments E and F, and its criterion 9, an owner-run check of the
 rendered hook in a scratch project with the installed Claude. Accepting this decision is the owner's act, after
 that evidence.
+
+Built, by increments B to G: the declaration fields and the `caps` setting, `wb settings`, `code-work active`, the
+gate (`workbench/gate_hook.py`, with a total deadline of 10 seconds and refusal on any doubt, and with links followed
+so an alias of the project root is not a way out), the layout's `hooks` description, the Claude module providing
+`hooks`, the rendered hook and the deny on the rendered settings file and `.git/info/exclude`. Not built: the owner's
+live check, an effect of `delegate`, a project-level lowering of a cap, and a hook for another harness.
 
 ## Related files and decisions
 

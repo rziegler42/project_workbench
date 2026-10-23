@@ -168,8 +168,8 @@ says so.
 | `release-approvals` | package | nothing | the shipped first-party records in the workbench distribution | no | built |
 | `approve-plan` | project | a plan path | the guarded store: a plan approval record | yes, owner-run | built |
 | `plan-status` | project | a plan path | nothing | no | built |
-| `settings` | project | nothing | nothing | no | proposed |
-| `gate` | project | a harness name, and the hook's JSON on standard input | nothing | no | proposed |
+| `settings` | project | nothing | nothing | no | built |
+| `gate` | project | a harness name, and the hook's JSON on standard input | nothing | no | built |
 
 - `verify --no-harness-required` turns off the rule that a selection needs a harness module
   (`module-contract.md`). It is a check option and installs nothing, so it does not weaken a
@@ -504,7 +504,7 @@ uses, with the same refusals. The behaviour, the path rules, the record, the out
 denies it to the agent; `plan-status` is read-only and agent-safe. Neither commits, pushes or edits a plan, and
 neither reads a plan itself: the process module's declared, pinned command does.
 
-### `settings` and `gate` (proposed by plan `2026-10-22-checkpoint-settings-and-caps`)
+### `settings` and `gate` (built by plan `2026-10-22-checkpoint-settings-and-caps`)
 
 `wb settings` takes no argument and no option and runs from anywhere inside a project, with the root and the ID
 found as `wb run` finds them. It resolves exactly one process module, none or more than one being a refusal, reads

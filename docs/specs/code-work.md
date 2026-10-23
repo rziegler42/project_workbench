@@ -1,7 +1,7 @@
 # code-work
 
 Status: Current. Approved by the owner on 2026-10-19. The plan format, the read subcommands, the
-plan approval record and the commit rules are built; the delegation, review, caps and push parts are not (see "As built"). Paths, field
+plan approval record, the commit rules, the checkpoint and cap declarations and the `active` subcommand are built; the delegation, review, reading of the caps and push parts are not (see "As built"). Paths, field
 names and file formats not yet built are proposals; the rules are the substance. Open items are listed at
 the end.
 
@@ -36,9 +36,9 @@ Non-goals:
 | blocks | nothing beyond the one-process rule of the type |
 | fills | the policy slot in `AGENTS.md`; the `docs-index` slot |
 | writes | `docs/plans/` and its README |
-| ships | one helper (code-bearing, shown at approval) with the subcommands `check`, `plans`, `report`, `region` and, proposed, `active`; the `wb` launcher is a workbench component and not shipped by this module |
-| approval | `region` computes a plan's hashed region; `active` (proposed) lists the plans under way |
-| checkpoints, caps | the eight checkpoint names and three caps under "Checkpoints" and "Loop caps" (proposed by plan `2026-10-22-checkpoint-settings-and-caps`) |
+| ships | one helper (code-bearing, shown at approval) with the subcommands `check`, `plans`, `report`, `region` and `active`; the `wb` launcher is a workbench component and not shipped by this module |
+| approval | `region` computes a plan's hashed region; `active` lists the plans under way |
+| checkpoints, caps | the eight checkpoint names and three caps under "Checkpoints" and "Loop caps" (built by plan `2026-10-22-checkpoint-settings-and-caps`) |
 
 It also ships neutral items: skills for drafting a plan, running the increment loop,
 and reviewing; and a read-only reviewer agent. Templates stay in the module; no
@@ -269,7 +269,7 @@ module adds none of its own.
   check: one `Candidate:` line, the sections of the hashed region, required fields),
   `wb run code-work plans` (the active plans, derived by listing plans by status) and
   `wb run code-work report` (candidate completion, derived from work records). They change
-  nothing, and run no program. A fifth, `wb run code-work active` *(proposed)*, lists the plans whose `Status:` is
+  nothing, and run no program. A fifth, `wb run code-work active`, lists the plans whose `Status:` is
   `Approved` or `In Progress` as `{"format": 1, "plans": [...]}` for the edit gate, with the same reader and
   limits as `region`.
 - A commit that completes an increment ends with the trailer `Plan: <plan stem>#<label>`.
@@ -401,8 +401,14 @@ installer's and is replaced on upgrade only while unedited.
   a left-out heading hides what follows from a reader, and quoting shell comments in a result after approval
   makes the approval stale. A `Status: Approved` line is informational; the gate is a command and a rule, and
   nothing stops an agent that does not ask `plan-status`.
-- Not built: the enforcement point that refuses work on an unapproved plan, the checkpoint settings, the loop
-  caps (`checkpoint-settings-and-caps`), the increment-loop and review skills and the reviewer agent
+- Built, from plan `2026-10-22-checkpoint-settings-and-caps`: the `active` subcommand, the eight `checkpoints` and
+  three `caps` the module declares, the `caps` setting and `wb settings` that reports the effective values, and the
+  installer's edit gate (`wb gate`) that the Claude harness renders as a hook (`trust-and-approval.md`, "Checkpoint
+  and cap settings, and the edit gate"). Limits: `delegate` has no effect and every checkpoint stops; nothing yet
+  reads a cap, so a cap is declared, set and reported and not enforced; a project cannot lower a cap (that waits
+  for a project setting the installer can read without naming a module); the gate stops a mistaken agent and not a
+  hostile one, covers only file-editing tools, and has not been seen working in a live Claude session.
+- Not built: the increment-loop and review skills and the reviewer agent
   (`increment-loop-and-review-skills`), the push checkpoint (`push-checkpoint`), the compaction guidance
   (`compaction-guidance`) and the delegated approval (`delegated-approval`). These came from the roadmap candidate
   `code-work-approval`, which is split into them.
@@ -415,4 +421,4 @@ installer's and is replaced on upgrade only while unedited.
 - Paths, field names and file formats remain proposals until the candidate that builds
   each item writes the real schema: `code-work-plans` has written the plan format and its helper;
   `code-work-commit` wrote the commit rules, now in `safe-git.md`, `2026-10-22-plan-approval-records` wrote the
-  approval record, and the candidates named under "As built" write the rest.
+  approval record, `2026-10-22-checkpoint-settings-and-caps` wrote the checkpoint and cap declarations, and the candidates named under "As built" write the rest.

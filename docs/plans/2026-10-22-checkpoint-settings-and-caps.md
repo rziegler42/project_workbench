@@ -391,4 +391,52 @@ grandchild. Its findings are untrusted input; each was reproduced or checked bef
 
 ## Result
 
-Not started.
+Increments A to H are implemented as local commits, none pushed. The full suite after G and again after H (H changes
+documents only): 3069 tests in 6 roots, all passing (installer 2319 with 1 skipped, ask-codex 90, claude 32,
+code-work 220 with 2 skipped, groundwork 178, safe-git 230). The document checks and `git diff --check` print
+nothing.
+
+**What was built.**
+
+- A process module declares `checkpoints`, `caps` and `approval.active`; the verifier refuses a malformed one
+  (increment B). The personal settings gain `caps` (B). `wb settings` is read-only and agent-safe (C).
+- `code-work` declares its eight checkpoints (all `stop`) and three caps (`review-rounds` 3 of 5,
+  `same-failure-retries` 1 of 2, `reviewer-exchanges` 6 of 12) and ships `active` (D). The shipped approvals were
+  released again and the three stale records removed (G).
+- `wb gate <harness>` is the installer's command, in `workbench/gate_hook.py` (E). The Claude layout renders it as a
+  `PreToolUse` hook, `wb gate claude || exit 2`, with a deny on edits to `.claude/settings.local.json` and
+  `.git/info/exclude` (F). The Claude module now provides `hooks`.
+- The security review (G) found one Medium finding, an alias of the project root that bypassed the gate; it is
+  fixed with regression tests.
+
+**Departures from the plan's wording** (owner decision, recorded in the Proposed decision
+`2026-10-22-installer-owns-the-edit-gate`):
+
+- The gate is `wb gate <harness>` and the tool-to-field table is the harness layout's `hooks.targets`; the
+  installer holds no tool name. The plan and the first spec text said `wb gate claude` with a table in the installer.
+- The hook is rendered only when the harness provides `hooks`, its layout describes a whole hook (`event`,
+  `timeout`, `block_code` and `targets`), and an installed process module declares `approval.active`; the plan said
+  "declares `approval`". Attach warns when an `active` module is installed and no hook can be rendered.
+- The same plan spelled in another case is refused and not passed. A target outside the root as spelled is followed
+  through its links before it is judged.
+- The specs were corrected to match (`trust-and-approval.md`, `harness-modules.md`, `module-contract.md`,
+  `code-work.md`, `installer-interface.md`).
+
+**Limits and open items.**
+
+- The hook has not been seen working in a live Claude session. Criterion 9 is the owner's, in a scratch project; it
+  would also check the facts `harness-modules.md` lists as unverified (`notebook_path`, `MultiEdit`, `PATH` for `wb`,
+  `CLAUDE_PROJECT_DIR`, project against local precedence, and whether the relative `Edit(...)` deny patterns
+  resolve from a subdirectory).
+- Input over 65,536 bytes is refused, so with the hook installed a `Write` of more than about 64 KiB is refused
+  even when no plan is under way. Skipping the bound when no plan is under way would change the approved spec and is
+  the owner's call.
+- The security fixes had no second reviewer's bypass attempt, and the plan has had no `workflow-reviewer` pass;
+  both were offered and not requested. The review of G was partial (see the Review record).
+- The decision `2026-10-22-installer-owns-the-edit-gate` is Proposed; accepting it is the owner's act.
+- `delegate` has no effect, nothing reads a cap, and a project cannot lower one (Deferred work).
+- This repository is not an installed project, so its own edits are not gated until `self-hosting`; the owner's
+  `~/.claude` rules still match the old tools (`global-config-migration`).
+- `docs/specs/repository-boundary.md` still says plan approvals "are not built yet" in a store listing; that is an
+  older plan's text and was left alone.
+- The plan's status line is still `Approved`; the owner completes and archives it.

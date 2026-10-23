@@ -76,9 +76,9 @@ Each module has one declaration file, `module.json`, at the root of its director
 | `ships` | Executable or code-bearing items it ships, such as hooks or helper scripts. |
 | `commands` | Commands it offers, each a helper it ships and the first arguments it accepts, run with `wb run`. The installer pins the helper when the owner confirms the install; nothing in the name of the shipped file declares a command. *(built: verified, and run with `wb run`)* |
 | `checks` | Pinned Python helpers it contributes to `wb check`. *(built: verified, listed in the approval request, and run by `wb check`)* |
-| `approval` | Process modules only: the command of its own that computes the hashed region of a plan and, optionally, the argument that lists the plans under way. *(built by plan `2026-10-22-plan-approval-records`; `active` proposed by plan `2026-10-22-checkpoint-settings-and-caps`)* |
-| `checkpoints` | Process modules only: the names of the checkpoints it asks the owner about. *(proposed by plan `2026-10-22-checkpoint-settings-and-caps`)* |
-| `caps` | Process modules only: the loop caps it enforces, each with a default and a ceiling. *(proposed by plan `2026-10-22-checkpoint-settings-and-caps`)* |
+| `approval` | Process modules only: the command of its own that computes the hashed region of a plan and, optionally, the argument that lists the plans under way. *(built by plans `2026-10-22-plan-approval-records` and `2026-10-22-checkpoint-settings-and-caps`)* |
+| `checkpoints` | Process modules only: the names of the checkpoints it asks the owner about. *(built by plan `2026-10-22-checkpoint-settings-and-caps`)* |
+| `caps` | Process modules only: the loop caps it enforces, each with a default and a ceiling. *(built by plan `2026-10-22-checkpoint-settings-and-caps`)* |
 | `layout` | Harness modules only: the layout description (see `harness-modules.md`). It is part of the declaration and its hash. |
 
 `provides`, `requires` and `blocks` are lists of capability names. A module that
@@ -300,13 +300,13 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   pinned command the installer runs to learn a plan's hashed region (`trust-and-approval.md`, "Plan approval
   records"). An unknown field, a wrong type, a command the module does not declare or an argument the command
   does not list is refused, naming the module and the field.
-- `approval.active` *(proposed by plan `2026-10-22-checkpoint-settings-and-caps`)*: an optional third field, one of the same command's `arguments`
+- `approval.active` *(built by plan `2026-10-22-checkpoint-settings-and-caps`)*: an optional third field, one of the same command's `arguments`
   and not the same as `argument`. It names the argument that lists the plans under way, for the edit gate
   (`trust-and-approval.md`, "Checkpoint and cap settings, and the edit gate"). A module without it has no
-  gate and `wb gate` allows every edit in its project.
-- `checkpoints` *(proposed)*: a list of at most 16 names, each lowercase kebab-case of at most 64 characters (the
+  gate, no hook is rendered for its project, and `wb gate` allows every edit there.
+- `checkpoints` *(built)*: a list of at most 16 names, each lowercase kebab-case of at most 64 characters (the
   rule the personal settings already apply to a checkpoint name), none repeated. A process module only.
-- `caps` *(proposed)*: a list of at most 16 objects with exactly the fields `name` (the same rule, none repeated),
+- `caps` *(built)*: a list of at most 16 objects with exactly the fields `name` (the same rule, none repeated),
   `default` and `ceiling`, both JSON integers, with `1 <= default <= ceiling <= 100`. A process module only.
 - The three are optional, are part of the declaration and so of the declaration hash as written, and are
   refused with a wrong type, an unknown field, a repeated name or an out-of-range number, naming the module and
@@ -395,7 +395,7 @@ result is a refusal and carries no hashes and no order.
   (it has no `runtime` and no `arguments`), and for a pin name already used by another entry.
 - An `approval` field on a module that is not a `process` module, or naming a command or an
   argument the module does not declare, is refused, naming the module and the field.
-- *(Proposed by plan `2026-10-22-checkpoint-settings-and-caps`.)* A process module's `checkpoints`, `caps` and `approval.active` verify; a repeated
+- *(Built by plan `2026-10-22-checkpoint-settings-and-caps`.)* A process module's `checkpoints`, `caps` and `approval.active` verify; a repeated
   or malformed name, a default outside 1 to the ceiling, a ceiling over 100, more than 16 entries, an `active`
   argument the command does not list or equal to `argument`, and any of the three fields on another module type
   are refused; the declaration hash changes when any of them changes.

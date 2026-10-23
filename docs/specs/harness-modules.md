@@ -116,7 +116,7 @@ plain terms when the module is approved. A harness that declares `hooks: none` s
 does not receive them.
 
 The one hook the installer itself renders is the edit gate, for a harness whose layout carries a `hooks` key
-("The edit gate hook", proposed). It is not a module's file and not listed under `ships`.
+("The edit gate hook", built). It is not a module's file and not listed under `ships`.
 
 ## Root files and instructions
 
@@ -130,10 +130,9 @@ The one hook the installer itself renders is the edit gate, for a harness whose 
 ## The Claude harness module
 
 Built as the first-party module `claude` in `packages/workbench/`, declared as data (`layout`
-in `module.json`) and rendered by the installer. It provides five capabilities:
-`instructions`, `skills`, `agents`, `commands` and `permissions`. It declares `hooks: none`;
-the sixth, `hooks`, is added by `checkpoint-settings-and-caps`, which renders the installer's own gate hook ("The edit gate
-hook") and no module's hook. Layout, verified against
+in `module.json`) and rendered by the installer. It provides six capabilities:
+`instructions`, `skills`, `agents`, `commands`, `hooks` and `permissions`. Its layout describes the installer's own
+gate hook ("The edit gate hook") and no module's hook. Layout, verified against
 Claude Code 2.1.305 (see "Evidence" below):
 
 | kind or file | path |
@@ -186,7 +185,8 @@ session; the documentation is silent).
 
 Hook facts, read from `code.claude.com/docs/en/hooks`, `hooks-guide`, `tools-reference` and `permissions` on
 2026-10-22 (the pages show no version; the installed version is 2.1.305 as above, and the hook behaviour is
-not yet tested on it). Proposed use is in "The edit gate hook".
+not yet tested on it). The use built on them is in "The edit gate hook"; the owner's live check (criterion 9 of
+plan `2026-10-22-checkpoint-settings-and-caps`) has not been made.
 
 - **Input.** A `PreToolUse` hook gets one JSON object on standard input with `session_id`, `transcript_path`,
   `cwd`, `permission_mode`, `hook_event_name`, `tool_name`, `tool_input` and `tool_use_id`. For the file tools
@@ -231,10 +231,9 @@ review or in the security pass:
   `add`, `attach`, `acknowledge`, `recover`, `approve`, `pin`, `release-approvals`) in five
   spellings: `wb` and the four interpreter forms of `-m workbench` (`rules.SPELLINGS`). `wb preview` is not denied. A Bash deny is not a security
   boundary; see "Verified rendering rules".
-- **The rendered rules do not deny edits to `.claude/settings.local.json` or
-  `.git/info/exclude`.** Claude prompts for an edit, but an agent that has been allowed edits
-  could change its own deny rules. Adding a rule is a separate decision; `checkpoint-settings-and-caps` proposes
-  it ("The edit gate hook").
+- **The rendered rules deny edits to `.claude/settings.local.json` and `.git/info/exclude` only
+  together with the edit gate hook** ("The edit gate hook"). Without a hook, Claude prompts for an
+  edit, but an agent that has been allowed edits could change its own deny rules.
 - **`.git/info/exclude` has the lowest precedence of git's ignore sources,** so a committed
   `.gitignore` can re-include a path with `!`. `wb check` reports such a file once it is tracked.
   An exclude file that already holds a later `!` line defeats an exclude line that is present.
@@ -263,31 +262,48 @@ review or in the security pass:
 
 ### The edit gate hook
 
-*(Proposed by plan `2026-10-22-checkpoint-settings-and-caps`, increment F; not built. The Claude module declares `hooks: none` until then.)*
+*(Built by plan `2026-10-22-checkpoint-settings-and-caps`. The decision that the installer owns the gate is
+`docs/decisions/2026-10-22-installer-owns-the-edit-gate.md`, Proposed.)*
 
 The installer, not a module, renders one hook into the same per-clone file as the permission rules, under the
-layout's `hooks` key, and the Claude module then provides `hooks`. A layout with `hooks: none` receives no hook, and
-attach says so. The rendered entry is fixed by the layout and not chosen by any module:
+layout's `hooks` key. The layout's `hooks` object carries `settings_key`, `targets`, `event`, `timeout` and
+`block_code`; the last three come together or not at all, and a layout with `hooks: none` or without them describes no
+hook. The rendered entry is fixed by the layout and not chosen by any module. The matcher is the tool names of
+`targets`, sorted and joined with `|`; it is derived and not stored. For the Claude module:
 
 ```json
-{"hooks": {"PreToolUse": [{"matcher": "Edit|Write|MultiEdit|NotebookEdit",
+{"hooks": {"PreToolUse": [{"matcher": "Edit|MultiEdit|NotebookEdit|Write",
   "hooks": [{"type": "command", "command": "wb gate claude || exit 2", "timeout": 20}]}]}}
 ```
 
+- **When it is rendered.** All three must hold: the harness module provides `hooks`; its layout describes a whole
+  hook; and an installed process module declares `approval.active`. Otherwise no hook is rendered. If a process
+  module with `approval.active` is installed and no hook can be rendered, attach warns that a plan under way is
+  not stopped from edits except by instruction. A module that provides `hooks` with a layout that does not describe
+  one is refused at attach; one that provides `hooks` without `permissions` gets a warning, because the hook is
+  written into the permissions file. A skill or other item that `needs: hooks` is never installed, because a hook
+  has no neutral form.
 - **Why `|| exit 2`.** Claude treats exit 2 as the only blocking code, so a `wb` that is missing from `PATH` (exit
   127) or a gate that fails for any reason would let the call through. The shell's `||` turns every non-zero exit
-  into 2. A hook whose command cannot start in the shell at all is not covered; criterion 9 of the plan checks it.
+  into 2. The harness name is checked against `[a-z0-9][a-z0-9_-]{0,63}` before it is put in the command. A hook
+  whose command cannot start in the shell at all is not covered; the owner's check, criterion 9 of the plan, is
+  what shows it.
 - **Why `timeout: 20`.** A timed-out command hook does not block the call. The gate stops itself after 10
   seconds and refuses, and the harness's limit is set above that. `onFailure: "block"` exists in the current
   documentation and is not rendered, because it is unverified on the installed version.
-- **The target table** (closed; anything else is a refusal): `Edit` reads `tool_input.file_path`, `Write` reads
-  `tool_input.file_path`, `NotebookEdit` reads `tool_input.notebook_path`, and `MultiEdit` reads
-  `tool_input.file_path`. The first two are verified in the documentation; `notebook_path` is documented for
-  permission rules only and `MultiEdit` is not in the current documentation (see "Evidence"), so both are
-  unverified and the gate refuses a call whose field is missing. No documented tool names several files.
-- **The deny.** The rendered deny list also covers edits to `.claude/settings.local.json` and `.git/info/exclude`
-  (the owner edits both by hand), so an agent cannot delete the hook. This is the one rule beyond the hook and the
-  owner may strike it; it is arranged so that it can be dropped alone.
+- **The target table** lives in the layout, under `hooks.targets`, and the gate reads it and holds no tool name
+  (closed; anything else is a refusal). For the Claude module: `Edit` and `Write` read `tool_input.file_path`,
+  `MultiEdit` reads `tool_input.file_path` and `NotebookEdit` reads `tool_input.notebook_path`. The first two are
+  verified in the documentation; `notebook_path` is documented for permission rules only and `MultiEdit` is not in
+  the current documentation (see "Evidence"), so both are unverified and the gate refuses a call whose field is
+  missing. No documented tool names several files.
+- **The deny.** With a hook, the rendered deny list also covers edits to `.claude/settings.local.json` and
+  `.git/info/exclude`, each spelled from the project root and with a `**/` prefix (the owner edits both by hand),
+  so an agent cannot delete the hook. It is one function in the renderer and rendered only with a hook, so it can
+  be dropped alone. Whether the relative `Edit(...)` patterns resolve from a subdirectory is not verified.
+- **As built, and its limits.** The gate is in `trust-and-approval.md`, "Checkpoint and cap settings, and the edit
+  gate". The Claude hook is not tested in a live session (criterion 9 of the plan is the owner's). Project and
+  local settings precedence, `PATH` for `wb`, and `CLAUDE_PROJECT_DIR` are as listed under "Evidence".
 
 ## The opencode harness module
 

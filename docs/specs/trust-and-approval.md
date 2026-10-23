@@ -3,7 +3,8 @@
 Status: Current. Approved by the owner on 2026-10-19. The guarded store, the personal settings, approval
 records, first-party shipped approvals, the approval request and gate, the owner-run `approve` and `pin`
 commands, the inert download and the launcher are built (`module-approvals`), and "Concrete formats" records what
-the code does. Acknowledgement (the baseline check and `wb acknowledge`) is built (`ownership-and-upgrade`). The rendering into the Claude harness is built (`claude-harness`). Plan approval records (`2026-10-22-plan-approval-records`) are built. Delegation
+the code does. Acknowledgement (the baseline check and `wb acknowledge`) is built (`ownership-and-upgrade`). The rendering into the Claude harness is built (`claude-harness`). Plan approval records (`2026-10-22-plan-approval-records`) are built. The `caps` setting, `wb settings` and the
+edit gate (`2026-10-22-checkpoint-settings-and-caps`) are built. Delegation
 and the opencode rendering are not built yet, and their record formats and setting names
 remain proposals. The rules are the substance.
 
@@ -402,8 +403,9 @@ prose above and this section differ in precision, this section is what the code 
 
 ### Checkpoint and cap settings, and the edit gate
 
-*(Proposed by plan `2026-10-22-checkpoint-settings-and-caps`; nothing here is built until that plan's increments B to F. The names are in
-`code-work.md`; the declaration fields are in `module-contract.md`.)*
+*(Built by plan `2026-10-22-checkpoint-settings-and-caps`. The names are in `code-work.md`; the declaration fields are
+in `module-contract.md`; the decision that the installer owns the gate is
+`docs/decisions/2026-10-22-installer-owns-the-edit-gate.md`, Proposed.)*
 
 - **What the module declares.** A process module declares `checkpoints`, `caps` and `approval.active`. The
   installer treats every name as opaque text and knows no plan: it never reads one.
@@ -426,23 +428,27 @@ prose above and this section differ in precision, this section is what the code 
   `{"format": 1, "plans": ["<root-relative path>", ...]}` with at most 32 paths of at most 240 characters, each
   passing the path validator, none repeated. Anything else, a non-zero exit, a timeout or a `refused:` line is a
   failure of the helper. The output is data and is validated, never followed.
-- **`wb gate claude`** (the edit gate; the hook's command). It reads one JSON object from standard input,
+- **`wb gate <harness>`** (the edit gate; the hook's command, `wb gate claude` for the Claude harness). It reads one JSON object from standard input,
   at most 65,536 bytes, and decides one tool call. It prints nothing and exits 0 to allow, and prints one `refused:`
   line on standard error and exits 2 to refuse. Every other outcome, a crash included, is a refusal. A total
   deadline of 10 seconds covers everything including the helper runs, and its expiry is a refusal. In order:
   1. The object must carry a string `cwd`, a string `tool_name` and an object `tool_input`. The project is found
      from `cwd` as `wb run` finds it; none is a refusal (the hook is only rendered into a project).
-  2. A project whose manifest has no process module that declares `approval` and `approval.active` is allowed. More
-     than one such module is a refusal.
+  2. A project with no installed process module that declares `approval.active` is allowed. More than one such
+     module is a refusal.
   3. The `active` command is run. No plan under way is an allow. A failed command is a refusal.
-  4. The targets are read from `tool_input` by the closed table in `harness-modules.md`, "The edit gate hook". A
-     `tool_name` outside the table, a missing or empty field, a field that is not a string, and a NUL are refusals.
-     Every target is placed and judged, and the call is allowed only when all of them pass.
-  5. A target is placed by resolving a relative path against `cwd` and folding `.` and `..` lexically. Containment
-     in the root and equality with a plan compare with case and Unicode variants folded, so a case-insensitive
-     filesystem cannot turn an inside path into an outside one. A target outside the root passes. A target inside
-     the root is refused when any component that exists is a symbolic link. A target that is a plan under way
-     passes, so that a plan's status, review record and result can still be written.
+  4. The targets are read from `tool_input` by the table the harness module's layout declares under
+     `hooks.targets` (`harness-modules.md`, "The edit gate hook"); the installer holds no tool name. A `tool_name`
+     outside the table, a missing or empty field, a field that is not a string, a NUL and a path of more than 4,096
+     characters are refusals. Every target is placed and judged, and the call is allowed only when all of them pass.
+  5. A target is placed by resolving a relative path against `cwd` and folding `.` and `..` lexically; a `..` that
+     follows a symbolic link is a refusal. Containment in the root compares with case and Unicode variants folded,
+     so a case-insensitive filesystem cannot turn an inside path into an outside one. A target that lies outside the
+     root as spelled is followed through its links and judged where it lands, so an alias of the root is not a way
+     out; a loop or a path that cannot be resolved is a refusal. A target outside the root passes. A target inside
+     the root is refused when any component that exists is a symbolic link. A target that is exactly a plan under
+     way passes, so that a plan's status, review record and result can still be written; the same plan spelled in
+     another case is refused and not passed, which is stricter than a fold would be.
   6. Any other target passes only when every plan under way reads `approved` by "The check" above; the first plan
      that does not stops the check. The refusal names the plan, its state (`not approved` or `changed since
      approval`) and `wb approve-plan`.
@@ -453,6 +459,13 @@ prose above and this section differ in precision, this section is what the code 
   can edit it; a shell command writes any file without passing a file-editing tool; a plan that no listed
   status marks as under way is not seen; and the hook runs only where the owner's local settings carry it.
   `Bash` and commit-time gates are deferred (`2026-10-22-checkpoint-settings-and-caps`, "Deferred work").
+  Input of more than 65,536 bytes is refused before anything else is decided, so while the hook is installed it
+  refuses a `Write` of more than about 64 KiB even when no plan is under way. Skipping the bound when no plan is
+  under way would change this spec and is the owner's call. A harness that renders no hook, or whose layout
+  describes none, has no gate, and attach says so.
+- **As built.** `delegate` has no effect: every checkpoint stops. There is no project-level setting that lowers a
+  cap; `code-work.md` says a project may lower and not raise, and that waits for a generic project setting the
+  installer can read ("Deferred work" of the plan). Only the Claude harness renders a hook.
 
 ### The `approve` command
 
@@ -676,7 +689,7 @@ instead of retrying. No dollar ceiling is required.
 - **Formats still proposals.** The formats in "Concrete formats" are fixed by the code at `format: 1`.
   The format of plan approvals is built ("Plan approval records"); the formats of
   delegated-approval records remain a proposal (the baselines format is built) until the way of working that
-  uses them is built. The `caps` setting and the edit gate are proposed by plan `2026-10-22-checkpoint-settings-and-caps` ("Checkpoint and cap
+  uses them is built. The `caps` setting and the edit gate are built by plan `2026-10-22-checkpoint-settings-and-caps` ("Checkpoint and cap
   settings, and the edit gate"); the checkpoint names are in `code-work.md`.
 - **Added hard stops.** A module may add hard stops, and the function that combines stops accepts
   additions, but a module declaration has no field to declare one and no module supplies any. The owner
@@ -687,7 +700,7 @@ instead of retrying. No dollar ceiling is required.
 ## Acceptance criteria
 
 - With no personal settings, every checkpoint behaves as `stop`.
-- *(Proposed by plan `2026-10-22-checkpoint-settings-and-caps`.)* With no `caps`, `wb settings` reports every default; a value that is not an
+- *(Built by plan `2026-10-22-checkpoint-settings-and-caps`.)* With no `caps`, `wb settings` reports every default; a value that is not an
   integer from 1 to the ceiling is replaced by the default with a `settings:` note. `wb gate claude` refuses an
   edit while a plan under way is not approved, allows it otherwise, and refuses on any doubt.
 - A module whose declaration or content differs from its approval is not installed,

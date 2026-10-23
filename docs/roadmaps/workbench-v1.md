@@ -143,6 +143,19 @@ meet here and the order matters.
   `increment-loop-and-review-skills`, `push-checkpoint`, `compaction-guidance` and `delegated-approval`; the older
   plans, specs and decisions that name `code-work-approval` mean this group. Security and workflow reviews found
   nothing above Medium unresolved; the hand run in a live project is still to do.
+- The checkpoint settings, the loop caps and the edit gate are implemented (plan
+  `2026-10-22-checkpoint-settings-and-caps`, increments A to H; its completion is derived from that plan once it is
+  completed). A process module declares `checkpoints`, `caps` and `approval.active`; `code-work` declares its eight
+  checkpoints and three caps and ships the `active` subcommand; the personal settings gain `caps`; the read-only
+  `wb settings` prints the effective values; and the installer's `wb gate <harness>` refuses a file edit while a plan
+  under way is not approved, rendered into the Claude harness as a `PreToolUse` hook (the Claude module now provides
+  `hooks`) together with a deny on edits to the rendered settings file. The tool-to-field table is the harness
+  layout's, not the installer's, which departs from the wording of the plan. `delegate` still has no effect, nothing
+  reads a cap yet, a project cannot lower one, and the hook has not been seen working in a live Claude session (the
+  owner's check, criterion 9 of the plan). The decision `2026-10-22-installer-owns-the-edit-gate` is Proposed. A
+  project-level setting that the installer can read without naming a module, so that a project may lower a cap, is
+  not a candidate yet; add one if the owner wants it. A security review found one Medium finding, fixed; the fixes had
+  no second reviewer.
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.
 
@@ -392,8 +405,7 @@ increment attempts), and an enforcement point that refuses work on a plan whose 
 (a hook or a deny rule the module renders; the record and the `plan-status` command exist already).
 **Dependencies:** `code-work-commit`; plan `2026-10-22-plan-approval-records` (built).
 **Boundary:** programming only. Settings and the enforcement point; no skills, no reviewer agent, no push rule.
-The Claude module has `hooks: none`, so the enforcement point may need a hook rendering first; decide when it is
-promoted.
+The enforcement point is the installer's `wb gate`, rendered as a Claude hook (built).
 **Promotion trigger:** the owner chooses to begin it.
 
 ### increment-loop-and-review-skills — The increment loop, the review skills and the reviewer agent
@@ -506,8 +518,7 @@ workbench never writes `allow`), machine-level settings such as authentication, 
 choice and remote hosts, and anything the owner wants in a project that has no workbench.
 **Dependencies:** `checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint`,
 `compaction-guidance`, `remote-runner-module`, `review-engine`, `action-review-engine`, and
-`groundwork-module`; hooks rendering for Claude, which the Claude module does not yet
-provide (`hooks: none`).
+`groundwork-module`; hooks rendering for Claude (built by `checkpoint-settings-and-caps`).
 **Boundary:** one global item at a time, each moved only after a test or a recorded run
 shows a project behaves the same without the global copy, so no hard stop, deny rule or
 approver is ever absent in between. The `claude_global_config` mirror is kept in step
