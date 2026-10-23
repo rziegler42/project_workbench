@@ -1,8 +1,8 @@
 # groundwork
 
 Status: Current. Approved by the owner on 2026-10-19. Built by the plan `2026-10-21-groundwork-module`:
-the module, its three skills and the two checks in `wb check`; "As built, and its limits" lists what
-is not detected. The researcher and the fetch tool are not built.
+the module, its three drafting skills and the two checks in `wb check`; the `brainstorm` skill was added by
+plan `2026-10-23-port-superpowers`. "As built, and its limits" lists what is not detected. The researcher and the fetch tool are not built.
 
 Terms are defined in `terms.md`. The declaration it must satisfy is defined in
 `module-contract.md`; the places and upgrade rules in `repository-boundary.md`; the
@@ -233,8 +233,12 @@ tier). Recording evidence and correcting a typo are not checkpoints.
 ## As built, and its limits
 
 The module is `packages/workbench/groundwork/`. It ships no code: a declaration, four READMEs, two
-slot blocks and three neutral skills (`draft-spec`, `draft-roadmap`, `draft-decision`), each with
-its own template beside it. The document-form check is the module's own: it ships `helper/doccheck`
+slot blocks and four neutral skills: three that draft a document (`draft-spec`, `draft-roadmap`,
+`draft-decision`), each with its own template beside it, and `brainstorm`, which has none. `brainstorm`
+finds out what the owner wants before a spec is drafted: it asks before it builds, one question at a time,
+writes a project's design in `docs/specs/`, builds nothing until the owner approves the design, and hands
+on to `draft-spec` and, only if a plan skill is installed, to that. It requires no other module and names
+no other module's skill; whether Claude loads it when it should is unverified. The document-form check is the module's own: it ships `helper/doccheck`
 and declares it in `checks` with kit API 1 (`docs/decisions/2026-10-21-module-code-lives-in-modules.md`),
 so `wb check` starts it, from the project root, only for a project whose committed manifest records the
 module and whose owner has pinned it under the name `doccheck`. It checks names, status, successor and

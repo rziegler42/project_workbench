@@ -23,7 +23,8 @@ HELPERS = ("doccheck", "refcheck")
 PDF = b"%PDF-1.4 datasheet\n"
 PACKAGE = os.path.join(ROOT, "packages", "workbench")
 MODULE = os.path.join(PACKAGE, "groundwork")
-SKILLS = ("draft-decision", "draft-roadmap", "draft-spec")
+TEMPLATED = ("draft-decision", "draft-roadmap", "draft-spec")
+SKILLS = ("brainstorm",) + TEMPLATED
 NEUTRAL = os.path.join(MODULE, "harness", "neutral")
 AREAS = ("specs", "roadmaps", "decisions", "references")
 READMES = ["docs/%s/README.md" % area for area in AREAS]
@@ -60,7 +61,7 @@ class Declaration(unittest.TestCase):
                 found.append(os.path.relpath(os.path.join(base, name), MODULE))
                 self.assertEqual(0, os.stat(os.path.join(base, name)).st_mode & 0o111, name)
         skills = ["harness/neutral/skills/%s/%s" % (name, file) for name in SKILLS
-                  for file in ("SKILL.md", "template.md")]
+                  for file in (("SKILL.md", "template.md") if name in TEMPLATED else ("SKILL.md",))]
         self.assertEqual(sorted(["module.json", "helper/doccheck", "helper/refcheck", "files/blocks/docs-index.md",
                                  "files/blocks/policy.md"] + skills
                                 + ["files/" + rel for rel in READMES]), sorted(found))
@@ -141,11 +142,12 @@ def skill_text(name):
 
 
 class Skills(unittest.TestCase):
-    def test_the_reader_accepts_exactly_the_three_skills_each_with_its_template(self):
+    def test_the_reader_accepts_exactly_the_four_skills_the_three_drafting_ones_with_their_template(self):
         items = neutral.read_items(neutral_tree())
         self.assertEqual([("skill", name) for name in SKILLS], [(i.kind, i.name) for i in items])
         for item in items:
-            self.assertEqual(["template.md"], [f.rel for f in item.files], item.name)
+            self.assertEqual(["template.md"] if item.name in TEMPLATED else [], [f.rel for f in item.files],
+                             item.name)
             self.assertEqual((), item.needs)
 
     def test_every_neutral_file_is_inside_a_skill_folder(self):
@@ -163,9 +165,10 @@ class Skills(unittest.TestCase):
         self.assertEqual((), planned.reports)
         paths = sorted(f.path for f in planned.files)
         self.assertEqual(sorted(".claude/skills/%s/%s" % (n, f) for n in SKILLS
-                                for f in ("SKILL.md", "template.md")), paths)
+                                for f in (("SKILL.md", "template.md") if n in TEMPLATED else ("SKILL.md",))),
+                         paths)
         by_path = {f.path: f.data for f in planned.files}
-        for name in SKILLS:
+        for name in TEMPLATED:
             with open(os.path.join(NEUTRAL, "skills", name, "template.md"), "rb") as handle:
                 self.assertEqual(handle.read(), by_path[".claude/skills/%s/template.md" % name])
 
@@ -316,11 +319,11 @@ class Install(support_install.InstallBase):
                     found[os.path.relpath(full, place)] = self.read(full)
         return found
 
-    def test_claude_receives_the_three_skills_and_git_tracks_none_of_them(self):
+    def test_claude_receives_the_four_skills_and_git_tracks_none_of_them(self):
         place = self.place()
         self.assertEqual(0, self.install(place)[0])
         for name in SKILLS:
-            for file in ("SKILL.md", "template.md"):
+            for file in (("SKILL.md", "template.md") if name in TEMPLATED else ("SKILL.md",)):
                 self.assertTrue(os.path.isfile(os.path.join(place, ".claude", "skills", name, file)))
         self.assertEqual(["/CLAUDE.md", "/.claude/"], self.read(
             place, ".git", "info", "exclude").decode().splitlines())
