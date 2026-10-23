@@ -1,5 +1,5 @@
 """Owner-run arguments: a command may declare first arguments only the owner runs, and an attached harness that
-provides permissions denies each one. Plan `2026-10-23-review-engine`, increment B.
+provides permissions denies each one. Increment B of the plan dated 2026-10-23 that adds the review engine.
 
 Everything here is synthetic: a module named `tool` with a command `tool`, and the fixture harness. The installer
 knows no module, so nothing in these tests or in `workbench/` names a first-party one."""

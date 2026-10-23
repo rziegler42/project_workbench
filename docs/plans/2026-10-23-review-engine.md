@@ -347,4 +347,31 @@ that provides permissions denies the agent each one.
   patterns match command text and are a mistake guard, not a boundary.
 - Not done: no review of this increment (only if the owner asks); no security pass yet (planned before close).
 
-Increments C to G: not started.
+Increment C, 2026-10-23: the module `review-engine` exists with `init` and `status`, a sealed state, the key and the
+rollback mark in the guarded store, a lock, atomic writes and a ledger. No bridge is called.
+
+- Owner decision in session: the module, command and helper are named `review-engine`, not `review` (Choice 5 and the
+  paths in the increments above say `review`; read them as `review-engine`). The boundary test refuses any module,
+  command or helper name as a substring in `workbench/` and `tests/`, and `review` appears about 190 times there. The
+  owner chose `review-engine`; the spec is edited in place, and one docstring in `tests/test_owner_run_arguments.py` was
+  reworded because it named the plan stem.
+- Changes: new `packages/workbench/review-engine/` (`module.json`, `helper/review-engine`, five test files, 73 tests),
+  `packages/workbench/package.json` (the module is listed last, so the safe-git test "after groundwork" still holds), the
+  module-list assertions in the claude, code-work and groundwork tests, and `docs/specs/review-engine.md` ("State",
+  "The seal" and "As built, and its limits").
+- Verification as run: the module tests passed on the first run, so five deliberate weakenings of the helper were tried
+  (a seal that always matches, no rollback check, a lowered mark, a lock that follows links, a bad key replaced) and
+  each made tests fail. The full suite `python3 -B -W error tests/run_all.py` ran 3258 tests in 7 roots, OK. Skips:
+  installer 1, code-work 2, and 12 in the claude root because the shipped approvals are stale until the release in
+  increment G (the package list changed, so the package hash did). `tests.test_boundary` is green; `doccheck`,
+  `refcheck` and `git diff --check` print nothing.
+- Decisions made in the code: `init` refuses a review that exists (a state file that is a link counts as existing);
+  `status` of a document with no review is a refusal and never writes; a damaged or linked key is never replaced; the
+  state is written before the mark; entries of `rounds` and `decisions` are checked only generically until D and E
+  write them; the lock is one file per project, held without waiting.
+- Not done: no review of this increment and no security pass (planned before close; this increment holds the seal key
+  and mark code, the riskiest in the plan). Whether an upgrade or `wb check` leaves the review directory inside the
+  module's namespace alone is not yet tested; it is checked in G with a real install. The approval for the new package
+  is absent until G.
+
+Increments D to G: not started.

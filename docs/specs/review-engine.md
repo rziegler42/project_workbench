@@ -1,7 +1,8 @@
 # review-engine
 
 Status: Draft. Written by plan `2026-10-23-review-engine` (increment A), before the module exists, so that the module is
-built against this text. Nothing here is built yet; "As built, and its limits" is filled by the plan's last increment.
+built against this text. The state layer, `init` and `status` are built (increment C); the rest is not, and
+"As built, and its limits" says which.
 The capability name `peer-review` is the accepted one (`2026-10-19-mandatory-review-personal-delegation`).
 
 Terms are in `terms.md`. The declaration is defined in `module-contract.md`; the launcher, the kit and the rule for a
@@ -11,7 +12,7 @@ helper that runs another module's command are in `module-boundary.md`; the contr
 
 ## Purpose and scope
 
-The **review engine** is a first-party module, `review`, that asks a second model to review a plan, a spec, a roadmap or
+The **review engine** is a first-party module, `review-engine`, that asks a second model to review a plan, a spec, a roadmap or
 a decision record, a bounded number of times, and keeps what came back. It provides the capability `peer-review`. It
 gives findings and a recommendation and never a verdict: the verdict belongs to the owner until `delegated-approval`
 builds the one rule that lets a delegate give it.
@@ -30,15 +31,15 @@ Non-goals:
 
 | field | value |
 |---|---|
-| name, type | `review`, `module` |
+| name, type | `review-engine`, `module` |
 | provides | `peer-review` |
 | requires | `model-bridge` (hard) |
-| ships | `helper/review` and the neutral skill `peer-review` |
-| commands | `review`, with `helper` `helper/review`, `runtime` `python`, `kit` 1 and the first `arguments` below |
+| ships | `helper/review-engine` and the neutral skill `peer-review` |
+| commands | `review-engine`, with `helper` `helper/review-engine`, `runtime` `python`, `kit` 1 and the first `arguments` below |
 | owner-run arguments | `amend`, `extend`, `reset`, `archive`, `prune` (see "Owner-run commands") |
 
 The first arguments are `status`, `init`, `review-plan`, `review-spec`, `review-roadmap`, `review-adr`, `decide`,
-`amend`, `extend`, `reset`, `archive` and `prune`. The engine is run as `wb run review <argument> [...]`.
+`amend`, `extend`, `reset`, `archive` and `prune`. The engine is run as `wb run review-engine <argument> [...]`.
 
 ## The commands
 
@@ -115,35 +116,46 @@ that `code-work` declares are separate and are not read here.
 
 ## State
 
-A review lives in its own directory in the project, `.workbench/workbench/review/<key>/`, where `<key>` is the kind, a
+A review lives in its own directory in the project, `.workbench/workbench/review-engine/<key>/`, where `<key>` is the kind, a
 hyphen and the first 16 hex digits of the SHA-256 of the document's project-relative path. The directory is committed
 with the project, so a clone and a teammate keep the history. It holds:
 
-- `state.json`: strict JSON with a format number, the kind and path, the settings used, the window and bound, the rounds
-  (each with its file name and SHA-256, the document's SHA-256, the model reported, the verdict, the engine's reading
-  and the usage counts), the decisions (each with the finding, the choice, the reason and its earlier values), the
-  closed time, and the seal;
+- `state.json`: strict JSON with exactly the fields `format` (1), `kind`, `path`, `window`, `rounds`, `decisions`,
+  `closed` and `seal`. The `window` is `{"first": <the number of the window's first round>, "bound": <1 to 5>}`, so the
+  rounds used are the rounds from `first` on. Each round records its file name and SHA-256, the document's SHA-256, the
+  settings used, the model reported, the verdict, the engine's reading and the usage counts. Each decision records the
+  finding, the choice, the reason and its earlier values. `closed` is a UTC time or null;
 - `round-<n>.json`: the stored reply of round n;
 - `ledger.md`: a readable rendering of the above, regenerated on every change and never read back.
 
 Every write is atomic (a temporary file in the same directory, flushed, then renamed) through the kit's no-follow file
-layer, and a lock in the guarded store (below) stops two runs at once.
+layer, and a lock in the guarded store (below) stops two runs at once: the lock is the file `lock` beside the key, held
+without waiting, and a run that cannot take it is refused.
+
+A state read from the project is untrusted: it is parsed as strict JSON of at most 4,194,304 bytes, must have exactly the
+fields above, must name the same kind and path as the review's directory, and every string in it must be at most 4,000
+characters with no control character. A state that fails any of this is reported as not usable and is treated as
+unsealed.
 
 ### The seal
 
 The state is an agent-writable file in the project, so tampering is made visible:
 
-- The helper keeps a random 32-byte key at `projects/<id>/review/seal-key` in the guarded store, made on first use with
-  mode 0600. `<id>` is the project's recorded identity, read as the kit's `project` module reads it.
+- The helper keeps a random 32-byte key at `projects/<id>/review-engine/seal-key` in the guarded store, made on first use
+  (by `init` or a round, never by `status`) with mode 0600 in directories of mode 0700. `<id>` is the project's recorded
+  identity, read as the kit's `project` module reads it. A key that exists but is not 32 bytes, or is a link, is never
+  replaced: the engine refuses and the owner removes it.
 - `state.json` carries `seal`, the HMAC-SHA256 of the canonical JSON of every other field (sorted keys, no spaces,
   UTF-8). The state names each round file by SHA-256, so the seal covers the rounds too.
 - A state whose seal does not verify, or that cannot be verified because there is no key (a fresh machine), is
   **unsealed**. An unsealed review can be read with `status` and can be `reset` by the owner, and runs no round, takes
   no `decide` and no `extend`.
 - **Rollback.** A seal detects change, not replay: an older state is still validly sealed. So the helper also keeps, in
-  the guarded store beside the key, a mark per review of the highest count of rounds and of decisions it has sealed. A
-  state below the mark in either count is **rolled back**; it is reported as such and treated like an unsealed one. A
-  machine that has not seen the later state has no mark, so a rollback there is not detected.
+  the guarded store beside the key, a mark per review of the highest count of rounds and of decisions it has sealed, in
+  `marks/<review key>`. A save writes the state first and the mark second, and the mark never goes down. A state below
+  the mark in either count is **rolled back**; it is reported as such and treated like an unsealed one. A mark that
+  cannot be read is reported as unsealed. A machine that has not seen the later state has no mark, so a rollback there
+  is not detected.
 - The helper reaches the guarded store by the fixed path under the home directory, through the kit's no-follow layer,
   because the kit has no store accessor. That couples the helper to the store's `projects/<id>/` layout; a kit
   accessor would remove it and is a kit change with a new API number, deferred.
@@ -174,7 +186,7 @@ file is a difference `wb acknowledge` lists, and the next round records the chan
 
 `amend`, `extend`, `reset`, `archive` and `prune` change what a review allows or destroys what it recorded, so they are
 the owner's. The declaration lists them as owner-run arguments, and the installer renders a `deny` rule for
-`wb run review <argument>` in each harness that provides `permissions`, as it does for the installer's own owner-run
+`wb run review-engine <argument>` in each harness that provides `permissions`, as it does for the installer's own owner-run
 commands. The rule names the first argument only, which is why `decide` (a once-only record) and `amend` (a change of
 one) are separate arguments. The rule is restrictive and is a mistake guard, not a security boundary: a command spelling
 it does not match runs. The agent's `decide` is allowed. This repository's owner may, by habit, run `decide` themselves;
@@ -246,4 +258,29 @@ The module conforms when tests against a fake bridge, installed as a real pinned
 
 ## As built, and its limits
 
-Nothing is built.
+Built by plan `2026-10-23-review-engine`, increment C (the module `review-engine`, version 0.1.0):
+
+- The declaration provides `peer-review`, requires `model-bridge` (hard) and declares the command `review-engine` with
+  the arguments `status` and `init` only. The other arguments, the `owner` list and the neutral skill are added by
+  the increments that build them. The package has no shipped approval until the plan's last increment.
+- Document resolution for the four kinds, the key and the directory name, the state file and its checks, the seal, the
+  key and the mark in the guarded store, the lock, atomic writes and the ledger are built as stated above.
+- `init <document>` makes an empty review (a window of 3 rounds) and prints its status; it refuses a review that
+  already exists, including one whose state file is a link. `status <document>` prints one object with `document`,
+  `kind`, `key`, `seal` (`ok`, `unsealed` or `rolled_back`) and `reason`, and, when the state could be used,
+  `rounds_used`, `rounds_total`, `bound`, `ceiling`, `decisions_total` and `closed`. It refuses a document that has no
+  review and never writes. The reasons are: there is no seal key on this machine; the seal key is not usable; the
+  state is not usable; the seal does not match; the rollback mark is not usable; the state is older than the last one
+  sealed here.
+- Entries of `rounds` and `decisions` are checked only as bounded objects of clean strings, small whole numbers, lists,
+  objects and null. Their own fields are checked by the increments that write them.
+- Not built: a round, `decide`, `amend`, `extend`, `reset`, `archive`, `prune`, the project setting, the skill, and the
+  findings schema's validation. No bridge is called.
+
+Limits found while building:
+
+- The module is named `review-engine`, not `review`: the installer's boundary test refuses any module, command or helper
+  name as a substring in `workbench/` and `tests/`, and `review` is an ordinary word there.
+- A review's directory is inside the module's namespace, `.workbench/workbench/review-engine/`, beside the installed
+  helper. Whether an upgrade or `wb check` leaves a file there alone is checked when the package is installed (the
+  plan's last increment).
