@@ -125,17 +125,20 @@ that `code-work` declares are separate and are not read here.
 ## State
 
 A review lives in its own directory in the project, `.workbench/workbench/review-engine/<key>/`, where `<key>` is the kind, a
-hyphen and the first 16 hex digits of the SHA-256 of the document's project-relative path. The directory is committed
+hyphen and the first 16 hex digits of the SHA-256 of the document's project-relative path with its case and Unicode
+form folded (so `Plan.md` and `plan.md`, one file on a case-insensitive disk, are one review; on a case-sensitive disk
+two files that differ only so share a review). The directory is committed
 with the project, so a clone and a teammate keep the history. It holds:
 
 - `state.json`: strict JSON with exactly the fields `format` (1), `kind`, `path`, `window`, `rounds`, `decisions`,
-  `closed` and `seal`. The `window` is `{"first": <the number of the window's first round>, "bound": <1 to 5>}`, so the
+  `closed`, `generation` and `seal`. The `window` is `{"first": <the number of the window's first round>, "bound": <1 to 5>}`, so the
   rounds used are the rounds from `first` on. A round is a record with exactly `n`, `file` (`round-<n>.json`), `sha256`
   (of that file), `document_sha256`, `at` (a UTC time), `bridge`, `requested` (`model` and `effort`, each or null),
   `model` (as the bridge reported it, cleaned, at most 200 characters, or null), `verdict` (the reviewer's), `reading`
   (the engine's: `changes_needed` if any finding is `blocker` or `major`), `mismatch`, `usage` (three counts or null; a
   count above 2,147,483,647 is stored as null) and `findings` (each with `id` and `severity`, numbered in order). Each
-  decision records the finding, the choice, the reason and its earlier values. `closed` is a UTC time or null;
+  decision records the finding, the choice (`applied` or `rejected`), the reason and its earlier values. `closed` is a
+  UTC time or null; `generation` is a count that every save raises by one;
 - `round-<n>.json`: the stored reply of round n, cleaned: `format`, `round`, `verdict`, `summary` and the findings
   with their `id`, `severity`, `location`, `problem` and `suggestion`;
 - `schema.json`: the schema the reply is asked to follow, the same bytes in every round;
@@ -164,10 +167,12 @@ The state is an agent-writable file in the project, so tampering is made visible
   **unsealed**. An unsealed review can be read with `status` and can be `reset` by the owner, and runs no round, takes
   no `decide` and no `extend`.
 - **Rollback.** A seal detects change, not replay: an older state is still validly sealed. So the helper also keeps, in
-  the guarded store beside the key, a mark per review of the highest count of rounds and of decisions it has sealed, in
+  the guarded store beside the key, a mark per review of the highest count of rounds, of decisions and the highest generation it has sealed, in
   `marks/<review key>`. A save writes the state first and the mark second, and the mark never goes down. A state below
-  the mark in either count is **rolled back**; it is reported as such and treated like an unsealed one. A mark that
-  cannot be read is reported as unsealed. A machine that has not seen the later state has no mark, so a rollback there
+  the mark in any of the three is **rolled back**; it is reported as such and treated like an unsealed one. The
+  generation is what shows a replayed older state that has the same counts (it would otherwise reopen a closed review
+  or undo a `reset`). A state file that is gone while the mark holds a round or a decision is also rolled back, not "no
+  review". A mark that cannot be read is reported as unsealed. A machine that has not seen the later state has no mark, so a rollback there
   is not detected.
 - The helper reaches the guarded store by the fixed path under the home directory, through the kit's no-follow layer,
   because the kit has no store accessor. That couples the helper to the store's `projects/<id>/` layout; a kit
@@ -303,6 +308,10 @@ Built by plan `2026-10-23-review-engine`, increments C and D (the module `review
   each, cut to 300 characters, with their decisions; when they do not fit in 65,536 bytes the oldest are left out and
   the prompt says so. A finding that was model output is therefore model input to the next round, which is why the
   prompt calls it data.
+- The security pass over C and D (two read-only reviewers, with experiments on scratch copies) found no critical or
+  high finding. Four findings were fixed: a deleted state file reset the round budget; a replayed older state with the
+  same counts passed as sealed; the case or Unicode form of a path made a second review and defeated the bound; and a
+  decision's choice was put into the next prompt without a bound. The rest are in the limits below.
 - Not built: `decide`, `amend`, `extend`, `reset`, `archive`, `prune`, a display of the setting a round used beside the
   setting now (the state records what each round requested), and the skill. `status` shows counts, not findings; the
   findings are in the round's output and in `round-<n>.json`.
@@ -313,6 +322,15 @@ Limits found while building:
   and whether a real vendor accepts the schema is untested until the first hand run against a real bridge.
 - A meaningful finding blocks the next round only inside the current window, so `reset` clears the way; the finding
   stays in the earlier rounds and in the ledger of the prompt.
+- The project's identity is read from the committed seed in `.workbench/manifest.json`, so a clone that copies the seed
+  shares this project's key, marks and lock in the guarded store. It cannot forge a seal without the key, but it can
+  raise a mark and so make the real review read as rolled back. The state is not compared with the current document: a
+  review whose document changed since its last round still reads as `ok`.
+- A deleted mark file reads as no mark, which is the documented limit of a mark that needs the guarded store.
+- The document is hashed before the bridge call, which can last 11 minutes, and the vendor reads the path itself, so a
+  swap of the file in between can show the reviewer other content than the hash names.
+- A process that the bridge starts in a session of its own survives a timeout, because the engine ends the process
+  group. `wbkit.call` also treats a `PATH` entry that does not exist yet as outside the project.
 - The module is named `review-engine`, not `review`: the installer's boundary test refuses any module, command or helper
   name as a substring in `workbench/` and `tests/`, and `review` is an ordinary word there.
 - A review's directory is inside the module's namespace, `.workbench/workbench/review-engine/`, beside the installed

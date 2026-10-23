@@ -46,7 +46,8 @@ KEY_BYTES = 32
 NAMESPACE = ".workbench/workbench/review-engine"
 STORE_NAME = "review-engine"
 USAGE = "usage: review-engine status|init|review-plan|review-spec|review-roadmap|review-adr <document>"
-FIELDS = {"format", "kind", "path", "window", "rounds", "decisions", "closed", "seal"}
+FIELDS = {"format", "kind", "path", "window", "rounds", "decisions", "closed", "generation", "seal"}
+CHOICES = ("applied", "rejected")
 ROUND_FIELDS = {"n", "file", "sha256", "document_sha256", "at", "bridge", "requested", "model", "verdict", "reading",
                 "mismatch", "usage", "findings"}
 USAGE_FIELDS = ("input_tokens", "output_tokens", "total_tokens")
@@ -129,6 +130,12 @@ def is_count(value):
 # --- the document -------------------------------------------------------------
 
 
+def fold(path):
+    """`path` as one spelling for every case and Unicode form of it, so that ``Plan.md`` and ``plan.md`` (one
+    file on a case-insensitive disk) are one review. Used for the review key and to compare paths, never to open."""
+    return unicodedata.normalize("NFD", unicodedata.normalize("NFD", path).casefold())
+
+
 def resolve(root, argument, kind=None):
     """The `Document` named by the project-relative path `argument`, or `Refused`. It must be a regular
     file, with no link in any component and one name, at most `MAX_DOCUMENT` bytes, below the directory of
@@ -154,7 +161,7 @@ def resolve(root, argument, kind=None):
         raise Refused(shown(exc))
     if data is None:
         raise Refused("%s does not exist" % shown(argument))
-    key = "%s-%s" % (found, hashlib.sha256(argument.encode("utf-8")).hexdigest()[:16])
+    key = "%s-%s" % (found, hashlib.sha256(fold(argument).encode("utf-8")).hexdigest()[:16])
     return Document(found, argument, key, hashlib.sha256(data).hexdigest())
 
 
@@ -221,17 +228,17 @@ class Guarded:
         return key
 
     def mark(self, name):
-        """``(rounds, decisions)``: the most the review `name` has ever sealed here; zero if none."""
+        """``(rounds, decisions, generation)``: the most the review `name` has ever sealed here; zero if none."""
         data = self.read(("marks", name), 4096)
         if data is None:
-            return 0, 0
+            return 0, 0, 0
         try:
             value = jsonstrict.parse_object(data, 4096)
         except ValueError:
             raise Unusable()
-        if set(value) != {"rounds", "decisions"} or not all(is_count(v) for v in value.values()):
+        if set(value) != {"rounds", "decisions", "generation"} or not all(is_count(v) for v in value.values()):
             raise Unusable()
-        return value["rounds"], value["decisions"]
+        return value["rounds"], value["decisions"], value["generation"]
 
     def _directory(self):
         """A descriptor for this engine's directory, made with mode 0700 where missing."""
@@ -351,7 +358,7 @@ def check_state(state, document):
         raise ValueError("the fields are not the documented ones")
     if type(state["format"]) is not int or state["format"] != FORMAT:
         raise ValueError("the format is not %d" % FORMAT)
-    if state["kind"] != document.kind or state["path"] != document.path:
+    if state["kind"] != document.kind or not isinstance(state["path"], str) or fold(state["path"]) != fold(document.path):
         raise ValueError("the state is of another document")
     window, rounds, decisions = state["window"], state["rounds"], state["decisions"]
     if not isinstance(window, dict) or set(window) != {"first", "bound"}:
@@ -370,6 +377,8 @@ def check_state(state, document):
     if state["closed"] is not None and not (isinstance(state["closed"], str)
                                             and re.fullmatch(_TIME, state["closed"])):
         raise ValueError("the closed time is not a time")
+    if type(state["generation"]) is not int or not 0 <= state["generation"] <= MAX_COUNT:
+        raise ValueError("the generation is not a count")
     if not isinstance(state["seal"], str) or not re.fullmatch(_HEX, state["seal"]):
         raise ValueError("the seal is not 64 hex digits")
     _check_value(state)
@@ -381,7 +390,8 @@ def state_rel(document):
 
 def new_state(document):
     return {"format": FORMAT, "kind": document.kind, "path": document.path,
-            "window": {"first": 1, "bound": DEFAULT_BOUND}, "rounds": [], "decisions": [], "closed": None}
+            "window": {"first": 1, "bound": DEFAULT_BOUND}, "rounds": [], "decisions": [], "closed": None,
+            "generation": 0}
 
 
 def load(root, guarded, document):
@@ -394,7 +404,12 @@ def load(root, guarded, document):
     except safefs.SafeFsError:
         return Loaded(None, "unsealed", BAD_STATE)
     if data is None:
-        return None
+        try:
+            rounds, decisions, _ = guarded.mark(document.key)
+        except Unusable:
+            return Loaded(None, "unsealed", BAD_MARK)
+        # a state that was sealed here and is gone is a rollback, not a review that never was
+        return None if rounds == 0 and decisions == 0 else Loaded(None, "rolled_back", ROLLED_BACK)
     try:
         state = jsonstrict.parse_object(data, MAX_STATE)
         check_state(state, document)
@@ -407,10 +422,10 @@ def load(root, guarded, document):
     if not hmac.compare_digest(seal(key, body), state["seal"]):
         return Loaded(state, "unsealed", NO_MATCH)
     try:
-        rounds, decisions = guarded.mark(document.key)
+        rounds, decisions, generation = guarded.mark(document.key)
     except Unusable:
         return Loaded(state, "unsealed", BAD_MARK)
-    if len(state["rounds"]) < rounds or len(state["decisions"]) < decisions:
+    if len(state["rounds"]) < rounds or len(state["decisions"]) < decisions or state["generation"] < generation:
         return Loaded(state, "rolled_back", ROLLED_BACK)
     return Loaded(state, "ok", "")
 
@@ -434,16 +449,17 @@ def save(root, guarded, document, state, files=None):
     before the mark: a failure leaves a mark that is behind the state, which is harmless, and never one that
     is ahead of it."""
     key = guarded.make_key()
+    try:
+        rounds, decisions, generation = guarded.mark(document.key)
+    except Unusable:
+        raise Refused("%s; the owner removes it to start again" % BAD_MARK)
     body = {name: value for name, value in state.items() if name != "seal"}
+    body["generation"] = max(state["generation"], generation) + 1
     sealed = dict(body, seal=seal(key, body))
     try:
         check_state(sealed, document)
     except ValueError as exc:
         raise Refused("the state would not be usable: %s" % shown(exc))
-    try:
-        rounds, decisions = guarded.mark(document.key)
-    except Unusable:
-        raise Refused("%s; the owner removes it to start again" % BAD_MARK)
     folder = "%s/%s" % (NAMESPACE, document.key)
     text = (json.dumps(sealed, sort_keys=True, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
     if len(text) > MAX_STATE:
@@ -454,7 +470,8 @@ def save(root, guarded, document, state, files=None):
         safefs.write_tree(root, tree)
     except safefs.SafeFsError as exc:
         raise Refused("the review cannot be written: %s" % shown(exc))
-    mark = {"rounds": max(rounds, len(sealed["rounds"])), "decisions": max(decisions, len(sealed["decisions"]))}
+    mark = {"rounds": max(rounds, len(sealed["rounds"])), "decisions": max(decisions, len(sealed["decisions"])),
+            "generation": sealed["generation"]}
     guarded.write({"marks/" + document.key: (json.dumps(mark, sort_keys=True) + "\n").encode("utf-8")})
     return sealed
 
@@ -663,7 +680,7 @@ def decisions_by_finding(state):
         name = item.get("finding")
         if isinstance(name, str):
             choice, reason = item.get("choice"), item.get("reason")
-            found[name] = (choice if isinstance(choice, str) and choice else "recorded",
+            found[name] = (choice if choice in CHOICES else "recorded",
                            reason if isinstance(reason, str) else "")
     return found
 
@@ -720,7 +737,8 @@ def run_round(root, project_id, kind, argument, out):
         state = new_state(document) if loaded is None else loaded.state
         if loaded is not None and (state is None or loaded.seal != "ok"):
             raise Refused("the review of %s is %s (%s) and runs no round" % (
-                shown(document.path), "not usable" if state is None else loaded.seal.replace("_", " "), loaded.reason))
+                shown(document.path), "not usable" if state is None and loaded.seal == "unsealed" else loaded.seal.replace("_", " "),
+                loaded.reason))
         if state["closed"] is not None:
             raise Refused("the review of %s is closed and runs no round" % shown(document.path))
         window = state["window"]

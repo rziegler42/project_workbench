@@ -57,7 +57,7 @@ class Success(Round):
     def test_the_mark_and_the_ledger_follow_the_state(self):
         self.round()
         with open(self.store_path("marks", key_of("plan", PLAN))) as handle:
-            self.assertEqual({"rounds": 1, "decisions": 0}, json.load(handle))
+            self.assertEqual({"rounds": 1, "decisions": 0, "generation": 1}, json.load(handle))
         self.assertIn("1 of 3 rounds", self.read(DIR + "/ledger.md").decode())
 
     def test_a_round_makes_the_review_when_there_is_none_and_uses_the_one_there_is(self):

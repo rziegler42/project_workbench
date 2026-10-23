@@ -410,4 +410,30 @@ bridge the project names and store the findings. Read together with Choice 5 as 
 - Not done: no review and no security pass of D (planned before close); no run against a real Codex, so whether a real
   vendor accepts the schema file (which sets no length bounds) is untested; `decide` and the owner-run commands.
 
+### Security pass over C and D
+
+Two read-only reviewers ran experiments on scratch copies with a temporary home (the state, seal and filesystem; the
+round, the bridge call and untrusted input). Their reports are untrusted input and were weighed one by one. No critical
+or high finding. At the owner's word ("fix findings 1 to 4") four were fixed:
+
+- A deleted `state.json` after sealed rounds read as "no review", so one more round could run and overwrote
+  `round-1.json`. `load` now reports it as rolled back when the mark holds a round or a decision.
+- A replayed older state with the same counts passed as sealed, which would reopen a closed review and undo a `reset`.
+  The state now has a `generation` (raised by every save) that the mark keeps; a state below the mark's is rolled back.
+  The state format gained a field and the mark one; no review exists outside the tests yet.
+- The case or Unicode form of a path made another review (nine rounds for one file at a bound of three, found by both
+  reviewers). The key and the path check now use a folded spelling. On a case-sensitive disk two files that differ only
+  in case share a review; I judged that the smaller cost.
+- A decision's `choice` reached the next prompt unbounded. It is now one of `applied` or `rejected`, anything else is
+  read as `recorded`; `decide` (E) must also refuse any other choice when it writes.
+
+Tests: 8 added (196 in the module); four deliberate weakenings (an absent state read as no review, the generation
+ignored, the key not folded, any choice accepted) each made a test fail. Not fixed, recorded as limits in the spec: a
+clone that copies the project's seed shares its store entries; a deleted mark file reads as no mark; a file swapped
+during the bridge call; a bridge's grandchild in its own session surviving a timeout; and `wbkit.call` treating a
+`PATH` entry that does not exist yet as outside the project (a kit change, not made). Not reviewed: `decide`, `amend`,
+`extend`, `reset`, `archive`, `prune`, the real bridge and the deny-rule text against a real permission matcher.
+Increment E must check decision entries one by one and refuse a second `decide`, and the owner-run list does not exist
+until E.
+
 Increments E to G: not started.

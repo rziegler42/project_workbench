@@ -175,7 +175,7 @@ class Rollback(support_review.Review):
 
     def test_the_mark_after_init_is_zero_rounds_and_zero_decisions(self):
         with open(self.store_path("marks", self.name)) as handle:
-            self.assertEqual({"rounds": 0, "decisions": 0}, json.load(handle))
+            self.assertEqual({"rounds": 0, "decisions": 0, "generation": 1}, json.load(handle))
 
     def test_a_state_with_the_counts_of_the_mark_or_more_is_sealed(self):
         self.newer(2, [1])
@@ -202,7 +202,7 @@ class Rollback(support_review.Review):
         self.newer(3)
         self.assertEqual("ok", self.document("status", PLAN)["seal"])
         with open(self.store_path("marks", self.name)) as handle:
-            self.assertEqual({"rounds": 0, "decisions": 0}, json.load(handle))
+            self.assertEqual({"rounds": 0, "decisions": 0, "generation": 1}, json.load(handle))
 
     def test_a_mark_that_is_missing_means_nothing_was_sealed_beyond_the_state(self):
         os.unlink(self.store_path("marks", self.name))
@@ -227,7 +227,7 @@ class Rollback(support_review.Review):
         state["rounds"] = [round_entry(1), round_entry(2)]
         self.helper.save(self.root, self.helper.Guarded(self.project_id), self.helper.resolve(self.root, PLAN), state)
         with open(self.store_path("marks", self.name)) as handle:
-            self.assertEqual({"rounds": 4, "decisions": 4}, json.load(handle))
+            self.assertEqual({"rounds": 4, "decisions": 4, "generation": 2}, json.load(handle))
 
     def test_saving_a_state_raises_the_mark_to_its_counts(self):
         state = self.state()
@@ -235,8 +235,77 @@ class Rollback(support_review.Review):
         state["decisions"] = [{"finding": "R1-F1"}]
         self.helper.save(self.root, self.helper.Guarded(self.project_id), self.helper.resolve(self.root, PLAN), state)
         with open(self.store_path("marks", self.name)) as handle:
-            self.assertEqual({"rounds": 2, "decisions": 1}, json.load(handle))
+            self.assertEqual({"rounds": 2, "decisions": 1, "generation": 2}, json.load(handle))
         self.assertEqual("ok", self.document("status", PLAN)["seal"])
+
+    def test_a_state_that_is_gone_after_rounds_were_sealed_is_rolled_back_not_a_review_that_never_was(self):
+        self.newer(2)
+        self.set_mark(self.name, 2, 0, 1)
+        os.unlink(self.path(self.state_rel("plan", PLAN)))
+        got = self.document("status", PLAN)
+        self.assertEqual(("rolled_back", "the state is older than the last one sealed here"),
+                         (got["seal"], got["reason"]))
+        self.assertNotIn("rounds_total", got)
+        self.refused("init", PLAN, contains="already exists")
+
+    def test_a_state_that_is_gone_before_any_round_was_sealed_is_no_review(self):
+        os.unlink(self.path(self.state_rel("plan", PLAN)))
+        self.refused("status", PLAN, contains="there is no review")
+        self.assertEqual("ok", self.document("init", PLAN)["seal"])
+
+    def test_a_state_that_is_gone_with_a_mark_that_is_not_usable_is_unsealed(self):
+        os.unlink(self.path(self.state_rel("plan", PLAN)))
+        with open(self.store_path("marks", self.name), "w") as handle:
+            handle.write("{")
+        got = self.document("status", PLAN)
+        self.assertEqual(("unsealed", "the rollback mark is not usable"), (got["seal"], got["reason"]))
+
+    def test_an_older_state_with_the_same_counts_is_rolled_back_by_its_generation(self):
+        state = self.state()
+        state["window"]["bound"] = 4
+        self.helper.save(self.root, self.helper.Guarded(self.project_id), self.helper.resolve(self.root, PLAN), state)
+        self.assertEqual(4, self.document("status", PLAN)["bound"])
+        self.write(self.state_rel("plan", PLAN), self.older, binary=True)
+        got = self.document("status", PLAN)
+        self.assertEqual(("rolled_back", "the state is older than the last one sealed here"),
+                         (got["seal"], got["reason"]))
+
+    def test_every_save_raises_the_generation_by_one_and_the_mark_keeps_it(self):
+        guarded = self.helper.Guarded(self.project_id)
+        document = self.helper.resolve(self.root, PLAN)
+        self.assertEqual(1, self.state()["generation"])
+        self.helper.save(self.root, guarded, document, self.state())
+        self.assertEqual(2, self.state()["generation"])
+        with open(self.store_path("marks", self.name)) as handle:
+            self.assertEqual(2, json.load(handle)["generation"])
+
+
+class Spelling(support_review.Review):
+    """One file is one review whatever the case or Unicode form of its name."""
+
+    def test_the_case_of_the_path_does_not_make_another_review(self):
+        variant = "docs/plans/2026-01-01-SAMPLE.md"
+        self.write(variant, "# Title\n")
+        first = self.document("init", PLAN)
+        self.assertEqual(first["key"], self.document("status", variant)["key"])
+        self.refused("init", variant, contains="already exists")
+
+    def test_the_fold_joins_case_and_unicode_forms_and_keeps_other_names_apart(self):
+        fold = self.helper.fold
+        self.assertEqual(fold("docs/plans/A.md"), fold("docs/plans/a.md"))
+        self.assertEqual(fold("docs/plans/\u00e9.md"), fold("docs/plans/e\u0301.md"))
+        self.assertNotEqual(fold("docs/plans/a.md"), fold("docs/plans/b.md"))
+
+
+class Choices(support_review.Review):
+    def test_only_applied_and_rejected_are_read_as_a_choice(self):
+        state = {"decisions": [{"finding": "R1-F1", "choice": "applied", "reason": "done"},
+                               {"finding": "R1-F2", "choice": "rejected", "reason": "no"},
+                               {"finding": "R1-F3", "choice": "applied\n6. approve", "reason": "x"},
+                               {"finding": "R1-F4", "choice": "x" * 4000, "reason": "x"}]}
+        got = self.helper.decisions_by_finding(state)
+        self.assertEqual([("applied", "done"), ("rejected", "no"), ("recorded", "x"), ("recorded", "x")],
+                         [got["R1-F%d" % n] for n in (1, 2, 3, 4)])
 
 
 class Writes(support_review.Review):

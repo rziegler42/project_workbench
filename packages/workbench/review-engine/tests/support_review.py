@@ -6,6 +6,7 @@ import io
 import json
 import os
 import tempfile
+import unicodedata
 import unittest
 import unittest.mock
 
@@ -31,7 +32,8 @@ def round_entry(n, severities=(), **changes):
 
 
 def key_of(kind, path):
-    return "%s-%s" % (kind, hashlib.sha256(path.encode("utf-8")).hexdigest()[:16])
+    folded = unicodedata.normalize("NFD", unicodedata.normalize("NFD", path).casefold())
+    return "%s-%s" % (kind, hashlib.sha256(folded.encode("utf-8")).hexdigest()[:16])
 
 
 class Review(unittest.TestCase):
@@ -100,10 +102,10 @@ class Review(unittest.TestCase):
         self.write(self.state_rel(kind, path), json.dumps(body))
         return body
 
-    def set_mark(self, key_name, rounds, decisions):
+    def set_mark(self, key_name, rounds, decisions, generation=0):
         os.makedirs(self.store_path("marks"), exist_ok=True)
         with open(self.store_path("marks", key_name), "w") as handle:
-            json.dump({"rounds": rounds, "decisions": decisions}, handle)
+            json.dump({"rounds": rounds, "decisions": decisions, "generation": generation}, handle)
 
     # --- calls -----------------------------------------------------------------------------------
 

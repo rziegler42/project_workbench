@@ -19,11 +19,12 @@ class Init(support_review.Review):
     def test_the_state_it_writes_has_exactly_the_documented_fields(self):
         self.document("init", PLAN)
         state = self.state()
-        self.assertEqual(["closed", "decisions", "format", "kind", "path", "rounds", "seal", "window"],
+        self.assertEqual(["closed", "decisions", "format", "generation", "kind", "path", "rounds", "seal", "window"],
                          sorted(state))
         self.assertEqual((1, "plan", PLAN, {"first": 1, "bound": 3}, [], [], None),
                          (state["format"], state["kind"], state["path"], state["window"], state["rounds"],
                           state["decisions"], state["closed"]))
+        self.assertEqual(1, state["generation"])
         self.assertRegex(state["seal"], r"^[0-9a-f]{64}$")
 
     def test_each_kind_is_found_from_its_directory(self):
