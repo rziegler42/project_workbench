@@ -23,7 +23,20 @@
         "review-plan",
         "review-spec",
         "review-roadmap",
-        "review-adr"
+        "review-adr",
+        "decide",
+        "amend",
+        "extend",
+        "reset",
+        "archive",
+        "prune"
+      ],
+      "owner": [
+        "amend",
+        "extend",
+        "reset",
+        "archive",
+        "prune"
       ]
     }
   }

@@ -6,7 +6,7 @@ import os
 import unittest
 
 import support_review
-from support_review import PLAN, SPEC, key_of, round_entry
+from support_review import PLAN, SPEC, decision_entry, key_of, round_entry
 
 
 class Init(support_review.Review):
@@ -65,7 +65,7 @@ class Status(support_review.Review):
         state = self.state()
         state["rounds"] = [round_entry(n) for n in range(1, 5)]
         state["window"] = {"first": 3, "bound": 4}
-        state["decisions"] = [{"finding": "R1-F1"}]
+        state["decisions"] = [decision_entry("R1-F1")]
         state["closed"] = "2026-02-03T04:05:06Z"
         self.forge(state)
         got = self.document("status", PLAN)

@@ -1,8 +1,8 @@
 # review-engine
 
 Status: Draft. Written by plan `2026-10-23-review-engine` (increment A), before the module exists, so that the module is
-built against this text. The state layer, `init`, `status` and the round are built (increments C and D); the rest is not, and
-"As built, and its limits" says which.
+built against this text. The state layer, `init`, `status`, the round and the decisions and owner commands are built (increments C, D and E);
+the setting's refusals and the skill are not, and "As built, and its limits" says which.
 The capability name `peer-review` is the accepted one (`2026-10-19-mandatory-review-personal-delegation`).
 
 Terms are in `terms.md`. The declaration is defined in `module-contract.md`; the launcher, the kit and the rule for a
@@ -53,17 +53,17 @@ directory, and none changes the reviewed document.
 | `status <document>` | shows the review state: rounds used and bound, the findings with their decisions, pending decisions, closed or not, seal state |
 | `init <document>` | makes the review's directory and state without calling a model |
 | `review-plan\|spec\|roadmap\|adr <document>` | runs one round (below) |
-| `decide <finding> applied\|rejected [--reason <text>]` | records a decision once; a second call on the same finding is refused |
-| `amend <finding> applied\|rejected [--reason <text>]` | changes a recorded decision and keeps the earlier one in the ledger (owner-run) |
-| `extend <n>` | raises the bound by 1 to 5 rounds, never above the ceiling (owner-run) |
-| `reset` | opens a fresh window of the default number of rounds (owner-run) |
-| `archive` | writes the closed summary and refuses any further round (owner-run) |
-| `prune [--apply]` | lists, and with `--apply` deletes, closed reviews older than the retention (owner-run) |
+| `decide <document> <finding> applied\|rejected [--reason <text>]` | records a decision once; a second call on the same finding is refused |
+| `amend <document> <finding> applied\|rejected [--reason <text>]` | changes a recorded decision and keeps the earlier one in the ledger (owner-run) |
+| `extend <document> <n>` | raises the bound by 1 to 5 rounds, never above the ceiling (owner-run) |
+| `reset <document>` | opens a fresh window of the default number of rounds (owner-run) |
+| `archive <document>` | closes the review: the ledger is its summary, and no further round, decision or change is taken (owner-run) |
+| `prune [--apply]` | lists, and with `--apply` deletes, closed reviews closed 90 days ago or more (owner-run) |
 
 `<document>` is a path relative to the project root. It must be a regular file with no link in any component, inside
 the project, in the directory of its kind (`docs/plans/`, `docs/specs/`, `docs/roadmaps/`, `docs/decisions/`) and no
 larger than 1,048,576 bytes; anything else is refused before a bridge is run. `decide` and the owner-run commands find
-the review by the document too; the finding is named `R<round>-F<number>`. A reason is at most 2,000 characters.
+the review by the document too; the finding is named `R<round>-F<number>`. A reason is at most 2,000 characters with no control character.
 
 ## The round
 
@@ -276,12 +276,12 @@ The module conforms when tests against a fake bridge, installed as a real pinned
 
 ## As built, and its limits
 
-Built by plan `2026-10-23-review-engine`, increments C and D (the module `review-engine`, version 0.1.0):
+Built by plan `2026-10-23-review-engine`, increments C, D and E (the module `review-engine`, version 0.1.0):
 
 - The declaration provides `peer-review`, requires `model-bridge` (hard) and declares the command `review-engine` with
-  the arguments `status`, `init`, `review-plan`, `review-spec`, `review-roadmap` and `review-adr`. The other arguments,
-  the `owner` list and the neutral skill are added by the increments that build them. The package has no shipped
-  approval until the plan's last increment.
+  the twelve arguments of "The commands" and the `owner` list `amend`, `extend`, `reset`, `archive`, `prune`. The
+  neutral skill is added by the increment that builds it. The package has no shipped approval until the plan's last
+  increment.
 - Document resolution for the four kinds, the key and the directory name, the state file and its checks, the seal, the
   key and the mark in the guarded store, the lock, atomic writes and the ledger are built as stated above.
 - `init <document>` makes an empty review (a window of 3 rounds) and prints its status; it refuses a review that
@@ -312,8 +312,23 @@ Built by plan `2026-10-23-review-engine`, increments C and D (the module `review
   high finding. Four findings were fixed: a deleted state file reset the round budget; a replayed older state with the
   same counts passed as sealed; the case or Unicode form of a path made a second review and defeated the bound; and a
   decision's choice was put into the next prompt without a bound. The rest are in the limits below.
-- Not built: `decide`, `amend`, `extend`, `reset`, `archive`, `prune`, a display of the setting a round used beside the
-  setting now (the state records what each round requested), and the skill. `status` shows counts, not findings; the
+- The decisions and owner commands (increment E). Each runs under the lock, on a review that exists, is sealed and has
+  not been rolled back, and prints the review's `status` object plus its own fields. A decision is one record per
+  finding with exactly `finding`, `choice` (`applied` or `rejected`), `reason`, `at` and `earlier`; `decide` refuses a
+  finding that no round has and one that already has a record, `amend` replaces the record and appends the value it
+  had to `earlier` (at most 20), so `decisions_total` counts findings. Every record is checked field by field when a
+  state is read, and a finding may have one record. `extend` takes 1 to 5 and refuses a bound above 5. `reset` opens a
+  window that starts after the last round. `archive` sets `closed`, and a closed review takes no round, decision,
+  `amend`, `extend` or `reset`; the ledger, regenerated on every save with each round and each decision, is its
+  summary. A review that is unsealed or rolled back takes none of these but `reset`, which sets it right: it seals the
+  state as it is (making the key if there is none) and sets the mark to its counts, even if that lowers the mark. A
+  state file that is gone while the mark holds a round is also set right by `reset`, as an empty review.
+- `prune` lists, and with `--apply` removes under the lock, a directory of the engine's own name (kind, hyphen, 16 hex
+  digits) that holds only the engine's own file names, whose state is sealed, whose name is the key of the path in its
+  state, and which was closed 90 days ago or more; it also removes the review's mark. Removal goes through descriptors
+  that never follow a link, and a directory that holds anything else is left whole.
+- Not built: a display of the setting a round used beside the setting now (the state records what each round
+  requested), and the skill. `status` shows counts, not findings; the
   findings are in the round's output and in `round-<n>.json`.
 
 Limits found while building:
@@ -322,6 +337,10 @@ Limits found while building:
   and whether a real vendor accepts the schema is untested until the first hand run against a real bridge.
 - A meaningful finding blocks the next round only inside the current window, so `reset` clears the way; the finding
   stays in the earlier rounds and in the ledger of the prompt.
+- The retention of 90 days, and archive as a final act that `reset` does not undo, are the engine's own choices, not the
+  owner's; both are one constant each.
+- `reset` on an unsealed state blesses whatever the state says, which is why it is the owner's. An agent that edits a
+  state and gets it reset by the owner has the owner's word for it.
 - The project's identity is read from the committed seed in `.workbench/manifest.json`, so a clone that copies the seed
   shares this project's key, marks and lock in the guarded store. It cannot forge a seal without the key, but it can
   raise a mark and so make the real review read as rolled back. The state is not compared with the current document: a

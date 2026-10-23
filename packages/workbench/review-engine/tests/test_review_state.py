@@ -8,7 +8,7 @@ import stat
 import unittest
 
 import support_review
-from support_review import NAMESPACE, OTHER_PLAN, PLAN, SPEC, key_of, round_entry
+from support_review import NAMESPACE, OTHER_PLAN, PLAN, SPEC, decision_entry, key_of, round_entry
 from workbench.wbkit import safefs
 
 
@@ -86,7 +86,7 @@ class Seal(support_review.Review):
     def test_a_field_changed_by_hand_is_unsealed_whichever_field_it_is(self):
         original = self.read(self.state_rel("plan", PLAN))
         edits = (lambda s: s["window"].update(bound=5), lambda s: s.update(closed="2026-01-01T00:00:00Z"),
-                 lambda s: s["rounds"].append(round_entry(1)), lambda s: s["decisions"].append({"finding": "R1-F1"}),
+                 lambda s: s["rounds"].append(round_entry(1)), lambda s: s["decisions"].append(decision_entry("R1-F1")),
                  lambda s: s.update(path=SPEC), lambda s: s.update(kind="spec"))
         for edit in edits:
             self.write(self.state_rel("plan", PLAN), original, binary=True)
@@ -170,7 +170,7 @@ class Rollback(support_review.Review):
     def newer(self, rounds, decisions=()):
         body = self.state()
         body["rounds"] = [round_entry(n + 1) for n in range(rounds)]
-        body["decisions"] = [{"finding": "R1-F%d" % n} for n in decisions]
+        body["decisions"] = [decision_entry("R1-F%d" % n) for n in decisions]
         return self.forge(body)
 
     def test_the_mark_after_init_is_zero_rounds_and_zero_decisions(self):
@@ -232,7 +232,7 @@ class Rollback(support_review.Review):
     def test_saving_a_state_raises_the_mark_to_its_counts(self):
         state = self.state()
         state["rounds"] = [round_entry(1), round_entry(2)]
-        state["decisions"] = [{"finding": "R1-F1"}]
+        state["decisions"] = [decision_entry("R1-F1")]
         self.helper.save(self.root, self.helper.Guarded(self.project_id), self.helper.resolve(self.root, PLAN), state)
         with open(self.store_path("marks", self.name)) as handle:
             self.assertEqual({"rounds": 2, "decisions": 1, "generation": 2}, json.load(handle))

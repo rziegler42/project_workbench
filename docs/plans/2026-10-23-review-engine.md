@@ -436,4 +436,36 @@ during the bridge call; a bridge's grandchild in its own session surviving a tim
 Increment E must check decision entries one by one and refuse a second `decide`, and the owner-run list does not exist
 until E.
 
-Increments E to G: not started.
+### Increment E — Decisions, extension, archive and prune
+
+- Changes: `packages/workbench/review-engine/helper/review-engine` (`decide`, `amend`, `extend`, `reset`, `archive`,
+  `prune`, per-record checks of decisions, a richer ledger, `Guarded.remove_mark`, `save(override=)`),
+  `module.json` (twelve arguments and the `owner` list `amend`, `extend`, `reset`, `archive`, `prune`), the module tests
+  (`test_review_decisions.py`, `test_review_owner.py`, `test_review_prune.py`, and the declaration, state, command and
+  round tests moved to valid decision records), and `docs/specs/review-engine.md` ("The commands" and "As built, and
+  its limits"). The installer is unchanged: increment B's rule generation renders the deny rules.
+- Verification as run: the module tests, 261 in all, pass. The full suite `python3 -B -W error tests/run_all.py` ran
+  3446 tests in 7 roots, OK (installer 2360 with 1 skip, ask-codex 90, claude 32 with 12 skips for the stale shipped
+  approvals until G, code-work 268 with 2 skips, groundwork 178, review-engine 261, safe-git 257). `doccheck`,
+  `refcheck` and `git diff --check` print nothing. Sixteen deliberate weakenings of the helper were tried (a second
+  `decide` allowed, an unknown finding allowed, `amend` dropping the earlier value, `extend` past the ceiling, `reset`
+  keeping the old window, `archive` setting no time, a closed review changeable, an unsealed one changeable, `reset`
+  not setting the mark, `prune` ignoring the retention, the seal, a foreign file or the key of the name, `prune`
+  leaving the mark, a preview that applies, decision records unchecked) and each made tests fail. This time I wrote
+  the helper before most of its tests; the mutation run is the check that the tests bite.
+- Decisions made in the code, for the owner to accept or overturn: (1) the forms are `decide|amend <document>
+  <finding> applied|rejected [--reason <text>]`, `extend <document> <n>` and `reset|archive <document>`; the spec's
+  table had left the document out of them. (2) A decision is one record per finding with `earlier` values; `amend`
+  rewrites it, so `decisions_total` counts findings, and at most 20 earlier values are kept. (3) A closed review takes
+  no round, `decide`, `amend`, `extend` or `reset`; `archive` is final. (4) `reset` is also the way out of a state that
+  is unsealed or rolled back or gone: it seals the state as it is (or an empty one) and sets the mark to its counts,
+  lowering it, which is why it is the owner's; a state that cannot be read at all is not reset. (5) The closed summary
+  is the ledger, which now lists every round and decision; there is no separate summary file. (6) Retention is 90 days
+  after closing, and `prune` removes the review's mark with its directory so the document can be reviewed again.
+  (7) `decide` takes a finding of any round of the review, not only the window's. (8) A reason is at most 2,000
+  characters with no control character, and the ledger shows it without markup characters.
+- Not done: the skill and the changed-request display (F); no review of E, and the security pass was before E, so the
+  new commands (`reset` lowering the mark, `prune` deleting files) have had no independent look; no run against a real
+  Codex.
+
+Increments F and G: not started.

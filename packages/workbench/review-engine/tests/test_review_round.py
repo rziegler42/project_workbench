@@ -371,10 +371,9 @@ class Refusals(Round):
     def test_a_decision_on_every_meaningful_finding_lets_the_next_round_run(self):
         self.control(reply=reply(finding("major"), finding("blocker")), events=support_bridge.EVENTS)
         self.round()
-        decisions = [{"finding": "R1-F1", "choice": "applied", "reason": ""}]
-        self.forge_now(decisions=decisions)
+        self.document("decide", PLAN, "R1-F1", "applied")
         self.refuses("review-plan", PLAN, contains="R1-F2")
-        self.forge_now(decisions=decisions + [{"finding": "R1-F2", "choice": "rejected", "reason": "no"}])
+        self.document("decide", PLAN, "R1-F2", "rejected", "--reason", "no")
         self.control(reply=reply(), events=support_bridge.EVENTS)
         got = self.round()
         self.assertEqual(([], True), (got["pending"], got["converged"]))

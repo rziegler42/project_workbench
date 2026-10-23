@@ -31,6 +31,11 @@ def round_entry(n, severities=(), **changes):
     return entry
 
 
+def decision_entry(finding, choice="applied", reason="", at="2026-01-01T00:00:00Z", earlier=()):
+    """A decision of a state in the documented shape."""
+    return {"finding": finding, "choice": choice, "reason": reason, "at": at, "earlier": list(earlier)}
+
+
 def key_of(kind, path):
     folded = unicodedata.normalize("NFD", unicodedata.normalize("NFD", path).casefold())
     return "%s-%s" % (kind, hashlib.sha256(folded.encode("utf-8")).hexdigest()[:16])
@@ -101,6 +106,15 @@ class Review(unittest.TestCase):
         body["seal"] = self.helper.seal(key if key is not None else self.key(), body)
         self.write(self.state_rel(kind, path), json.dumps(body))
         return body
+
+    def reviewed(self, severities=("major", "minor"), path=PLAN, kind="plan", **changes):
+        """A review of `path` that has one round with a finding of each of `severities` (R1-F1, R1-F2 ...)."""
+        if not os.path.exists(self.path(self.state_rel(kind, path))):
+            self.document("init", path)
+        body = self.state(kind, path)
+        body["rounds"] = [round_entry(1, severities)]
+        body.update(changes)
+        return self.forge(body, kind=kind, path=path)
 
     def set_mark(self, key_name, rounds, decisions, generation=0):
         os.makedirs(self.store_path("marks"), exist_ok=True)

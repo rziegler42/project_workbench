@@ -9,6 +9,11 @@ private copy of it through the kit runner with nothing beside it.
     review-engine review-plan|review-spec|review-roadmap|review-adr <document>
                                          run one round: ask a model, through the bridge the project names,
                                          and keep what it found
+    review-engine decide <document> <finding> applied|rejected [--reason <text>]
+                                         record what was done about a finding, once
+    review-engine amend|extend|reset|archive <document> ...    (the owner's) change a decision, the bound or
+                                         the window, or close the review
+    review-engine prune [--apply]        (the owner's) list, or delete, closed reviews past their retention
 
 The contract is ``docs/specs/review-engine.md``. A review lives in the project, in
 ``.workbench/workbench/review-engine/<key>/``, and is sealed with a key kept in the guarded store, together with
@@ -17,6 +22,7 @@ JSON object, or a ``refused:`` line and nothing on standard output. Whatever is 
 data: it is parsed strictly, bounded and checked, never run and never believed.
 """
 
+import calendar
 import collections
 import contextlib
 import errno
@@ -26,6 +32,7 @@ import hmac
 import json
 import os
 import re
+import stat
 import sys
 import time
 import unicodedata
@@ -45,9 +52,19 @@ CEILING = 5
 KEY_BYTES = 32
 NAMESPACE = ".workbench/workbench/review-engine"
 STORE_NAME = "review-engine"
-USAGE = "usage: review-engine status|init|review-plan|review-spec|review-roadmap|review-adr <document>"
+USAGE = ("usage: review-engine status|init|review-plan|review-spec|review-roadmap|review-adr|reset|archive <document>, "
+         "decide|amend <document> <finding> applied|rejected [--reason <text>], extend <document> <1 to 5>, "
+         "or prune [--apply]")
 FIELDS = {"format", "kind", "path", "window", "rounds", "decisions", "closed", "generation", "seal"}
 CHOICES = ("applied", "rejected")
+DECISION_FIELDS = {"finding", "choice", "reason", "at", "earlier"}
+EARLIER_FIELDS = {"choice", "reason", "at"}
+FINDING = r"R[1-9][0-9]{0,3}-F[1-9][0-9]{0,2}"
+MAX_REASON = 2000
+MAX_EARLIER = 20
+RETENTION_DAYS = 90
+REVIEW_DIR = re.compile(r"(plan|spec|roadmap|adr)-[0-9a-f]{16}")
+FILE_NAME = re.compile(r"state\.json|ledger\.md|schema\.json|round-[1-9][0-9]{0,3}\.json")
 ROUND_FIELDS = {"n", "file", "sha256", "document_sha256", "at", "bridge", "requested", "model", "verdict", "reading",
                 "mismatch", "usage", "findings"}
 USAGE_FIELDS = ("input_tokens", "output_tokens", "total_tokens")
@@ -136,6 +153,11 @@ def fold(path):
     return unicodedata.normalize("NFD", unicodedata.normalize("NFD", path).casefold())
 
 
+def review_key(kind, path):
+    """The name of the directory of the review of `path`, a document of `kind`."""
+    return "%s-%s" % (kind, hashlib.sha256(fold(path).encode("utf-8")).hexdigest()[:16])
+
+
 def resolve(root, argument, kind=None):
     """The `Document` named by the project-relative path `argument`, or `Refused`. It must be a regular
     file, with no link in any component and one name, at most `MAX_DOCUMENT` bytes, below the directory of
@@ -161,8 +183,7 @@ def resolve(root, argument, kind=None):
         raise Refused(shown(exc))
     if data is None:
         raise Refused("%s does not exist" % shown(argument))
-    key = "%s-%s" % (found, hashlib.sha256(fold(argument).encode("utf-8")).hexdigest()[:16])
-    return Document(found, argument, key, hashlib.sha256(data).hexdigest())
+    return Document(found, argument, review_key(found, argument), hashlib.sha256(data).hexdigest())
 
 
 # --- the guarded store --------------------------------------------------------
@@ -239,6 +260,26 @@ class Guarded:
         if set(value) != {"rounds", "decisions", "generation"} or not all(is_count(v) for v in value.values()):
             raise Unusable()
         return value["rounds"], value["decisions"], value["generation"]
+
+    def remove_mark(self, name):
+        """Remove the mark of the review `name`, if there is one: only when its review is gone, so that a new review
+        of the same document does not read as rolled back. A link is removed, never followed."""
+        folder = self._directory()
+        try:
+            try:
+                marks = os.open("marks", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=folder)
+            except FileNotFoundError:
+                return
+            try:
+                os.unlink(name, dir_fd=marks)
+            except FileNotFoundError:
+                pass
+            finally:
+                os.close(marks)
+        except OSError as exc:
+            raise Refused("the mark cannot be removed (%s)" % shown(exc.strerror or "error"))
+        finally:
+            os.close(folder)
 
     def _directory(self):
         """A descriptor for this engine's directory, made with mode 0700 where missing."""
@@ -352,6 +393,29 @@ def check_round(entry, index):
             raise ValueError("a finding is not numbered by its round and place")
 
 
+def _check_answer(choice, reason, at):
+    if choice not in CHOICES or not isinstance(reason, str) or len(reason) > MAX_REASON or not _is_time(at):
+        raise ValueError("a decision has not a choice, a reason and a time")
+
+
+def check_decision(entry, seen):
+    """Raise ValueError unless `entry` is a decision as `decide` and `amend` write it, of a finding not seen yet."""
+    if set(entry) != DECISION_FIELDS:
+        raise ValueError("a decision has not the documented fields")
+    name = entry["finding"]
+    if not isinstance(name, str) or not re.fullmatch(FINDING, name) or name in seen:
+        raise ValueError("a decision is not of one finding, once")
+    seen.add(name)
+    _check_answer(entry["choice"], entry["reason"], entry["at"])
+    earlier = entry["earlier"]
+    if not isinstance(earlier, list) or len(earlier) > MAX_EARLIER:
+        raise ValueError("a decision has too many earlier values")
+    for item in earlier:
+        if not isinstance(item, dict) or set(item) != EARLIER_FIELDS:
+            raise ValueError("an earlier value of a decision has not the documented fields")
+        _check_answer(item["choice"], item["reason"], item["at"])
+
+
 def check_state(state, document):
     """Raise ValueError unless `state` is a state of `document` of the documented shape and bounds."""
     if set(state) != FIELDS:
@@ -372,6 +436,9 @@ def check_state(state, document):
             raise ValueError("rounds and decisions are lists of objects within bounds")
     for index, entry in enumerate(rounds):
         check_round(entry, index)
+    seen = set()
+    for entry in decisions:
+        check_decision(entry, seen)
     if window["first"] - 1 > len(rounds):
         raise ValueError("the window starts after the last round")
     if state["closed"] is not None and not (isinstance(state["closed"], str)
@@ -430,6 +497,16 @@ def load(root, guarded, document):
     return Loaded(state, "ok", "")
 
 
+def md(text, limit):
+    """`text` as one line with no character that makes markup, for the ledger."""
+    return re.sub(r"[\[\]()<>`*_|#\\]", " ", flat(text, limit))
+
+
+def decision_lines(entry):
+    said = lambda e: "%s on %s%s" % (e["choice"], e["at"], ": " + md(e["reason"], 200) if e["reason"] else "")
+    return ["- %s: %s" % (entry["finding"], said(entry))] + ["  - earlier: %s" % said(e) for e in entry["earlier"]]
+
+
 def render_ledger(document, state):
     """A readable rendering of `state`. It is written for people and never read back."""
     window = state["window"]
@@ -440,19 +517,29 @@ def render_ledger(document, state):
                       "- Rounds in this window: %d of %d rounds (ceiling %d)" % (used, window["bound"], CEILING),
                       "- Rounds in all: %d" % len(state["rounds"]),
                       "- Decisions recorded: %d" % len(state["decisions"]),
-                      "- Closed: %s" % (state["closed"] or "no"), ""])
+                      "- Closed: %s" % (state["closed"] or "no"), "", "## Rounds", ""]
+                     + ["- Round %d, %s: the reviewer said %s, the engine read %s%s, %d findings, model %s" % (
+                         e["n"], e["at"], e["verdict"], e["reading"], " (a mismatch)" if e["mismatch"] else "",
+                         len(e["findings"]), md(e["model"] or "unknown", 60)) for e in state["rounds"]]
+                     + ([] if state["rounds"] else ["- none"]) + ["", "## Decisions", ""]
+                     + [line for d in state["decisions"] for line in decision_lines(d)]
+                     + ([] if state["decisions"] else ["- none"]) + [""])
 
 
-def save(root, guarded, document, state, files=None):
+def save(root, guarded, document, state, files=None, override=False):
     """Seal `state`, write it with its ledger and the `files` (``{name: bytes}`` in the review's directory) and
     then raise the mark to its counts. The caller holds the lock. The state is written last of the files and
     before the mark: a failure leaves a mark that is behind the state, which is harmless, and never one that
-    is ahead of it."""
+    is ahead of it. Each save raises the generation, which the mark keeps, so a replayed older state with the same
+    counts is still seen as older. With `override`, the owner's `reset` of a state that is unsealed or rolled back,
+    the mark is set to the counts of the state saved, even if that lowers it."""
     key = guarded.make_key()
     try:
         rounds, decisions, generation = guarded.mark(document.key)
     except Unusable:
-        raise Refused("%s; the owner removes it to start again" % BAD_MARK)
+        if not override:
+            raise Refused("%s; the owner removes it to start again" % BAD_MARK)
+        rounds = decisions = generation = 0
     body = {name: value for name, value in state.items() if name != "seal"}
     body["generation"] = max(state["generation"], generation) + 1
     sealed = dict(body, seal=seal(key, body))
@@ -470,7 +557,8 @@ def save(root, guarded, document, state, files=None):
         safefs.write_tree(root, tree)
     except safefs.SafeFsError as exc:
         raise Refused("the review cannot be written: %s" % shown(exc))
-    mark = {"rounds": max(rounds, len(sealed["rounds"])), "decisions": max(decisions, len(sealed["decisions"])),
+    mark = {"rounds": len(sealed["rounds"]) if override else max(rounds, len(sealed["rounds"])),
+            "decisions": len(sealed["decisions"]) if override else max(decisions, len(sealed["decisions"])),
             "generation": sealed["generation"]}
     guarded.write({"marks/" + document.key: (json.dumps(mark, sort_keys=True) + "\n").encode("utf-8")})
     return sealed
@@ -737,8 +825,7 @@ def run_round(root, project_id, kind, argument, out):
         state = new_state(document) if loaded is None else loaded.state
         if loaded is not None and (state is None or loaded.seal != "ok"):
             raise Refused("the review of %s is %s (%s) and runs no round" % (
-                shown(document.path), "not usable" if state is None and loaded.seal == "unsealed" else loaded.seal.replace("_", " "),
-                loaded.reason))
+                shown(document.path), standing(loaded), loaded.reason))
         if state["closed"] is not None:
             raise Refused("the review of %s is closed and runs no round" % shown(document.path))
         window = state["window"]
@@ -796,6 +883,186 @@ def run_round(root, project_id, kind, argument, out):
 # --- the commands -------------------------------------------------------------
 
 
+def standing(loaded):
+    """How a message calls a review that cannot be used as it is."""
+    return "not usable" if loaded.state is None and loaded.seal == "unsealed" else loaded.seal.replace("_", " ")
+
+
+def changeable(document, loaded, command):
+    """``(state, False)`` of a review that may be changed: it exists, its seal and mark verify and it is open."""
+    if loaded is None:
+        raise Refused("there is no review of %s (init makes one)" % shown(document.path))
+    if loaded.state is None or loaded.seal != "ok":
+        raise Refused("the review of %s is %s (%s) and takes no %s" % (
+            shown(document.path), standing(loaded), loaded.reason, command))
+    if loaded.state["closed"] is not None:
+        raise Refused("the review of %s is closed and takes no %s" % (shown(document.path), command))
+    return loaded.state, False
+
+
+def recoverable(document, loaded, command):
+    """``(state, override)`` for `reset`: the open review, or, when it is unsealed or rolled back, the state the owner
+    sets right (a state that is gone starts again empty). A state that cannot be read at all is not recovered."""
+    if loaded is None:
+        raise Refused("there is no review of %s (init makes one)" % shown(document.path))
+    if loaded.state is None:
+        if loaded.seal != "rolled_back":
+            raise Refused("the review of %s is %s (%s); the owner removes its directory to start again" % (
+                shown(document.path), standing(loaded), loaded.reason))
+        return new_state(document), True
+    if loaded.state["closed"] is not None:
+        raise Refused("the review of %s is closed and takes no %s" % (shown(document.path), command))
+    return loaded.state, loaded.seal != "ok"
+
+
+def mutate(root, project_id, argv, out, command, make, access=changeable):
+    """Change the state of the review named by `argv[1]` under the lock: `make(document, state)` returns the new
+    state and a dict to print beside the review's own object."""
+    document = resolve(root, argv[1])
+    guarded = Guarded(project_id)
+    with guarded.locked():
+        state, override = access(document, load(root, guarded, document), command)
+        state, extra = make(document, state)
+        save(root, guarded, document, state, override=override)
+        return emit(out, dict(describe(document, load(root, guarded, document)), **extra))
+
+
+def decide(root, project_id, argv, out):
+    """`decide` records what was done about a finding, once; `amend` changes it and keeps the value it had."""
+    command, finding, choice = argv[0], argv[2], argv[3]
+    reason = argv[5] if len(argv) == 6 else ""
+    if not re.fullmatch(FINDING, finding):
+        raise Refused("%s is not a finding (they are named like R1-F1)" % shown(finding))
+    if choice not in CHOICES:
+        raise Refused("the choice is applied or rejected, not %s" % shown(choice))
+    if len(reason) > MAX_REASON or plain(reason, "\n\t") != reason:
+        raise Refused("the reason is at most %d characters with no control character" % MAX_REASON)
+
+    def make(document, state):
+        if finding not in {item["id"] for entry in state["rounds"] for item in entry["findings"]}:
+            raise Refused("no round of this review has the finding %s" % finding)
+        records = list(state["decisions"])
+        index = next((n for n, entry in enumerate(records) if entry["finding"] == finding), None)
+        now = utc_now()
+        if command == "decide":
+            if index is not None:
+                raise Refused("%s already has a decision (the owner's amend changes it)" % finding)
+            records.append({"finding": finding, "choice": choice, "reason": reason, "at": now, "earlier": []})
+        else:
+            if index is None:
+                raise Refused("%s has no decision to amend (decide records it)" % finding)
+            old = records[index]
+            if len(old["earlier"]) >= MAX_EARLIER:
+                raise Refused("%s has been amended %d times, the most that are kept" % (finding, MAX_EARLIER))
+            records[index] = {"finding": finding, "choice": choice, "reason": reason, "at": now,
+                              "earlier": old["earlier"] + [{"choice": old["choice"], "reason": old["reason"],
+                                                            "at": old["at"]}]}
+        state = dict(state, decisions=records)
+        return state, {"finding": finding, "choice": choice, "reason": reason, "pending": pending(state)}
+    return mutate(root, project_id, argv, out, command, make)
+
+
+def extend(root, project_id, argv, out):
+    if not re.fullmatch("[1-5]", argv[2]):
+        raise Refused("extend takes a number of rounds from 1 to 5, not %s" % shown(argv[2]))
+    more = int(argv[2])
+
+    def make(document, state):
+        bound = state["window"]["bound"]
+        if bound + more > CEILING:
+            raise Refused("the bound is %d and %d more would pass the ceiling of %d" % (bound, more, CEILING))
+        return dict(state, window=dict(state["window"], bound=bound + more)), {}
+    return mutate(root, project_id, argv, out, "extend", make)
+
+
+def reset(root, project_id, argv, out):
+    def make(document, state):
+        return dict(state, window={"first": len(state["rounds"]) + 1, "bound": DEFAULT_BOUND}), {}
+    return mutate(root, project_id, argv, out, "reset", make, recoverable)
+
+
+def archive(root, project_id, argv, out):
+    def make(document, state):
+        return dict(state, closed=utc_now()), {}
+    return mutate(root, project_id, argv, out, "archive", make)
+
+
+def prunable(root, guarded, now):
+    """The reviews that may be pruned, each ``{"key", "path", "closed"}``: a directory of the engine's own name that
+    holds only the engine's own files, whose state is sealed, closed and closed `RETENTION_DAYS` ago or more."""
+    try:
+        with safefs.Root(root, "project root") as tree:
+            names = [name for name, kind in tree.list_dir(NAMESPACE, lenient=True) or []
+                     if kind == "dir" and REVIEW_DIR.fullmatch(name)]
+            names = [name for name in names if all(
+                kind == "file" and FILE_NAME.fullmatch(entry)
+                for entry, kind in tree.list_dir("%s/%s" % (NAMESPACE, name), lenient=True) or [])]
+            data = {name: tree.read_if_present("%s/%s/state.json" % (NAMESPACE, name), MAX_STATE) for name in names}
+    except safefs.SafeFsError as exc:
+        raise Refused(shown(exc))
+    found = []
+    for name in names:
+        try:
+            body = jsonstrict.parse_object(data[name], MAX_STATE)
+            document = Document(body["kind"], body["path"], name, "")
+            if review_key(document.kind, document.path) != name:
+                continue
+            loaded = load(root, guarded, document)
+            closed = loaded.state["closed"]
+            if loaded.seal == "ok" and closed is not None and now - calendar.timegm(
+                    time.strptime(closed, "%Y-%m-%dT%H:%M:%SZ")) >= RETENTION_DAYS * 86400:
+                found.append({"key": name, "path": document.path, "closed": closed})
+        except (ValueError, TypeError, KeyError, AttributeError):
+            continue
+    return found
+
+
+def remove_review(root, name):
+    """Remove the directory of a review and the files the engine made in it, through descriptors that never follow a
+    link. Anything else in it is left, and the directory with it."""
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        fds = [safefs.open_root(root, "project root")]
+    except safefs.SafeFsError as exc:
+        raise Refused(shown(exc))
+    try:
+        for part in NAMESPACE.split("/"):
+            fds.append(os.open(part, flags, dir_fd=fds[-1]))
+        parent = fds[-1]
+        fds.append(os.open(name, flags, dir_fd=parent))
+        folder = fds[-1]
+        entries = os.listdir(folder)
+        for entry in entries:
+            if not FILE_NAME.fullmatch(entry) or not stat.S_ISREG(os.stat(entry, dir_fd=folder,
+                                                                          follow_symlinks=False).st_mode):
+                raise Refused("%s holds %s, which is not the engine's; it is left" % (name, shown(entry)))
+        for entry in entries:
+            os.unlink(entry, dir_fd=folder)
+        os.rmdir(name, dir_fd=parent)
+    except OSError as exc:
+        raise Refused("%s cannot be removed (%s)" % (name, shown(exc.strerror or "error")))
+    finally:
+        for fd in fds:
+            os.close(fd)
+
+
+def prune(root, project_id, argv, out):
+    """List the closed reviews past their retention; with ``--apply`` remove them and their marks."""
+    apply = argv[1:] == ["--apply"]
+    guarded = Guarded(project_id)
+    removed = []
+    if not apply:
+        found = prunable(root, guarded, time.time())
+    else:
+        with guarded.locked():
+            found = prunable(root, guarded, time.time())
+            for item in found:
+                remove_review(root, item["key"])
+                guarded.remove_mark(item["key"])
+                removed.append(item["key"])
+    return emit(out, {"apply": apply, "retention_days": RETENTION_DAYS, "reviews": found, "removed": removed})
+
+
 def describe(document, loaded):
     """The object ``status`` and ``init`` print."""
     found = {"document": document.path, "kind": document.kind, "key": document.key, "seal": loaded.seal,
@@ -815,15 +1082,30 @@ def emit(out, found):
 
 
 def run(argv, cwd, out):
-    if len(argv) != 2 or (argv[0] not in ("status", "init") and argv[0] not in ROUND_COMMANDS):
+    command = argv[0] if argv else ""
+    if command == "prune":
+        fits = argv[1:] in ([], ["--apply"])
+    elif command in ("decide", "amend"):
+        fits = len(argv) == 4 or (len(argv) == 6 and argv[4] == "--reason")
+    elif command == "extend":
+        fits = len(argv) == 3
+    elif command in ("status", "init", "reset", "archive") or command in ROUND_COMMANDS:
+        fits = len(argv) == 2
+    else:
+        fits = False
+    if not fits:
         raise Refused(USAGE)
     try:
         root = os.path.realpath(project.find_root(cwd))
         project_id = project.read_id(root)
     except project.ProjectError as exc:
         raise Refused(shown(exc))
-    if argv[0] in ROUND_COMMANDS:
-        return run_round(root, project_id, ROUND_COMMANDS[argv[0]], argv[1], out)
+    if command in ROUND_COMMANDS:
+        return run_round(root, project_id, ROUND_COMMANDS[command], argv[1], out)
+    commands = {"decide": decide, "amend": decide, "extend": extend, "reset": reset, "archive": archive,
+                "prune": prune}
+    if command in commands:
+        return commands[command](root, project_id, argv, out)
     document = resolve(root, argv[1])
     guarded = Guarded(project_id)
     if argv[0] == "status":

@@ -9,7 +9,8 @@ import re
 import unittest
 
 from tests import support_install
-from workbench import verify
+from workbench import declarations as d
+from workbench import rules, verify
 
 ROOT = support_install.ROOT
 PACKAGE = os.path.join(ROOT, "packages", "workbench")
@@ -43,13 +44,25 @@ class Declaration(unittest.TestCase):
         for field in ("writes", "fills", "checks", "helpers", "blocks", "slots", "layout"):
             self.assertNotIn(field, document)
 
-    def test_the_command_has_its_own_name_and_only_the_arguments_built_so_far(self):
+    def test_the_command_has_its_own_name_and_the_twelve_arguments(self):
         self.assertEqual(["review-engine"], list(declaration()["commands"]))
         command = declaration()["commands"]["review-engine"]
-        self.assertEqual(["status", "init", "review-plan", "review-spec", "review-roadmap", "review-adr"],
-                         command["arguments"])
+        self.assertEqual(["status", "init", "review-plan", "review-spec", "review-roadmap", "review-adr", "decide",
+                          "amend", "extend", "reset", "archive", "prune"], command["arguments"])
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
-        self.assertNotIn("owner", command)
+
+    def test_amend_extend_reset_archive_and_prune_are_owner_run_and_the_others_are_not(self):
+        command = declaration()["commands"]["review-engine"]
+        self.assertEqual(["amend", "extend", "reset", "archive", "prune"], command["owner"])
+        parsed = d.parse_module(json.dumps(declaration()).encode("utf-8"), "workbench", "review-engine", first_party=True).commands[0]
+        self.assertEqual(("amend", "extend", "reset", "archive", "prune"), parsed.owner)
+
+    def test_the_installer_denies_each_owner_argument_and_none_of_the_others(self):
+        patterns = " ".join(rules.command_owner_patterns("review-engine", ("amend", "extend", "reset", "archive", "prune")))
+        for argument in ("amend", "extend", "reset", "archive", "prune"):
+            self.assertIn("run review-engine %s" % argument, patterns)
+        for argument in ("status", "init", "review-plan", "review-spec", "review-roadmap", "review-adr", "decide"):
+            self.assertNotIn("review-engine %s" % argument, patterns)
 
     def test_every_file_is_the_declaration_or_the_helper(self):
         found = []
@@ -72,8 +85,8 @@ class Helper(unittest.TestCase):
 
     def test_it_imports_only_the_standard_library_and_the_kit(self):
         imported = set(re.findall(r"^(?:import|from) ([a-z_.]+)", self.text(), re.M))
-        self.assertEqual({"collections", "contextlib", "errno", "fcntl", "hashlib", "hmac", "json", "os", "re",
-                          "sys", "time", "unicodedata", "wbkit"}, imported)
+        self.assertEqual({"calendar", "collections", "contextlib", "errno", "fcntl", "hashlib", "hmac", "json", "os",
+                          "re", "stat", "sys", "time", "unicodedata", "wbkit"}, imported)
 
     def test_it_opens_no_connection_and_names_no_vendor_or_other_module(self):
         text = self.text()
