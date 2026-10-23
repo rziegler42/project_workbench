@@ -245,15 +245,24 @@ every checkpoint stops, whatever the setting says. `wb settings` reports the eff
 once `delegated-approval` is built, `delegate` takes effect for `approve-plan` only, and every other checkpoint
 stops whatever its setting says.)*
 
-Delegability *(proposed, not built)*. The module's helper gets a read-only argument that tells the installer whether a
-plan may be approved by a delegate (`approval.delegable`; `module-contract.md`). A plan is delegable when it has exactly
-one Risks section, the one headed `## Risks and sensitive actions` outside a fence, a quotation and an HTML comment,
-and that section has no line that begins, after any list marker and emphasis, with `Hard stop:` (case-sensitive). Text
-outside that section cannot change the answer. A plan with no Risks section, more than one, a heading in another
-case, an unreadable file, a link, a file larger than the check reads or a path outside `docs/plans/` is not delegable.
-The marker is a convention of this module and defence in depth only (`trust-and-approval.md`); a plan that omits it is
-still stopped at the action. The convention is not a keyword search: a Risks section that says "no push, no install"
-is delegable.
+Delegability *(built by plan `2026-10-23-delegated-approval`, increment C; the installer's use of it is increment D)*.
+The module's helper has a read-only subcommand, `delegable <plan>`, that tells the installer whether a plan may be
+approved by a delegate (`approval.delegable`; `module-contract.md`). It prints one JSON object,
+`{"format": 1, "delegable": true | false, "reason": "<at most 200 printable ASCII characters>"}`, and exits 0 for
+every answer, including "not delegable". A path that is not a plan, a link, a file that cannot be opened or one larger
+than the check reads is refused (exit 1, nothing on standard output).
+
+A plan is delegable when it has exactly one Risks section, the one headed `## Risks and sensitive actions` outside a
+fence, a quotation and an HTML comment, and that section has no line that begins, after any list marker and emphasis,
+with `Hard stop:` (case-sensitive). Text outside that section cannot change the answer. A plan with no Risks section,
+more than one, a heading in another case, a file that is not UTF-8, a code fence or comment that is never closed or a
+header without exactly one `Status:` line is not delegable. Any heading a reader could take for the section (any
+level, any case, a closing `#`, a trailing `:` or `.`, an underlined heading) counts as a Risks section, so a second
+one, or one not in the exact form, makes the plan not delegable. The section runs to the next `#` or `##` heading
+outside a fence, a quotation and a comment; a rule, an underline or a `###` heading does not end it, and a marker is
+read from the whole line, however long. The marker is a convention of this module and defence in depth only
+(`trust-and-approval.md`); a plan that omits it is still stopped at the action. The convention is not a keyword
+search: a Risks section that says "no push, no install" is delegable.
 
 Not checkpoints inside an approved plan: starting the next increment, a local commit
 after a passing review, archiving a plan, pushing a branch that is not shared (the harness still asks, see
@@ -485,7 +494,11 @@ installer's and is replaced on upgrade only while unedited.
   the items it names. Limits: it is advice; it relies on the documented re-reading of `CLAUDE.md` and its imports
   after a compaction and does not shape the summary; no "Compact Instructions" section, no rendered root-file
   section, no `SessionStart` hook and no opencode delivery exist; nothing was run in a live session.
-- Not built: the delegated approval (`delegated-approval`). It came from the roadmap candidate
+- Built, from plan `2026-10-23-delegated-approval`, increment C: the helper's `delegable` subcommand and the
+  `approval.delegable` declaration (`"delegable": "delegable"`). Limits: the marker is a convention and defence in depth
+  only; the installer does not use the answer until increment D; the package's shipped approval is stale until
+  increment F.
+- Not built: the installer's delegated approval (`delegated-approval`, increments D to F). It came from the roadmap candidate
   `code-work-approval`, which is split into it and `compaction-guidance`.
 - The helper reads untrusted plans and is bounded; the limits are in the plan `2026-10-21-code-work-plans`.
 

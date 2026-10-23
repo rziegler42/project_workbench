@@ -74,12 +74,13 @@ class Declaration(unittest.TestCase):
 
     def test_the_command_takes_the_four_reads_as_its_first_argument_and_no_change(self):
         command = declaration()["commands"]["code-work"]
-        self.assertEqual(["check", "plans", "report", "region", "active", "shared"], command["arguments"])
+        self.assertEqual(["check", "plans", "report", "region", "active", "shared", "delegable"],
+                         command["arguments"])
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
 
-    def test_it_declares_the_region_and_the_active_listing_as_its_approval_command(self):
-        self.assertEqual({"command": "code-work", "argument": "region", "active": "active"},
-                         declaration()["approval"])
+    def test_it_declares_the_region_the_active_listing_and_the_delegability_as_its_approval_command(self):
+        self.assertEqual({"command": "code-work", "argument": "region", "active": "active",
+                          "delegable": "delegable"}, declaration()["approval"])
 
     def test_it_declares_the_eight_checkpoints_all_stopping_by_default_and_the_three_caps(self):
         document = declaration()

@@ -364,3 +364,26 @@ The review is not an approval; the plan stays `Proposed` until the owner approve
 - Not done: the process module's `delegable` (C), the installer (D), guidance (E), any security pass or release (F). The
   package approval of `review-engine` is stale until F, so `wb run review-engine` will not run in an installed project
   until then.
+
+### Increment C — The process module's delegability argument
+
+- One local commit, trailer `Plan: 2026-10-23-delegated-approval#C` (find it with `git log --grep`).
+- Built: `code-work delegable <plan>` (helper, read-only; one JSON object `format`, `delegable`, `reason` of at most 200
+  ASCII characters; exit 0 for every answer, refused with exit 1 for a path that is not a plan, a link, an unreadable or
+  oversize file); the `approval.delegable` field and its check in `workbench/declarations.py` (a string, an argument of
+  the command, different from `argument` and `active`; part of the declaration hash); the module's `module.json`; the
+  specs (`code-work.md`, `module-contract.md`).
+- Tests: 48 new in `test_codework_delegable.py`, one changed in each of `test_codework_module.py` (two assertions), five
+  new in `tests/test_declarations.py`. The full suite passes, 3,568 tests in 7 roots (3,515 before), the same skips.
+  Document checks print nothing. Thirteen changes to the helper in turn (case-insensitive marker, no emphasis before or
+  after the word, no list markers, a section ended by any section start, markers counted in fences, several sections
+  allowed, an inexact heading allowed, the marker read from the cut line, an unclosed fence ignored, no setext heading
+  counted, no status check, hidden headings counted) each failed a test; a fourteenth (no cut of the reason) cannot
+  change any answer, because the only text it shortens is a fixed message. Four of five changes to the declaration check
+  failed a test; the fifth (no string check) is the same refusal by another path.
+- Differs from the plan: a section runs to the next level-one or level-two heading and a rule, an underline or a
+  level-three heading does not end it (more lines are read, which can only withhold delegation); any heading a reader
+  could take for the Risks section counts, so a second one in another case or form makes the plan not delegable; a
+  header without exactly one `Status:` line is not delegable. All three are in the spec.
+- Not done: the installer's command and record (D), guidance (E), the security pass and release (F). The package
+  approval of `code-work` is stale until F, as is `review-engine`'s.

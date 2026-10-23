@@ -29,14 +29,16 @@
         "report",
         "region",
         "active",
-        "shared"
+        "shared",
+        "delegable"
       ]
     }
   },
   "approval": {
     "command": "code-work",
     "argument": "region",
-    "active": "active"
+    "active": "active",
+    "delegable": "delegable"
   },
   "checkpoints": [
     "approve-plan",

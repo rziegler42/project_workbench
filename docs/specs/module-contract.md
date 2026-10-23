@@ -304,7 +304,7 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   and not the same as `argument`. It names the argument that lists the plans under way, for the edit gate
   (`trust-and-approval.md`, "Checkpoint and cap settings, and the edit gate"). A module without it has no
   gate, no hook is rendered for its project, and `wb gate` allows every edit there.
-- `approval.delegable` *(proposed by plan `2026-10-23-delegated-approval`; not built)*: an optional field, one of the same
+- `approval.delegable` *(built by plan `2026-10-23-delegated-approval`, increment C)*: an optional field, one of the same
   command's `arguments`, different from `argument` and `active`. It names the argument that tells the installer whether
   a plan may be approved by a delegate (`trust-and-approval.md`, "Delegated plan approval records"). A module without it
   has no plan that is delegable.

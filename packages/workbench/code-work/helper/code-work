@@ -2,7 +2,7 @@
 """The code-work helper: reads a project's plans and says what is wrong with them.
 
 It is one file that imports only the standard library; the launcher runs a private copy of it through the
-kit runner with nothing beside it. Its six subcommands change nothing, take no lock, run no program and
+kit runner with nothing beside it. Its seven subcommands change nothing, take no lock, run no program and
 follow no link. Commits and removals are the ``safe-git`` module's.
 
     code-work check      report problems with the plans in docs/plans/ (exit 1 if there is one)
@@ -12,6 +12,9 @@ follow no link. Commits and removals are the ``safe-git`` module's.
     code-work region <plan>
                          print the hash of a plan's hashed region and the names of the parts left out of
                          it, as one JSON object (the installer's approval command reads it)
+    code-work delegable <plan>
+                         print whether a plan may be approved by a delegate, as one JSON object (the
+                         installer's delegated approval reads it)
     code-work active     print the plans that are Approved or In Progress, as one JSON object (the
                          installer's edit gate reads it)
     code-work shared     print the branches `.workbench/shared-branches.json` declares as shared, as one
@@ -77,6 +80,7 @@ _NEAR = re.compile(r"\A[ ]{0,3}#{1,6}[ \t]+Increment\b", re.I)
 _CANDIDATE_HEAD = re.compile(r"\A[ ]{0,3}" + _ITEM + r"###[ \t]+([^\s:]+)")
 _UNDERLINE = re.compile(r"\A[ ]{0,3}(=+|-+)[ \t]*\Z")
 _LINE = 2000
+_REASON = 200
 _STATUS_BOUND = 200
 # What a reader may show as a section start inside a quote or a list item, or as an HTML heading or rule.
 _WRAPPED = re.compile(r"\A(?:[ \t]+|>|[-*+](?=[ \t])|\d{1,9}[.)](?=[ \t]))*")
@@ -86,6 +90,12 @@ _HEADING = 200
 # of whatever form, so nothing a reader could take for another section is ever left out.
 _EXCLUDED = re.compile(r"\A##[ ](Review record|Second opinion|Result)[ \t]*\Z")
 _BOUNDARY = re.compile(r"\A[ ]{0,3}#{1,2}(?:[ \t]|\Z)")
+# Delegability: the one section that lists a plan's risks, and the line that marks a hard stop in it. Any heading
+# that a reader could take for the section counts, and only the exact form is accepted.
+_RISKS = "risks and sensitive actions"
+_RISKS_HEADING = re.compile(r"\A## Risks and sensitive actions[ \t]*\Z")
+_ATX = re.compile(r"\A[ ]{0,3}#{1,6}(?:[ \t]+(.*))?\Z")
+_HARD = re.compile(r"\A[ \t]*(?:(?:[-*+]|[0-9]{1,9}[.)])[ \t]+)*[*_`~]*Hard stop[*_`~]*:")
 
 
 class Refused(Exception):
@@ -785,6 +795,69 @@ def command_region(root, plan, out, err):
     return 0
 
 
+def _risks_heading(marked, whole):
+    """``(index, count)``: the line index of the first heading a reader could take for the Risks section, and how
+    many there are. An ATX heading of any level or a heading underlined with `=` or `-` counts, in whatever case."""
+    found = []
+    for index, (_, _, plain) in enumerate(marked):
+        if not plain:
+            continue
+        atx = _ATX.match(whole[index])
+        if atx:
+            words = atx.group(1) or ""
+        elif index + 1 < len(whole) and _UNDERLINE.match(whole[index + 1]):
+            words = whole[index]
+        else:
+            continue
+        if _section(words) == _RISKS:
+            found.append(index)
+    return (found[0] if found else None), len(found)
+
+
+def delegable_of(text):
+    """``(delegable, reason)`` for the text of a plan. Delegable means exactly one Risks section, in its exact form,
+    with no line in it that begins, after any list marker and emphasis, with `Hard stop:`. Whatever leaves the
+    answer uncertain is not delegable. Only the plan's own lines count: not a fence, a quotation or a comment."""
+    state = {}
+    marked = list(lines_of(text, state))
+    if state["open"] or state["comment"]:
+        return False, "a code fence or an HTML comment is never closed, so the plan's sections cannot be told"
+    whole = [line.rstrip("\n") for line in io.StringIO(text, newline=None)]
+    if len(whole) != len(marked):
+        return False, "the plan's lines cannot be read"
+    try:
+        _status_line(marked)
+    except Refused as exc:
+        return False, shown(exc, _REASON)
+    heading, count = _risks_heading(marked, whole)
+    if count == 0:
+        return False, "the plan has no Risks section (`## Risks and sensitive actions`)"
+    if count > 1:
+        return False, "the plan has more than one Risks section"
+    if not _RISKS_HEADING.match(whole[heading]):
+        return False, "the Risks heading is not exactly `## Risks and sensitive actions`"
+    for index in range(heading + 1, len(marked)):
+        if not marked[index][2]:
+            continue
+        if _BOUNDARY.match(whole[index]):
+            break
+        if _HARD.match(whole[index]):
+            return False, 'the Risks section has a line that begins "Hard stop:" (line %d)' % marked[index][0]
+    return True, "the plan has one Risks section and it has no `Hard stop:` line"
+
+
+def command_delegable(root, plan, out, err):
+    data = read_plan(root, plan)
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        delegable, reason = False, "the plan is not valid UTF-8, so its sections cannot be told"
+    else:
+        delegable, reason = delegable_of(text)
+    out.write(json.dumps({"format": 1, "delegable": delegable, "reason": reason}) + "\n")
+    return 0
+
+
 def command_active(root, out, err):
     """The plans under way, as ``{"format": 1, "plans": ["docs/plans/<name>", ...]}`` in name order. A plan is
     under way when any `Status:` line of its header begins with Approved or In Progress, so a second, contrary
@@ -895,8 +968,10 @@ def main(argv, out, err, cwd):
     try:
         if len(argv) == 2 and argv[0] == "region":
             return command_region(find_root(cwd), argv[1], out, err)
+        if len(argv) == 2 and argv[0] == "delegable":
+            return command_delegable(find_root(cwd), argv[1], out, err)
         if len(argv) != 1 or argv[0] not in COMMANDS:
-            raise Refused("usage: code-work %s (no arguments), or code-work region <plan>"
+            raise Refused("usage: code-work %s (no arguments), or code-work region|delegable <plan>"
                           % "|".join(COMMANDS))
         return COMMANDS[argv[0]](find_root(cwd), out, err)
     except Refused as exc:

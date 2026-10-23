@@ -561,6 +561,50 @@ class ModuleTest(unittest.TestCase):
             with self.subTest(label):
                 self.refused("approval", **self.declared(approval=approval))
 
+    def delegable(self, **changes):
+        """A process module whose command lists `region`, `active`, `delegable` and `check`."""
+        return self.declared(
+            commands={"run-it": {"helper": "scripts/check.sh",
+                                 "arguments": ["region", "active", "delegable", "check"]}},
+            approval=dict({"command": "run-it", "argument": "region", "active": "active",
+                           "delegable": "delegable"}, **changes))
+
+    def test_the_delegable_argument_verifies(self):
+        got = self.parse(module(**self.delegable()))
+        self.assertEqual({"command": "run-it", "argument": "region", "active": "active",
+                          "delegable": "delegable"}, got.approval)
+        got = self.parse(module(**self.declared(
+            commands={"run-it": {"helper": "scripts/check.sh", "arguments": ["region", "delegable"]}},
+            approval={"command": "run-it", "argument": "region", "delegable": "delegable"})))
+        self.assertEqual({"command": "run-it", "argument": "region", "delegable": "delegable"}, got.approval)
+
+    def test_a_module_without_a_delegable_argument_has_none(self):
+        got = self.parse(module(**self.declared()))
+        self.assertNotIn("delegable", got.approval)
+
+    def test_the_delegable_argument_refusals(self):
+        cases = {
+            "an argument the command does not list": "evil",
+            "the same as the region argument": "region",
+            "the same as the active argument": "active",
+            "not a string": 1,
+            "null": None,
+            "empty": "",
+            "differing in case": "Delegable",
+        }
+        for label, value in cases.items():
+            with self.subTest(label):
+                self.refused("approval", **self.delegable(delegable=value))
+
+    def test_the_delegable_argument_is_part_of_the_declaration_hash(self):
+        without = module(**self.declared(
+            commands={"run-it": {"helper": "scripts/check.sh", "arguments": ["region", "active", "delegable"]}}))
+        with_it = module(**self.delegable())
+        self.assertNotEqual(hashing.declaration_hash(without), hashing.declaration_hash(with_it))
+
+    def test_the_delegable_argument_is_refused_on_a_module_that_is_not_a_process_module(self):
+        self.refused("approval", **dict(self.delegable(), type="module"))
+
     def test_checkpoint_refusals(self):
         cases = {
             "not a list": "approve-plan",

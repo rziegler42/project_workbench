@@ -35,10 +35,11 @@ checks      a list of at most ``MAX_CHECKS`` objects ``{"helper", "kit"}``, both
             helper is an item of ``ships`` or a file below one, and its last path segment, the
             check's pin name, is in the helper-name form (``module-boundary.md``).
 approval    process modules only: ``{"command", "argument"}``, the key of one of the module's
-            ``commands`` and one of that command's ``arguments``, and optionally ``active``,
-            another of that command's arguments. It names the command the installer runs to
-            learn a plan's hashed region and, with ``active``, the plans under way
-            (``trust-and-approval.md``).
+            ``commands`` and one of that command's ``arguments``, and optionally ``active`` and
+            ``delegable``, each another of that command's arguments, all different. It names
+            the command the installer runs to learn a plan's hashed region and, with ``active``,
+            the plans under way and, with ``delegable``, whether a plan may be approved by a
+            delegate (``trust-and-approval.md``).
 convergence a module that provides ``peer-review``: ``{"command", "argument"}``, the key of one of the
             module's ``commands`` and one of that command's ``arguments``. It names the argument that
             reports whether the last review of a plan converged (``trust-and-approval.md``).
@@ -367,7 +368,7 @@ def _approval(check, value, mtype, commands):
     """The ``approval`` field as ``{"command", "argument"}``, or a refusal naming the field."""
     if mtype != "process":
         check.fail("approval", "only a process module declares an approval command")
-    check.exact_keys(value, "approval", ("command", "argument"), ("active",))
+    check.exact_keys(value, "approval", ("command", "argument"), ("active", "delegable"))
     command, argument = value["command"], value["argument"]
     if not isinstance(command, str) or not isinstance(argument, str):
         check.fail("approval", "'command' and 'argument' must be strings")
@@ -386,6 +387,15 @@ def _approval(check, value, mtype, commands):
         if active == argument:
             check.fail("approval", "'active' must differ from 'argument'")
         approval["active"] = active
+    if "delegable" in value:
+        delegable = value["delegable"]
+        if not isinstance(delegable, str):
+            check.fail("approval", "'delegable' must be a string")
+        if delegable not in found.arguments:
+            check.fail("approval", "%s is not an argument of the command %s" % (_shown(delegable), _shown(command)))
+        if delegable == argument or delegable == approval.get("active"):
+            check.fail("approval", "'delegable' must differ from 'argument' and 'active'")
+        approval["delegable"] = delegable
     return approval
 
 
