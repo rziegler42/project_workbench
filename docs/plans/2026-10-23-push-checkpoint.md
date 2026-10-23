@@ -1,6 +1,6 @@
 # The shared-branch push checkpoint
 
-Status: Proposed
+Status: Approved
 Created: 2026-10-23
 Candidate: workbench-v1#push-checkpoint
 Specs: code-work, safe-git, harness-modules
