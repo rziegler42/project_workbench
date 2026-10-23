@@ -36,4 +36,5 @@ or an evidence note.
 | [`code-work.md`](code-work.md) | The programming way of working |
 | [`safe-git.md`](safe-git.md) | Local commits of exact paths and approved deletions, as a module of their own |
 | [`model-bridge.md`](model-bridge.md) | The contract of a thin vendor module that lets an engine ask a model one read-only question |
+| [`review-engine.md`](review-engine.md) | The review module that provides `peer-review`: rounds, findings, sealed state, the project setting |
 | [`harness-modules.md`](harness-modules.md) | How a harness module describes one AI runtime |

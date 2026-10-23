@@ -248,7 +248,7 @@ path or field.
   provides the capability `peer-review`. It can give findings without being
   delegated the verdict. The capability is named `peer-review`; the section of a
   plan that records a review is named "Review record", so the two are never
-  confused.
+  confused. The first-party provider is specified in `review-engine.md`.
 
 **model bridge**
 : A thin module for one vendor that provides the capability `model-bridge`. It takes a prompt

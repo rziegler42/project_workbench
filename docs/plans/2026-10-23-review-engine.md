@@ -313,4 +313,20 @@ would be bound by.
 
 ## Result
 
-Not started.
+Increment A, 2026-10-23: `docs/specs/review-engine.md` is written (Status: Draft), indexed in `docs/specs/README.md` and
+pointed to from `terms.md` and `code-work.md`.
+
+- Verification as run: `doccheck`, `refcheck` and `git diff --check` print nothing. No test applies to a spec. The owner
+  has not yet read it, and no review was run.
+- Facts checked in the source while writing it, which the plan had assumed: a pinned helper is Python run as the owner
+  and the kit passes `HOME` so a helper can reach the guarded store, but the kit has no store accessor, so the helper
+  builds the path itself and depends on the store's `projects/<id>/` layout (the spec records this and a kit accessor
+  as deferred). `wbkit.call.run_command` needs a command name and the kit cannot list installed bridges.
+- Two places where the spec is narrower than the plan's wording, for the owner to accept or overturn: (1) increment F's
+  test "a missing file means the one installed bridge" cannot hold, so the spec makes a missing or bridge-less
+  `.workbench/review.json` a refusal that names the file, with no default bridge; (2) the prompt names the document by
+  path, kind and hash and the vendor reads the files itself, so the prompt stays under 65,536 bytes and the document
+  bound is 1,048,576 bytes.
+- Not done: the owner's reading of the spec; no review.
+
+Increments B to G: not started.

@@ -209,7 +209,8 @@ step without a recorded outcome.
 - A human may review. A `peer-review` provider may also review, and may always give
   findings. It may give the verdict only when the owner has delegated that checkpoint
   and the provider is installed and approved.
-- Without an installed provider, the owner reviews, or the run stops.
+- Without an installed provider, the owner reviews, or the run stops. The first-party provider is the review engine
+  (`review-engine.md`).
 - A plan review checks the plan against its candidate and its specs. Drift from
   either is a finding.
 - The outcome is written to the plan's review record: the reviewer, the model, the
