@@ -59,7 +59,7 @@ class Facts(unittest.TestCase):
         self.assertEqual(layout.facts(FIXTURE), {
             "roots": ("FIXTURE.md", ".fixture"), "directories": (".fixture",),
             "generated": (".fixture/skills", ".fixture/prompts"),
-            "tolerated": (".fixture/shared.json",)})
+            "tolerated": (".fixture/shared.json",), "hook_targets": ()})
 
     def test_facts_of_the_synthetic_layout_include_its_settings_directory(self):
         found = layout.facts(SYNTHETIC)
@@ -69,7 +69,7 @@ class Facts(unittest.TestCase):
                          (".fixture/skills", ".fixture/agents", ".fixture/commands"))
 
     def test_a_layout_with_nothing_gives_empty_facts(self):
-        empty = {"roots": (), "directories": (), "generated": (), "tolerated": ()}
+        empty = {"roots": (), "directories": (), "generated": (), "tolerated": (), "hook_targets": ()}
         self.assertEqual(layout.facts({}), empty)
         self.assertEqual(layout.facts({"root": "none", "local_settings": "none", "kinds": {}}), empty)
 
@@ -281,6 +281,18 @@ class Refused(unittest.TestCase):
         self.bad(edit(["hooks"], {"command": "x"}), "hooks")
         self.bad(edit(["hooks"], "all"), "hooks")
         self.assertEqual(layout.problems(edit(["hooks"], {"settings_key": "hooks"})), [])
+
+    def test_hook_targets(self):
+        table = {"Edit": ["file_path"], "NotebookEdit": ["notebook_path"], "Both": ["a", "b"]}
+        good = edit(["hooks"], {"settings_key": "hooks", "targets": table})
+        self.assertEqual([], layout.problems(good))
+        self.assertEqual((("Edit", ("file_path",)), ("NotebookEdit", ("notebook_path",)), ("Both", ("a", "b"))),
+                         layout.facts(good)["hook_targets"])
+        for bad in ({}, [], "Edit", {"Edit": []}, {"Edit": "file_path"}, {"Edit": ["File"]}, {"Edit": ["a", "a"]},
+                    {"Edit": [1]}, {"Edit": ["a", "b", "c", "d", "e"]}, {"Ed it": ["a"]}, {"": ["a"]},
+                    {"Edit": ["file path"]}, {"T%d" % n: ["a"] for n in range(17)}):
+            with self.subTest(bad):
+                self.bad(edit(["hooks"], {"settings_key": "hooks", "targets": bad}), "hooks.targets")
 
     def test_exclude_paths(self):
         for entry in ("/abs", "../x", "a/../x", ".git", ".git/", ".GIT/info", ".workbench",

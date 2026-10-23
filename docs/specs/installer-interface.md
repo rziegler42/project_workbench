@@ -513,11 +513,14 @@ stop` or `checkpoint <name>: delegate`, then one line per declared cap, `cap <na
 <text>` line per problem in the owner's settings. It is read-only and agent-safe. Exit codes: 0 printed, 1 refused
 (a `refused:` line on standard error and nothing on standard output), 2 usage error.
 
-`wb gate claude` takes exactly the one argument `claude` and reads the harness's hook JSON from standard input. It
-is the command the Claude harness's rendered hook runs. It is read-only and agent-safe, prints nothing, and
-exits 0 to allow and 2 to refuse; any usage error is also 2, because the hook treats exit 2 alone as a block. The
-rules, the deadline and the refusals are in `trust-and-approval.md`, "Checkpoint and cap settings, and the edit
-gate". Neither command writes in the project, and neither writes in the store beyond the bootstrap above.
+`wb gate <harness>` takes exactly one argument, the name of a first-party harness, and reads that harness's hook JSON
+from standard input. It is the command the harness's rendered hook runs. The installer holds no harness or tool
+name: the tools the hook covers, and the field of each one's input that names the file it writes, are the harness
+module's own data, the `targets` table under `hooks` in its layout (`module-contract.md`, `harness-modules.md`). A
+name that is not a known harness whose layout declares that table is a refusal. It is read-only and agent-safe,
+prints nothing, and exits 0 to allow and 2 to refuse; any usage error is also 2, because the hook treats exit 2
+alone as a block. The rules, the deadline and the refusals are in `trust-and-approval.md`, "Checkpoint and cap
+settings, and the edit gate". Neither command writes in the project, and neither writes in the store beyond the bootstrap above.
 
 ## The existing commands
 

@@ -5,10 +5,12 @@ writes nothing there; every command first creates the guarded store if it is mis
 """
 
 import argparse
+import io
 import os
+import re
 import sys
 
-from . import (acknowledge, approve, attach, check, firstparty, install, launch, pins, planapprovals,
+from . import (acknowledge, approve, attach, check, firstparty, gate_hook, harnesses, install, launch, pins, planapprovals,
                preview, recover, settings, settingscmd, sources, store, target, upgrade, verify)
 from . import commands as module_commands
 from .wbkit import display, safefs
@@ -39,6 +41,7 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench approve-plan <plan>   (owner-run, terminal only)\n"
          "       python3 -m workbench plan-status <plan>   (read-only)\n"
          "       python3 -m workbench settings   (read-only)\n"
+         "       python3 -m workbench gate <harness>   (read-only; the harness's hook runs it)\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
 
@@ -294,6 +297,28 @@ def _settings(tokens, out, err, store_root, distribution):
     return settingscmd.run(opened[0], tokens, out, err)
 
 
+def _gate(tokens, err, store_root, distribution, stdin):
+    """``gate <harness>``: the harness's hook command. Exit 0 allows, 2 refuses with one line on standard error and
+    nothing else, and a usage error is 2 as well, because 2 is the only code the harness takes for a block."""
+    if len(tokens) != 1 or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", tokens[0]):
+        err.write(gate_hook.USAGE)
+        return 2
+
+    def prepare():
+        said = io.StringIO()
+        opened = _open_store(store_root, said)
+        if opened is None:
+            raise gate_hook.Refusal(said.getvalue().strip().removeprefix("refused: ") or "the store cannot be used")
+        launch.install_wrapper(opened[0], distribution or firstparty.default_distribution())
+        facts = harnesses.known(distribution).get(tokens[0])
+        if not facts or not facts["hook_targets"]:
+            raise gate_hook.Refusal("%s is not a known harness whose layout declares the tools its hook covers"
+                                    % _clean(tokens[0]))
+        return opened[0], dict(facts["hook_targets"])
+
+    return gate_hook.run(stdin if stdin is not None else sys.stdin, err, prepare)
+
+
 def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=None, home=None):
     """Run a command. `store_root`, `distribution`, `stdin` and `home` are for tests; the command
     line cannot set them."""
@@ -311,6 +336,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         argv, passthrough = argv[:split], argv[split + 1:]
     if argv and argv[0] == "run":
         return _run(argv[1:], out, err, store_root, distribution)
+    if argv and argv[0] == "gate":
+        return _gate(argv[1:], err, store_root, distribution, stdin)
     if argv and argv[0] == "settings":
         return _settings(argv[1:], out, err, store_root, distribution)
     if argv and argv[0] in ("approve-plan", "plan-status"):

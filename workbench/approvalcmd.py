@@ -15,6 +15,11 @@ The output is data: it is validated, never followed, and a helper's own words ar
 
 The installer reads no plan. It hands the helper the plan's path relative to the project root and takes the
 helper's report; what the region is belongs to the helper (``2026-10-22-plan-check-in-the-shipped-helper``).
+``active_plans`` runs ``<command> <active>`` the same way, for a module that declares ``approval.active``, within
+``MAX_ACTIVE_REPORT`` bytes, and accepts exactly one JSON object and a newline: ``{"format": 1, "plans":
+["<root-relative path>", ...]}`` of at most ``MAX_ACTIVE`` paths of at most ``MAX_ACTIVE_PATH`` characters, each
+passing the path rules, none repeated. The edit gate reads it (``gate_hook.py``).
+
 Nothing here writes to the project or to the guarded store. Every refusal is an ``ApprovalError``.
 """
 
@@ -28,9 +33,13 @@ MAX_REPORT = 4096
 TIMEOUT = 30
 MAX_UNHASHED = 16
 MAX_NAME = 64
+MAX_ACTIVE_REPORT = 8192
+MAX_ACTIVE = 32
+MAX_ACTIVE_PATH = 240
 
 Resolved = collections.namedtuple(
-    "Resolved", "root project_id package module declaration helper_sha256 command argument kit")
+    "Resolved", "root project_id package module declaration helper_sha256 command argument kit active",
+    defaults=(None,))
 Report = collections.namedtuple("Report", "region_hash unhashed")
 
 _HASH = re.compile(r"[0-9a-f]{64}\Z")
@@ -72,21 +81,27 @@ def resolve(guarded, start):
     """The ``Resolved`` approval command of the project that holds the directory `start`, or ``ApprovalError``.
     Nothing is started."""
     root, ident, found = installed_modules(start)
-    declaring = [(item.package, item.module, item.declaration) for item in found if item.module.approval is not None]
+    declaring = [item for item in found if item.module.approval is not None]
     if not declaring:
         raise ApprovalError("no installed module declares an approval command; nothing was run")
     if len(declaring) > 1:
         raise ApprovalError("more than one installed module declares an approval command: %s; nothing was run"
-                            % ", ".join(sorted("%s/%s" % (package, module.name) for package, module, _ in declaring)))
-    package, module, declaration = declaring[0]
+                            % ", ".join(sorted("%s/%s" % (item.package, item.module.name) for item in declaring)))
+    return resolved(guarded, root, ident, declaring[0])
+
+
+def resolved(guarded, root, ident, item):
+    """The ``Resolved`` approval command of the ``Installed`` module `item`, which declares ``approval``: its
+    pin must record exactly the declared helper (``commands.check_pin``). Nothing is started."""
+    module = item.module
     command = next(c for c in module.commands if c.name == module.approval["command"])
-    found = commands.Declared(package, module.name, command, declaration, tuple(module.provides))
+    found = commands.Declared(item.package, module.name, command, item.declaration, tuple(module.provides))
     try:
         pin = commands.check_pin(guarded, ident, found)
     except commands.CommandError as exc:
         raise ApprovalError(str(exc))
-    return Resolved(root, ident, package, module.name, declaration, pin.sha256, command.name,
-                    module.approval["argument"], pin.kit)
+    return Resolved(root, ident, item.package, module.name, item.declaration, pin.sha256, command.name,
+                    module.approval["argument"], pin.kit, module.approval.get("active"))
 
 
 def _plan_argument(plan):
@@ -106,23 +121,61 @@ def _cleaned_end(data):
     return _shown(lines[-1].strip(), 200) if lines else ""
 
 
-def region(guarded, resolved, plan):
-    """The ``Report`` the approval command gives for the root-relative path `plan`, or ``ApprovalError``."""
-    plan = _plan_argument(plan)
+def _capture(guarded, found, args, limit, timeout):
+    """The standard output of the approval command run with `args`, or ``ApprovalError``."""
     try:
-        done = launch.launch_captured(guarded, resolved.project_id, resolved.command, resolved.root,
-                                      [resolved.argument, plan], limit=MAX_REPORT, timeout=TIMEOUT,
-                                      kit=resolved.kit, cwd=resolved.root)
+        done = launch.launch_captured(guarded, found.project_id, found.command, found.root, args, limit=limit,
+                                      timeout=timeout, kit=found.kit, cwd=found.root)
     except launch.LaunchError as exc:
         raise ApprovalError(_shown(exc, 300))
     if done.over:
-        raise ApprovalError("the approval command printed more than %d bytes and was stopped" % MAX_REPORT)
+        raise ApprovalError("the approval command printed more than %d bytes and was stopped" % limit)
     if done.timed_out:
-        raise ApprovalError("the approval command did not finish within %d seconds and was stopped" % TIMEOUT)
+        raise ApprovalError("the approval command did not finish within %g seconds and was stopped" % timeout)
     if done.code != 0:
         said = _cleaned_end(done.stderr) or _cleaned_end(done.stdout)
         raise ApprovalError("the approval command failed (exit %d)%s" % (done.code, ": " + said if said else ""))
-    return parse_report(done.stdout)
+    return done.stdout
+
+
+def region(guarded, found, plan, *, timeout=None):
+    """The ``Report`` the approval command gives for the root-relative path `plan`, or ``ApprovalError``."""
+    plan = _plan_argument(plan)
+    return parse_report(_capture(guarded, found, [found.argument, plan], MAX_REPORT, timeout or TIMEOUT))
+
+
+def active_plans(guarded, found, *, timeout=None):
+    """The root-relative paths of the plans under way, as the approval command's ``active`` argument lists
+    them, or ``ApprovalError``. The command is run once, with that argument only."""
+    if not found.active:
+        raise ApprovalError("the approval command declares no argument that lists the plans under way")
+    return parse_active(_capture(guarded, found, [found.active], MAX_ACTIVE_REPORT, timeout or TIMEOUT))
+
+
+def parse_active(data):
+    """The list of paths in the bytes `data` an ``active`` command printed, or ``ApprovalError``."""
+    if not data.endswith(b"\n") or data.count(b"\n") != 1:
+        raise ApprovalError("the active command's report is not one line ending in a newline")
+    try:
+        report = jsonstrict.parse_object(data[:-1], MAX_ACTIVE_REPORT)
+    except ValueError as exc:
+        raise ApprovalError("the active command's report is not one JSON object: %s" % _shown(exc, 80))
+    if set(report) != {"format", "plans"}:
+        raise ApprovalError("the active command's report must hold exactly format and plans")
+    if type(report["format"]) is not int or report["format"] != 1:
+        raise ApprovalError("the active command's report has a format this workbench does not read")
+    plans = report["plans"]
+    if not isinstance(plans, list) or len(plans) > MAX_ACTIVE:
+        raise ApprovalError("the active command's plans must be a list of at most %d paths" % MAX_ACTIVE)
+    for plan in plans:
+        if not isinstance(plan, str) or not 1 <= len(plan) <= MAX_ACTIVE_PATH or not safefs.relpath_ok(plan):
+            raise ApprovalError("the active command's plans hold a path that is not one to %d characters passing "
+                                "the path rules" % MAX_ACTIVE_PATH)
+        if plan.startswith("-"):
+            raise ApprovalError("the active command's plans hold a path that could be taken for an option")
+    if len(set(plans)) != len(plans):
+        raise ApprovalError("the active command's plans repeat a path")
+    return list(plans)
 
 
 def parse_report(data):

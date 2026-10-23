@@ -23,7 +23,10 @@ Keys, all optional (an absent key means ``none`` or empty):
     each tool class (``Name({pattern})`` or, for ``read`` and ``write``, ``Name({path})``), and
     the prefix that spells an absolute path (``//`` or ``~/``).
 ``hooks``
-    ``"none"``, or ``{"settings_key": "<key>"}``. No hook is built yet.
+    ``"none"``, or ``{"settings_key": "<key>"}`` with, optionally, ``"targets"``: for each file-editing tool the
+    harness's hook can be given, the fields of that tool's input that name a file it writes
+    (``{"<Tool>": ["<field>", ...]}``). The edit gate reads the table (``gate_hook.py``) and reads no tool name
+    of its own. No hook is rendered yet.
 ``exclude``
     The literal paths written to ``.git/info/exclude`` (a trailing ``/`` marks a directory). No
     glob, no space, nothing under ``.workbench`` and not the guarded store.
@@ -162,10 +165,11 @@ def problems(layout):
         written += _settings(settings, out)
     hooks = layout.get("hooks", "none")
     if hooks != "none":
-        if out.keys(hooks, "layout.hooks", ("settings_key",), ("settings_key",)) \
-                and not (isinstance(hooks["settings_key"], str)
-                         and _WORD.match(hooks["settings_key"])):
-            out.add("layout.hooks", "settings_key must be a plain word")
+        if out.keys(hooks, "layout.hooks", ("settings_key", "targets"), ("settings_key",)):
+            if not (isinstance(hooks["settings_key"], str) and _WORD.match(hooks["settings_key"])):
+                out.add("layout.hooks", "settings_key must be a plain word")
+            if "targets" in hooks:
+                _hook_targets(hooks["targets"], out)
     hook_key = hooks["settings_key"] if isinstance(hooks, dict) \
         and isinstance(hooks.get("settings_key"), str) else None
     actions = settings.get("actions") if isinstance(settings, dict) else None
@@ -185,6 +189,28 @@ def problems(layout):
             out.add("layout.exclude", "%r covers no path this layout writes" %
                     ("/".join(entry) + ("/" if entry_dir else "")))
     return out.messages
+
+
+MAX_HOOK_TOOLS = 16
+MAX_HOOK_FIELDS = 4
+_HOOK_TOOL = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,39}\Z")
+_HOOK_FIELD = re.compile(r"[a-z][a-z_]{0,39}\Z")
+
+
+def _hook_targets(targets, out):
+    where = "layout.hooks.targets"
+    if not isinstance(targets, dict) or not targets:
+        out.add(where, "must be an object with at least one tool")
+        return
+    if len(targets) > MAX_HOOK_TOOLS:
+        out.add(where, "at most %d tools" % MAX_HOOK_TOOLS)
+    for tool, fields in targets.items():
+        if not _HOOK_TOOL.match(tool):
+            out.add(where, "%r is not a plain tool name" % tool)
+        if not isinstance(fields, list) or not 1 <= len(fields) <= MAX_HOOK_FIELDS \
+                or not all(isinstance(f, str) and _HOOK_FIELD.match(f) for f in fields) \
+                or len(set(fields)) != len(fields):
+            out.add(where, "%r must map to one to %d different lowercase field names" % (tool, MAX_HOOK_FIELDS))
 
 
 ROOT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*\.md")
@@ -420,6 +446,7 @@ def facts(layout):
     ``roots``: the top-level names the harness occupies (the root file, the first segment of each kind
     directory and of the settings file). ``directories``: those that are directories. ``generated``: each
     kind's directory, which holds files the installer generates. ``tolerated``: the declared paths.
+    ``hook_targets``: the pairs ``(tool, fields)`` of the hook's ``targets`` table, or empty.
     """
     roots, directories, generated = [], [], []
     root = layout.get("root", "none")
@@ -441,8 +468,11 @@ def facts(layout):
         if rest or path in generated:
             directories.append(first)
     unique = lambda items: tuple(dict.fromkeys(items))
+    hooks = layout.get("hooks", "none")
+    targets = hooks.get("targets", {}) if isinstance(hooks, dict) else {}
     return {"roots": unique(roots), "directories": unique(directories),
-            "generated": unique(generated), "tolerated": tuple(layout.get("tolerated", []))}
+            "generated": unique(generated), "tolerated": tuple(layout.get("tolerated", [])),
+            "hook_targets": tuple((tool, tuple(fields)) for tool, fields in targets.items())}
 
 
 def _overlaps(written, out):

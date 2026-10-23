@@ -35,7 +35,7 @@ class Facts(unittest.TestCase):
         self.assertEqual(layout.facts(declared()), {
             "roots": ("CLAUDE.md", ".claude"), "directories": (".claude",),
             "generated": (".claude/skills", ".claude/agents", ".claude/commands"),
-            "tolerated": (".claude/settings.json",)})
+            "tolerated": (".claude/settings.json",), "hook_targets": ()})
 
     def test_the_tolerated_file_is_not_one_the_layout_writes(self):
         document = declared()
