@@ -511,7 +511,7 @@ def render_ledger(document, state):
     """A readable rendering of `state`. It is written for people and never read back."""
     window = state["window"]
     used = len(state["rounds"]) - (window["first"] - 1)
-    return "\n".join(["# Review of %s" % document.path, "",
+    return "\n".join(["# Review of %s" % md(document.path, 300), "",
                       "This file is a rendering of state.json for people. It is never read back.", "",
                       "- Kind: %s" % document.kind,
                       "- Rounds in this window: %d of %d rounds (ceiling %d)" % (used, window["bound"], CEILING),
@@ -542,6 +542,9 @@ def save(root, guarded, document, state, files=None, override=False):
         rounds = decisions = generation = 0
     body = {name: value for name, value in state.items() if name != "seal"}
     body["generation"] = max(state["generation"], generation) + 1
+    if body["generation"] > MAX_COUNT:
+        raise Refused("the generation has reached its largest value; the owner removes the review's directory and "
+                      "resets the review (which loses its history)")
     sealed = dict(body, seal=seal(key, body))
     try:
         check_state(sealed, document)
@@ -803,7 +806,9 @@ def earlier_findings(root, document, state):
                 found.append({"id": item["id"], "severity": item["severity"], "location": str(item["location"]),
                               "problem": str(item["problem"]), "decision": decided.get(item["id"])})
         except (safefs.SafeFsError, ValueError, KeyError, AttributeError, TypeError) as exc:
-            raise Refused("%s cannot be used (%s); the owner resets the review" % (name, shown(exc)))
+            raise Refused("%s cannot be used (%s); the owner restores the file from the commit it came from, or "
+                          "removes the review's directory and resets the review (which loses its history)" % (
+                              name, shown(exc)))
     return found
 
 
@@ -921,10 +926,27 @@ def mutate(root, project_id, argv, out, command, make, access=changeable):
     document = resolve(root, argv[1])
     guarded = Guarded(project_id)
     with guarded.locked():
-        state, override = access(document, load(root, guarded, document), command)
+        loaded = load(root, guarded, document)
+        state, override = access(document, loaded, command)
+        replaced = replaced_standing(guarded, document, loaded) if override else {}
         state, extra = make(document, state)
         save(root, guarded, document, state, override=override)
-        return emit(out, dict(describe(document, load(root, guarded, document)), **extra))
+        return emit(out, dict(describe(document, load(root, guarded, document)), **dict(extra, **replaced)))
+
+
+def replaced_standing(guarded, document, loaded):
+    """What an owner's `reset` of a review that was not sealed puts right replaces: ``{"replaced": {...}}`` with the
+    seal it had, what its file claimed (``None`` where there was no file) and the mark that is lowered to the new
+    counts. The owner sees what was undone."""
+    try:
+        rounds, decisions, _ = guarded.mark(document.key)
+        mark = {"rounds": rounds, "decisions": decisions}
+    except Unusable:
+        mark = None
+    old = loaded.state
+    return {"replaced": {"seal": loaded.seal, "closed": old["closed"] if old else None,
+                         "rounds": len(old["rounds"]) if old else None,
+                         "decisions": len(old["decisions"]) if old else None, "mark": mark}}
 
 
 def decide(root, project_id, argv, out):
@@ -997,9 +1019,15 @@ def prunable(root, guarded, now):
             names = [name for name in names if all(
                 kind == "file" and FILE_NAME.fullmatch(entry)
                 for entry, kind in tree.list_dir("%s/%s" % (NAMESPACE, name), lenient=True) or [])]
-            data = {name: tree.read_if_present("%s/%s/state.json" % (NAMESPACE, name), MAX_STATE) for name in names}
+            data = {}
+            for name in names:
+                try:
+                    data[name] = tree.read_if_present("%s/%s/state.json" % (NAMESPACE, name), MAX_STATE)
+                except safefs.SafeFsError:
+                    pass    # a state that cannot be read is not one of ours to prune; it must not stop the others
     except safefs.SafeFsError as exc:
         raise Refused(shown(exc))
+    names = [name for name in names if name in data]
     found = []
     for name in names:
         try:

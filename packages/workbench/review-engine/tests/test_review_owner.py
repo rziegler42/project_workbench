@@ -7,10 +7,11 @@ as the owner would run them."""
 import json
 import os
 import re
+import shutil
 import unittest
 
 import support_review
-from support_review import PLAN, key_of, round_entry
+from support_review import PLAN, decision_entry, key_of, round_entry
 
 TIME = r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
 
@@ -129,6 +130,50 @@ class Reset(support_review.Review):
         self.refused("reset", PLAN, contains="seal key")
         with open(self.store_path("seal-key"), "rb") as handle:
             self.assertEqual(b"short", handle.read())
+
+    def test_setting_right_a_replayed_copy_says_what_it_replaced(self):
+        self.reviewed(("major",))
+        older = self.read(self.state_rel("plan", PLAN))
+        self.document("decide", PLAN, "R1-F1", "applied")
+        self.document("archive", PLAN)
+        self.write(self.state_rel("plan", PLAN), older, binary=True)
+        self.assertEqual("rolled_back", self.document("status", PLAN)["seal"])
+        got = self.document("reset", PLAN)
+        self.assertEqual((None, 0), (got["closed"], got["decisions_total"]))
+        self.assertEqual({"seal": "rolled_back", "closed": None, "rounds": 1, "decisions": 0,
+                          "mark": {"rounds": 1, "decisions": 1}}, got["replaced"])
+
+    def test_setting_right_an_unsealed_state_says_what_its_file_claimed(self):
+        self.reviewed(("major",))
+        state = self.state()
+        state["decisions"] = [decision_entry("R1-F1", "rejected", "made up")]
+        self.write(self.state_rel("plan", PLAN), json.dumps(state))
+        got = self.document("reset", PLAN)
+        self.assertEqual({"seal": "unsealed", "closed": None, "rounds": 1, "decisions": 1,
+                          "mark": {"rounds": 0, "decisions": 0}}, got["replaced"])
+        self.assertEqual(1, got["decisions_total"])   # the decision it claimed is now sealed: the owner was told
+
+    def test_setting_right_a_state_that_is_gone_says_so(self):
+        self.reviewed(("major",))
+        self.set_mark(key_of("plan", PLAN), 2, 1, 7)
+        os.unlink(self.path(self.state_rel("plan", PLAN)))
+        self.assertEqual({"seal": "rolled_back", "closed": None, "rounds": None, "decisions": None,
+                          "mark": {"rounds": 2, "decisions": 1}}, self.document("reset", PLAN)["replaced"])
+
+    def test_a_generation_at_its_largest_is_refused_with_the_way_out_and_the_way_out_works(self):
+        self.reviewed(("major",))
+        state = self.state()
+        state["generation"] = 2147483647
+        self.write(self.state_rel("plan", PLAN), json.dumps(state))
+        self.refused("reset", PLAN, contains="largest")
+        self.set_mark(key_of("plan", PLAN), 1, 0, 1)   # the mark of the round it had sealed
+        shutil.rmtree(self.path(self.review_dir("plan", PLAN)))
+        self.assertEqual("rolled_back", self.document("status", PLAN)["seal"])
+        self.assertEqual("ok", self.document("reset", PLAN)["seal"])
+
+    def test_a_reset_that_replaces_nothing_says_nothing_of_it(self):
+        self.reviewed()
+        self.assertNotIn("replaced", self.document("reset", PLAN))
 
     def test_replaying_the_state_from_before_a_reset_is_rolled_back(self):
         self.reviewed(("major",))

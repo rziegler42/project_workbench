@@ -40,6 +40,21 @@ class Prune(support_review.Review):
         self.reviewed(closed=recent)
         self.assertEqual([], self.listed()["reviews"])
 
+    def test_one_directory_that_cannot_be_read_does_not_stop_the_others(self):
+        self.reviewed(closed=OLD)
+        planted = NAMESPACE + "/plan-0000000000000000"
+        os.makedirs(self.path(planted))
+        outside = os.path.join(self.base, "elsewhere.json")
+        with open(outside, "w") as handle:
+            handle.write("{}")
+        os.link(outside, self.path(planted + "/state.json"))      # a file with two links is not read
+        self.write(NAMESPACE + "/spec-0000000000000000/state.json", "x" * (4194304 + 10))   # over the bound
+        self.assertEqual([key_of("plan", PLAN)], [r["key"] for r in self.listed()["reviews"]])
+        got = self.listed("--apply")
+        self.assertEqual([key_of("plan", PLAN)], got["removed"])
+        self.assertTrue(os.path.exists(self.path(planted + "/state.json")))
+        self.assertTrue(os.path.exists(outside))
+
     def test_the_preview_changes_nothing(self):
         self.reviewed(closed=OLD)
         before = (self.tree(self.root), self.tree(self.store))

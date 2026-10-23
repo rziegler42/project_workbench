@@ -495,4 +495,25 @@ until E.
   commands only as the owner's.
 - Not done: no review of E or F, and no security pass after C and D; no run against a real vendor.
 
+### Security pass over E and F
+
+- Two read-only `security-reviewer` subagents ran experiments on scratch copies of `b0211d5`: one on the owner commands
+  and `prune`, one on untrusted text and increment F. Both stopped at their turn limit and were asked to finish, so
+  not everything was checked: the real-launcher refusal tests, the launcher's handling of `--provides=` and `--`,
+  multi-process races, case-insensitive disks, the harness translation of the skill, and a few size cases. No critical
+  or high finding. Seven low items were reported.
+- Fixed, each with a regression test that failed first (the module tests went from 274 to 283): `reset` of a state
+  that was rolled back, unsealed or gone now prints `replaced` (the seal it had, what its file claimed, its counts,
+  the mark lowered), because it can undo an archive and drop decisions (the spec had said it could not); `prune`
+  skips a directory whose state cannot be read instead of refusing the whole run; the ledger heading passes the
+  document path through the markup filter; the refusal for a damaged round file no longer names a `reset` that does
+  not help; a generation at its largest says how the owner gets out; the skill no longer treats a plan's say-so as the
+  owner's request, tells the agent not to paste model text into a reason, and not to edit the review's files.
+- Not fixed, by choice: a bare web address in a decision reason is kept in the ledger as text (cosmetic). Recorded in
+  the spec's limits: `reset`'s reach, the generation limit, the round-file refusal, the unreported skip in `prune`,
+  and the markup replacement in the ledger.
+- Verification as run: the full suite ran 3468 tests in 7 roots, OK (installer 2360 with 1 skip, ask-codex 90, claude
+  32 with 12 skips, code-work 268 with 2 skips, groundwork 178, review-engine 283, safe-git 257); `doccheck`,
+  `refcheck` and `git diff --check` print nothing (see the run below).
+
 Increment G: not started.

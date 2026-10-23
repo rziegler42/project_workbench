@@ -339,6 +339,16 @@ class Writes(support_review.Review):
         self.write(self.review_dir("plan", PLAN) + "/ledger.md", "tampered\n")
         self.assertEqual("ok", self.document("status", PLAN)["seal"])
 
+    def test_the_ledger_heading_makes_no_markup_from_a_document_name(self):
+        name = "docs/plans/2026-01-02-<!-- [x](y) *z* `c` |t|.md"
+        self.write(name, "# T\n")
+        self.document("init", name)
+        ledger = self.read(self.review_dir("plan", name) + "/ledger.md").decode()
+        heading = ledger.splitlines()[0]
+        self.assertTrue(heading.startswith("# Review of docs/plans/2026-01-02-"), heading)
+        for char in "<>[]()*`|":
+            self.assertNotIn(char, heading, char)
+
     def test_a_write_that_fails_part_way_leaves_the_old_state_and_no_temporary_file(self):
         self.document("init", PLAN)
         before = self.read(self.state_rel("plan", PLAN))

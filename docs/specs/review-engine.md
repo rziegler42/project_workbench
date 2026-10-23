@@ -312,6 +312,12 @@ Built by plan `2026-10-23-review-engine`, increments C to F (the module `review-
   high finding. Four findings were fixed: a deleted state file reset the round budget; a replayed older state with the
   same counts passed as sealed; the case or Unicode form of a path made a second review and defeated the bound; and a
   decision's choice was put into the next prompt without a bound. The rest are in the limits below.
+- A second security pass, over E and F (two read-only reviewers; both stopped at a turn limit and were asked to finish,
+  so some checks were not run: the real-launcher refusal tests, the launcher's handling of `--provides=` and `--`,
+  multi-process races, case-insensitive disks), found no critical or high finding. Five were fixed (the ledger heading
+  was unescaped; a damaged round file named a `reset` that does not help; one unreadable directory stopped `prune`; the
+  generation at its largest gave no way out; `reset` of a replaced state said nothing of what it replaced), and the
+  skill no longer treats a plan's say-so as the owner's request. A bare address in a reason was left as it is.
 - The decisions and owner commands (increment E). Each runs under the lock, on a review that exists, is sealed and has
   not been rolled back, and prints the review's `status` object plus its own fields. A decision is one record per
   finding with exactly `finding`, `choice` (`applied` or `rejected`), `reason`, `at` and `earlier`; `decide` refuses a
@@ -344,10 +350,24 @@ Limits found while building:
   and whether a real vendor accepts the schema is untested until the first hand run against a real bridge.
 - A meaningful finding blocks the next round only inside the current window, so `reset` clears the way; the finding
   stays in the earlier rounds and in the ledger of the prompt.
-- The retention of 90 days, and archive as a final act that `reset` does not undo, are the engine's own choices, not the
-  owner's; both are one constant each.
-- `reset` on an unsealed state blesses whatever the state says, which is why it is the owner's. An agent that edits a
-  state and gets it reset by the owner has the owner's word for it.
+- The retention of 90 days, and archive as a final act, are the engine's own choices, not the owner's; both are one
+  constant each. `reset` does not undo an archive of a review that is sealed and closed. It does undo one when the
+  review is rolled back, unsealed or gone: an older open copy of the state, or a missing state file, is set right as
+  what it says (an open review with the decisions of that copy, or an empty one), and the mark is lowered to it.
+- `reset` on an unsealed or rolled-back state blesses whatever the state says, which is why it is the owner's. An agent
+  that edits or replays a state and gets it reset by the owner has the owner's word for it. So that the owner sees what
+  is being replaced, `reset` of such a review prints `replaced`: the seal it had, whether its file claimed a close, its
+  counts of rounds and decisions (null for a file that is gone) and the mark that is lowered.
+- The generation is a count that stops at 2,147,483,647. A state at that value cannot be saved again; the owner removes
+  the review's directory and resets the review, which starts it empty and loses its history.
+- A round refuses when any stored round file is missing, changed or a link, including a file of an earlier window, and
+  `reset` does not help (it moves only the window). The owner restores the file from the commit it came from, or
+  removes the review's directory and resets the review.
+- `prune` skips a directory whose state file cannot be read (a second link, over the bound, a link) and goes on with
+  the others; it does not report what it skipped. A directory with a file of another name, or a directory inside it,
+  is left whole and is not listed.
+- The ledger shows the document's path and a decision's reason with markup characters replaced by spaces, so a name
+  such as `a_b.md` reads `a b.md` there. A bare web address in a reason is kept as text and a viewer may link it.
 - The project's identity is read from the committed seed in `.workbench/manifest.json`, so a clone that copies the seed
   shares this project's key, marks and lock in the guarded store. It cannot forge a seal without the key, but it can
   raise a mark and so make the real review read as rolled back. The state is not compared with the current document: a

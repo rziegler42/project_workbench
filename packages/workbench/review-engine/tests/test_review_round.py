@@ -427,6 +427,16 @@ class Refusals(Round):
         os.unlink(self.path(DIR + "/round-1.json"))
         self.refuses("review-plan", PLAN, contains="round-1.json")
 
+    def test_the_refusal_for_a_damaged_round_file_names_what_helps_and_not_a_reset_that_does_not(self):
+        self.round()
+        os.unlink(self.path(DIR + "/round-1.json"))
+        text = self.refuses("review-plan", PLAN, contains="round-1.json")
+        self.assertIn("restores the file", text)
+        self.assertIn("removes the review's directory", text)
+        self.assertNotIn("owner resets", text)
+        self.document("reset", PLAN)   # a reset only moves the window: the round is still refused
+        self.refuses("review-plan", PLAN, contains="round-1.json")
+
     def test_a_round_file_that_is_a_link_is_not_followed(self):
         self.round()
         real = os.path.join(self.base, "elsewhere.json")
