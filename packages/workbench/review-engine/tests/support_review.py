@@ -19,6 +19,17 @@ OTHER_PLAN = "docs/plans/2026-01-02-other.md"
 NAMESPACE = ".workbench/workbench/review-engine"
 
 
+def round_entry(n, severities=(), **changes):
+    """A round of a state in the documented shape, with one finding for each of `severities`."""
+    entry = {"n": n, "file": "round-%d.json" % n, "sha256": "%064x" % n, "document_sha256": "%064x" % (n + 1000),
+             "at": "2026-01-01T00:00:00Z", "bridge": "ask-codex", "requested": {"model": None, "effort": None},
+             "model": None, "verdict": "no_meaningful_changes", "reading": "no_meaningful_changes",
+             "mismatch": False, "usage": {"input_tokens": None, "output_tokens": None, "total_tokens": None},
+             "findings": [{"id": "R%d-F%d" % (n, k + 1), "severity": s} for k, s in enumerate(severities)]}
+    entry.update(changes)
+    return entry
+
+
 def key_of(kind, path):
     return "%s-%s" % (kind, hashlib.sha256(path.encode("utf-8")).hexdigest()[:16])
 

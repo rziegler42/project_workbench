@@ -8,7 +8,7 @@ import stat
 import unittest
 
 import support_review
-from support_review import NAMESPACE, OTHER_PLAN, PLAN, SPEC, key_of
+from support_review import NAMESPACE, OTHER_PLAN, PLAN, SPEC, key_of, round_entry
 from workbench.wbkit import safefs
 
 
@@ -86,7 +86,7 @@ class Seal(support_review.Review):
     def test_a_field_changed_by_hand_is_unsealed_whichever_field_it_is(self):
         original = self.read(self.state_rel("plan", PLAN))
         edits = (lambda s: s["window"].update(bound=5), lambda s: s.update(closed="2026-01-01T00:00:00Z"),
-                 lambda s: s["rounds"].append({"n": 1}), lambda s: s["decisions"].append({"finding": "R1-F1"}),
+                 lambda s: s["rounds"].append(round_entry(1)), lambda s: s["decisions"].append({"finding": "R1-F1"}),
                  lambda s: s.update(path=SPEC), lambda s: s.update(kind="spec"))
         for edit in edits:
             self.write(self.state_rel("plan", PLAN), original, binary=True)
@@ -169,7 +169,7 @@ class Rollback(support_review.Review):
 
     def newer(self, rounds, decisions=()):
         body = self.state()
-        body["rounds"] = [{"n": n + 1} for n in range(rounds)]
+        body["rounds"] = [round_entry(n + 1) for n in range(rounds)]
         body["decisions"] = [{"finding": "R1-F%d" % n} for n in decisions]
         return self.forge(body)
 
@@ -224,14 +224,14 @@ class Rollback(support_review.Review):
     def test_saving_a_state_never_lowers_the_mark(self):
         self.set_mark(self.name, 4, 4)
         state = self.state()
-        state["rounds"] = [{"n": 1}, {"n": 2}]
+        state["rounds"] = [round_entry(1), round_entry(2)]
         self.helper.save(self.root, self.helper.Guarded(self.project_id), self.helper.resolve(self.root, PLAN), state)
         with open(self.store_path("marks", self.name)) as handle:
             self.assertEqual({"rounds": 4, "decisions": 4}, json.load(handle))
 
     def test_saving_a_state_raises_the_mark_to_its_counts(self):
         state = self.state()
-        state["rounds"] = [{"n": 1}, {"n": 2}]
+        state["rounds"] = [round_entry(1), round_entry(2)]
         state["decisions"] = [{"finding": "R1-F1"}]
         self.helper.save(self.root, self.helper.Guarded(self.project_id), self.helper.resolve(self.root, PLAN), state)
         with open(self.store_path("marks", self.name)) as handle:
@@ -307,6 +307,84 @@ class Lock(support_review.Review):
         os.symlink(os.path.join(self.base, "somewhere"), self.store_path("lock"))
         self.refused("init", OTHER_PLAN)
         self.assertFalse(os.path.exists(os.path.join(self.base, "somewhere")))
+
+
+class RoundEntries(support_review.Review):
+    """The entries of `rounds` are checked one by one: a state that is sealed but holds an entry the engine
+    would never have written is not usable."""
+
+    def setUp(self):
+        super().setUp()
+        self.document("init", PLAN)
+
+    def sealed(self, rounds):
+        self.forge(dict(self.state(), rounds=rounds))
+        return self.document("status", PLAN)
+
+    def test_entries_in_the_documented_shape_are_read(self):
+        got = self.sealed([round_entry(1, ["major", "nit"]), round_entry(2, ["blocker"], mismatch=True,
+                                                                     verdict="changes_needed", reading="changes_needed",
+                                                                     model="m-1", at="2026-02-03T04:05:06Z")])
+        self.assertEqual(("ok", 2), (got["seal"], got["rounds_total"]))
+
+    def test_the_usage_may_hold_whole_numbers_and_none(self):
+        usage = {"input_tokens": 12, "output_tokens": 0, "total_tokens": None}
+        self.assertEqual("ok", self.sealed([round_entry(1, usage=usage)])["seal"])
+
+    def test_an_entry_the_engine_would_not_have_written_makes_the_state_unusable(self):
+        entry = round_entry(1, ["major"])
+        bad = [dict(entry, n=2), dict(entry, n=0), dict(entry, n=True), dict(entry, n="1"),
+               dict(entry, file="round-2.json"), dict(entry, file="../round-1.json"), dict(entry, file=1),
+               dict(entry, sha256="0" * 63), dict(entry, sha256="G" * 64), dict(entry, sha256=None),
+               dict(entry, document_sha256="x"), dict(entry, at="yesterday"), dict(entry, at=None),
+               dict(entry, bridge=""), dict(entry, bridge="a b"), dict(entry, bridge=1),
+               dict(entry, requested=None), dict(entry, requested={"model": None}),
+               dict(entry, requested={"model": 1, "effort": None}),
+               dict(entry, requested={"model": None, "effort": "max"}),
+               dict(entry, requested={"model": None, "effort": None, "x": 1}),
+               dict(entry, model=1), dict(entry, verdict="approved"), dict(entry, reading="ok"),
+               dict(entry, mismatch=None), dict(entry, mismatch=1),
+               dict(entry, usage=None), dict(entry, usage={"input_tokens": None}),
+               dict(entry, usage={"input_tokens": -1, "output_tokens": None, "total_tokens": None}),
+               dict(entry, usage={"input_tokens": "1", "output_tokens": None, "total_tokens": None}),
+               dict(entry, usage={"input_tokens": True, "output_tokens": None, "total_tokens": None}),
+               dict(entry, findings={}), dict(entry, findings=[1]), dict(entry, extra=1)]
+        missing = dict(entry)
+        del missing["reading"]
+        bad.append(missing)
+        for each in bad:
+            got = self.sealed([each])
+            self.assertEqual(("unsealed", "the state is not usable"), (got["seal"], got["reason"]), each)
+
+    def test_a_finding_entry_must_be_numbered_by_its_round_and_its_place(self):
+        entry = round_entry(1, ["major", "minor"])
+        good = entry["findings"]
+        for findings in ([good[1], good[0]], [good[0], good[0]], [{"id": "R2-F1", "severity": "major"}],
+                         [{"id": "R1-F1", "severity": "critical"}], [{"id": "R1-F1"}],
+                         [{"id": "R1-F1", "severity": "major", "x": 1}], [{"id": 1, "severity": "major"}],
+                         [{"id": "R1-F01", "severity": "major"}], [{"id": "R1-F0", "severity": "major"}],
+                         [{"id": "r1-f1", "severity": "major"}], [{"id": "R1-F1", "severity": 1}],
+                         [{"id": "R1-F%d" % n, "severity": "nit"} for n in range(1, 102)]):
+            got = self.sealed([dict(entry, findings=findings)])
+            self.assertEqual("the state is not usable", got["reason"], findings[:2])
+
+    def test_a_hundred_findings_in_a_round_are_read(self):
+        self.assertEqual("ok", self.sealed([round_entry(1, ["nit"] * 100)])["seal"])
+
+    def test_the_rounds_are_numbered_one_after_the_other(self):
+        for rounds in ([round_entry(2)], [round_entry(1), round_entry(3)], [round_entry(1), round_entry(1)],
+                       [round_entry(2), round_entry(1)]):
+            self.assertEqual("the state is not usable", self.sealed(rounds)["reason"])
+
+    def test_a_state_too_large_to_read_back_is_not_written(self):
+        state = self.state()
+        state["rounds"] = [round_entry(n, ["minor"] * 100) for n in range(1, 1001)]
+        before = self.read(self.state_rel("plan", PLAN))
+        with self.assertRaises(self.helper.Refused) as caught:
+            self.helper.save(self.root, self.helper.Guarded(self.project_id), self.helper.resolve(self.root, PLAN),
+                             state)
+        self.assertIn("too large", str(caught.exception))
+        self.assertEqual(before, self.read(self.state_rel("plan", PLAN)))
 
 
 if __name__ == "__main__":

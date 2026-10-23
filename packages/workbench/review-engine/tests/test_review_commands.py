@@ -6,7 +6,7 @@ import os
 import unittest
 
 import support_review
-from support_review import PLAN, SPEC, key_of
+from support_review import PLAN, SPEC, key_of, round_entry
 
 
 class Init(support_review.Review):
@@ -62,7 +62,7 @@ class Status(support_review.Review):
     def test_it_counts_the_rounds_of_the_window_and_the_decisions(self):
         self.document("init", PLAN)
         state = self.state()
-        state["rounds"] = [{"n": 1}, {"n": 2}, {"n": 3}, {"n": 4}]
+        state["rounds"] = [round_entry(n) for n in range(1, 5)]
         state["window"] = {"first": 3, "bound": 4}
         state["decisions"] = [{"finding": "R1-F1"}]
         state["closed"] = "2026-02-03T04:05:06Z"
@@ -95,7 +95,7 @@ class Status(support_review.Review):
 
 class Arguments(support_review.Review):
     def test_the_first_argument_must_be_a_command_that_exists(self):
-        for argv in ([], ["extend", "3"], ["STATUS", PLAN], ["--help"], [""], ["review-plan", PLAN]):
+        for argv in ([], ["extend", "3"], ["STATUS", PLAN], ["--help"], [""], ["decide", "R1-F1", "applied"]):
             self.refused(*argv, contains="usage")
 
     def test_each_command_takes_exactly_one_document(self):

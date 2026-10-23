@@ -374,4 +374,40 @@ rollback mark in the guarded store, a lock, atomic writes and a ledger. No bridg
   module's namespace alone is not yet tested; it is checked in G with a real install. The approval for the new package
   is absent until G.
 
-Increments D to G: not started.
+Increment D, 2026-10-23: `review-plan`, `review-spec`, `review-roadmap` and `review-adr` run one bounded round through the
+bridge the project names and store the findings. Read together with Choice 5 as renamed in C (`review-engine`).
+
+- Changes: `packages/workbench/review-engine/helper/review-engine` (the setting reader, the bridge-answer and reply
+  validation, the prompt, the round, per-entry checks of `rounds`, a size check on save, `Failed`),
+  `module.json` (the four arguments), the module tests (`support_bridge.py` and `test_review_round.py`,
+  `test_review_findings.py`, `test_review_setting.py`, `test_review_prompt.py`, round-entry tests added to
+  `test_review_state.py`, and C's tests moved to valid round entries), `tests/support_helpers.py` (registers the kit's
+  `call` module so a helper under test and the test see one module), and `docs/specs/review-engine.md` ("The round",
+  "State" and "As built, and its limits").
+- Verification as run: the module tests, 188 in all, pass; they start the real `wb` launcher and the real first-party
+  `ask-codex` bridge, installed and pinned from a copy of the package, against a fake `codex`. The full suite
+  `python3 -B -W error tests/run_all.py` ran 3373 tests in 7 roots, OK (installer 2360 with 1 skip, ask-codex 90, claude
+  32 with 12 skips for the stale shipped approvals until G, code-work 268 with 2 skips, groundwork 178, review-engine
+  188, safe-git 257). `tests.test_boundary` is green; `doccheck`, `refcheck` and `git diff --check` print nothing.
+  Eleven deliberate weakenings of the helper were tried (capability dropped, verdict unchecked, engine limit shorter
+  than the bridge's, pending findings ignored, round-file hash unchecked, exit code unchecked, closed review ignored,
+  bound off by one, no cleaning, unsealed state allowed to run, no lock) and each made tests fail. The round-file hash
+  one first survived, because its test failed for another reason; the test was changed to alter a finding and keep the
+  ids, and then failed under the weakening. I wrote the tests before the helper but did not run them red before
+  writing it.
+- Decisions made in the code, for the owner to accept or overturn: (1) the setting reader is built here, not in F,
+  because a round cannot name its bridge without it; F keeps the skill and whatever the owner's review of D adds. (2) A
+  round on a document with no review makes the review, as the spec says a round may make the key. (3) A failure is
+  printed as a `refused:` line ending `no round was spent`, not as an object. (4) `schema.json` is written into the
+  review's directory before the call and stays there after a failure (the bridge reads a schema only from inside the
+  project); it holds no model output. (5) An undecided meaningful finding blocks the next round only inside the
+  current window, so `reset` clears the way. (6) The lock is held for the whole round, up to 11 minutes, so another
+  run of the engine is refused meanwhile; `status` takes no lock. (7) Decisions are read by the keys `finding`,
+  `choice` and `reason`, which increment E must write. (8) A bridge-reported model is cleaned and cut to 200
+  characters; a usage count above 2,147,483,647 is stored as null. (9) Earlier findings reach the next prompt cut to
+  300 characters, and the oldest are left out when 65,536 bytes would be passed. (10) `status` still shows counts, not
+  findings.
+- Not done: no review and no security pass of D (planned before close); no run against a real Codex, so whether a real
+  vendor accepts the schema file (which sets no length bounds) is untested; `decide` and the owner-run commands.
+
+Increments E to G: not started.

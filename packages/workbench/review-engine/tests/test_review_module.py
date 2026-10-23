@@ -46,7 +46,8 @@ class Declaration(unittest.TestCase):
     def test_the_command_has_its_own_name_and_only_the_arguments_built_so_far(self):
         self.assertEqual(["review-engine"], list(declaration()["commands"]))
         command = declaration()["commands"]["review-engine"]
-        self.assertEqual(["status", "init"], command["arguments"])
+        self.assertEqual(["status", "init", "review-plan", "review-spec", "review-roadmap", "review-adr"],
+                         command["arguments"])
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
         self.assertNotIn("owner", command)
 
@@ -72,7 +73,7 @@ class Helper(unittest.TestCase):
     def test_it_imports_only_the_standard_library_and_the_kit(self):
         imported = set(re.findall(r"^(?:import|from) ([a-z_.]+)", self.text(), re.M))
         self.assertEqual({"collections", "contextlib", "errno", "fcntl", "hashlib", "hmac", "json", "os", "re",
-                          "sys", "unicodedata", "wbkit"}, imported)
+                          "sys", "time", "unicodedata", "wbkit"}, imported)
 
     def test_it_opens_no_connection_and_names_no_vendor_or_other_module(self):
         text = self.text()

@@ -1,7 +1,7 @@
 # review-engine
 
 Status: Draft. Written by plan `2026-10-23-review-engine` (increment A), before the module exists, so that the module is
-built against this text. The state layer, `init` and `status` are built (increment C); the rest is not, and
+built against this text. The state layer, `init`, `status` and the round are built (increments C and D); the rest is not, and
 "As built, and its limits" says which.
 The capability name `peer-review` is the accepted one (`2026-10-19-mandatory-review-personal-delegation`).
 
@@ -77,17 +77,25 @@ A round is one call to the bridge and, if the reply is valid, one recorded set o
   262,144. The reviewer reads the files itself through the bridge's read-only program; the engine embeds no file.
 - **The call** is `wbkit.call.run_command(root, <bridge>, ["ask", ...], provides="model-bridge", ...)` with the model and
   effort of the setting as the bridge's documented options, a `--schema` file the engine writes for the reply shape, a
-  bridge `--timeout` of 600 seconds and an engine limit of 660. The engine runs nothing else and imports no bridge.
+  bridge `--timeout` of 600 seconds and an engine limit of 660. The schema file is `schema.json` in the review's own
+  directory, the same bytes every round. The engine runs nothing else and imports no bridge.
 - **The reply** is accepted only when the bridge's object is valid under `model-bridge.md` (an unknown `contract`, a
   missing or oversize object or an exit code that disagrees with `ok` is a failure) and its `reply` is one JSON object
   of the findings schema, validated by the engine again whatever the bridge or the vendor did.
 - **A failure spends no round.** A bridge refusal, an error class (`not_signed_in`, `model_unavailable`,
   `effort_unsupported`, `program_not_found`, `timeout`, `vendor_error`), an unusable or invalid reply and a
   `retryable` flag are reported as they are, and nothing is stored. The engine does not retry and does not try another
-  bridge. A bridge's own limit message is shown to the owner and not parsed.
+  bridge. A bridge's own limit message is shown to the owner and not parsed. A failure is printed as a `refused:` line
+  that names the class, its detail if any and whether the bridge calls it retryable, and ends `no round was spent`.
 - **A valid reply spends one round.** It is stored whole as `round-<n>.json` and its findings are numbered by the engine.
-- **A round is refused** when the review is closed, the rounds used equal the bound, a finding of an earlier round
-  that is `blocker` or `major` has no decision (`decide` first), the seal does not verify, or the state is rolled back.
+- **A round is refused** when the review is closed, the rounds used equal the bound, a finding of an earlier round of
+  the current window that is `blocker` or `major` has no decision (`decide` first), the seal does not verify, the state
+  is rolled back, or a stored round file is not the one the state names by hash. A round on a document that has no
+  review makes the review first, and the seal key with it.
+- **The output** is one object: `document`, `kind`, `key`, `seal`, `round`, `rounds_used`, `bound`, `verdict` (the
+  reviewer's), `reading` (the engine's), `verdict_mismatch`, `summary`, `model`, `findings` (each with its `id`,
+  `severity`, `location`, `problem` and `suggestion`), `meaningful` (the number of blocker and major findings),
+  `pending` (the meaningful findings of the window with no decision) and `converged`.
 
 ### The findings schema
 
@@ -122,10 +130,15 @@ with the project, so a clone and a teammate keep the history. It holds:
 
 - `state.json`: strict JSON with exactly the fields `format` (1), `kind`, `path`, `window`, `rounds`, `decisions`,
   `closed` and `seal`. The `window` is `{"first": <the number of the window's first round>, "bound": <1 to 5>}`, so the
-  rounds used are the rounds from `first` on. Each round records its file name and SHA-256, the document's SHA-256, the
-  settings used, the model reported, the verdict, the engine's reading and the usage counts. Each decision records the
-  finding, the choice, the reason and its earlier values. `closed` is a UTC time or null;
-- `round-<n>.json`: the stored reply of round n;
+  rounds used are the rounds from `first` on. A round is a record with exactly `n`, `file` (`round-<n>.json`), `sha256`
+  (of that file), `document_sha256`, `at` (a UTC time), `bridge`, `requested` (`model` and `effort`, each or null),
+  `model` (as the bridge reported it, cleaned, at most 200 characters, or null), `verdict` (the reviewer's), `reading`
+  (the engine's: `changes_needed` if any finding is `blocker` or `major`), `mismatch`, `usage` (three counts or null; a
+  count above 2,147,483,647 is stored as null) and `findings` (each with `id` and `severity`, numbered in order). Each
+  decision records the finding, the choice, the reason and its earlier values. `closed` is a UTC time or null;
+- `round-<n>.json`: the stored reply of round n, cleaned: `format`, `round`, `verdict`, `summary` and the findings
+  with their `id`, `severity`, `location`, `problem` and `suggestion`;
+- `schema.json`: the schema the reply is asked to follow, the same bytes in every round;
 - `ledger.md`: a readable rendering of the above, regenerated on every change and never read back.
 
 Every write is atomic (a temporary file in the same directory, flushed, then renamed) through the kit's no-follow file
@@ -258,11 +271,12 @@ The module conforms when tests against a fake bridge, installed as a real pinned
 
 ## As built, and its limits
 
-Built by plan `2026-10-23-review-engine`, increment C (the module `review-engine`, version 0.1.0):
+Built by plan `2026-10-23-review-engine`, increments C and D (the module `review-engine`, version 0.1.0):
 
 - The declaration provides `peer-review`, requires `model-bridge` (hard) and declares the command `review-engine` with
-  the arguments `status` and `init` only. The other arguments, the `owner` list and the neutral skill are added by
-  the increments that build them. The package has no shipped approval until the plan's last increment.
+  the arguments `status`, `init`, `review-plan`, `review-spec`, `review-roadmap` and `review-adr`. The other arguments,
+  the `owner` list and the neutral skill are added by the increments that build them. The package has no shipped
+  approval until the plan's last increment.
 - Document resolution for the four kinds, the key and the directory name, the state file and its checks, the seal, the
   key and the mark in the guarded store, the lock, atomic writes and the ledger are built as stated above.
 - `init <document>` makes an empty review (a window of 3 rounds) and prints its status; it refuses a review that
@@ -272,13 +286,33 @@ Built by plan `2026-10-23-review-engine`, increment C (the module `review-engine
   review and never writes. The reasons are: there is no seal key on this machine; the seal key is not usable; the
   state is not usable; the seal does not match; the rollback mark is not usable; the state is older than the last one
   sealed here.
-- Entries of `rounds` and `decisions` are checked only as bounded objects of clean strings, small whole numbers, lists,
-  objects and null. Their own fields are checked by the increments that write them.
-- Not built: a round, `decide`, `amend`, `extend`, `reset`, `archive`, `prune`, the project setting, the skill, and the
-  findings schema's validation. No bridge is called.
+- Entries of `rounds` are checked field by field (numbered one after the other, hashes, time, bridge name, request,
+  verdicts, usage and the numbering of their findings). Entries of `decisions` are checked only as bounded objects of
+  clean strings, small whole numbers, lists, objects and null, until the increment that writes them.
+- A state is refused when it would be larger than 4,194,304 bytes once written, so that it can always be read back.
+- The round (increment D): `review-plan`, `review-spec`, `review-roadmap` and `review-adr` read `.workbench/review.json`
+  (strict, at most 4,096 bytes, `format` 1, `bridge`, optional `model` and `effort`; a missing or bridge-less file is a
+  refusal that names it, and no bridge is chosen), take the lock for the whole round, refuse a closed review, a full
+  window, an undecided meaningful finding, an unsealed or rolled-back state and a stored round file that is missing,
+  linked or not the one the state names, build the prompt, write `schema.json`, and run the bridge only through
+  `wbkit.call.run_command` with `provides` `model-bridge`, `--timeout 600` and an engine limit of 660 seconds. The
+  bridge's answer and the reply are validated again; a failure prints a `refused:` line and stores nothing but
+  `schema.json`. Tested with the real launcher and the real first-party bridge against a fake vendor program; no real
+  vendor, session or network call was used.
+- The prompt names the document by path, kind and hash and never embeds it. Earlier findings are quoted in it, one line
+  each, cut to 300 characters, with their decisions; when they do not fit in 65,536 bytes the oldest are left out and
+  the prompt says so. A finding that was model output is therefore model input to the next round, which is why the
+  prompt calls it data.
+- Not built: `decide`, `amend`, `extend`, `reset`, `archive`, `prune`, a display of the setting a round used beside the
+  setting now (the state records what each round requested), and the skill. `status` shows counts, not findings; the
+  findings are in the round's output and in `round-<n>.json`.
 
 Limits found while building:
 
+- The reply schema file asks for the four fields and nothing more (no length bounds): bounds are checked by the engine,
+  and whether a real vendor accepts the schema is untested until the first hand run against a real bridge.
+- A meaningful finding blocks the next round only inside the current window, so `reset` clears the way; the finding
+  stays in the earlier rounds and in the ledger of the prompt.
 - The module is named `review-engine`, not `review`: the installer's boundary test refuses any module, command or helper
   name as a substring in `workbench/` and `tests/`, and `review` is an ordinary word there.
 - A review's directory is inside the module's namespace, `.workbench/workbench/review-engine/`, beside the installed

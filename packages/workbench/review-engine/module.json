@@ -19,7 +19,11 @@
       "kit": 1,
       "arguments": [
         "status",
-        "init"
+        "init",
+        "review-plan",
+        "review-spec",
+        "review-roadmap",
+        "review-adr"
       ]
     }
   }
