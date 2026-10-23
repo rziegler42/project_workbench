@@ -368,15 +368,24 @@ Limits found while building:
   is being replaced, `reset` of such a review prints `replaced`: the seal it had, whether its file claimed a close, its
   counts of rounds and decisions (null for a file that is gone) and the mark that is lowered.
 - The generation is a count that stops at 2,147,483,647. A state at that value cannot be saved again; the owner removes
-  the review's directory and resets the review, which starts it empty and loses its history.
+  the review's directory and resets the review, which starts it empty and loses its history. When the review's mark in
+  the guarded store is zero, `reset` of a missing review says there is none, and `init` is what starts it; the refusal
+  says "resets" only. Reaching the limit takes about 2^31 saves of one review.
 - A round refuses when any stored round file is missing, changed or a link, including a file of an earlier window, and
   `reset` does not help (it moves only the window). The owner restores the file from the commit it came from, or
   removes the review's directory and resets the review.
 - `prune` skips a directory whose state file cannot be read (a second link, over the bound, a link) and goes on with
   the others; it does not report what it skipped. A directory with a file of another name, or a directory inside it,
-  is left whole and is not listed.
+  is left whole and is not listed. An independent adversarial pass over these fixes (2026-10-23, at the owner's
+  request) found no Critical or High problem and tried hostile directories (a linked, FIFO or directory
+  `state.json`, an extra file name, a linked review directory): `prune --apply` removed only the real closed review.
+  It did not show that the new tests fail without their fixes, and it did not try a rolled-back sealed copy or a
+  hard-linked `ledger.md`.
 - The ledger shows the document's path and a decision's reason with markup characters replaced by spaces, so a name
   such as `a_b.md` reads `a b.md` there. A bare web address in a reason is kept as text and a viewer may link it.
+  The filter is a list of characters, not an allowlist: in the heading a bare address or email address, an HTML entity,
+  `~~`, `{{` and right-to-left letters are kept, so a viewer may link them or show them in another order. No newline,
+  control or format character reaches the ledger. The ledger is never read back, so this is only how it looks.
 - The project's identity is read from the committed seed in `.workbench/manifest.json`, so a clone that copies the seed
   shares this project's key, marks and lock in the guarded store. It cannot forge a seal without the key, but it can
   raise a mark and so make the real review read as rolled back. The state is not compared with the current document: a
