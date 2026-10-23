@@ -399,14 +399,28 @@ def render_hook(harness_layout, harness_name):
     return hooks["settings_key"], {hooks["event"]: [entry]}
 
 
-def _protected(settings):
+def _protected(settings, root):
     """The patterns of the files the hook is kept in: the settings file and git's exclude file, spelled from the
-    project root and from any directory below it. The agent may not write them; the owner edits them by hand.
-    This is the one rule beyond the hook itself, and it is rendered here and nowhere else."""
-    return [spelled + path for path in (settings["path"], GIT_EXCLUDE) for spelled in ("", "**/")]
+    directory the harness starts in, from any directory below it, and by their absolute path in the project at
+    `root`. A relative pattern is matched from where the session started, so only the absolute one holds when the
+    session starts below the root. The agent may not write them; the owner edits them by hand. This is the one rule
+    beyond the hook itself, and it is rendered here and nowhere else."""
+    paths = (settings["path"], GIT_EXCLUDE)
+    return ([spelled + path for path in paths for spelled in ("", "**/")]
+            + [root.rstrip("/") + "/" + path for path in paths])
 
 
-def render_permissions(rules, harness_layout, store_root, home, hook_for=None):
+def _plain_root(root):
+    """`root` when it is an absolute path that can be written as a permission rule, or raise PlanError."""
+    if not isinstance(root, str) or not root.startswith("/") or root.rstrip("/") == "" \
+            or any(part in ("", ".", "..") for part in root.rstrip("/").split("/")[1:]):
+        raise PlanError("the project directory %r is not a plain absolute path" % (root,))
+    if any(c not in _PATH_CHARS for c in root):
+        raise PlanError("cannot write the path %r as a permission rule" % root)
+    return root
+
+
+def render_permissions(rules, harness_layout, store_root, home, hook_for=None, root=None):
     """Return the bytes of the local settings file for ``rules`` plus what is always rendered.
 
     Always rendered: a deny for writes to the guarded store at ``store_root``, a deny for every
@@ -417,7 +431,8 @@ def render_permissions(rules, harness_layout, store_root, home, hook_for=None):
     that depends on the input.
 
     ``hook_for`` is the name of the harness to render the edit gate's hook for, or None for no hook. A hook
-    comes with a deny for the files it is kept in (``_protected``).
+    comes with a deny for the files it is kept in (``_protected``), which names them by their path in the project
+    at `root`, an absolute real path; a hook cannot be rendered without it.
     """
     found = layout.problems(harness_layout)
     if found:
@@ -464,7 +479,9 @@ def render_permissions(rules, harness_layout, store_root, home, hook_for=None):
         wanted[rule.action].add(render(rule.tool, rule.pattern))
     hook = render_hook(harness_layout, hook_for) if hook_for is not None else None
     if hook:
-        wanted["deny"].update(render("write", pattern) for pattern in _protected(settings))
+        if root is None:
+            raise PlanError("the project directory is needed to render the edit gate's hook")
+        wanted["deny"].update(render("write", pattern) for pattern in _protected(settings, _plain_root(root)))
     wanted["ask"] -= wanted["deny"]
     document = {}
     for action in ("deny", "ask"):

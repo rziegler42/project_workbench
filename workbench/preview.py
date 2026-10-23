@@ -62,7 +62,7 @@ def prepare(guarded, held, resolved, select, distribution, seed, version, which=
     staged = harnessstage.stage(
         guarded.root, harness, modules, snaps,
         _recorded_source(origins[harness.package], harness.package), version,
-        home if home is not None else harnessstage.default_home())
+        home if home is not None else harnessstage.default_home(), held.path)
     if held.state == "new-git":
         # An existing .git may hold an exclude file attach cannot use: say so before the digest
         # is typed, not after the install is written.

@@ -138,10 +138,11 @@ def _gated(modules):
                for item in modules)
 
 
-def stage(store_root, harness, modules, snaps, source, version, home):
+def stage(store_root, harness, modules, snaps, source, version, home, root):
     """Translate and render for `harness` (a ``verify.Verified``), over `modules` in install
     order, whose snapshots are `snaps`. `source` is where the harness package came from and
-    `home` the home directory the rendered rules name (None when it is not known). Returns a
+    `home` the home directory the rendered rules name (None when it is not known) and `root` the project directory
+    the rendered rules may name (the edit gate's hook protects its settings file by that path). Returns a
     ``Staged``; raises ``Refused``. Nothing is read from or written to a project."""
     layout = harness.module.layout
     tree, overrides, excludes = inputs(modules, snaps, harness.name)
@@ -173,7 +174,7 @@ def stage(store_root, harness, modules, snaps, source, version, home):
                                             "name it cannot be written")
             data = harnessplan.render_permissions(
                 [], layout, os.path.realpath(store_root), os.path.realpath(home),
-                hook_for=harness.name if hook else None)
+                hook_for=harness.name if hook else None, root=os.path.realpath(root))
             settings = harnessplan.Planned(local["path"], data, harnessplan.FILE_MODE,
                                            hashlib.sha256(data).hexdigest(), "permissions")
             files.append(settings)

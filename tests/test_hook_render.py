@@ -20,6 +20,7 @@ TABLE = {"Edit": ["file_path"], "Write": ["file_path"], "MultiEdit": ["file_path
 HOOKS = {"settings_key": "hooks", "targets": TABLE, "event": "PreToolUse", "timeout": 20, "block_code": 2}
 SETTINGS = support_harness.SYNTHETIC["local_settings"]["path"]
 NAME = support_harness.MODULE
+ROOT = "/work/project"
 
 
 def hooked(**changes):
@@ -29,6 +30,7 @@ def hooked(**changes):
 
 
 def render(document=None, name=NAME, **kwargs):
+    kwargs.setdefault("root", ROOT)
     return json.loads(harnessplan.render_permissions(
         [], document or hooked(), "/store", "/home/u", hook_for=name, **kwargs))
 
@@ -56,8 +58,8 @@ class Rendered(unittest.TestCase):
         self.assertIn("hooks", document)
 
     def test_it_is_the_same_bytes_every_time(self):
-        first = harnessplan.render_permissions([], hooked(), "/store", "/home/u", hook_for=NAME)
-        second = harnessplan.render_permissions([], hooked(), "/store", "/home/u", hook_for=NAME)
+        first = harnessplan.render_permissions([], hooked(), "/store", "/home/u", hook_for=NAME, root=ROOT)
+        second = harnessplan.render_permissions([], hooked(), "/store", "/home/u", hook_for=NAME, root=ROOT)
         self.assertEqual(first, second)
         self.assertTrue(first.endswith(b"\n"))
 
@@ -72,12 +74,13 @@ class Rendered(unittest.TestCase):
             for key, value in changes.items():
                 del document["hooks"][key]
             with self.subTest(changes), self.assertRaises(harnessplan.PlanError) as caught:
-                harnessplan.render_permissions([], document, "/store", "/home/u", hook_for=NAME)
+                harnessplan.render_permissions([], document, "/store", "/home/u", hook_for=NAME, root=ROOT)
             self.assertIn("hook", str(caught.exception))
 
     def test_a_layout_with_no_hooks_cannot_render_one(self):
         with self.assertRaises(harnessplan.PlanError):
-            harnessplan.render_permissions([], support_harness.SYNTHETIC, "/store", "/home/u", hook_for=NAME)
+            harnessplan.render_permissions([], support_harness.SYNTHETIC, "/store", "/home/u", hook_for=NAME,
+                                           root=ROOT)
 
     def test_a_harness_name_the_gate_would_refuse_is_not_rendered(self):
         for name in ("", "A", "a b", "-a", "a;b", "a$(x)", "a|b", "a\nb", "x" * 65, "../x", "a'b"):
@@ -101,6 +104,49 @@ class Protected(unittest.TestCase):
     def test_no_hook_no_such_deny(self):
         plain = json.loads(harnessplan.render_permissions([], hooked(), "/store", "/home/u"))
         self.assertEqual([], [rule for rule in plain["permissions"]["deny"] if "exclude" in rule or "settings" in rule])
+
+    def test_a_root_without_a_hook_adds_nothing(self):
+        plain = json.loads(harnessplan.render_permissions([], hooked(), "/store", "/home/u", root=ROOT))
+        self.assertEqual([], [rule for rule in plain["permissions"]["deny"] if "exclude" in rule or "settings" in rule])
+
+    def test_the_two_files_are_also_denied_by_their_absolute_path_in_the_project(self):
+        deny = render()["permissions"]["deny"]
+        for path in (SETTINGS, ".git/info/exclude"):
+            self.assertIn("Edit(/%s/%s)" % (ROOT, path), deny)
+
+    def test_the_deny_is_exactly_the_four_relative_and_the_two_absolute_patterns(self):
+        deny = render()["permissions"]["deny"]
+        found = sorted(rule for rule in deny if "exclude" in rule or "settings" in rule)
+        wanted = sorted(["Edit(%s)" % SETTINGS, "Edit(**/%s)" % SETTINGS, "Edit(/%s/%s)" % (ROOT, SETTINGS),
+                         "Edit(.git/info/exclude)", "Edit(**/.git/info/exclude)",
+                         "Edit(/%s/.git/info/exclude)" % ROOT])
+        self.assertEqual(wanted, found)
+
+    def test_a_root_with_a_space_is_spelled_as_it_is(self):
+        deny = render(root="/work/my project")["permissions"]["deny"]
+        self.assertIn("Edit(//work/my project/%s)" % SETTINGS, deny)
+
+    def test_a_root_that_cannot_be_a_rule_is_refused_and_named(self):
+        for root in ("/work/a(b)", "/work/a*b", "/work/a'b", "/work/a\\b", "/work/a\nb", "/work/caf\u00e9",
+                     "/work/a[b]", "/work/a:b"):
+            with self.subTest(root), self.assertRaises(harnessplan.PlanError) as caught:
+                render(root=root)
+            self.assertIn("permission rule", str(caught.exception))
+
+    def test_a_root_that_is_not_a_plain_absolute_path_is_refused(self):
+        for root in ("", "/", "work", "./work", "/work/../x", "/work/./x", "/work//x", None, 7, b"/work"):
+            with self.subTest(root), self.assertRaises(harnessplan.PlanError):
+                render(root=root)
+
+    def test_a_hook_cannot_be_rendered_without_a_root(self):
+        with self.assertRaises(harnessplan.PlanError) as caught:
+            harnessplan.render_permissions([], hooked(), "/store", "/home/u", hook_for=NAME)
+        self.assertIn("project", str(caught.exception))
+
+    def test_no_pattern_is_a_glob_built_from_the_root(self):
+        for rule in render()["permissions"]["deny"]:
+            if ROOT in rule:
+                self.assertNotIn("*", rule)
 
     def test_the_deny_is_one_function_and_one_call(self):
         with open(harnessplan.__file__, encoding="utf-8") as handle:
@@ -175,6 +221,15 @@ class Attached(test_gate_hook.Gated):
         self.assertEqual("wb gate fixture || exit 2",
                          document["hooks"]["PreToolUse"][0]["hooks"][0]["command"])
         self.assertIn("deny", document["permissions"])
+
+    def test_the_deny_names_the_two_files_by_the_real_path_of_the_project(self):
+        self.use()
+        self.assertEqual(0, self.attach_hooked()[0])
+        deny = self.settings()["permissions"]["deny"]
+        real = os.path.realpath(self.place)
+        for path in (SETTINGS, ".git/info/exclude"):
+            self.assertIn("Edit(/%s/%s)" % (real, path), deny)
+            self.assertIn("Edit(%s)" % path, deny)
 
     def test_the_local_manifest_records_the_hash_of_the_file_with_the_hook(self):
         self.use()

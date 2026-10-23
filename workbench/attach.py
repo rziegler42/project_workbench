@@ -249,7 +249,7 @@ def prepare(guarded, held, command, distribution=None, version=None, which=shuti
     where = home if home is not None else default_home()
     origin = dict(resolved)[package_name]
     staged = harnessstage.stage(guarded.root, harness, modules, snaps,
-                                preview._recorded_source(origin, package_name), version, where)
+                                preview._recorded_source(origin, package_name), version, where, held.path)
     warnings.extend(staged.warnings)
     create, kept = preflight(writer, staged.files, staged.exclude, staged.settings)
     return Prepared(held.path, token, harness.version, create, kept, staged.exclude,

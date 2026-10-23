@@ -200,7 +200,8 @@ class Rendering(unittest.TestCase):
     def test_the_hook_it_renders_is_the_one_the_documentation_describes(self):
         layout = declaration()["layout"]
         document = json.loads(harnessplan.render_permissions([], layout, "/Users/t/.config/project-workbench",
-                                                             "/Users/t", hook_for="claude"))
+                                                             "/Users/t", hook_for="claude",
+                                                             root="/Users/t/work/project"))
         self.assertEqual({"PreToolUse": [{
             "matcher": "Edit|MultiEdit|NotebookEdit|Write",
             "hooks": [{"type": "command", "command": "wb gate claude || exit 2", "timeout": 20}]}]},
@@ -209,10 +210,12 @@ class Rendering(unittest.TestCase):
     def test_the_hook_comes_with_a_deny_for_the_settings_file_and_the_exclude_file(self):
         layout = declaration()["layout"]
         deny = json.loads(harnessplan.render_permissions([], layout, "/Users/t/.config/project-workbench",
-                                                         "/Users/t", hook_for="claude"))["permissions"]["deny"]
+                                                         "/Users/t", hook_for="claude",
+                                                         root="/Users/t/work/project"))["permissions"]["deny"]
         for path in (".claude/settings.local.json", ".git/info/exclude"):
             self.assertIn("Edit(%s)" % path, deny)
             self.assertIn("Edit(**/%s)" % path, deny)
+            self.assertIn("Edit(//Users/t/work/project/%s)" % path, deny)
 
     def test_the_permissions_it_renders_are_claudes_syntax(self):
         layout = declaration()["layout"]
