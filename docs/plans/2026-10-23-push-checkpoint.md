@@ -332,4 +332,24 @@ Increment B, 2026-10-23: `wb run code-work shared` is built in `packages/workben
   does not know the default branch, which `push-check` reports.
 - Not done: no review and no security pass on this increment (only if the owner asks); not run in a live session.
 
-Increments C and D: not started.
+Increment C, 2026-10-23: the neutral skill `push-changes` is in
+`packages/workbench/code-work/harness/neutral/skills/push-changes/SKILL.md` (about 35 lines), with 12 new tests in
+`test_codework_pushskill.py`. The tree lists in `test_codework_module.py` and the reader test in
+`test_codework_skills.py` include it, and the module's scan for raw git words exempts exactly the two `wb` commands
+and the one `git push <remote> <branch>` span of this skill.
+
+- Verification as run: the new tests failed first (no skill), then passed. The `code-work` suite then ran 267
+  tests, OK, 2 skipped as before; `tests.test_boundary` ran 19 tests, OK; `doccheck`, `refcheck` and `git diff
+  --check` print nothing. The full suite was not run: the `safe-git` and `code-work` approvals are stale until
+  increment D.
+- What it says: push only on the owner's word, a commit is not a word, name the branch and remote; run the two
+  `wb` commands; shared means `default_branch` or a name in `shared`; report the commits to be sent, the changed
+  paths and every finding; stop on any finding or a refusal; then push only what the owner named; never force,
+  delete, push an unnamed branch or change the remote; the harness's prompt is not the owner's word.
+- What is enforced: nothing in the skill. The two floor tests pin the rendered Claude settings: `ask` on `git push`,
+  `git push *` and each of the four force forms, none of them in `deny`, and no `allow` section.
+- Limits: a skill is advice; an agent that ignores it still meets the harness's prompt on every push, and only
+  the owner's answer to that prompt decides. The skill cannot tell a secret from a false positive.
+- Not done: no review and no security pass on this increment (only if the owner asks); not run in a live session.
+
+Increment D: not started.
