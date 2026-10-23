@@ -209,6 +209,43 @@ class Fails(Delegable):
     def test_carriage_returns_end_lines(self):
         self.no(text(SAFE).replace("\n", "\r\n").replace("commits", "commits\rHard stop: x\r"), "Hard stop")
 
+    def test_a_decorated_second_heading_is_taken_for_a_section(self):
+        for heading in ("## **Risks and sensitive actions**", "## Risks &amp; sensitive actions",
+                        "## _Risks_ and `sensitive` actions", "## Risks &#97;nd sensitive actions",
+                        "## Risks &amp;&nbsp;sensitive actions", "## Risks and sensitive actions <!-- x -->",
+                        "## Risks & sensitive actions"):
+            with self.subTest(heading):
+                self.no(text(after="\n" + heading + "\n\nHard stop: x\n"), "more than one")
+                self.no(text(heading=heading), "exactly")
+
+    def test_a_line_a_reader_may_see_otherwise_is_not_delegable(self):
+        """Fail closed: a marker hidden by markup, an entity or an invisible or look-alike character."""
+        lines = ["​Hard stop: x", "Hard​ stop: x", "Hard­ stop: x", " Hard stop: x",
+                 "Hard stop： x", "<b>Hard stop:</b> x", "<strong>Hard stop:</strong>", "&#72;ard stop: x",
+                 "&amp; Hard stop: x", "Ηard stop: x", "Hаrd stop: x", "Hard‑stop: x",
+                 "Hard–stop: x", "café", "plain \x0b text", "plain \x0c text", "Hard stop: ‮ x"]
+        for line in lines:
+            with self.subTest(line):
+                self.no(text(SAFE + line + "\n"), "")
+        self.no(text(SAFE + "café\n"), "line")
+
+    def test_a_marker_in_a_table_cell_or_after_a_heading_prefix_and_a_list_marker_counts(self):
+        for line in ("| Hard stop: x |", "|Hard stop: x", "- ### Hard stop: x", "### - Hard stop: x",
+                     "1. ### - [ ] **Hard stop:** x"):
+            with self.subTest(line):
+                self.no(text(SAFE + line + "\n"), "Hard stop")
+
+    def test_a_marker_split_over_two_lines_counts(self):
+        for lines in ("Hard\nstop: x", "- Hard\n  stop: x", "**Hard**\nstop: x", "Hard \n stop : x"):
+            with self.subTest(lines):
+                self.no(text(SAFE + lines + "\n"), "Hard stop")
+        self.yes(text(SAFE + "Hard\n\nstop: x\n"))
+        self.yes(text(SAFE + "Hard\n```\nstop: x\n```\n"))
+
+    def test_text_outside_the_section_or_hidden_from_the_plan_may_hold_other_characters(self):
+        self.yes(text(before="\ncafé — outside\n", after="\n## Other\n\ncafé &amp; <b>x</b>\n"))
+        self.yes(text(SAFE + "```\ncafé <b>\n```\n> café &amp;\n<!-- café -->\n"))
+
     def test_the_reason_is_ascii_whatever_the_plan_says(self):
         report = self.no(text(SAFE + "Hard stop: café ‮\n"))
         self.assertTrue(all(" " <= char <= "~" for char in report["reason"]))

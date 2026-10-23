@@ -254,10 +254,14 @@ than the check reads is refused (exit 1, nothing on standard output).
 A plan is delegable when it has exactly one Risks section, the one headed `## Risks and sensitive actions` outside a
 fence, a quotation and an HTML comment, and that section has no line that begins, after any list marker and emphasis,
 with `Hard stop:` (any case, a space or a hyphen between the words, a space before the colon, and an optional
-heading or checkbox prefix). Text outside that section cannot change the answer. A plan with no Risks section,
+heading, table-cell or checkbox prefix, in any order with the list marker; the two words may also be split over two
+consecutive lines). Text outside that section cannot change the answer. Inside it the check fails closed: a line with
+markup (a `<` that starts a tag), an entity (`&`) or any character other than printable ASCII and a tab makes the plan not
+delegable, because a reader may see such a line otherwise than its bytes say (a look-alike letter, an invisible
+character, `<b>Hard stop:</b>`). A plan that needs such a character in its Risks section is for the owner. A plan with no Risks section,
 more than one, a heading in another case, a file that is not UTF-8, a code fence or comment that is never closed or a
 header without exactly one `Status:` line is not delegable. Any heading a reader could take for the section (any
-level, any case, a closing `#`, a trailing `:` or `.`, an underlined heading) counts as a Risks section, so a second
+level, any case, emphasis, an entity such as `&amp;` for "and", a closing `#`, a trailing `:` or `.`, an underlined heading) counts as a Risks section, so a second
 one, or one not in the exact form, makes the plan not delegable. The section runs to the next `#` or `##` heading
 outside a fence, a quotation and a comment; a rule, an underline or a `###` heading does not end it, and a marker is
 read from the whole line, however long. The marker is a convention of this module and defence in depth only

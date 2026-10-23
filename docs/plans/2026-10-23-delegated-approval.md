@@ -452,5 +452,23 @@ The review is not an approval; the plan stays `Proposed` until the owner approve
   fields uncovered, as for every `wb run` field.
 - Verification: the full suite passes, 3,656 tests in 7 roots (3,655 before), the same skips. Document checks and
   `git diff --check` print nothing.
-- Not done: the release of the stale approvals (owner-run), the plan Goal wording, the real-vendor hand run, and
-  `Status: Completed`. Criterion 7 is open until the owner releases the approvals.
+- Second look (owner's word given in session): a second adversarial `security-reviewer` run, one round, on scratch
+  copies. It found no bypass of the `document_sha256` binding: 30 hostile answers were refused (hash case and length,
+  types, duplicate or extra keys, BOM, bad bytes, trailing data, size, depth, NaN, control and bidi characters), and the
+  swap steps and record rules read sound. Two evasions of the `Hard stop:` marker, confirmed by running the helper:
+  (Medium) a second Risks heading with emphasis or an entity (`## **Risks and sensitive actions**`) was not counted as
+  a section, so a `Hard stop:` under it was missed; (Low) a marker hidden by an invisible or look-alike character, a
+  full-width colon, a tag, an entity, a table cell, a heading prefix before a list marker or a split over two lines.
+  Fixed with tests that failed first: the heading is compared as a reader sees it (`&` read as "and"), and the Risks
+  section fails closed: a line with markup, an entity or any character other than printable ASCII and a tab makes the
+  plan not delegable, and the marker also matches a table cell, either order of prefixes and a split over two lines.
+  Cost: two of the 27 plans of this repository (`2026-10-19-installer-core-verifier`, `2026-10-20-base-and-manifests`)
+  are no longer delegable because their Risks sections hold such text; they go to the owner, as before. The specs
+  `code-work.md` and `trust-and-approval.md` say so.
+- Not run in the second look: an end-to-end run with a fake executable that records its arguments, a concurrent swap,
+  and hardlinked, FIFO and oversize plans beyond the shipped tests.
+- Verification after the second look: the full suite passes, 3,661 tests in 7 roots (3,656 before; 333 in `code-work`),
+  the same skips.
+- Not done: the release of the stale approvals after this change (owner-run; `code-work` changed), the plan Goal
+  wording, the real-vendor hand run, and `Status: Completed`. Criterion 7 is open until the owner releases the
+  approvals.

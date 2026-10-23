@@ -482,7 +482,8 @@ increment D, the skill guidance (`delegate-approval` in `code-work`) by incremen
   provider's hashes in the entry are provenance and are not checked when the entry is read.
 - **Delegable.** A plan is delegable when it has exactly one Risks section and that section has no line that begins,
   after any list marker and emphasis, with `Hard stop:` (any case, a space or a hyphen between the words). A plan with no Risks section, more than one,
-  or one that cannot be read is not delegable. The marker is a convention the process module documents. It is defence
+  or one that cannot be read is not delegable, and neither is one whose Risks section has markup, an entity or a
+  character other than printable ASCII, which a reader may see otherwise than the bytes say. The marker is a convention the process module documents. It is defence
   in depth only: a hostile plan can omit it, and the real control is that hard stops stop at the time of the action.
 - **Limits.** A delegated approval is weaker than the owner's. A plan written to steer the reviewer can get a clean
   review, the reviewer and the author can share a blind spot, and the gate stops a mistaken agent and not a hostile

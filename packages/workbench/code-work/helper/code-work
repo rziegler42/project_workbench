@@ -95,8 +95,13 @@ _BOUNDARY = re.compile(r"\A[ ]{0,3}#{1,2}(?:[ \t]|\Z)")
 _RISKS = "risks and sensitive actions"
 _RISKS_HEADING = re.compile(r"\A## Risks and sensitive actions[ \t]*\Z")
 _ATX = re.compile(r"\A[ ]{0,3}#{1,6}(?:[ \t]+(.*))?\Z")
-_HARD = re.compile(r"\A[ \t]*(?:#{3,6}[ \t]+)?(?:(?:[-*+]|[0-9]{1,9}[.)])[ \t]+)*(?:\[[ xX]\][ \t]+)?[*_`~]*"
-                   r"Hard[ \t-]+stop[*_`~]*[ \t]*:", re.IGNORECASE)
+_LEAD = (r"\A[ \t]*\|?[ \t]*(?:(?:#{3,6}|[-*+]|[0-9]{1,9}[.)])[ \t]+)*(?:\[[ xX]\][ \t]+)?[*_`~]*")
+_HARD = re.compile(_LEAD + r"Hard[ \t-]+stop[*_`~]*[ \t]*:", re.IGNORECASE)
+# The same words split over two lines, which a reader sees as one.
+_HARD_HEAD = re.compile(_LEAD + r"Hard[*_`~]*[ \t]*\Z", re.IGNORECASE)
+_HARD_TAIL = re.compile(r"\A[ \t]*[*_`~]*stop[*_`~]*[ \t]*:", re.IGNORECASE)
+# What a reader could see otherwise than the bytes say: markup, an entity, or a character other than printable ASCII.
+_UNSURE = re.compile(r"[^ -~\t]|<[A-Za-z/!?]|&[#A-Za-z]")
 
 
 class Refused(Exception):
@@ -810,7 +815,7 @@ def _risks_heading(marked, whole):
             words = whole[index]
         else:
             continue
-        if _section(words) == _RISKS:
+        if _heading(words).replace("&", "and") == _RISKS:
             found.append(index)
     return (found[0] if found else None), len(found)
 
@@ -842,8 +847,12 @@ def delegable_of(text):
             continue
         if _BOUNDARY.match(whole[index]):
             break
-        if _HARD.match(whole[index]):
+        if _HARD.match(whole[index]) or (_HARD_HEAD.match(whole[index]) and index + 1 < len(marked)
+                                         and marked[index + 1][2] and _HARD_TAIL.match(whole[index + 1])):
             return False, 'the Risks section has a line that begins "Hard stop:" (line %d)' % marked[index][0]
+        if _UNSURE.search(whole[index]):
+            return False, ("the Risks section has markup, an entity or a character other than printable ASCII, "
+                           "so a reader may see it otherwise (line %d)" % marked[index][0])
     return True, "the plan has one Risks section and it has no `Hard stop:` line"
 
 
