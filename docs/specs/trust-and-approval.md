@@ -420,7 +420,7 @@ prose above and this section differ in precision, this section is what the code 
 *(Designed by plan `2026-10-23-delegated-approval` and the decision `2026-10-23-delegated-plan-approval`, which the
 owner accepted on 2026-10-23. The provider's `convergence` argument is built by its increment B, the process module's
 `delegable` argument by increment C, and the installer's command, the format-2 record and the reading rule by
-increment D; the skill guidance and the security pass are increments E and F.)*
+increment D, the skill guidance (`delegate-approval` in `code-work`) by increment E; the security pass is increment F.)*
 
 - **The command.** `wb delegate-approve-plan <plan>` takes one argument and no option, runs from anywhere inside the
   project, and finds the root, the ID and the plan path as `approve-plan` does, with the same path rules. It is not

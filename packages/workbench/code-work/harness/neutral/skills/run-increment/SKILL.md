@@ -9,7 +9,8 @@ increment, never more. A plan, a roadmap or this skill does not authorize work: 
 approval of the plan does.
 
 1. Read the plan and run `wb plan-status <plan>`. Stop unless it says `approved`. Stop also if the plan
-   changed since the approval; tell the owner and wait.
+   changed since the approval; tell the owner and wait. Only the owner approves a plan, or allows a review to
+   stand for it; `delegate-approval` says how a delegated approval is asked for.
 2. Take the increment the owner named, or the first one whose dependencies are done. Read its outcome,
    affected areas, steps and verification.
 3. Implement only what its steps say. Write the test first where a meaningful test exists, and see it

@@ -107,6 +107,7 @@ class Declaration(unittest.TestCase):
         self.assertEqual(sorted(["module.json", HELPER, "files/blocks/docs-index.md",
                                  "files/blocks/policy.md", "files/" + README,
                                  "harness/neutral/agents/reviewer.md",
+                                 "harness/neutral/skills/delegate-approval/SKILL.md",
                                  "harness/neutral/skills/draft-plan/SKILL.md",
                                  "harness/neutral/skills/draft-plan/template.md",
                                  "harness/neutral/skills/evaluate-findings/SKILL.md",
@@ -203,9 +204,9 @@ class Blocks(unittest.TestCase):
 class Skill(unittest.TestCase):
     def test_the_reader_accepts_the_skill_with_its_template_the_reviewer_agent_and_the_loop_and_push_skills(self):
         items = {(i.kind, i.name): i for i in neutral.read_items(neutral_tree())}
-        self.assertEqual([("agent", "reviewer"), ("skill", SKILL), ("skill", "evaluate-findings"),
-                          ("skill", "push-changes"), ("skill", "request-review"), ("skill", "run-increment")],
-                         sorted(items))
+        self.assertEqual([("agent", "reviewer"), ("skill", "delegate-approval"), ("skill", SKILL),
+                          ("skill", "evaluate-findings"), ("skill", "push-changes"), ("skill", "request-review"),
+                          ("skill", "run-increment")], sorted(items))
         self.assertEqual(["template.md"], [f.rel for f in items[("skill", SKILL)].files])
         self.assertEqual((), items[("skill", SKILL)].needs)
 
@@ -215,7 +216,8 @@ class Skill(unittest.TestCase):
         planned = harnessplan.translate(neutral.read_items(neutral_tree()), claude["layout"], {},
                                         {}, provides=claude["provides"])
         self.assertEqual((), planned.reports)
-        self.assertEqual([".claude/agents/reviewer.md", ".claude/skills/draft-plan/SKILL.md",
+        self.assertEqual([".claude/agents/reviewer.md", ".claude/skills/delegate-approval/SKILL.md",
+                          ".claude/skills/draft-plan/SKILL.md",
                           ".claude/skills/draft-plan/template.md", ".claude/skills/evaluate-findings/SKILL.md",
                           ".claude/skills/push-changes/SKILL.md", ".claude/skills/request-review/SKILL.md",
                           ".claude/skills/run-increment/SKILL.md"], sorted(f.path for f in planned.files))

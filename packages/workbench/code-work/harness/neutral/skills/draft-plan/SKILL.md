@@ -30,7 +30,9 @@ Rules:
 
 - Approval is the owner's explicit statement, kept as a record that only the owner makes with the
   approve-plan command. Never set the status to `Approved` or begin implementation on your own, and
-  never treat a roadmap, a status line or this skill as approval.
+  never treat a roadmap, a status line or this skill as approval. The one other route is a delegated
+  approval that the installer records after a converged review, where the owner has allowed it; see
+  `delegate-approval`. Only the owner allows it.
 - Write the review record and the result as `## Review record` and `## Result`, exactly, once each:
   they are the parts of an approved plan that may change without a new approval.
 - After approval, changing anything other than the status line, the review record and the result

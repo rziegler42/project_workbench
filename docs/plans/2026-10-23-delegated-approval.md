@@ -411,3 +411,23 @@ The review is not an approval; the plan stays `Proposed` until the owner approve
   listing; `delegate` for another checkpoint reads `stop` with a note.
 - Not done: guidance for the agent (E), the security pass, the release of the approvals and the close (F). The shipped
   approvals of the installer, `code-work` and `review-engine` are stale until F.
+
+### Increment E — Guidance for the agent
+
+- One local commit, trailer `Plan: 2026-10-23-delegated-approval#E` (find it with `git log --grep`).
+- Built: the neutral skill `delegate-approval` in `code-work` (run `wb settings` first and go on only when
+  `approve-plan` shows `delegate`; ask once with `wb delegate-approve-plan <plan>` after the converging round and
+  before writing the review record; report a `refused:` line and stop; every other checkpoint still stops; the
+  owner's word and the approve-plan command remain the other way; `Hard stop:` and a missing Risks section are for
+  the owner). A one-sentence pointer to it in `draft-plan` and `run-increment`, each still leaving the approval to
+  the owner. The specs `code-work.md` and `trust-and-approval.md` say it is built.
+- Tests: 12 new in `test_codework_delegateskill.py` (the phrases, the order of the steps, the two commands named,
+  no harness or vendor word, the pointers); the item lists in `test_codework_skills.py` and `test_codework_module.py`
+  changed. The full suite passes, 3,655 tests in 7 roots (3,643 before), the same skips. Document checks and
+  `tests.test_boundary` print nothing or pass. Fourteen changes to the text in turn each failed a test; three first
+  survived (the Hard stop sentence, "once", the command limit) and are now pinned by phrases.
+- Differs from the plan: the guidance is a new skill rather than text inside the existing ones, because the tests
+  of `draft-plan` and of the loop skills allow no command beyond their own; those two skills carry a pointer only.
+  The skill is advice: the installer's command is what gives or refuses the approval.
+- Not done: the security pass, the release of the approvals, the "as built" updates and the close (F). The shipped
+  approvals of the installer, `code-work` and `review-engine` are stale until F.

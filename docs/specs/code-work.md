@@ -41,7 +41,7 @@ Non-goals:
 | checkpoints, caps | the eight checkpoint names and three caps under "Checkpoints" and "Loop caps" (built by plan `2026-10-22-checkpoint-settings-and-caps`) |
 
 It also ships neutral items: skills for drafting a plan, running the increment loop,
-reviewing, and pushing; and a read-only reviewer agent. Templates stay in the module; no
+reviewing, asking for a delegated approval, and pushing; and a read-only reviewer agent. Templates stay in the module; no
 placeholder plan is installed.
 
 ## Lifecycle
@@ -498,9 +498,15 @@ installer's and is replaced on upgrade only while unedited.
 - Built, from plan `2026-10-23-delegated-approval`, increment D, in the installer: `wb delegate-approve-plan`, the
   format-2 record and the rule that `delegate` takes effect for `approve-plan` only (`trust-and-approval.md`,
   `installer-interface.md`).
-- Not built: the skill guidance and the security pass of the delegated approval (`delegated-approval`, increments E
-  and F). It came from the roadmap candidate
-  `code-work-approval`, which is split into it and `compaction-guidance`.
+- Built, from plan `2026-10-23-delegated-approval`, increment E: the neutral skill `delegate-approval`, and a pointer
+  to it in `draft-plan` and `run-increment`. It tells the agent to run `wb settings` first and to go on only when
+  `approve-plan` shows `delegate`; to ask with `wb delegate-approve-plan <plan>` once, after the converging round and
+  before it writes the review record; to report a `refused:` line and stop; that every other checkpoint still stops;
+  and that the owner's word and the approve-plan command remain the other way. Limits: the skill is advice, and what
+  gives or refuses the approval is the installer's command; the shipped approval of the package is stale until
+  increment F.
+- Not built: the security pass of the delegated approval (`delegated-approval`, increment F). It came from the roadmap
+  candidate `code-work-approval`, which is split into it and `compaction-guidance`.
 - The helper reads untrusted plans and is bounded; the limits are in the plan `2026-10-21-code-work-plans`.
 
 ## Open items
