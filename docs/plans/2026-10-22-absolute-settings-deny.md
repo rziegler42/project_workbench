@@ -152,4 +152,17 @@ Empty until a review is asked for.
 
 ## Result
 
-Empty until work starts.
+- **A** (commit `e274799`): `render_permissions` takes the project root and, with a hook, adds
+  `Edit(//<root>/.claude/settings.local.json)` and `Edit(//<root>/.git/info/exclude)` to the four relative patterns;
+  `stage`, `preview` and `attach` pass the real path of the project. A root that is not plain and absolute, or holds a
+  character outside the allowed set, refuses the attach; a space is allowed. Ten new tests in `tests/test_hook_render.py`.
+  The full suite passed: 3078 tests in 6 roots.
+- **A shipped-approval release was needed, contrary to the plan's expectation.** The Claude package's tests sit inside
+  its package tree, so updating them changed the tree hash and 12 Claude tests skipped. On the owner's "Run it for me"
+  `release-approvals` wrote new records; the two stale records were removed after a preview and "remove them"; the
+  suite then ran with 0 Claude skips.
+- **B**: `harness-modules.md`, `trust-and-approval.md`, `code-work.md`, the roadmap and the decision's Verification
+  paragraph now say the absolute patterns are built and what remains (a moved project keeps stale rules, an existing
+  clone is not migrated, the gate runs only while a plan is under way, the deny is not for a shell).
+- **Criterion 5 is not met yet.** The owner's recheck in a new scratch project, started in a subdirectory, is still to
+  be made and recorded here with the Claude version and date.

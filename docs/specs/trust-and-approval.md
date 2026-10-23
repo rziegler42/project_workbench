@@ -213,9 +213,9 @@ Rules:
   the four interpreter spellings of `-m workbench` (`rules.SPELLINGS`). The read-only `wb preview` is not denied. The commands
   are listed in `installer-interface.md`. *(Rendered by the Claude harness module, built by
   `claude-harness`; the opencode module is `opencode-harness`.)* The deny is best effort: it
-  matches the command text the agent submits, not what a wrapper script runs, and the rendered
-  rules do not deny edits to the local settings file or `.git/info/exclude` themselves
-  (`harness-modules.md`, "As built, and its limits").
+  matches the command text the agent submits, not what a wrapper script runs. With the edit gate's hook the
+  rendered rules also deny edits to the local settings file and `.git/info/exclude`, by relative and by absolute
+  path; without a hook they do not (`harness-modules.md`, "As built, and its limits").
 
 ## Acknowledgement
 

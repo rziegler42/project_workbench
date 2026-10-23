@@ -304,12 +304,20 @@ hook. The rendered entry is fixed by the layout and not chosen by any module. Th
   missing. No documented tool names several files.
 - **The deny.** With a hook, the rendered deny list also covers edits to `.claude/settings.local.json` and
   `.git/info/exclude`, each spelled from the project root and with a `**/` prefix (the owner edits both by hand),
-  so an agent cannot delete the hook. It is one function in the renderer and rendered only with a hook, so it can
-  be dropped alone. The relative patterns do not resolve from a subdirectory (see "As built, and its limits" below).
+  so an agent cannot delete the hook, and also by the real path of the project (`Edit(//<root>/.claude/settings.local.json)`
+  and `Edit(//<root>/.git/info/exclude)`), because the relative patterns do not resolve from a subdirectory (see "As
+  built, and its limits" below). A project path that is not plain and absolute, or holds a character outside the allowed
+  set (a quote, brackets, `*`, a backslash, a colon, non-ASCII), refuses the attach; a space is allowed. It is one
+  function in the renderer and rendered only with a hook, so it can be dropped alone.
 - **As built, and its limits.** The gate is in `trust-and-approval.md`, "Checkpoint and cap settings, and the edit
-  gate". **The rendered `Edit(...)` deny does not hold from a subdirectory** (live check, 2026-10-22): the patterns are matched
+  gate". **The relative `Edit(...)` deny did not hold from a subdirectory** (live check, 2026-10-22): the patterns are matched
   from the directory Claude started in, so a session started below the root and aimed at
-  `../.claude/settings.local.json` is not stopped by the rule. The correction is absolute patterns; it is not made.
+  `../.claude/settings.local.json` was stopped only by the auto mode classifier. Plan
+  `2026-10-22-absolute-settings-deny` adds the absolute patterns, built and tested; the owner's recheck that the
+  permission rule, and not the classifier, now stops the edit is not yet made. Limits that remain: a project that is
+  moved keeps stale absolute rules; a clone that already holds a rendered settings file is not migrated (attach treats a
+  different file as a conflict); the hook, and so the gate, runs only while a plan is under way, so nothing but the deny
+  guards the file at other times; the deny covers the agent's file tools and not a shell.
   Project and local settings precedence, `PATH` for `wb`, and `CLAUDE_PROJECT_DIR` are as listed under "Evidence".
 
 ## The opencode harness module
