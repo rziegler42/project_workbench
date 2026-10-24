@@ -9,6 +9,7 @@
     "groundwork",
     "safe-git",
     "review-engine",
-    "mempalace"
+    "mempalace",
+    "remote-runner"
   ]
 }

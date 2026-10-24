@@ -39,5 +39,6 @@ or an evidence note.
 | [`review-engine.md`](review-engine.md) | The review module that provides `peer-review`: rounds, findings, sealed state, the project setting |
 | [`knowledge-tools.md`](knowledge-tools.md) | The three knowledge modules (`mempalace`, `graphify`, the knowledge base): which problem each owns, routing, shared conventions |
 | [`mempalace.md`](mempalace.md) | The module that lets an agent search the owner's MemPalace; owner-run commands build it |
+| [`remote-runner.md`](remote-runner.md) | The module that gives a project its remote job profiles and a guarded way to submit, inspect and fetch |
 | [`harness-modules.md`](harness-modules.md) | How a harness module describes one AI runtime |
 | [`superpowers-ports.md`](superpowers-ports.md) | The superpowers skills the owner uses, and what became of each |

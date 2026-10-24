@@ -1,7 +1,7 @@
 {
   "approver": "workbench-release",
   "commit": null,
-  "declaration_hash": "32e370e60d19d3c58873a3af23036e09c84358603e4a0215f15ff1bcdc9912a8",
+  "declaration_hash": "8b9c04cf57c5329af5a84e158be50b499d40b0fd93172074d236cadf07852778",
   "format": 1,
   "kind": "package",
   "modules": [
@@ -13,22 +13,27 @@
     {
       "declaration_hash": "0e1dff0840c0982afaa0b27d5e3a1b86d5bdc8062d9402e55ea4ab6813082ec6",
       "name": "claude",
-      "tree_hash": "1cb643ca66937b892ffbc60728b4a61ef893fe29c4c241b8adc35b6ebdc00965"
+      "tree_hash": "60a898f80189c35dc25b4321a86f08fbef8a5402e7a3355ba6d0518e00f43a02"
     },
     {
       "declaration_hash": "50cfad42b0e477acb499f437f1272f5e189772c689091801639ea3dfc3ad232c",
       "name": "code-work",
-      "tree_hash": "e7554deb92c1e37706d887e2a7c2e7cace45bed31aa0be1e7a5877687edfca6e"
+      "tree_hash": "2dd9b45d373ffdfaccb72883b72b43da0d3f8dafe429bf7e2b8027380eca0725"
     },
     {
       "declaration_hash": "eb8f2f640ad950914c8de822f9c50fe8bc387c4938e656f339f11d092329bf3f",
       "name": "groundwork",
-      "tree_hash": "b3f57ac9cbc889dbe0115dea63a2fb10a09543c0b795b6921ebdbfe46bd5f221"
+      "tree_hash": "c779d23039384a11c63f557b1bd60204e37e76d32a64207f8c620253b3cd940c"
     },
     {
       "declaration_hash": "184b1eaf0af1a0482a00da156e33ef42e6da16f6a14a2f71c30d77a9418368f9",
       "name": "mempalace",
       "tree_hash": "f453184314c28aeac9c8217aefe1b590f2ecdeeac33f89408c3c2d50f21aa3e4"
+    },
+    {
+      "declaration_hash": "4b8f7c515c504354e5a6691c8ba1f14616926becffd1e249170a3cf44a861b38",
+      "name": "remote-runner",
+      "tree_hash": "8605469f4f7cc759753e3160e01aabf8832158ea4c43346761354c6fee13a223"
     },
     {
       "declaration_hash": "c3d8035f7971b1509cfb90a1b709cafabb914b96b99fda50d64ad6c6eb7630d1",
@@ -43,6 +48,6 @@
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "97b4972ff056142d2e8330823b63042b21ac43e9882ed7e5ccedf26b9d291525",
+  "tree_hash": "bac9095598f99acb39b1895b2195198550cc3dd7aeb9f07b761fc69b2a3b6823",
   "workbench_version": "0.1.0"
 }

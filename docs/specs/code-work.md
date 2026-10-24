@@ -24,7 +24,8 @@ Non-goals:
 - Discovery tooling. There is no discovery gate; a discovery tool is an optional
   module that nothing here requires.
 - The mechanics of running jobs on a remote machine. That belongs to a separate
-  module.
+  module, `remote-runner` (`remote-runner.md`), which declares no checkpoint of its own: the two below are
+  this module's, and its skill `run-remote-job` waits for the owner at each.
 
 ## Declaration (summary)
 
@@ -293,7 +294,8 @@ module adds none of its own.
 - The usual rhythm is to push the shared branch once a plan is archived and before the
   next plan is drafted.
 - A remote job needs the committed revision to be reachable from the remote. That is
-  satisfied by pushing a branch that is not shared, which is not a checkpoint.
+  satisfied by pushing a branch that is not shared, which is not a checkpoint. The `run-remote-job` skill does not
+  commit or push to run a job; it uses a revision the remote can already reach, or a snapshot the owner agrees to.
 - Merging into a shared branch on the hosting side is outside the agent.
 
 ## Commit

@@ -19,11 +19,12 @@ helper that runs another module's command (``wbkit.call``) does not make it for 
 import collections
 import os
 import re
+import sys
 
-from . import declarations, hashing, launch, manifest, pins
+from . import approve, declarations, hashing, launch, manifest, pins
 from .wbkit import display, project, safefs
 
-Request = collections.namedtuple("Request", "root project_id name arguments kit")
+Request = collections.namedtuple("Request", "root project_id name arguments kit owner", defaults=((),))
 Declared = collections.namedtuple("Declared", "package module command declaration provides")
 
 
@@ -155,7 +156,45 @@ def resolve(guarded, start, name, args, provides=None):
                            % (found.package, found.module, _shown(name), _shown(provides)))
     _arguments(command, args)
     pin = check_pin(guarded, ident, found)
-    return Request(root, ident, name, args, pin.kit)
+    return Request(root, ident, name, args, pin.kit, command.owner)
+
+
+def launch_refusal(guarded, project_id, name, root, args, stdin, stdout):
+    """Why ``wb launch`` may not run the pinned helper `name` with `args`, or None.
+
+    A pin the installer made records the declaration the owner confirmed. For such a pin the declaration installed
+    at `root` must be that one. A pin the owner typed has none (a new pin replaces the old, declaration included):
+    where the project declares a command of that name whose helper is the pinned path, the project's declaration is
+    used as ``wb run`` uses it, and anything else is the owner's own tool and is left alone. Either way the declared
+    ``arguments`` and ``owner`` lists are applied as ``wb run`` applies them."""
+    try:
+        pin = pins.lookup(guarded, project_id, name)
+    except pins.PinError:
+        return None  # the launcher says why nothing runs
+    typed = pin.declaration is None
+    try:
+        with safefs.Root(root, "project root") as held:
+            document = manifest.parse(held.read_file(project.MANIFEST))
+            try:
+                found = [d for d in _declared(held, document) if d.command.name == name]
+            except CommandError as exc:
+                return "the declaration of %s cannot be read at the root: %s" % (_shown(name), str(exc)[:200])
+    except (safefs.SafeFsError, manifest.ManifestError, pins.PinError) as exc:
+        if typed:
+            return None  # no workbench project here: the owner's own tool
+        return "the declaration of %s cannot be read at the root: %s" % (_shown(name), display.clean(str(exc))[:200])
+    if typed:
+        found = [d for d in found if pin.path == ".workbench/%s/%s/%s" % (d.package, d.module, d.command.helper)]
+        if not found:
+            return None
+    if len(found) != 1 or (not typed and found[0].declaration != pin.declaration):
+        return ("the declaration of %s at the root is not the one the owner confirmed for its pin; nothing was run"
+                % _shown(name))
+    try:
+        _arguments(found[0].command, list(args))
+    except CommandError as exc:
+        return str(exc)
+    return owner_refusal(name, found[0].command.owner, args, stdin, stdout)
 
 
 USAGE = "usage: wb run [--provides <capability>] <command> [<argument> ...]\n"
@@ -176,7 +215,20 @@ def split(tokens):
     return provides, tokens
 
 
-def run(guarded, tokens, err, *, cwd=None, stdout=None):
+def owner_refusal(name, owner, args, stdin, stdout):
+    """Why the first of `args` may not run, or None. An argument a command declares ``owner`` runs only when
+    standard input and output are both terminals, the test ``approve`` and ``pin`` use. It is a mistake guard,
+    not a sandbox: it does not read how the command was spelled, but a process that opens its own
+    pseudo-terminal passes it."""
+    if not args or args[0] not in owner:
+        return None
+    if approve.is_terminal(stdin) and approve.is_terminal(stdout):
+        return None
+    return ("%s of the command %s is the owner's; run it yourself, from your own terminal"
+            % (_shown(args[0]), _shown(name)))
+
+
+def run(guarded, tokens, err, *, cwd=None, stdin=None, stdout=None):
     """``wb run [--provides <capability>] <command> [<argument> ...]``: returns the helper's exit code,
     2 for a usage error, or 1 with one ``refused:`` line when nothing was run. It prints nothing of its
     own on success."""
@@ -191,6 +243,11 @@ def run(guarded, tokens, err, *, cwd=None, stdout=None):
         except OSError as exc:
             raise CommandError("the working directory cannot be read: %s" % (exc.strerror or "unknown error"))
         request = resolve(guarded, start, tokens[0], tokens[1:], provides)
+        reason = owner_refusal(request.name, request.owner, request.arguments,
+                               stdin if stdin is not None else sys.stdin,
+                               stdout if stdout is not None else sys.stdout)
+        if reason:
+            raise CommandError(reason)
         return launch.launch(guarded, request.project_id, request.name, request.root,
                              request.arguments, stdout=stdout, kit=request.kit)
     except (CommandError, launch.LaunchError) as exc:

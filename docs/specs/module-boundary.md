@@ -305,8 +305,9 @@ checked with the rest of its declaration, before anything is written.
     characters, default empty.
   - `owner` (optional, built by plan `2026-10-23-review-engine`): a list of distinct strings, each one of this
     command's `arguments`, default empty. These are the arguments only the owner runs. A harness that provides
-    `permissions` denies the agent each of them (`trust-and-approval.md`, "Rendering rules"). The declaration
-    authorizes the first argument only, so a form that must be allowed to the agent and a form that must not
+    `permissions` denies the agent each of them (`trust-and-approval.md`, "Rendering rules"), and `wb run` and
+    `wb launch` run one only when standard input and output are both terminals (plan
+    `2026-10-24-owner-run-in-code`). The declaration authorizes the first argument only, so a form that must be allowed to the agent and a form that must not
     are two arguments of the command.
 - Refused: an unknown field, a wrong type, a duplicate key (the parser already refuses it), a `helper` that
   is not in `ships`, a `runtime` other than the two, a duplicate `arguments` entry, an `owner` entry that is not a

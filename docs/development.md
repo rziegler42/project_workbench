@@ -6,8 +6,9 @@ There is nothing to set up and no dependency is installed. The code is Python 3 
 only the standard library, and the repository assumes git, a POSIX shell and `python3`,
 as `docs/specs/repository-boundary.md` states.
 
-Minimum Python version: 3.6, the lowest minor version that has every language feature
-written so far (f-strings are the newest). The checks have been run only on 3.14; the
+Minimum Python version: 3.11, the lowest minor version that has every language feature
+and standard-library module used so far (`tomllib`, which the `remote-runner` module reads
+its project file with, is the newest). The checks have been run only on 3.14; the
 minimum is derived from the features used, not from running older interpreters. Raise
 it here whenever a later increment uses a newer feature.
 
@@ -40,7 +41,7 @@ ambiguous blank.
 | Owner-run: upgrade a project (terminal only) | `python3 -m workbench upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
 | Preview adding a module (read-only) | `python3 -m workbench preview add [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Owner-run: add a module (terminal only) | `python3 -m workbench add [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
-| Run a pinned helper | `python3 -m workbench launch <project-id> <name> --root <project-dir> -- <args>` |
+| Run a pinned helper | `python3 -m workbench launch <project-id> <name> --root <project-dir> -- <args>` (an owner-run argument of a declared command, here and in `run`, is refused unless standard input and output are both terminals) |
 | Run a module command | `python3 -m workbench run [--provides <capability>] <command> [<argument> ...]` from anywhere in the project (agent-safe; the command must be installed and pinned; with `--provides` its module must provide the capability; the arguments after the first reach the helper unchanged) |
 | Check, list or report the plans | `python3 -m workbench run code-work check\|plans\|report` (the `code-work` module's command; the installer pinned the helper when the install was confirmed) |
 | Commit exact paths (local) | `python3 -m workbench run safe-git commit --expected-head <full hash or none> --subject <text> [--body <text>] [--trailer 'Key: value'] [--leave-other-staged] -- <path> ...` (the `safe-git` module's command; needs git; see "The safe-git helper") |
@@ -48,6 +49,9 @@ ambiguous blank.
 | Ask a model one read-only question | `python3 -m workbench run --provides model-bridge ask-codex ask [--model <name>] [--effort low\|medium\|high] [--timeout <seconds>] [--root <path>] [--schema <path>]` with the prompt on standard input (the `ask-codex` module's command; needs a `codex` program and a sign-in; see "The ask-codex bridge") |
 | Search the owner's memory (agent-safe) | `python3 -m workbench run mempalace status`, and `python3 -m workbench run mempalace search [--wing <name>] [--room <name>] [--results <1-20>] [--since <date>] [--before <date>] -- <query>` (the `mempalace` module's command; needs a `mempalace` program and its cached embedding model; see "The mempalace module") |
 | Owner-run: build the memory (terminal only) | `python3 -m workbench run mempalace init <dir> [--yes] [--allow-project-root]`, and `python3 -m workbench run mempalace mine <dir> [--confirm] [--wing <name>] [--mode projects\|convos] [--allow-project-root]` (refuse unless standard input and output are terminals; `mine` is a dry run without `--confirm`) |
+| Show a project's remote job profiles | `python3 -m workbench run remote-runner profiles` (the `remote-runner` module's command; reads `.workbench/remote-runner.toml`, starts no program; `wb check` also reports a refused file and a leftover `.claude/remote-runner.toml`; see `docs/specs/remote-runner.md`) |
+| Fetch a finished job's files into the project | `python3 -m workbench run remote-runner fetch <job> <path> ... [--dest <folder>] [--as <name>]` (1 to 16 paths; refuses a target that exists or goes through a link; never overwrites; fetched files are untrusted). `fetch-overwrite` (same arguments, passes the program's `--force`) is owner-run only and is denied to the agent in the rendered Claude settings |
+| Ask for runners, check a job, list its artifacts, submit a declared profile | `python3 -m workbench run remote-runner recommend --profile <name>`, `... status <job> [--expect <40 hex>]`, `... artifacts <job>`, `... submit (--remote <name> \| --best) --profile <name> [--ref <ref> \| --snapshot]` (starts only the external `remote-runner` program, found in an absolute `PATH` entry outside the project; prints one JSON line; submit only on the owner's word; tests use a fake program) |
 | Owner-run: approve a plan (terminal only) | `python3 -m workbench approve-plan <plan>` from anywhere in the project: one argument, no option; runs the project's declared approval command and records the plan's path and region hash after the owner types back the first 12 characters |
 | Is a plan approved (read-only) | `python3 -m workbench plan-status <plan>`: prints `approved:`, `changed since approval:` or `not approved:` and exits 0 only for the first (agent-safe) |
 | Show the checkpoint and cap values that apply (read-only) | `python3 -m workbench settings` from anywhere in the project: no argument, no option; prints `checkpoint <name>: stop\|delegate` and `cap <name>: <n>` lines for what the process module declares, then a `settings:` line per problem in the owner's settings (agent-safe) |
