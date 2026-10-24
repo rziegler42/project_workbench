@@ -1,6 +1,6 @@
 # The security-review module
 
-Status: Approved
+Status: Completed
 Created: 2026-10-24
 Candidate: workbench-v1#security-review-module
 Specs: harness-modules, module-contract, code-work
@@ -328,3 +328,11 @@ Round 3 was not run. The owner approved the plan on 2026-10-24, after rounds 1 a
   `groundwork` (187) and `claude` (33, 12 skipped) module tests pass, as do `tests.test_boundary`, `tests.test_package` and
   `tests.test_skill_names` (29). The 12 `claude` skips are the stale package approvals and clear after E. `doccheck`,
   `refcheck` and `git diff --check` print nothing. Next: E.
+- Increment E: the owner asked me to run `release-approvals`; it wrote 10 approvals (5 new directories) and reported 4 stale
+  records, which I previewed and removed on the owner's "Remove them" (full hashes begin `1161dfed`, `122ee376`, `5c2cfc86`
+  and `999f904b`). The spec has "As built, and its limits", and its status line says it was built. A search of `workbench`
+  and `tests` for `security-review` finds no code that names the module; a search of `packages` for `writes:` finds only the
+  agent. The full suite passes: 4,118 tests in 10 roots (`tests` 2,609 with 1 skipped, `code-work` 339 with 2 skipped,
+  `security-review` 24, the other seven roots unchanged); no skip is for a stale approval. `doccheck`, `refcheck` and
+  `git diff --check` print nothing. The spec stays `Draft` until the owner approves it. No live session ran the agent, and no
+  real attach was run, as the spec says. The reason for 4 stale records against 5 new ones was not worked out.

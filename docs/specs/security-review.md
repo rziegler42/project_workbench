@@ -1,7 +1,7 @@
 # security-review
 
-Status: Draft. Written by plan `2026-10-24-security-review-module` (increment A); it reads `Current` after the owner
-approves it. The module it describes is not built yet.
+Status: Draft. Written by plan `2026-10-24-security-review-module` (increment A) and built by its increments B to E; it
+reads `Current` after the owner approves it.
 
 Terms are defined in `terms.md`. The declaration it must satisfy is defined in `module-contract.md`; the confined agent
 and its guard in `harness-modules.md` ("A confined agent", "The agent gate"); the decision behind it is
@@ -117,6 +117,24 @@ provides `permissions`. Elsewhere it is skipped with a warning and never install
    command.
 4. On a harness without the per-agent hook the agent is skipped with a warning and the skill installs.
 5. The `code-work` policy block names the capability and no module.
+
+## As built, and its limits
+
+- **Built** (plan `2026-10-24-security-review-module`): `packages/workbench/security-review/` with `module.json`, the neutral
+  skill `security-review` and the neutral agent `security-reviewer`; the module is in the `workbench` package; the
+  `code-work` policy block has one bullet that names the capability and no module.
+- **Pinned commands.** The four patterns are `python3 -I -B {scratch}/probe1.py` to `probe4.py`. The agent's body tells it
+  to write a script under one of those names and to run it with no other argument. The grammar admits `-I` and `-B`.
+- **Shown by test.** The reader accepts the agent with exactly these limits and no `web` or `agents` tool. The real
+  translation into the Claude layout renders the agent with the hook `wb agent-gate claude security-reviewer || exit 2`, and
+  skips the agent but installs the skill on a layout with no per-agent hook. The installer's path and command functions,
+  given that layout's scratch template, allow a write below scratch and each pinned command, and refuse a write into the
+  project, through `..` or through a link out of scratch, a pinned name with a path component or an unpinned name, and every
+  other command (chaining, redirects, expansion, other flags, other interpreters).
+- **Not shown.** The module was not attached to a scratch project, so the rendered hook was not run end to end against an
+  installed manifest; the installer's synthetic tests cover that path. No live session ran the agent, and whether an agent
+  loads the skill is unverified. The limits above all remain.
+- **The policy block** grew from 23 to 28 lines, and the line cap in the `code-work` module's test with it.
 
 ## Related files and decisions
 

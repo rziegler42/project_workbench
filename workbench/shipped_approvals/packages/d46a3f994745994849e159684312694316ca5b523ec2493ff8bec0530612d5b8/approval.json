@@ -1,0 +1,10 @@
+{
+  "approver": "workbench-release",
+  "declaration_hash": "699b15cbb3637244800be23192d3085186fd448a6aab41a4c60c08586229d324",
+  "format": 1,
+  "kind": "module",
+  "subject": "workbench/security-review",
+  "time": "1970-01-01T00:00:00Z",
+  "tree_hash": "3486a1f96dffbc1b6e908171b76caffd6d3c91033ec0c09b77d88312b7e71933",
+  "workbench_version": "0.1.0"
+}
