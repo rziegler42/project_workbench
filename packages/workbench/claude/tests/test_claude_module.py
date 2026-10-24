@@ -22,7 +22,9 @@ EXPECTED_LAYOUT = {
                   "fields": {"name": "name", "description": "description", "tools": "tools",
                              "model": "model"},
                   "tools": {"read": ["Read"], "search": ["Grep", "Glob"],
-                            "edit": ["Edit", "Write"], "shell": ["Bash"]}},
+                            "edit": ["Edit", "Write"], "shell": ["Bash"]},
+                  "hook": {"key": "hooks", "event": "PreToolUse", "timeout": 20, "block_code": 2},
+                  "scratch": "/private/tmp/claude-{uid}/{cwd_key}/{session_id}/scratchpad"},
         "command": {"path": ".claude/commands/{name}.md",
                     "fields": {"name": "name", "description": "description",
                                "args": "argument-hint"}},
@@ -143,6 +145,16 @@ class Declaration(unittest.TestCase):
         self.assertEqual(shipped, expected)
         self.assertEqual(len(notes), 1)
         self.assertEqual(tolerated, [".claude/settings.json"])
+
+    def test_the_agent_hook_and_scratch_are_what_the_trial_observed(self):
+        """Recorded from the live trial of 2026-10-24 (Claude Code 2.1.310): an agent's frontmatter holds
+        `hooks`, exit 2 blocks, and the session's scratch directory is under `/private/tmp/claude-<uid>`."""
+        agent = declaration()["layout"]["kinds"]["agent"]
+        self.assertEqual(agent["hook"], {"key": "hooks", "event": "PreToolUse", "timeout": 20,
+                                         "block_code": 2})
+        self.assertEqual(agent["scratch"], "/private/tmp/claude-{uid}/{cwd_key}/{session_id}/scratchpad")
+        self.assertEqual(agent["hook"]["block_code"], declaration()["layout"]["hooks"]["block_code"])
+        self.assertEqual(sorted(agent["tools"]["edit"] + agent["tools"]["shell"]), ["Bash", "Edit", "Write"])
 
     def test_the_rule_templates_are_the_names_claude_reads(self):
         """Claude reads `Bash`, `Read` and `Edit`; `Write(path)` is accepted and never consulted."""

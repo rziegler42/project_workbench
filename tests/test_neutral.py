@@ -228,3 +228,102 @@ class Rules(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConfinedAgents(unittest.TestCase):
+    """The ``writes`` and ``run`` fields of an agent, and every way they are refused."""
+
+    base = b"name: reviewer\ndescription: d\ntools: read, search, edit, shell\n"
+    example = b"writes: scratch\nrun: python3 {scratch}/check.py, python3 {scratch}/check.py --fast\n"
+
+    def agent(self, head):
+        return {"agents/reviewer.md": b"---\n" + head + b"---\nbody\n"}
+
+    def item(self, extra=b"", base=None):
+        return neutral.read_items(self.agent((base or self.base) + extra))[0]
+
+    def test_the_example_is_read_back_field_by_field(self):
+        item = self.item(self.example)
+        self.assertEqual(item.writes, ("scratch",))
+        self.assertEqual(item.run, ("python3 {scratch}/check.py", "python3 {scratch}/check.py --fast"))
+        self.assertEqual(item.tools, ("edit", "read", "search", "shell"))
+
+    def test_an_agent_without_the_fields_is_not_confined(self):
+        item = self.item()
+        self.assertEqual((item.writes, item.run), ((), ()))
+
+    def test_either_field_alone_is_read(self):
+        self.assertEqual(self.item(b"writes: scratch\n").run, ())
+        self.assertEqual(self.item(b"run: ls -l\n").writes, ())
+
+    def test_only_an_agent_takes_them(self):
+        refused(self, {"skills/sample/SKILL.md": SKILL.replace(b"---\nDo", b"writes: scratch\n---\nDo")},
+                "writes")
+        refused(self, {"commands/ship.md": COMMAND.replace(b"args: [target]\n", b"run: ls\n")}, "run")
+
+    def test_a_repeated_field_is_refused(self):
+        refused(self, self.agent(self.base + b"writes: scratch\nwrites: scratch\n"), "twice")
+        refused(self, self.agent(self.base + b"run: ls\nrun: ls\n"), "twice")
+
+    def test_writes_takes_only_scratch(self):
+        for value in (b"home", b"Scratch", b"scratch, home", b"scratch, scratch", b"scratch,", b"/tmp"):
+            refused(self, self.agent(self.base + b"writes: " + value + b"\n"), "writes")
+
+    def test_a_field_without_its_tool_is_refused(self):
+        no_edit = b"name: reviewer\ndescription: d\ntools: read, shell\n"
+        no_shell = b"name: reviewer\ndescription: d\ntools: read, edit\n"
+        refused(self, self.agent(no_edit + b"writes: scratch\n"), "edit")
+        refused(self, self.agent(no_shell + b"run: ls\n"), "shell")
+
+    def test_the_agents_tool_beside_either_field_is_refused(self):
+        both = b"name: reviewer\ndescription: d\ntools: read, edit, shell, agents\n"
+        refused(self, self.agent(both + b"writes: scratch\n"), "agents")
+        refused(self, self.agent(both + b"run: ls\n"), "agents")
+        self.assertEqual(neutral.read_items(self.agent(both))[0].run, ())  # unconfined is unchanged
+
+    def test_the_web_tool_is_allowed(self):
+        web = b"name: reviewer\ndescription: d\ntools: read, edit, web\n"
+        self.assertEqual(self.item(b"writes: scratch\n", base=web).writes, ("scratch",))
+
+    def test_run_limits_at_the_bound_and_one_past(self):
+        four = ", ".join("ls %d" % n for n in range(4)).encode()
+        self.assertEqual(len(self.item(b"run: " + four + b"\n").run), 4)
+        five = ", ".join("ls %d" % n for n in range(5)).encode()
+        refused(self, self.agent(self.base + b"run: " + five + b"\n"), "at most 4")
+        exact = b"a" * 200
+        self.assertEqual(self.item(b"run: " + exact + b"\n").run, (exact.decode(),))
+        refused(self, self.agent(self.base + b"run: " + exact + b"a\n"), "200")
+        # 3 patterns of 190 and a short one is 4 patterns and over 600 characters in the line.
+        long = ", ".join(("a" * 190, "b" * 190, "c" * 190, "d" * 40)).encode()
+        self.assertGreater(len(long), 600)
+        refused(self, self.agent(self.base + b"run: " + long + b"\n"), "600")
+        fits = ", ".join(("a" * 195, "b" * 195, "c" * 195, "d" * 5)).encode()
+        self.assertLessEqual(len(fits), 600)
+        self.assertEqual(len(self.item(b"run: " + fits + b"\n").run), 4)
+
+    def test_an_empty_or_repeated_pattern_is_refused(self):
+        for value in (b"ls, ", b"ls,,ls -l", b",ls", b"ls,", b"ls, ls", b"ls ,ls"):
+            refused(self, self.agent(self.base + b"run: " + value + b"\n"), "run")
+
+    def test_a_pattern_outside_the_grammar_is_refused(self):
+        for bad in (b"ls  -l", b"ls \"x\"", b"ls 'x'", b"ls;id", b"ls&&id", b"ls|id", b"ls$HOME",
+                    b"ls `id`", b"ls (x)", b"ls >x", b"ls <x", b"ls\\x", b"ls *", b"ls ?", b"ls [a]",
+                    b"ls {x}", b"ls ~", b"ls #x", b"ls !x", b"ls ^x", "ls café".encode(),
+                    b"ls\tx", b"{scratch}", b"{scratch}/", b"{scratch}/a/b.py", b"{scratch}/..",
+                    b"{scratch}/.hidden", b"{scratch}/-x", b"{scratch}x.py", b"x{scratch}/a.py",
+                    b"{scratch}/a{scratch}/b", b"{Scratch}/a.py", b"{tmp}/a.py", b"$scratch/a.py",
+                    b"python3 {scratch}/a b.py ;"):
+            refused(self, self.agent(self.base + b"run: " + bad + b"\n"), "run")
+
+    def test_a_comma_splits_patterns_so_it_cannot_sit_in_one(self):
+        self.assertEqual(self.item(b"run: ls a,ls b\n").run, ("ls a", "ls b"))
+
+    def test_accepted_tokens(self):
+        for good in (b"python3 {scratch}/check.py", b"python3 -m unittest", b"git status --short",
+                     b"make -C . test=1", b"tool a@b:c%d+e", b"{scratch}/run_1-b.sh --fast",
+                     b"python3 {scratch}/a.b.c"):
+            self.assertEqual(self.item(b"run: " + good + b"\n").run, (good.decode(),))
+
+    def test_a_line_that_is_not_one_line_of_text_is_refused_as_before(self):
+        refused(self, self.agent(self.base + b"run: |\n"), "run")
+        refused(self, self.agent(self.base + b"run: ls \n"), "run")

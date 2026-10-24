@@ -395,3 +395,44 @@ class Root(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConfinedAgents(unittest.TestCase):
+    """An agent with ``writes`` or ``run`` is never installed where nothing enforces them."""
+
+    CONFINED = (b"---\nname: checker\ndescription: Runs a check\ntools: read, edit, shell\n"
+                b"writes: scratch\nrun: python3 {scratch}/check.py\n---\nYou check.\n")
+
+    def found(self):
+        return items(**{"agents/checker.md": self.CONFINED})
+
+    def test_a_harness_without_the_entries_does_not_install_it(self):
+        result = run(found=self.found())
+        self.assertNotIn(".fixture/agents/checker.md", by_path(result))
+        reported = [r for r in levels(result, "skipped") if r.item == "agent/checker"]
+        self.assertEqual(len(reported), 1)
+        self.assertIn("no per-agent hook", reported[0].message)
+
+    def test_an_override_does_not_get_around_it(self):
+        override = {("agent", "checker"): {"checker.md": b"---\ntools: Read, Bash\n---\nx\n"}}
+        result = run(found=self.found(), overrides=override)
+        self.assertNotIn(".fixture/agents/checker.md", by_path(result))
+        self.assertEqual(levels(result, "overridden"), [])
+
+    def test_the_other_items_are_unaffected(self):
+        result = run(found=self.found())
+        self.assertEqual(sorted(by_path(result)), [
+            ".fixture/agents/reviewer.md", ".fixture/commands/ship.md",
+            ".fixture/skills/sample/SKILL.md"])
+
+    def test_until_the_hook_is_rendered_the_entries_do_not_install_it_either(self):
+        from tests.test_layout import confining
+        result = run(layout=confining(), found=self.found())
+        self.assertNotIn(".fixture/agents/checker.md", by_path(result))
+        reported = [r for r in levels(result, "skipped") if r.item == "agent/checker"]
+        self.assertIn("does not yet render", reported[0].message)
+
+    def test_an_agent_with_neither_field_is_installed_as_before(self):
+        from tests.test_layout import confining
+        for layout in (SYNTHETIC, confining()):
+            self.assertIn(".fixture/agents/reviewer.md", by_path(run(layout=layout)))

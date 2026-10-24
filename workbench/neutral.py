@@ -30,6 +30,8 @@ from .wbkit import safefs
 KINDS = {"skills": "skill", "agents": "agent", "commands": "command"}
 TOOLS = ("read", "search", "edit", "shell", "web", "agents")
 NEEDS = declarations.HARNESS_CAPABILITIES
+WRITE_ROOTS = ("scratch",)
+CONFINED_FIELDS = ("writes", "run")
 RULE_ACTIONS = ("ask", "deny")
 RULE_TOOLS = ("shell", "read", "write", "web")
 
@@ -44,6 +46,15 @@ MAX_BUNDLED = 100
 MAX_TOTAL_BYTES = 8 * 1024 * 1024
 MAX_RULES = 200
 MAX_PATTERN_CHARS = 200
+MAX_RUN_PATTERNS = 4
+MAX_RUN_PATTERN_CHARS = 200
+MAX_RUN_LINE_CHARS = 600
+# A pinned command is space-separated tokens: a literal of these characters, or ``{scratch}/<name>``. No
+# quote, comma, ``;``, ``&``, ``|``, ``$``, backtick, bracket, redirection, backslash or control character
+# can be in one, so a command that matches reaches no shell syntax.
+RUN_LITERAL_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/:=+@%-")
+RUN_NAME_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+SCRATCH_PREFIX = "{scratch}/"
 # A rule pattern is words, paths and the globs ``*`` and ``**``. No bracket, quote, colon or
 # backslash can reach a harness's own rule syntax. The layout that renders a pattern checks it
 # again against its target syntax; this only keeps the neutral form small.
@@ -52,12 +63,12 @@ PATTERN_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 
 FIELDS = {
     "skill": (("name", "description"), ("needs",)),
     "command": (("name", "description"), ("args", "needs")),
-    "agent": (("name", "description", "tools"), ("model", "needs")),
+    "agent": (("name", "description", "tools"), ("model", "needs") + CONFINED_FIELDS),
 }
 
 Bundled = collections.namedtuple("Bundled", "rel data sha256")
 Item = collections.namedtuple(
-    "Item", "kind name description args tools needs model body files")
+    "Item", "kind name description args tools needs model body files writes run")
 Rule = collections.namedtuple("Rule", "action tool pattern")
 
 
@@ -158,7 +169,50 @@ def _item(kind, name, rel, data, extra):
     needs = _choice(values, "needs", NEEDS, rel, required=False)
     files = tuple(Bundled(sub, content, hashlib.sha256(content).hexdigest())
                   for _, sub, content in extra)
-    return Item(kind, name, description, args, tools, needs, model, body, files)
+    writes, run = _confinement(values, tools, rel) if kind == "agent" else ((), ())
+    return Item(kind, name, description, args, tools, needs, model, body, files, writes, run)
+
+
+def _confinement(values, tools, rel):
+    """The ``writes`` roots and ``run`` patterns of an agent, each refused unless it is whole and understood."""
+    writes = _choice(values, "writes", WRITE_ROOTS, rel)
+    run = _patterns(values["run"], rel) if "run" in values else ()
+    if writes and "edit" not in tools:
+        raise NeutralError("%s: writes needs the 'edit' tool" % rel)
+    if run and "shell" not in tools:
+        raise NeutralError("%s: run needs the 'shell' tool" % rel)
+    if (writes or run) and "agents" in tools:
+        raise NeutralError("%s: an agent with writes or run may not hold the 'agents' tool, because the "
+                           "agent it started would not be confined" % rel)
+    return writes, run
+
+
+def _patterns(value, rel):
+    if len(value) > MAX_RUN_LINE_CHARS:
+        raise NeutralError("%s: run is over %d characters" % (rel, MAX_RUN_LINE_CHARS))
+    patterns = tuple(part.strip() for part in value.split(","))
+    if len(patterns) > MAX_RUN_PATTERNS:
+        raise NeutralError("%s: run lists %d patterns; at most %d" % (rel, len(patterns), MAX_RUN_PATTERNS))
+    for pattern in patterns:
+        if not pattern:
+            raise NeutralError("%s: run has an empty pattern" % rel)
+        if len(pattern) > MAX_RUN_PATTERN_CHARS:
+            raise NeutralError("%s: a run pattern is over %d characters" % (rel, MAX_RUN_PATTERN_CHARS))
+        if patterns.count(pattern) > 1:
+            raise NeutralError("%s: run lists %r twice" % (rel, pattern))
+        for token in pattern.split(" "):
+            if not run_token_ok(token):
+                raise NeutralError("%s: run pattern %r has a token outside the grammar: %r"
+                                   % (rel, pattern, token))
+    return patterns
+
+
+def run_token_ok(token):
+    """True for a literal of ``RUN_LITERAL_CHARS`` or ``{scratch}/<name>`` with one plain file name."""
+    if token.startswith(SCRATCH_PREFIX):
+        name = token[len(SCRATCH_PREFIX):]
+        return bool(name) and name[0] not in ".-" and set(name) <= RUN_NAME_CHARS
+    return bool(token) and set(token) <= RUN_LITERAL_CHARS
 
 
 def _model_ok(model):

@@ -313,3 +313,18 @@ acceptance criteria. Choices of mine in the text: the safe character set is lett
 spaces; a command is at most 1,000 characters; the scratch directory itself is not a writable path; the Claude scratch template
 is `/private/tmp/claude-{uid}/{cwd_key}/{session_id}/scratchpad`, taken from A's observation. `doccheck`, `refcheck` and
 `git diff --check` print nothing. The owner reads the spec; no code changed.
+
+**Increment C:** `neutral.read_items` reads `writes` and `run` (`Item.writes`, `Item.run`) under the grammar and limits of
+choice 1, and refuses the `agents` tool beside either. `layout.problems` accepts the agent kind's `hook`
+(`key`, `event`, `timeout`, `block_code`) and `scratch` together, and refuses one without the other, a hook without a tools
+table that grants `edit` and `shell`, and a scratch template that is not absolute, has fewer than two plain segments, has a
+placeholder first segment or lacks `{session_id}` exactly once. `harnessplan` skips a confined agent, overrides included: with the
+reason "no per-agent hook" where the layout lacks the entries, and "does not yet render the hook" where it has them. That second
+skip is deliberate and increment E replaces it, so no confined agent is ever written without its hook. The `claude` module
+declares `hook` (`hooks`, `PreToolUse`, 20, 2) and `scratch` (`/private/tmp/claude-{uid}/{cwd_key}/{session_id}/scratchpad`),
+pinned by its module test. Two existing tests changed: the layout constants test no longer expects `writes` and `run` as harness
+fields, and a `code-work` test that removes an agent's tools table now removes the hook and scratch with it. `release-approvals`
+was run on the owner's word, and three stale shipped records were removed after a preview and "remove them". The full suite is
+green: 3,991 tests in 9 roots. One earlier full run stopped making progress in the first root (no CPU for 21 minutes, a
+leftover child process, a wait on a condition variable); it was stopped, and the verbose run of that root and the next full run
+passed. The cause was not found and the hang was not reproduced.

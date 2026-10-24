@@ -147,6 +147,13 @@ def _unavailable(item, kinds, provides):
         return "this harness does not provide %s" % CAPABILITY[item.kind]
     if item.kind not in kinds:
         return "this harness has no %s" % item.kind
+    if item.kind == "agent" and (item.writes or item.run):
+        # Fail closed, as for an agent whose tools cannot be restricted: a limit nothing enforces is no limit.
+        if "hook" not in kinds["agent"] or "scratch" not in kinds["agent"]:
+            return ("it declares limits on what it writes and runs, and this harness has no per-agent hook "
+                    "and scratch directory to enforce them, so it is not installed")
+        return ("it declares limits on what it writes and runs, and this installer does not yet render the "
+                "hook that enforces them, so it is not installed")
     lacking = [need for need in item.needs if need not in provides]
     if lacking:
         return "needs %s, which this harness does not provide" % ", ".join(lacking)

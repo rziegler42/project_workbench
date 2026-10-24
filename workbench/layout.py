@@ -17,6 +17,9 @@ Keys, all optional (an absent key means ``none`` or empty):
     field, and must map ``name`` and ``description``. An agent may add ``tools``, which maps a
     neutral tool to a list of the harness tool names that grant it. A neutral field or tool the
     layout does not map cannot be expressed by this harness, and the translation fails closed.
+    An agent may also carry ``hook`` and ``scratch``, together, which describe a per-agent hook and the
+    session's scratch directory (``_confinement``). An agent that declares ``writes`` or ``run`` is
+    installed only where both are present.
 ``local_settings``
     ``"none"``, or ``{"path", "format": "json", "actions", "rules", "absolute"}``: the per-clone
     file, the dotted JSON key that holds the ``deny`` and the ``ask`` list, a rule template for
@@ -86,6 +89,9 @@ REQUIRED_RULE_TOOLS = ("shell", "write")
 RULE_NAMES = {"shell": ("Bash",), "read": ("Read",), "write": ("Edit",), "web": ("WebFetch",)}
 SETTINGS_KEYS = ("permissions",)
 AGENT_TOOLS_FIELD = "tools"
+MAX_SCRATCH_CHARS = 200
+SCRATCH_PLACEHOLDERS = ("uid", "cwd_key", "session_id")
+_SCRATCH_PART = re.compile(r"(?:[A-Za-z0-9._-]|\{(?:uid|cwd_key|session_id)\})+\Z")
 # The harness tool names that may grant each neutral tool, so a "read" agent cannot be given Bash.
 TOOL_NAMES = {"read": ("Read",), "search": ("Grep", "Glob"),
               "edit": ("Edit", "Write", "NotebookEdit", "MultiEdit"), "shell": ("Bash",),
@@ -262,7 +268,7 @@ def _kinds(kinds, out):
         if kind not in kinds:
             continue
         where = "layout.kinds.%s" % kind
-        allowed = ("path", "fields") + (("tools",) if kind == "agent" else ())
+        allowed = ("path", "fields") + (("tools", "hook", "scratch") if kind == "agent" else ())
         if not out.keys(kinds[kind], where, allowed, ("path", "fields")):
             continue
         entry = kinds[kind]
@@ -272,7 +278,54 @@ def _kinds(kinds, out):
         _fields(kind, entry["fields"], where + ".fields", out)
         if "tools" in entry:
             _tools(entry["tools"], where + ".tools", out)
+        if "hook" in entry or "scratch" in entry:
+            _confinement(entry, where, out)
     return written
+
+
+def _confinement(entry, where, out):
+    """The agent's per-agent ``hook`` (the front-matter key that holds hooks, the event, the timeout in
+    seconds and the exit code that blocks) and the ``scratch`` directory template. They come together,
+    and the hook needs a tool table that grants ``edit`` and ``shell`` to match."""
+    if "hook" not in entry or "scratch" not in entry:
+        out.add(where, "hook and scratch are given together")
+        return
+    hook = entry["hook"]
+    if out.keys(hook, where + ".hook", ("key", "event", "timeout", "block_code"),
+                ("key", "event", "timeout", "block_code")):
+        for key in ("key", "event"):
+            if not (isinstance(hook[key], str) and _WORD.match(hook[key])):
+                out.add(where + ".hook", "%s must be a plain word" % key)
+        mapped = entry["fields"].values() if isinstance(entry.get("fields"), dict) else ()
+        if hook["key"] == AGENT_TOOLS_FIELD or hook["key"] in mapped:
+            out.add(where + ".hook", "key is a field the layout already maps")
+        for key, high in (("timeout", MAX_HOOK_TIMEOUT), ("block_code", 255)):
+            value = hook[key]
+            if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= high:
+                out.add(where + ".hook", "%s must be a whole number from 1 to %d" % (key, high))
+    tools = entry.get("tools")
+    if not isinstance(tools, dict) or "edit" not in tools or "shell" not in tools:
+        out.add(where + ".hook", "needs a tools table that grants edit and shell, to know what to match")
+    _scratch(entry["scratch"], where + ".scratch", out)
+
+
+def _scratch(template, where, out):
+    """An absolute path whose first segment is literal, with ``{session_id}`` once and ``{uid}`` and
+    ``{cwd_key}`` at most once; every other character is a letter, digit, ``.``, ``_`` or ``-``."""
+    if not isinstance(template, str) or not template.startswith("/") or len(template) > MAX_SCRATCH_CHARS:
+        out.add(where, "must be an absolute path of at most %d characters" % MAX_SCRATCH_CHARS)
+        return
+    parts = template[1:].split("/")
+    if len(parts) < 2 or any(part in ("", ".", "..") or not _SCRATCH_PART.match(part) for part in parts) \
+            or "{" in parts[0]:
+        out.add(where, "must be at least two plain segments (letters, digits, . _ - and the placeholders "
+                       "{uid}, {cwd_key}, {session_id}), the first of them literal")
+        return
+    for name in SCRATCH_PLACEHOLDERS:
+        count = template.count("{%s}" % name)
+        if count > 1 or (name == "session_id" and count != 1):
+            out.add(where, "{%s} must appear %s" % (name, "exactly once" if name == "session_id"
+                                                    else "at most once"))
 
 
 def _kind_path(kind, path, where, out):

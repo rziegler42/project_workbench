@@ -34,7 +34,7 @@ class Accepted(unittest.TestCase):
         self.assertEqual(layout.RULE_TOOLS, neutral.RULE_TOOLS)
         for kind, fields in layout.KIND_FIELDS.items():
             self.assertEqual(set(fields), set(neutral.FIELDS[kind][0]) | (
-                set(neutral.FIELDS[kind][1]) - {"needs"}))
+                set(neutral.FIELDS[kind][1]) - {"needs"} - set(neutral.CONFINED_FIELDS)))
 
 
 # A made-up harness, so these tests name no real one.
@@ -534,3 +534,86 @@ class AgentAndSettingsTables(unittest.TestCase):
                                         ".fixture/commands/"]))
         self.bad(value, "local_settings.path")
         self.bad(value, "no exclude entry")
+
+
+HOOK = {"key": "hooks", "event": "PreToolUse", "timeout": 20, "block_code": 2}
+SCRATCH = "/private/tmp/fixture-{uid}/{cwd_key}/{session_id}/scratchpad"
+
+
+def confining(hook=HOOK, scratch=SCRATCH):
+    value = edit(["kinds", "agent", "hook"], hook)
+    return edit(["kinds", "agent", "scratch"], scratch, value)
+
+
+class ConfinementEntries(unittest.TestCase):
+    """The agent kind's per-agent ``hook`` and ``scratch`` entries."""
+
+    def bad(self, value, text=""):
+        found = layout.problems(value)
+        self.assertTrue(found, "accepted: %r" % (value,))
+        self.assertTrue(any(text in m for m in found), found)
+
+    def test_both_entries_are_accepted(self):
+        self.assertEqual(layout.problems(confining()), [])
+
+    def test_a_layout_without_them_is_accepted(self):
+        self.assertEqual(layout.problems(SYNTHETIC), [])
+
+    def test_one_without_the_other_is_refused(self):
+        self.bad(edit(["kinds", "agent", "hook"], HOOK), "together")
+        self.bad(edit(["kinds", "agent", "scratch"], SCRATCH), "together")
+
+    def test_only_an_agent_may_carry_them(self):
+        for kind in ("skill", "command"):
+            self.bad(edit(["kinds", kind, "hook"], HOOK, confining()), "unknown key 'hook'")
+            self.bad(edit(["kinds", kind, "scratch"], SCRATCH, confining()), "unknown key 'scratch'")
+
+    def test_the_hook_is_an_object_of_exactly_four_keys(self):
+        for hook in ("none", [], {}, {"key": "hooks"}, dict(HOOK, extra=1),
+                     {k: v for k, v in HOOK.items() if k != "block_code"}):
+            self.bad(confining(hook=hook), "layout.kinds.agent.hook")
+
+    def test_the_hook_values(self):
+        for key, value in (("key", ""), ("key", "ho oks"), ("key", "hooks.x"), ("key", 3),
+                           ("key", "tools"), ("key", "name"), ("event", "pre tool"), ("event", ""),
+                           ("event", 3), ("timeout", 0), ("timeout", 601), ("timeout", True),
+                           ("timeout", "20"), ("timeout", 1.5), ("block_code", 0),
+                           ("block_code", 256), ("block_code", False), ("block_code", "2")):
+            self.bad(confining(hook=dict(HOOK, **{key: value})), "layout.kinds.agent.hook")
+
+    def test_the_hook_bounds_are_accepted(self):
+        for timeout in (1, 600):
+            self.assertEqual(layout.problems(confining(hook=dict(HOOK, timeout=timeout))), [])
+        for code in (1, 255):
+            self.assertEqual(layout.problems(confining(hook=dict(HOOK, block_code=code))), [])
+
+    def test_the_hook_key_may_not_be_a_mapped_field(self):
+        self.bad(confining(hook=dict(HOOK, key="model")), "layout.kinds.agent.hook")
+        self.bad(confining(hook=dict(HOOK, key="description")), "layout.kinds.agent.hook")
+
+    def test_the_hook_needs_a_tool_table_that_grants_edit_and_shell(self):
+        for table in ({"read": ["Read"]}, {"edit": ["Edit"]}, {"shell": ["Bash"]}):
+            self.bad(edit(["kinds", "agent", "tools"], table, confining()), "edit and shell")
+
+    def test_the_scratch_template(self):
+        for scratch in ("", "relative/{session_id}", "/tmp/x", "/{session_id}", 3, [],
+                        "/tmp/{session_id}/", "/tmp//{session_id}", "/tmp/../{session_id}",
+                        "/tmp/./{session_id}", "/tmp/{session}", "/tmp/{uid}/{session_id}{x}",
+                        "/tmp/{session_id}/a b", "/tmp/{session_id}/a*", "/tmp/{session_id}/é",
+                        "/tmp/{session_id}\n", "/tmp/{session_id}/" + "a" * 200, "~/x/{session_id}",
+                        "/tmp/{SESSION_ID}", "/tmp/{session_id}/{session_id}",
+                        "/tmp/{cwd_key}/a", "/{uid}/{session_id}"):
+            self.bad(confining(scratch=scratch), "layout.kinds.agent.scratch")
+
+    def test_the_scratch_template_forms_that_are_accepted(self):
+        for scratch in ("/var/tmp/s-{session_id}", "/private/tmp/{uid}/{session_id}/scratchpad",
+                        "/tmp/fixture-{uid}/{cwd_key}/{session_id}"):
+            self.assertEqual(layout.problems(confining(scratch=scratch)), [], scratch)
+
+    def test_the_limits_are_never_a_harness_field(self):
+        for field in neutral.CONFINED_FIELDS:
+            fields = dict(SYNTHETIC["kinds"]["agent"]["fields"], **{field: field})
+            self.bad(edit(["kinds", "agent", "fields"], fields, confining()), "not a neutral agent field")
+
+    def test_the_agent_entry_does_not_change_the_facts(self):
+        self.assertEqual(layout.facts(confining()), layout.facts(SYNTHETIC))

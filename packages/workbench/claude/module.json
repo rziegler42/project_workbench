@@ -13,7 +13,9 @@
                 "fields": {"name": "name", "description": "description", "tools": "tools",
                            "model": "model"},
                 "tools": {"read": ["Read"], "search": ["Grep", "Glob"],
-                          "edit": ["Edit", "Write"], "shell": ["Bash"]}},
+                          "edit": ["Edit", "Write"], "shell": ["Bash"]},
+                "hook": {"key": "hooks", "event": "PreToolUse", "timeout": 20, "block_code": 2},
+                "scratch": "/private/tmp/claude-{uid}/{cwd_key}/{session_id}/scratchpad"},
       "command": {"path": ".claude/commands/{name}.md",
                   "fields": {"name": "name", "description": "description",
                              "args": "argument-hint"}}

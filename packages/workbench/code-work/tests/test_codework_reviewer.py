@@ -67,7 +67,8 @@ class Agent(unittest.TestCase):
 
     def test_a_layout_that_cannot_restrict_an_agent_skips_it_with_a_report_and_keeps_the_skills(self):
         layout = json.loads(json.dumps(claude()))
-        del layout["layout"]["kinds"]["agent"]["tools"]
+        for key in ("tools", "hook", "scratch"):  # the hook needs the table, so it goes too
+            layout["layout"]["kinds"]["agent"].pop(key, None)
         planned = harnessplan.translate(neutral.read_items(neutral_tree()), layout["layout"], {}, {},
                                         provides=layout["provides"])
         self.assertEqual([("skipped", "agent/reviewer")], [(r.level, r.item) for r in planned.reports])
