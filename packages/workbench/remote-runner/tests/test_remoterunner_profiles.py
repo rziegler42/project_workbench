@@ -63,7 +63,8 @@ class Declaration(unittest.TestCase):
         document = declaration()
         self.assertEqual(sorted(HELPERS), sorted(document["ships"]))
         self.assertEqual({"remote-runner": {"helper": "helper/remote-runner", "runtime": "python", "kit": 1,
-                                            "arguments": ["profiles"]}}, document["commands"])
+                                            "arguments": ["profiles", "recommend", "status", "artifacts",
+                                                          "submit"]}}, document["commands"])
         self.assertEqual([{"helper": "helper/remote-runner-check", "kit": 1}], document["checks"])
 
     def test_every_file_is_the_declaration_or_a_helper(self):
@@ -79,13 +80,17 @@ class Declaration(unittest.TestCase):
         with open(os.path.join(PACKAGE, "package.json"), encoding="utf-8") as handle:
             self.assertIn("remote-runner", json.load(handle)["modules"])
 
-    def test_the_helpers_import_the_standard_library_and_the_kit_and_no_program_runner(self):
+    def test_the_helpers_import_the_standard_library_and_the_kit_and_no_network(self):
         allowed = set(sys.stdlib_module_names) | {"wbkit"}
         for helper in HELPERS:
             found = imports(os.path.join(MODULE, helper))
             self.assertLessEqual(found, allowed, helper)
             self.assertIn("tomllib", found, helper)
-            self.assertFalse(found & {"subprocess", "socket", "urllib", "http", "ctypes"}, helper)
+            self.assertFalse(found & {"socket", "urllib", "http", "ctypes", "shutil", "tempfile"}, helper)
+
+    def test_only_the_command_helper_can_start_a_program(self):
+        self.assertIn("subprocess", imports(os.path.join(MODULE, HELPERS[0])))
+        self.assertNotIn("subprocess", imports(os.path.join(MODULE, HELPERS[1])))
 
     def test_the_two_helpers_carry_the_same_rules_for_the_project_file(self):
         self.assertEqual(region(os.path.join(MODULE, HELPERS[0])), region(os.path.join(MODULE, HELPERS[1])))
@@ -268,12 +273,12 @@ class Command(support_remote.Project):
 
     def test_any_other_argument_list_is_refused(self):
         self.write(FILE, VALID)
-        for args in ((), ("profiles", "x"), ("profiles", "--all"), ("recommend",), ("status", "j"),
-                     ("PROFILES",), ("",)):
+        for args in ((), ("profiles", "x"), ("profiles", "--all"), ("log", "j"), ("cancel",), ("remotes",),
+                     ("prune",), ("PROFILES",), ("",)):
             with self.subTest(args):
                 code, out, err = self.run_it(*args)
                 self.assertEqual((1, ""), (code, out))
-                self.assertTrue(err.startswith("refused: usage: remote-runner profiles"), err)
+                self.assertTrue(err.startswith("refused: usage: remote-runner "), err)
 
     def test_a_program_of_the_same_name_on_the_path_is_never_started(self):
         outside = os.path.join(self.base, "outside")

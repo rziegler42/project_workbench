@@ -197,7 +197,7 @@ class Installed(support_install.InstallBase):
         code, shown, err = self.run_profiles(place, "profiles")
         self.assertEqual((0, ""), (code, err), shown)
         self.assertEqual(["fast", "full"], [p["name"] for p in json.loads(shown)["profiles"]])
-        code, shown, err = self.run_profiles(place, "submit")
+        code, shown, err = self.run_profiles(place, "log")
         self.assertEqual(1, code)
         self.assertIn("is not an argument of the command", err)
 

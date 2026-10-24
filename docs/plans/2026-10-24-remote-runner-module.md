@@ -387,3 +387,33 @@ minimum Python is now 3.11 in `docs/development.md`, which is its only statement
   spec's "at most 64" reads (a runner never matches an empty value, so it fails closed); a reason names a profile
   only after its name has passed the pattern.
 - Not done: no program is run by either helper; the spec text is unchanged (the "As built" edits are increment F).
+
+Increment C, 2026-10-24: `helper/remote-runner` now has the guarded runner and the commands `recommend`, `status`,
+`artifacts` and `submit`; `module.json` lists them as `arguments`. Tests: `support_program.py` (a fake
+`remote-runner` that records its argument vector, environment, working directory, process id and whether standard
+input is the null device) and `test_remoterunner_run.py`. `docs/development.md` has a row for the four commands.
+
+- Verification as run: the module tests (69) pass; `tests.test_boundary` and `tests.test_skill_names` (27) pass. The
+  `doccheck`, `refcheck` and `git diff --check` print nothing. The full suite was not run (approvals stale until F). No real `remote-runner` was started and no host contacted.
+- Test order: I wrote the tests and the helper before the first run, so the plan's "see them fail" step did not
+  happen for this increment. As a check I changed the environment allow list to pass `PYTHONPATH` and the
+  environment test failed on it; I reverted that.
+- What the tests show: each command passes exactly its row (nine accepted shapes across the four commands); 41
+  refused shapes start nothing and leave the tree unchanged; a missing or invalid project file refuses only
+  `recommend` and `submit`; the program runs in the project root with no standard input; the environment is the allow
+  list (no `GIT_*`, `LD_*`, `DYLD_*`, `PYTHON*` or token) and `PATH` is the trusted entries only; a program in the
+  project, on a relative, empty or `.` entry, behind a link into the project, or in a trusted entry that is itself a
+  link into the project is never run; output over 65,536 bytes is cut and marked, output over 1 MiB stops the program;
+  a hanging program and its child are gone at the deadline and on SIGTERM to the helper; instruction-like text and
+  control characters come back only as cleaned text; `status` returns only the listed fields, drops a bad one, and sets
+  `provenance` in each case.
+- Departures from the spec's wording, to be written into it in increment F (mine; the owner may change any):
+  1. A program stopped at its deadline or for too much output is reported with `exit` 124 or 125 and a `detail`
+     (the spec has only "exit: int"); the helper exits 1 in those cases, and in any case where the program's exit is
+     not 0.
+  2. `provenance` is `false` when the program's exit is not 0, even if it printed a matching view.
+  3. A ref is also refused if it holds `/.` or a character git forbids in a ref (`~ ^ : ? * [ \`, by allowing only
+     `A-Za-z0-9 . _ / + @ -`); the spec lists only the other rules.
+  4. `provenance` does not require `integrity` to be `ok`, as the spec reads. Whether it should is left to the owner
+     (a record the job rewrote can pass either way).
+- Not done: `fetch` and `fetch-overwrite` (increment D); a security review of the runner (only if the owner asks).

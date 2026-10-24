@@ -13,7 +13,11 @@
       "runtime": "python",
       "kit": 1,
       "arguments": [
-        "profiles"
+        "profiles",
+        "recommend",
+        "status",
+        "artifacts",
+        "submit"
       ]
     }
   },

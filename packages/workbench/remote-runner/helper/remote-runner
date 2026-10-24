@@ -1,21 +1,30 @@
 #!/usr/bin/env python3
-"""``remote-runner``: a project's remote job profiles, read from ``.workbench/remote-runner.toml``.
+"""``remote-runner``: a project's remote job profiles, and a guarded way to use the ``remote-runner`` program.
 
 It is one file that imports the standard library and the workbench kit (``wbkit``); the launcher runs a pinned
-copy of it as ``wb run remote-runner <command>`` (``docs/specs/remote-runner.md``). This increment has one
-command, ``profiles``: it reads the project file without following a link, checks every rule of the spec and
-prints the declared profiles as one JSON line. It starts no program and writes nothing.
+copy of it as ``wb run remote-runner <command>`` (``docs/specs/remote-runner.md``). ``profiles`` reads
+``.workbench/remote-runner.toml`` without following a link and prints the declared profiles. ``recommend``,
+``status``, ``artifacts`` and ``submit`` check every argument first and then start the program, and only the
+program, in the one argument shape the spec lists: found only in an absolute ``PATH`` entry outside the
+project, with an environment of its own, from the project root, with no standard input, bounded output, a
+deadline and a process group that is killed. Its output is returned bounded, cleaned and marked untrusted.
 
-A refusal is one ``refused: <reason>`` line on standard error and exit 1. A reason names the rule and repeats
-nothing of the file. The rules for the project file are fenced below because ``remote-runner-check`` carries
-the same text (a helper is a standalone file); a test shows the two are equal.
+A refusal is one ``refused: <reason>`` line on standard error and exit 1, and nothing is started. A reason
+names the rule and repeats nothing of the project file. The rules for the project file are fenced below
+because ``remote-runner-check`` carries the same text (a helper is a standalone file); a test shows the two
+are equal.
 """
 
 import json
 import os
 import re
+import selectors
+import signal
+import subprocess
 import sys
+import time
 import tomllib
+import unicodedata
 
 from wbkit import display, project, safefs
 
@@ -116,24 +125,56 @@ def parse_project_file(data):
 
 # --- end of the project file ---
 
-USAGE = "usage: remote-runner profiles"
+PROGRAM = "remote-runner"
+DEADLINE_SLOW = 600   # seconds for submit
+DEADLINE_FAST = 120   # seconds for every other command
+MAX_OUTPUT = 1048576  # bytes read from the program before it is stopped
+MAX_SHOWN = 65536     # bytes of output returned
+MAX_DETAIL = 200
+STOPPED_SLOW = 124    # exit status reported when the program was stopped at its deadline
+STOPPED_BIG = 125     # exit status reported when the program was stopped for too much output
+KEPT = ("HOME", "USER", "LOGNAME", "LANG", "TERM", "TMPDIR", "SSH_AUTH_SOCK")
+JOB = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,199}")
+HEX = re.compile(r"[0-9a-f]{40}")
+REF = re.compile(r"[A-Za-z0-9._/+@-]{1,200}")
+STATES = ("STARTING", "RUNNING", "PASSED", "FAILED", "CANCELLED", "FINISHED", "UNKNOWN_EXIT", "UNKNOWN")
+INTEGRITY = ("ok", "mismatch", "invalid")
+USAGE = {
+    "profiles": "usage: remote-runner profiles",
+    "recommend": "usage: remote-runner recommend --profile <name>",
+    "status": "usage: remote-runner status <job> [--expect <40 hex>]",
+    "artifacts": "usage: remote-runner artifacts <job>",
+    "submit": "usage: remote-runner submit (--remote <name> | --best) --profile <name> "
+              "[--ref <ref> | --snapshot]",
+}
 
 
 class Refused(Exception):
-    """Nothing was done; the message is the reason."""
+    """Nothing was started; the message is the reason."""
 
 
 def shown(text, limit=160):
     return display.ascii_text(str(text))[:limit]
 
 
-def command_profiles(argv, cwd, out, err):
-    if argv:
-        raise Refused(USAGE)
+def plain(text):
+    """`text` without control, format and separator characters, except the newline and the tab."""
+    return "".join(char for char in text if char in "\n\t" or (unicodedata.category(char)[0] != "C"
+                                                              and unicodedata.category(char) not in ("Zl", "Zp")))
+
+
+# --- finding the project and its profiles ---
+
+
+def find_root(cwd):
     try:
-        root = project.find_root(cwd)
+        return project.find_root(cwd)
     except project.ProjectError as exc:
         raise Refused(shown(exc))
+
+
+def read_profiles(root):
+    """The validated project file at `root`, or `Refused`."""
     try:
         with safefs.Root(root, "project root") as held:
             data = held.read_if_present(PATH, MAX_FILE)
@@ -142,22 +183,309 @@ def command_profiles(argv, cwd, out, err):
     if data is None:
         raise Refused("no project file (%s)" % PATH)
     try:
-        found = parse_project_file(data)
+        return parse_project_file(data)
     except ProjectFileError as exc:
         raise Refused("%s: %s" % (PATH, exc))
+
+
+def command_profiles(argv, root, out):
+    if argv:
+        raise Refused(USAGE["profiles"])
+    found = read_profiles(root)
     out.write(json.dumps({"format": 1, "project": found["project"], "profiles": found["profiles"]}) + "\n")
     return 0
 
 
-COMMANDS = {"profiles": command_profiles}
+# --- arguments ---
+
+
+def split_arguments(args, values, flags):
+    """``(words, options)``: the words that are not options, and ``{option: value or True}``. An option is
+    accepted at most once and a value is the next argument; anything else that starts with a dash is refused."""
+    words, found, place = [], {}, 0
+    while place < len(args):
+        item = args[place]
+        if item in values or item in flags:
+            if item in found:
+                raise Refused("%s is given more than once" % item)
+            if item in flags:
+                found[item] = True
+                place += 1
+                continue
+            if place + 1 >= len(args):
+                raise Refused("%s needs a value" % item)
+            found[item] = args[place + 1]
+            place += 2
+        elif item.startswith("-"):
+            raise Refused("%s is not an option of this command" % shown(item, 40))
+        else:
+            words.append(item)
+            place += 1
+    return words, found
+
+
+def need_name(value, what):
+    if not NAME.fullmatch(value):
+        raise Refused("%s is not letters, digits, _ and - (at most 64)" % what)
+    return value
+
+
+def need_profile(root, value):
+    need_name(value, "the profile")
+    if value not in [each["name"] for each in read_profiles(root)["profiles"]]:
+        raise Refused("the profile %s is not declared in %s" % (value, PATH))
+    return value
+
+
+def need_job(value):
+    if not JOB.fullmatch(value) or "--" not in value:
+        raise Refused("the job is not of the program's form (letters, digits, _ and -, holding --, "
+                      "at most 200 characters)")
+    return value
+
+
+def need_ref(value):
+    """A 40-digit commit or a plain ref name: ASCII without a leading dash or dot, a trailing dot or slash,
+    `..`, `//`, `@{`, `/.`, `.lock`, a space, a control character or one git forbids in a ref."""
+    if HEX.fullmatch(value):
+        return value
+    if not REF.fullmatch(value) or value[0] in "-." or value[-1] in "./" or any(
+            bad in value for bad in ("..", "//", "@{", "/.", ".lock")):
+        raise Refused("the ref is not a plain branch name, tag name or 40-digit commit")
+    return value
+
+
+def build_recommend(args, root):
+    words, found = split_arguments(args, ("--profile",), ())
+    if words or "--profile" not in found:
+        raise Refused(USAGE["recommend"])
+    return ["recommend", "--profile", need_profile(root, found["--profile"])], {}
+
+
+def build_status(args, root):
+    words, found = split_arguments(args, ("--expect",), ())
+    if len(words) != 1:
+        raise Refused(USAGE["status"])
+    expect = found.get("--expect")
+    if expect is not None and not HEX.fullmatch(expect):
+        raise Refused("--expect is not 40 lowercase hex digits")
+    return ["status", need_job(words[0])], {"expect": expect}
+
+
+def build_artifacts(args, root):
+    words, found = split_arguments(args, (), ())
+    if len(words) != 1:
+        raise Refused(USAGE["artifacts"])
+    return ["artifacts", need_job(words[0])], {}
+
+
+def build_submit(args, root):
+    words, found = split_arguments(args, ("--remote", "--profile", "--ref"), ("--best", "--snapshot"))
+    if words or "--profile" not in found or ("--remote" in found) == ("--best" in found) \
+            or ("--ref" in found and "--snapshot" in found):
+        raise Refused(USAGE["submit"])
+    tail = ["submit"]
+    tail += ["--remote", need_name(found["--remote"], "the remote")] if "--remote" in found else ["--best"]
+    tail += ["--profile", need_profile(root, found["--profile"])]
+    if "--ref" in found:
+        tail += ["--ref", need_ref(found["--ref"])]
+    if "--snapshot" in found:
+        tail += ["--snapshot"]
+    return tail, {}
+
+
+# --- running the program ---
+
+
+def is_inside(path, boundary):
+    """True when `path` is `boundary` or below it, whatever links and case spellings lead there."""
+    try:
+        current = os.path.realpath(path)
+        while True:
+            if os.path.samefile(current, boundary):
+                return True
+            parent = os.path.dirname(current)
+            if parent == current:
+                return False
+            current = parent
+    except OSError:
+        return False
+
+
+def outermost_boundary(start):
+    """The outermost ancestor of `start` that holds a `.git` entry. A PATH entry is trusted only when it is
+    outside this one, so a repository embedded in another cannot make the outer one look outside."""
+    current = os.path.realpath(start)
+    found = None
+    while True:
+        if os.path.lexists(os.path.join(current, ".git")):
+            found = current
+        parent = os.path.dirname(current)
+        if parent == current:
+            return found or os.path.realpath(start)
+        current = parent
+
+
+def trusted_entries(boundary):
+    """The PATH entries that are absolute and outside the repository: never "", "." or a relative one."""
+    return [entry for entry in os.environ.get("PATH", "").split(os.pathsep)
+            if entry and os.path.isabs(entry) and not is_inside(entry, boundary)]
+
+
+def trusted_which(name, entries, boundary):
+    """The first executable file `name` in a trusted entry that does not resolve into the repository."""
+    for entry in entries:
+        candidate = os.path.join(entry, name)
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK) \
+                and not is_inside(candidate, boundary):
+            return candidate
+    return None
+
+
+def environment(entries):
+    """What the program sees: a short list of the caller's variables, its ``LC_*`` variables and the trusted
+    PATH. `SSH_AUTH_SOCK` is there because the program reaches its runners over SSH. Nothing else is passed."""
+    env = {name: os.environ[name] for name in KEPT if name in os.environ}
+    env.update({name: value for name, value in os.environ.items() if name.startswith("LC_")})
+    env["PATH"] = os.pathsep.join(entries)
+    return env
+
+
+def kill(process):
+    """Stop the program and anything it started in its own process group."""
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+    try:
+        process.kill()
+    except ProcessLookupError:
+        pass
+
+
+def _terminated(number, frame):
+    raise SystemExit(128 + number)
+
+
+def run_program(argv, cwd, env, timeout):
+    """Run `argv`; return ``(code, stdout, stderr, over, timed_out)``. Each stream is read to `MAX_OUTPUT` bytes
+    and the program is stopped when one passes it, and at `timeout` seconds; the whole process group is killed
+    in either case, and on SIGTERM or an interrupt of the helper. The program gets no standard input."""
+    process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               cwd=cwd, env=env, start_new_session=True)
+    previous = signal.signal(signal.SIGTERM, _terminated)
+    out, err = bytearray(), bytearray()
+    over = timed_out = False
+    try:
+        with selectors.DefaultSelector() as pipes:
+            pipes.register(process.stdout, selectors.EVENT_READ, out)
+            pipes.register(process.stderr, selectors.EVENT_READ, err)
+            deadline = time.monotonic() + timeout
+            while (process.stdout in pipes.get_map() or process.stderr in pipes.get_map()) and not over:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    timed_out = True
+                    break
+                for key, _ in pipes.select(min(left, 0.2)):
+                    chunk = os.read(key.fileobj.fileno(), 65536)
+                    if not chunk:
+                        pipes.unregister(key.fileobj)
+                    else:
+                        key.data.extend(chunk)
+                        over = over or len(key.data) > MAX_OUTPUT
+        if not timed_out and not over:
+            try:
+                process.wait(timeout=max(0.0, deadline - time.monotonic()))
+            except subprocess.TimeoutExpired:
+                timed_out = True
+        kill(process)  # also what a program that has exited left running in its group
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            kill(process)
+            process.wait()
+        return process.returncode, bytes(out[:MAX_OUTPUT]), bytes(err[:MAX_OUTPUT]), over, timed_out
+    finally:
+        if process.poll() is None:  # an interrupt or SIGTERM: the program is in its own session, so it would run on
+            kill(process)
+            process.wait()
+        signal.signal(signal.SIGTERM, previous)
+        for pipe in (process.stdout, process.stderr):
+            try:
+                pipe.close()
+            except (OSError, ValueError):
+                pass
+
+
+def detail_of(stderr):
+    """The last non-empty line of the program's standard error, as printable ASCII of at most 200 characters."""
+    for line in reversed(stderr.decode("utf-8", "replace").splitlines()):
+        text = "".join(char for char in line if " " <= char <= "~").strip()
+        if text:
+            return text[:MAX_DETAIL]
+    return ""
+
+
+def job_data(raw):
+    """The fields of the program's status view that match their pattern, and nothing else."""
+    try:
+        view = json.loads(raw.decode("utf-8"))
+    except (ValueError, RecursionError):
+        return {}
+    if not isinstance(view, dict):
+        return {}
+    commit = lambda v: v is None or (isinstance(v, str) and HEX.fullmatch(v) is not None)
+    rules = {"state": lambda v: isinstance(v, str) and v in STATES, "commit": commit, "dut_commit": commit,
+             "dut_clean": lambda v: v is None or isinstance(v, bool),
+             "integrity": lambda v: isinstance(v, str) and v in INTEGRITY,
+             "snapshot": lambda v: isinstance(v, bool), "base_commit": commit}
+    return {key: view[key] for key, ok in rules.items() if key in view and ok(view[key])}
+
+
+def run_wrapped(name, tail, extra, root, out):
+    boundary = outermost_boundary(root)
+    entries = trusted_entries(boundary)
+    program = trusted_which(PROGRAM, entries, boundary)
+    if program is None:
+        raise Refused("program_not_found: no remote-runner program in an absolute PATH entry outside the project")
+    seconds = DEADLINE_SLOW if name == "submit" else DEADLINE_FAST
+    code, stdout, stderr, over, timed_out = run_program([program] + tail, root, environment(entries), seconds)
+    detail = detail_of(stderr)
+    if timed_out:
+        code, detail = STOPPED_SLOW, "stopped after %d seconds" % seconds
+    elif over:
+        code, detail = STOPPED_BIG, "stopped: output over %d bytes" % MAX_OUTPUT
+    document = {"format": 1, "command": name, "exit": code, "untrusted_job_data": True,
+                "output": plain(stdout[:MAX_SHOWN].decode("utf-8", "replace")),
+                "truncated": over or len(stdout) > MAX_SHOWN}
+    if code != 0:
+        document["detail"] = detail
+    if name == "status":
+        data = job_data(stdout)
+        expect = extra["expect"]
+        document["data"] = data
+        document["provenance"] = None if expect is None else (
+            code == 0 and data.get("commit") == expect and data.get("dut_commit") == expect
+            and data.get("dut_clean") is True)
+    out.write(json.dumps(document) + "\n")
+    return 0 if code == 0 else 1
+
+
+BUILDERS = {"recommend": build_recommend, "status": build_status, "artifacts": build_artifacts,
+            "submit": build_submit}
 
 
 def main(argv, out, err, cwd):
-    """Run one command from `cwd`. Returns the exit code."""
+    """Run one command from `cwd`. Returns the exit code: 0 when it succeeded, 1 on a refusal, a failed program
+    or a program that was stopped."""
     try:
-        if not argv or argv[0] not in COMMANDS:
-            raise Refused(USAGE)
-        return COMMANDS[argv[0]](argv[1:], cwd, out, err)
+        if not argv or (argv[0] != "profiles" and argv[0] not in BUILDERS):
+            raise Refused("usage: remote-runner %s, with their options" % "|".join(["profiles"] + sorted(BUILDERS)))
+        root = find_root(cwd)
+        if argv[0] == "profiles":
+            return command_profiles(argv[1:], root, out)
+        tail, extra = BUILDERS[argv[0]](argv[1:], root)
+        return run_wrapped(argv[0], tail, extra, root, out)
     except Refused as exc:
         err.write("refused: %s\n" % exc)
         return 1
