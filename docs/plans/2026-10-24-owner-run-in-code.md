@@ -1,6 +1,6 @@
 # Owner-run arguments enforced in code
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-24
 Candidate: none (closes a gap recorded in the remote-runner plan's Deferred work and in finding 1 of its 2026-10-24 security review; no roadmap candidate names it)
 Specs: trust-and-approval, module-boundary, remote-runner, installer-interface
@@ -234,7 +234,7 @@ not prove a boundary; each refusal has a test that failed first.
 
 Round 1 of 3, 2026-10-24, `ask-codex review-plan`, model `gpt-5.6-luna`, effort medium (asked for by the owner).
 Outcome: converged with no findings. The reviewer found the plan consistent with the current implementation, specs, tests
-and repository instructions. No decision to record. Further rounds only on the owner's word.
+and repository instructions. No decision to record. Closed with `ask-codex archive` at 2026-10-24T13:57:24Z after 1 of 3 rounds, 0 decisions applied or rejected, on the owner's word. The fixes of increment D were not reviewed by it.
 
 Security review, 2026-10-24 (asked for by the owner): a `security-reviewer` subagent tried six areas on a scratch copy of
 `832d2a4`. No Critical or High finding. 1 Medium: a re-pin by the owner leaves a pin without a declaration, and
@@ -328,3 +328,11 @@ Increment D, 2026-10-24: the three fixes from the security review. Finding 4 is 
   nothing. No module file changed, so no approval is stale.
 - Not done: the fixes have had no independent review (the reviewer saw `832d2a4`, not these changes); no re-run of the
   owner's two trials, which the change does not affect.
+
+Completion, 2026-10-24: all six completion criteria are met. `wb run` and `wb launch` refuse an owner-run argument of a
+declared command unless standard input and output are both terminals; `wb launch` binds an installer pin to the declaration
+the owner confirmed, and applies the project's declaration to a pin the owner typed; the specs state the rule and its two
+residuals; the full suite passes (3,811 tests in 8 roots). The security review of 2026-10-24 found no Critical or High issue and
+its findings are fixed or recorded. The owner's two trials are recorded under increment C. This plan closes finding 1 of the
+`2026-10-24-remote-runner-module` security review. Open after it: an independent review of the increment D fixes, a real
+trial of `env wb` and `bash -c`, the weaker trust of a typed pin (choice in increment D), and the push.
