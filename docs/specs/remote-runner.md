@@ -179,13 +179,14 @@ passes `--force`, and `fetch-overwrite` is listed under `owner`, which a harness
 to the agent (`module-boundary.md`, "Declaration schema"). The owner can run it. A harness without `permissions`
 leaves the rule to instruction, as it does for every hard stop.
 
-The rendered deny rules match the text of `wb run`, in its usual spellings. They do not match `wb launch <id>
-remote-runner --root <root> -- fetch-overwrite ...` (the installer's `launch` is agent-safe and checks the pin and the
-helper's hash, not the declared `arguments` or `owner`), a path-qualified `wb`, `env wb ...`, `bash -c ...`, or running
-the pinned helper file directly. On those routes the rule rests on instruction and on the agent not being hostile,
-which is the limit the trust specification states for every pin and deny rule. An installer change that makes `launch`
-refuse a command's `owner` arguments is deferred (plan `2026-10-24-remote-runner-module`, security review, finding 1;
-it would also close the same gap for `review-engine`).
+The rendered deny rules match the text of `wb run`, in its usual spellings. The installer also refuses an owner
+argument in its own code, whatever the spelling: `wb run` and `wb launch` run `fetch-overwrite` only when standard input
+and output are both terminals, and `wb launch` of an installer-made pin first requires the declaration at `--root` to be
+the one the owner confirmed (plan `2026-10-24-owner-run-in-code`, which closed finding 1 of the security review of
+plan `2026-10-24-remote-runner-module`). That covers `wb launch`, a path-qualified `wb`, `env wb ...` and `bash -c ...`.
+It does not cover running the pinned helper file directly, or a process that opens its own pseudo-terminal; on those
+routes the rule rests on instruction and on the agent not being hostile, which is the limit the trust specification
+states for every pin and deny rule.
 
 ## The checkpoints
 

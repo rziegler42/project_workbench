@@ -41,7 +41,7 @@ ambiguous blank.
 | Owner-run: upgrade a project (terminal only) | `python3 -m workbench upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
 | Preview adding a module (read-only) | `python3 -m workbench preview add [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Owner-run: add a module (terminal only) | `python3 -m workbench add [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
-| Run a pinned helper | `python3 -m workbench launch <project-id> <name> --root <project-dir> -- <args>` |
+| Run a pinned helper | `python3 -m workbench launch <project-id> <name> --root <project-dir> -- <args>` (an owner-run argument of a declared command, here and in `run`, is refused unless standard input and output are both terminals) |
 | Run a module command | `python3 -m workbench run [--provides <capability>] <command> [<argument> ...]` from anywhere in the project (agent-safe; the command must be installed and pinned; with `--provides` its module must provide the capability; the arguments after the first reach the helper unchanged) |
 | Check, list or report the plans | `python3 -m workbench run code-work check\|plans\|report` (the `code-work` module's command; the installer pinned the helper when the install was confirmed) |
 | Commit exact paths (local) | `python3 -m workbench run safe-git commit --expected-head <full hash or none> --subject <text> [--body <text>] [--trailer 'Key: value'] [--leave-other-staged] -- <path> ...` (the `safe-git` module's command; needs git; see "The safe-git helper") |

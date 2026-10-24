@@ -1,6 +1,6 @@
 # Owner-run arguments enforced in code
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-24
 Candidate: none (closes a gap recorded in the remote-runner plan's Deferred work and in finding 1 of its 2026-10-24 security review; no roadmap candidate names it)
 Specs: trust-and-approval, module-boundary, remote-runner, installer-interface
@@ -235,3 +235,26 @@ declaration at `--root` to be the one the owner confirmed.
   declared at the root is now refused by `wb launch`, where before it ran if the hash matched. The plan says the
   declaration must match; this is the same rule with nothing to match.
 - Not done: the specs, the full suite and the approvals (C); no review or security pass.
+
+Increment C, 2026-10-24: the specs and notes state the rule; the full suite passes; no approval is stale.
+
+- Step 1: no test in `review-engine` or `remote-runner` reaches an owner argument through `commands.run` or `wb launch`
+  (a search for `"run"` and `"launch"` in both test trees finds nothing, and both module suites passed unchanged after A
+  and B). No module file was edited, so no shipped approval went stale and step 4 (`release-approvals`, removal of stale
+  records) was not needed.
+- Spec edits: `trust-and-approval.md` (the rendered-rules paragraph and the fetch row's note), `module-boundary.md`
+  (the `owner` field), `installer-interface.md` (`launch`), `remote-runner.md` ("The overwrite": the unmatched routes are
+  now covered except the helper file run directly and a process with its own pseudo-terminal), `docs/development.md`
+  (the launch row). `doccheck`, `refcheck` and `git diff --check` print nothing.
+- Full suite as run: 3,803 tests in 8 roots, OK (3,787 before; the 16 new tests are the difference), with the same
+  3 skips as before (root 1, `code-work` 2).
+- Step 5, the owner's two trials, run in a scratch project installed with `remote-runner` and `claude` (choice 2):
+  from a terminal window, `wb run remote-runner fetch-overwrite nojob nofile` passed the terminal test and was refused by
+  the helper for the form of the job name (`nojob` holds no `--`); the control `wb run remote-runner profiles` was
+  refused only for the missing project file. From the agent prompt with `!`, the same line printed `refused:
+  fetch-overwrite of the command remote-runner is the owner's; run it yourself, from your own terminal`. So the `!`
+  route has no terminal on both ends and is refused as `approve` is: the owner runs these arguments from a terminal
+  window. `wb` was not on `PATH`; the owner used the launcher's full path (`~/.config/project-workbench/bin/wb`).
+- Not done: no real-process trial of `env`, a path-qualified `wb` or `bash -c` (the `!` trial used the full path of
+  `wb`, a path-qualified spelling, which the deny rules do not match and the code check refused). No review or
+  security pass.

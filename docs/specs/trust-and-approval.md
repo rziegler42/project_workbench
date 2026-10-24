@@ -225,7 +225,12 @@ Rules:
   `wb run <command> <argument>` bare, with more arguments and through `--provides`, in the same five spellings
   (`rules.command_owner_patterns`). They are restrictive only, they depend on the modules installed when the
   harness was attached (a module added later needs `wb attach` again), and they are the same best-effort match
-  as the rest. A harness that provides no `permissions` enforces them by instruction only. *(Rendered by the Claude harness module, built by
+  as the rest. `wb run` and `wb launch` also refuse such an argument in their own code unless standard input and
+  output are both terminals, whatever the spelling of the command; for a pin the installer made, `wb launch` first
+  requires the declaration at its root to be the one the owner confirmed, so a copy that drops the list is refused.
+  That test is a mistake guard like `approve`'s: a process that opens its own pseudo-terminal passes it, and the
+  pinned helper file run directly is not a workbench route. A harness that provides no `permissions` still has the
+  code check, and the rest is instruction. *(Rendered by the Claude harness module, built by
   `claude-harness`; the opencode module is `opencode-harness`.)* The deny is best effort: it
   matches the command text the agent submits, not what a wrapper script runs. With the edit gate's hook the
   rendered rules also deny edits to the local settings file and `.git/info/exclude`, by relative and by absolute
@@ -710,11 +715,11 @@ arrival is hashed and carries provenance. The channels are:
   delegated. Overwriting an existing or tracked file with fetched content, for example
   with a force option, is a hard stop. The `remote-runner` module's `fetch` passes no force option and refuses an
   existing target or a link before it starts the program; the overwrite is its separate argument `fetch-overwrite`,
-  declared `owner`, which a harness with `permissions` denies the agent (`remote-runner.md`, "The overwrite"). A module
-  cannot yet declare an added hard stop, so this is kept by reach, and a harness without `permissions` leaves it to
-  instruction. The rendered deny rules match `wb run` only; `wb launch`, a path-qualified `wb`, `env wb`, `bash -c`
-  and the pinned helper file run directly reach the same argument unmatched, so on those routes it is instruction
-  (`remote-runner.md`, "The overwrite").
+  declared `owner`, which a harness with `permissions` denies the agent and which `wb run` and `wb launch` run only from
+  a terminal (`remote-runner.md`, "The overwrite"). A module cannot yet declare an added hard stop, so this is kept by
+  reach. The rendered deny rules match `wb run` only, but the code check covers `wb launch`, a path-qualified `wb`,
+  `env wb` and `bash -c`; the pinned helper file run directly, and a process with its own pseudo-terminal, are not
+  covered, and on those routes it is instruction.
 - A tracked document that relies on a knowledge-base entry cites it by store, entry and
   content hash, plus the store's version, and never by a path on any machine. The
   project records only the store's name; each developer maps that name to their own
