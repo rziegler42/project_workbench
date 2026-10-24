@@ -335,4 +335,4 @@ Round 3 was not run. The owner approved the plan on 2026-10-24, after rounds 1 a
   agent. The full suite passes: 4,118 tests in 10 roots (`tests` 2,609 with 1 skipped, `code-work` 339 with 2 skipped,
   `security-review` 24, the other seven roots unchanged); no skip is for a stale approval. `doccheck`, `refcheck` and
   `git diff --check` print nothing. The spec stays `Draft` until the owner approves it. No live session ran the agent, and no
-  real attach was run, as the spec says. The reason for 4 stale records against 5 new ones was not worked out.
+  real attach was run, as the spec says. Git recorded the commit's approvals as 4 renames of the removed records and 1 new record, which accounts for 4 stale records against 5 new ones. Which four packages the renames belong to was not checked.
