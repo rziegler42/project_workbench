@@ -201,3 +201,11 @@ and without a second round.
   with a link made afterwards, and an environment whose every entry is dropped, which now gets `FALLBACK_PATH` (before,
   the missing entries were kept, the fallback was not used and the run was refused). The module's 262 tests pass;
   `git diff --check` prints nothing. The module's shipped approval is stale until E. Next: D.
+- Increment D: tests only, no helper changed. `test_mempalace_run.py` (class `Environment`) and
+  `test_remoterunner_run.py` (class `Lookup`) each have one new test with the inputs of criterion 1. It shows a missing
+  entry, a file, a missing entry outside the project and `<project>/a/../../pwn` dropped, and a link to an outside
+  directory kept: resolved in `mempalace`, as written in `remote-runner`. Both tests also make `a` a link afterwards and
+  show the same text names `<project>/pwn`. Both pass on the current helpers. Run against a scratch copy of each helper
+  with the `isdir` test replaced by `True`, both fail, the child's `PATH` then holding the attack string and the
+  missing entries; the tree was not touched for this. The modules' 146 and 106 tests pass; `git diff --check` prints
+  nothing. Both modules' shipped approvals are stale until E. Next: E.

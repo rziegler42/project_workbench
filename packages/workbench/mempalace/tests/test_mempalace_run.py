@@ -185,6 +185,26 @@ class Environment(support_mempalace.Palace):
         self.assertEqual(self.outside, call["env"]["PATH"])
         self.assertEqual("1", call["env"]["PYTHONDONTWRITEBYTECODE"])
 
+    def test_only_an_existing_directory_is_passed_on_and_a_link_is_passed_as_its_resolved_directory(self):
+        """Pins the decision for the entries a project could use: a missing one, a file and the string
+        `<project>/a/../../pwn` with `a` missing are dropped, and a link to a directory outside is kept, resolved."""
+        sneaky = os.path.join(self.root, "a", "..", "..", "pwn")
+        a_file = os.path.join(self.base, "a-file")
+        with open(a_file, "w") as handle:
+            handle.write("x")
+        other = os.path.join(self.base, "other")
+        os.mkdir(other)
+        link = os.path.join(self.base, "to-other")
+        os.symlink(other, link)
+        self.path([os.path.join(self.root, "missing"), sneaky, a_file, os.path.join(self.base, "none"), link,
+                   self.outside], TMPDIR=self.temp, HOME=self.home)
+        self.assertEqual(0, self.search()[0])
+        self.assertEqual(os.pathsep.join([other, self.outside]), self.calls()[0]["env"]["PATH"])
+        os.makedirs(os.path.join(self.root, "x", "y"))
+        os.makedirs(os.path.join(self.root, "pwn"))
+        os.symlink(os.path.join(self.root, "x", "y"), os.path.join(self.root, "a"))
+        self.assertEqual(os.path.join(self.root, "pwn"), os.path.realpath(sneaky))
+
     def test_the_git_the_program_runs_cannot_be_told_by_a_repository_to_run_a_program_or_fetch(self):
         """Found by the security review of 2026-10-24: `init` runs git in repositories it finds, and a repository
         can select a signature verifier or a monitor. Configuration in the environment ranks above the repository's."""
