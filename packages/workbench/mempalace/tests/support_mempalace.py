@@ -27,7 +27,9 @@ while len(argv) >= 2 and argv[0] in ("--backend", "--palace"):
     argv = argv[2:]
 data = sys.stdin.read() if not sys.stdin.isatty() else ""
 control = json.load(open(os.path.join(here, "control.json")))
-record = {{"argv": argv, "front": front, "env": dict(os.environ), "cwd": os.getcwd(), "stdin": data, "pid": os.getpid(),
+# macOS gives every process this variable itself; the program under test does not pass it
+env = {{k: v for k, v in os.environ.items() if k != "__CF_USER_TEXT_ENCODING"}}
+record = {{"argv": argv, "front": front, "env": env, "cwd": os.getcwd(), "stdin": data, "pid": os.getpid(),
           "program": os.path.abspath(sys.argv[0]),
           "tty": [sys.stdin.isatty(), sys.stdout.isatty(), sys.stderr.isatty()]}}
 with open(os.path.join(here, "calls.jsonl"), "a") as handle:

@@ -178,12 +178,13 @@ class Directory(Owner):
             handle.write("ORIGINAL\n")
         outside_dir = os.path.join(self.base, "somewhere")
         os.makedirs(outside_dir)
-        for name in ("mempalace.yaml", "mempalace.yml", "mempal.yaml", "mempal.yml", "mempalace.yaml.bak",
-                     "mempalace.yaml.bak.20261024T000000Z", "mempal.yml.bak-1", "entities.json", ".gitignore",
-                     "entities.json.bak", "ENTITIES.JSON", "Mempalace.YAML", ".GitIgnore"):
+        names = ("mempalace.yaml", "mempalace.yml", "mempal.yaml", "mempal.yml", "mempalace.yaml.bak",
+                 "mempalace.yaml.bak.20261024T000000Z", "mempal.yml.bak-1", "entities.json", ".gitignore",
+                 "entities.json.bak", "ENTITIES.JSON", "Mempalace.YAML", ".GitIgnore")
+        for position, name in enumerate(names):
             for label in ("link to a file", "link to a directory", "dangling link", "directory", "hard link"):
-                folder = os.path.join(self.base, "corpus-" + name.replace(".", "_") + label.replace(" ", "_"))
-                folder = folder.replace("ENTITIES", "entities-up").replace("Mempalace", "mixed").replace(".GitIgnore", "gi")
+                # numbered, so names that differ only in case stay apart on a case-insensitive volume
+                folder = os.path.join(self.base, "corpus-%02d-%s" % (position, label.replace(" ", "_")))
                 os.makedirs(folder)
                 path = os.path.join(folder, name)
                 if label == "link to a file":
