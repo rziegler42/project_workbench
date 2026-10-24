@@ -170,6 +170,89 @@ class Directory(Owner):
         self.assertEqual(0, self.owner("mine", os.path.join(self.root, "docs"))[0])
         self.assertEqual(os.path.join(self.root, "docs"), self.calls()[0]["argv"][1])
 
+    def test_a_project_config_that_is_a_link_a_directory_or_shared_is_refused_so_the_program_cannot_write_through_it(self):
+        """Found by the security review of 2026-10-24 and reproduced against the real program: `init` opens
+        `mempalace.yaml` for writing and follows a link, so a planted one overwrote a file outside the directory."""
+        victim = os.path.join(self.base, "victim.yaml")
+        with open(victim, "w") as handle:
+            handle.write("ORIGINAL\n")
+        outside_dir = os.path.join(self.base, "somewhere")
+        os.makedirs(outside_dir)
+        for name in ("mempalace.yaml", "mempalace.yml", "mempal.yaml", "mempal.yml", "mempalace.yaml.bak",
+                     "mempalace.yaml.bak.20261024T000000Z", "mempal.yml.bak-1", "entities.json", ".gitignore",
+                     "entities.json.bak", "ENTITIES.JSON", "Mempalace.YAML", ".GitIgnore"):
+            for label in ("link to a file", "link to a directory", "dangling link", "directory", "hard link"):
+                folder = os.path.join(self.base, "corpus-" + name.replace(".", "_") + label.replace(" ", "_"))
+                folder = folder.replace("ENTITIES", "entities-up").replace("Mempalace", "mixed").replace(".GitIgnore", "gi")
+                os.makedirs(folder)
+                path = os.path.join(folder, name)
+                if label == "link to a file":
+                    os.symlink(victim, path)
+                elif label == "link to a directory":
+                    os.symlink(outside_dir, path)
+                elif label == "dangling link":
+                    os.symlink(os.path.join(self.base, "nothing"), path)
+                elif label == "directory":
+                    os.mkdir(path)
+                else:
+                    os.link(victim, path)
+                for command in ("init", "mine"):
+                    self.owner_refused(command, folder, contains="would write through it")
+        self.assertEqual([], self.calls())
+        with open(victim) as handle:
+            self.assertEqual("ORIGINAL\n", handle.read())
+
+    def test_a_plain_config_file_and_unrelated_names_are_not_in_the_way(self):
+        folder = os.path.join(self.base, "fine")
+        os.makedirs(folder)
+        for name in ("mempalace.yaml", "mempalace.yaml.bak", "notes.md", "mempalace-notes.txt", "my-mempalace.yaml",
+                     "entities.json", ".gitignore", "entities-old.json"):
+            with open(os.path.join(folder, name), "w") as handle:
+                handle.write("x\n")
+        os.symlink(os.path.join(self.base, "nothing"), os.path.join(folder, "link-to-nothing.md"))
+        self.assertEqual(0, self.owner("init", folder, "--yes")[0])
+        self.assertEqual(0, self.owner("mine", folder)[0])
+
+    def test_a_directory_that_is_the_palace_or_holds_it_or_is_inside_it_is_refused(self):
+        """Found by the security review of 2026-10-24: `init` writes `.mempalace/origin.json` under the palace, so a
+        palace inside the directory makes a planted link there a way to overwrite a file; `mine` would index the
+        palace's own files."""
+        palace = os.path.join(self.corpus, "store")
+        os.makedirs(os.path.join(palace, ".mempalace"))
+        with open(os.path.join(self.base, "victim.txt"), "w") as handle:
+            handle.write("ORIGINAL\n")
+        os.symlink(os.path.join(self.base, "victim.txt"), os.path.join(palace, ".mempalace", "origin.json"))
+        with open(os.path.join(self.root, ".workbench", "mempalace.json"), "w") as handle:
+            json.dump({"format": 1, "palace": palace}, handle)
+        for command in ("init", "mine"):
+            self.owner_refused(command, self.corpus, contains="same place or one holds the other")
+            self.owner_refused(command, palace, contains="same place or one holds the other")
+            self.owner_refused(command, os.path.join(palace, ".mempalace"), contains="same place or one holds the other")
+        self.assertEqual([], self.calls())
+        with open(os.path.join(self.base, "victim.txt")) as handle:
+            self.assertEqual("ORIGINAL\n", handle.read())
+
+    def test_a_palace_the_program_saved_or_its_default_places_count_even_without_a_setting(self):
+        for where in ((".config", "mempalace"), (".mempalace",)):
+            folder = os.path.join(self.home, *where)
+            os.makedirs(folder, exist_ok=True)
+            with open(os.path.join(folder, "config.json"), "w") as handle:
+                # a decimal number, which a strict reader would refuse, must not hide the path
+                json.dump({"palace_path": os.path.join(self.corpus, "saved-" + where[0]), "weight": 0.5}, handle)
+            self.owner_refused("mine", self.corpus, contains="same place or one holds the other")
+            os.remove(os.path.join(folder, "config.json"))
+        for default in ((".config", "mempalace", "palace"), (".mempalace", "palace")):
+            inside = os.path.join(self.home, *default)
+            os.makedirs(inside, exist_ok=True)
+            self.owner_refused("init", inside, contains="same place or one holds the other")
+            self.owner_refused("init", os.path.dirname(inside), contains="same place or one holds the other")
+        self.assertEqual([], self.calls())
+
+    def test_a_palace_elsewhere_does_not_get_in_the_way(self):
+        with open(os.path.join(self.root, ".workbench", "mempalace.json"), "w") as handle:
+            json.dump({"format": 1, "palace": os.path.join(self.base, "palace-elsewhere")}, handle)
+        self.assertEqual(0, self.owner("init", self.corpus, "--yes")[0])
+
     def test_a_directory_that_cannot_be_entered_is_refused(self):
         folder = os.path.join(self.corpus, "locked")
         os.mkdir(folder)
@@ -183,11 +266,14 @@ class Directory(Owner):
 class Environment(Owner):
     def test_the_program_gets_the_same_short_environment_and_a_private_directory_that_is_removed(self):
         secrets = {"MEMPALACE_PALACE_PATH": "/x", "MEMPALACE_EMBEDDING_API_URL": "http://x", "OPENAI_API_KEY": "k",
-                   "ANTHROPIC_API_KEY": "k", "GITHUB_TOKEN": "t", "GIT_DIR": "/x", "XDG_CONFIG_HOME": "/x"}
+                   "ANTHROPIC_API_KEY": "k", "GITHUB_TOKEN": "t", "GIT_DIR": "/x", "XDG_CONFIG_HOME": "/x", "MEMPALACE_EMBEDDING_MODEL": "embeddinggemma2"}
         with unittest.mock.patch.dict(os.environ, dict(secrets, LANG="C.UTF-8", LC_ALL="C")):
             self.assertEqual(0, self.owner("mine", self.corpus, "--confirm")[0])
         (call,) = self.calls()
-        self.assertEqual({"HOME", "LANG", "LC_ALL", "PATH", "PYTHONDONTWRITEBYTECODE"}, set(call["env"]))
+        self.assertEqual({"HOME", "LANG", "LC_ALL", "PATH", "PYTHONDONTWRITEBYTECODE", "MEMPALACE_EMBEDDING_MODEL",
+                          "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0", "GIT_CONFIG_KEY_1", "GIT_CONFIG_VALUE_1", "GIT_NO_LAZY_FETCH", "GIT_TERMINAL_PROMPT"}, set(call["env"]))
+        self.assertEqual(self.helper.GIT_SETTINGS, {k: v for k, v in call["env"].items() if k.startswith("GIT_")})
+        self.assertEqual("minilm", call["env"]["MEMPALACE_EMBEDDING_MODEL"])
         self.assertEqual(self.outside, call["env"]["PATH"])
         self.assertTrue(os.path.realpath(call["cwd"]).startswith(self.temp + os.sep), call["cwd"])
         self.assertEqual([], os.listdir(self.temp))
@@ -285,7 +371,7 @@ class Setting(Owner):
         for _, run in self.every_command():
             run()
         for call in self.calls():
-            self.assertNotIn("--palace", call["argv"])
+            self.assertEqual({"--backend": "chroma"}, call["front"])
 
     def test_a_valid_setting_is_passed_before_the_command_for_all_four(self):
         self.setting()
@@ -293,7 +379,8 @@ class Setting(Owner):
         for name, run in self.every_command():
             self.assertEqual(0, run()[0], name)
         for call, name in zip(self.calls(), ("status", "search", "init", "mine")):
-            self.assertEqual(["--palace", palace, name], call["argv"][:3])
+            self.assertEqual({"--backend": "chroma", "--palace": palace}, call["front"])
+            self.assertEqual(name, call["argv"][0])
 
     def test_a_setting_that_is_wrong_in_any_way_stops_every_command_before_the_program_starts(self):
         bad = {
@@ -331,10 +418,29 @@ class Setting(Owner):
         self.refused("status", contains="mempalace.json")
         self.assertEqual([], self.calls())
 
+    def test_a_workbench_directory_swapped_for_a_link_after_the_project_was_found_is_not_followed(self):
+        """Found by the security review of 2026-10-24: the setting is read through the project's held
+        descriptor, so a link put in place of `.workbench` after the project is found leads nowhere."""
+        external = os.path.join(self.base, "external")
+        os.makedirs(external)
+        with open(os.path.join(external, "mempalace.json"), "w") as handle:
+            handle.write(json.dumps({"format": 1, "palace": "/attacker/palace"}))
+        real = os.path.join(self.root, ".workbench")
+        os.rename(real, real + ".real")
+        os.symlink(external, real)
+        with self.assertRaises(self.helper.Refused) as caught:
+            self.helper.palace_setting(self.root)
+        self.assertIn("mempalace.json", str(caught.exception))
+
+    def test_a_setting_file_with_a_second_name_is_refused(self):
+        self.setting()
+        os.link(os.path.join(self.root, ".workbench", "mempalace.json"), os.path.join(self.base, "second-name.json"))
+        self.refused("status", contains="mempalace.json")
+
     def test_a_setting_file_is_read_from_the_project_root_whatever_the_current_directory(self):
         self.setting()
         self.assertEqual(0, self.run_helper("status", cwd=os.path.join(self.root, "docs"))[0])
-        self.assertEqual(os.path.join(self.base, "palace"), self.calls()[0]["argv"][1])
+        self.assertEqual(os.path.join(self.base, "palace"), self.calls()[0]["front"]["--palace"])
 
     def test_a_directory_that_is_not_a_project_is_refused(self):
         self.refused("status", cwd=self.base, contains="not inside a workbench project")

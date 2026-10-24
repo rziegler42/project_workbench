@@ -312,7 +312,70 @@ sealed state is untracked, in `/.debug/2026-10-24-plan-review/`.
   increment A's confinement step names it. The owner installed it the same day (`strace` 6.19, `/usr/bin/strace`;
   a test trace ran). This note was added after round 3 and was not reviewed.
 
+### Security review of the helper (increment E), 2026-10-24
+
+Reviewed by Codex (`gpt-6.1-sol`, effort high), read-only, at the owner's request ("Security review, then release"). Run
+directly with `codex exec --sandbox read-only --ephemeral` because the workbench's own bridge and review engine are not
+installed in this repository; the prompts and replies are untracked, in the session scratchpad. Three rounds of a bound
+of 3; outcome: **stopped at the bound**. The findings of round 3 (S12 to S14) were applied after the bound was reached
+and have not been reviewed. The reviewer judged the dispositions of S5 and S9 reasonable in round 3 and named no cheap
+safe fix that the author had wrongly rejected.
+
+Round 1 (six findings):
+
+- S1 (applied, high): a `PATH` entry that is a link could be swapped between the check and the run. The entries and the
+  program are now resolved once and the resolved paths are used, also for the child's `PATH`.
+- S2 (applied, medium): the download gate checked one cache file; the program downloads when any of six is missing.
+  Confirmed in the installed downloader's source. All six are required.
+- S3 (applied, medium): the setting was read through a path whose parent could be swapped for a link. It is now read
+  through the kit's held-descriptor reader.
+- S4 (applied, high): `init` wrote through a planted `mempalace.yaml` link. **Reproduced against the real program**
+  (it overwrote a file outside the directory). A directory holding a config name that is a link, a directory or shared
+  is now refused. (A reproduction that `mine` follows links was tried and failed: the miner skips symbolic links.)
+- S5 (not fixed, high): the owner's directory could be swapped after the check. A program that works on path names
+  cannot be made safe against a concurrent writer without a sandbox. Recorded as a limit in the spec.
+- S6 (not fixed, medium; see S9): descendants of an owner command survive a terminate signal.
+
+Round 2 (five findings; the spec edit of that round had not been written, so the reviewer saw the earlier spec):
+
+- S7 (applied, high): `is_inside` failed open for a directory that does not exist yet, so a missing entry inside the
+  repository stayed on the child's `PATH`. It now skips a missing part, treats an unexaminable part as inside, and the
+  entries must be existing directories.
+- S8 (applied, high): `init` also writes `entities.json` and appends to `.gitignore`, both through links. Read from the
+  program's source. The name list now covers both, case-folded.
+- S9 (not fixed, medium): the reviewer disputed my reason for S6: a process group of its own is possible if the helper
+  hands the terminal to it with `tcsetpgrp` and restores it. Correct, and the spec's reasoning is amended. The remaining
+  reason is cost and risk (a mistake leaves the owner's terminal stopped); recorded as a limit. **This is the one open
+  difference of opinion for the owner to decide.**
+- S10 (applied, medium): the embedding model comes from the home configuration, so the checked cache might not be the
+  model used. The helper now sets `MEMPALACE_EMBEDDING_MODEL=minilm`, which the program reads first.
+- S11 (applied, medium): after an interrupt the read commands skipped the group kill when the program had already
+  exited. They now always kill the group. Test added with a descendant that holds the output open.
+
+Round 3 (three findings, applied after the bound, not re-reviewed):
+
+- S12 (applied, high): a palace inside the directory lets a planted `.mempalace/origin.json` link be written through.
+  `init` and `mine` refuse a directory that is, holds or lies inside any palace the program may use (the setting, its saved
+  `palace_path`, its two default places).
+- S13 (applied, medium): the program can take a remote backend from the home configuration. The helper now passes the
+  program's own `--backend chroma`, which ranks first.
+- S14 (applied, high): `init` runs git in repositories it finds, and a repository can select a signature verifier or a
+  monitor. The helper sets git's configuration through the environment (`log.showSignature=false`,
+  `core.fsmonitor=false`, no lazy fetch, no prompt), which ranks above a repository's.
+
+Every applied finding has a regression test, and each fix was mutation-checked (the fix removed, a test fails). S1's first
+mutation survived once and led to a second test.
+
+Found outside this plan: the `ask-codex` helper has the same fail-open `is_inside` (S7). It is another module and is not
+changed here (Deferred work).
+
 ## Deferred work
+
+- **`ask-codex` fails open in `is_inside`** for a directory that does not exist yet (found as S7): a missing `PATH` entry
+  inside the repository passes as trusted. The same function was written again in `mempalace`; `safe-git` was not checked.
+  Needs its own change and a release of the package.
+- A process group of its own for the owner commands, with a terminal hand-over, so that a terminate signal reaches what
+  `init` and `mine` start (S9).
 
 - A hand run in a live Claude session with a real palace and a real install, by the owner.
 - An MCP rendering of `mempalace-mcp`, once the workbench has an MCP layer (`module-boundary.md`).
@@ -421,3 +484,15 @@ Choices and departures:
 - The block and the skill name `graphify` and "the knowledge base" because the routing rule does, and say a tool that is not
   installed is skipped; neither module exists yet, and the skill names none of their skills.
 - Whether Claude loads the skill when it should is not tested, as for the other modules' skills.
+
+### Increment E (2026-10-24)
+
+The security review above ran and its findings are applied (module tests 145). On the owner's words "Run it for me",
+`python3 -m workbench release-approvals` wrote 8 records (the package, `mempalace`, and new records for `claude`,
+`code-work` and `groundwork`, whose tests changed to list `mempalace` and so changed their tree hashes; `ask-codex`,
+`safe-git` and `review-engine` were unchanged). After a preview and the owner's "remove them", the four stale records
+were deleted (`9569d07e0804` the old package record, `82f7f21eeffe` `claude`, `80166f7edde5` `code-work`,
+`c85fc176859e` `groundwork`); a second `release-approvals` wrote the same 8 and warned of nothing. `wb verify
+packages/workbench` now accepts all seven modules as first-party. The full suite is green: 3828 tests in 8 roots, one
+skip. The helper was also run against the real program, with the backend pin and the pinned model, for a status and for
+a search with a hit.

@@ -26,6 +26,7 @@ daemon or a background job, and ``init`` always passes ``--no-llm``. A project m
 ``.workbench/mempalace.json``; the helper passes it as ``--palace``.
 """
 
+import json
 import os
 import re
 import secrets
@@ -39,7 +40,7 @@ import tempfile
 import time
 import unicodedata
 
-from wbkit import display, jsonstrict, project
+from wbkit import display, jsonstrict, project, safefs
 
 PROGRAM = "mempalace"
 TIMEOUT = 60
@@ -49,11 +50,25 @@ MAX_STDERR = 2000
 MAX_QUERY = 1000
 DEFAULT_RESULTS = 5
 CEILING_RESULTS = 20
-MODEL_FILE = (".cache", "chroma", "onnx_models", "all-MiniLM-L6-v2", "onnx", "model.onnx")
+MODEL_DIR = (".cache", "chroma", "onnx_models", "all-MiniLM-L6-v2", "onnx")
+MODEL_FILES = ("config.json", "model.onnx", "special_tokens_map.json", "tokenizer_config.json", "tokenizer.json",
+               "vocab.txt")
+MODEL_FILE = MODEL_DIR + ("model.onnx",)
+CONFIG_NAMES = ("mempalace.yaml", "mempalace.yml", "mempal.yaml", "mempal.yml")
+WRITTEN_NAMES = CONFIG_NAMES + ("entities.json", ".gitignore")
+# The program runs git inside repositories it finds under the directory `init` is given, and a repository can
+# select programs for git to run. These override the repository's own configuration (configuration given in the
+# environment ranks above it) for the two settings that run a program on a read, and stop a lazy fetch.
+GIT_SETTINGS = {"GIT_CONFIG_COUNT": "2", "GIT_CONFIG_KEY_0": "log.showSignature", "GIT_CONFIG_VALUE_0": "false",
+                "GIT_CONFIG_KEY_1": "core.fsmonitor", "GIT_CONFIG_VALUE_1": "false", "GIT_NO_LAZY_FETCH": "1",
+                "GIT_TERMINAL_PROMPT": "0"}
+BACKEND = ("--backend", "chroma")  # the one local backend; the program would otherwise take one from its own
+# configuration, which can name a remote store
 _NAME = r"[A-Za-z0-9_][A-Za-z0-9_.:-]{0,63}"
 _DATE = r"[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}(:[0-9]{2})?)?"
 OPTIONS = ("--wing", "--room", "--results", "--since", "--before")
 MAX_SETTING = 4096
+MAX_CONFIG = 262144
 MODES = ("projects", "convos")
 OWNER_FLAGS = {"init": ("--yes", "--allow-project-root"), "mine": ("--confirm", "--allow-project-root")}
 OWNER_VALUES = {"init": (), "mine": ("--wing", "--mode")}
@@ -81,18 +96,22 @@ def plain(text, keep=""):
 
 
 def is_inside(path, boundary):
-    """True when `path` is `boundary` or below it, whatever links and case spellings lead there."""
-    try:
-        current = os.path.realpath(path)
-        while True:
+    """True when `path` is `boundary` or below it, whatever links and case spellings lead there. A part of the
+    path that does not exist yet is skipped (it cannot be the boundary, but something may be put there later),
+    and a part that cannot be examined counts as inside."""
+    current = os.path.realpath(path)
+    while True:
+        try:
             if os.path.samefile(current, boundary):
                 return True
-            parent = os.path.dirname(current)
-            if parent == current:
-                return False
-            current = parent
-    except OSError:
-        return False
+        except FileNotFoundError:
+            pass
+        except OSError:
+            return True
+        parent = os.path.dirname(current)
+        if parent == current:
+            return False
+        current = parent
 
 
 def outermost_boundary(start):
@@ -110,30 +129,43 @@ def outermost_boundary(start):
 
 
 def trusted_entries(boundary):
-    """The PATH entries that are absolute and outside the repository: never "", "." or a relative one."""
-    return [entry for entry in os.environ.get("PATH", "").split(os.pathsep)
-            if entry and os.path.isabs(entry) and not is_inside(entry, boundary)]
+    """The PATH entries that are absolute and, once every link is resolved, outside the repository: never "",
+    "." or a relative one, and no directory that does not exist. Each is returned as the resolved directory, so that what was checked is what is
+    used, and a link that is changed afterwards cannot lead the program or the child's PATH into the project."""
+    found = []
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        if not entry or not os.path.isabs(entry):
+            continue
+        real = os.path.realpath(entry)
+        if real not in found and os.path.isdir(real) and not is_inside(real, boundary):
+            found.append(real)
+    return found
 
 
 def trusted_which(name, entries, boundary):
-    """The first executable file `name` in a trusted entry that does not resolve into the repository."""
+    """The resolved path of the first executable file `name` in a trusted entry, when it does not resolve into
+    the repository. The resolved path is the one to run."""
     for entry in entries:
         candidate = os.path.join(entry, name)
-        if os.path.isfile(candidate) and os.access(candidate, os.X_OK) \
-                and not is_inside(candidate, boundary):
-            return candidate
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            real = os.path.realpath(candidate)
+            if not is_inside(real, boundary):
+                return real
     return None
 
 
 def environment(entries):
     """What the program sees: ``HOME`` (it reads its configuration from there), ``LANG``, the ``LC_*``
-    variables, the trusted PATH, and a setting that stops it writing bytecode into its own installation.
-    Nothing else is passed, so no variable that selects a backend, a remote embedding service, a log file or a
-    credential reaches it."""
+    variables, the trusted PATH, a setting that stops it writing bytecode into its own installation, and the
+    embedding model, which is fixed to the one whose cache is checked (the program takes it from this variable
+    before its configuration file). Nothing else is passed, so no variable that selects a backend, a remote
+    embedding service, a log file or a credential reaches it."""
     env = {name: os.environ[name] for name in ("HOME", "LANG") if name in os.environ}
     env.update({name: value for name, value in os.environ.items() if name.startswith("LC_")})
     env["PATH"] = os.pathsep.join(entries)
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["MEMPALACE_EMBEDDING_MODEL"] = "minilm"
+    env.update(GIT_SETTINGS)
     return env
 
 
@@ -145,12 +177,17 @@ def home_directory():
 
 
 def model_cached():
-    """True when the embedding model's file is a regular file in the cache the program uses."""
-    path = os.path.join(home_directory(), *MODEL_FILE)
-    try:
-        return stat.S_ISREG(os.lstat(path).st_mode)
-    except OSError:
-        return False
+    """True when every file the program's embedding model needs is in the cache it uses. The program starts a
+    download when any one of them is missing, so all six are required; a link counts if it leads to a file, as it
+    does for the program."""
+    folder = os.path.join(home_directory(), *MODEL_DIR)
+    for name in MODEL_FILES:
+        try:
+            if not stat.S_ISREG(os.stat(os.path.join(folder, name)).st_mode):
+                return False
+        except OSError:
+            return False
+    return True
 
 
 def kill(process):
@@ -203,9 +240,8 @@ def run_program(argv, cwd, env, timeout):
             process.wait()
         return process.returncode, bytes(out[:MAX_OUTPUT]), bytes(err[:MAX_OUTPUT]), over, timed_out
     finally:
-        if process.poll() is None:  # an interrupt: the program is in its own session, so it would run on
-            kill(process)
-            process.wait()
+        kill(process)  # an interrupt: the program is in its own session, so it and what it started would run
+        process.wait()  # on, even if the program itself has already exited
         for pipe in (process.stdout, process.stderr):
             try:
                 pipe.close()
@@ -270,7 +306,8 @@ def wrap(command, text, notes=""):
 
 def query_program(command, argv_tail, cwd, palace=None):
     """The cleaned text of one run of the program, or ``Failed`` / ``Refused``. `palace` is the project's
-    setting, passed as the program's own ``--palace`` option, which goes before the command."""
+    setting, passed as the program's own ``--palace`` option, which goes before the command, after the fixed
+    ``--backend chroma``."""
     boundary = outermost_boundary(cwd)
     entries = trusted_entries(boundary)
     program = trusted_which(PROGRAM, entries, boundary)
@@ -284,7 +321,7 @@ def query_program(command, argv_tail, cwd, palace=None):
         if is_inside(scratch, boundary):
             raise Refused("the temporary directory is inside the project; set TMPDIR outside it")
         try:
-            front = ["--palace", palace] if palace else []
+            front = list(BACKEND) + (["--palace", palace] if palace else [])
             code, out, err, over, timed_out = run_program([program] + front + [command] + argv_tail, scratch,
                                                           environment(entries), TIMEOUT)
         except OSError:
@@ -337,13 +374,11 @@ def palace_setting(root):
     """The palace the project names in ``.workbench/mempalace.json``, or ``None`` when it names none. The file
     is ``{"format": 1, "palace": "<absolute path>"}``; anything else is refused."""
     what = ".workbench/mempalace.json"
-    directory = os.path.join(root, ".workbench")
     try:
-        if stat.S_ISLNK(os.lstat(directory).st_mode):
-            raise Refused(".workbench is a link")
-    except OSError:
-        return None
-    data = read_file(os.path.join(directory, "mempalace.json"), MAX_SETTING, what)
+        with safefs.Root(root, "the project") as held:
+            data = held.read_if_present(what, MAX_SETTING)
+    except safefs.SafeFsError as exc:
+        raise Refused("%s: %s" % (what, display.ascii_text(str(exc))[:160]))
     if data is None:
         return None
     try:
@@ -462,6 +497,62 @@ def owner_directory(cwd, root, value, allow_root):
     return path
 
 
+def saved_palaces(home):
+    """The `palace_path` the program saved in its own configuration, from either place it keeps one. The file is
+    the owner's and is read only to find a path to compare, so an ordinary JSON reader is enough; a file that
+    cannot be read this way adds nothing."""
+    for parts in ((".config", "mempalace", "config.json"), (".mempalace", "config.json")):
+        try:
+            data = read_file(os.path.join(home, *parts), MAX_CONFIG, "the program's config.json")
+            document = json.loads(data.decode("utf-8")) if data is not None else {}
+        except (Refused, ValueError, RecursionError):
+            continue
+        saved = document.get("palace_path") if isinstance(document, dict) else None
+        if isinstance(saved, str) and saved and "\0" not in saved:
+            yield os.path.expanduser(saved)
+
+
+def program_palaces(palace):
+    """The palaces the program may use from here: the project's setting, the path its configuration file saved, and
+    its two default places. `init` writes into the palace (an `origin.json` under it), so a directory that overlaps
+    any of them is not one to run `init` or `mine` on."""
+    home = home_directory()
+    found = ([palace] if palace else []) + list(saved_palaces(home))
+    found += [os.path.join(home, ".config", "mempalace", "palace"), os.path.join(home, ".mempalace", "palace")]
+    return [os.path.realpath(each) for each in found]
+
+
+def refuse_palace_overlap(path, palace):
+    for each in program_palaces(palace):
+        if each == path or each.startswith(path + os.sep) or path.startswith(each + os.sep):
+            raise Refused("the directory and the palace (%s) are the same place or one holds the other; the program "
+                          "writes into the palace and would write into or index it"
+                          % display.ascii_text(each)[:120])
+
+
+def refuse_planted_config(path):
+    """Refuse a directory in which a file the program writes or reads there (its project configuration, the
+    entities file `init` saves, the `.gitignore` it appends to, or a backup of one) is a link, a directory,
+    another kind of file, or has another name for the same file. The program opens such a name for writing and
+    follows it, so a planted link would have it overwrite a file outside the directory (found by the security
+    review of 2026-10-24 and reproduced against the program). Names are compared without regard to case, in
+    case the file system does not distinguish it."""
+    try:
+        names = sorted(os.listdir(path))
+    except OSError:
+        raise Refused("the directory cannot be listed")
+    for name in names:
+        if not name.casefold().startswith(WRITTEN_NAMES):
+            continue
+        try:
+            info = os.lstat(os.path.join(path, name))
+        except OSError:
+            continue
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink > 1:
+            raise Refused("%s in the directory is a link, a directory or shared with another name, and the program "
+                          "would write through it; remove it first" % display.ascii_text(name)[:60])
+
+
 def owner_terminal(stdin, out):
     for stream in (stdin, out):
         try:
@@ -490,7 +581,7 @@ def run_owner(argv_tail, palace, cwd, stdin, out, err):
             raise Refused("the temporary directory is inside the project; set TMPDIR outside it")
         out.flush()
         err.flush()
-        front = ["--palace", palace] if palace else []
+        front = list(BACKEND) + (["--palace", palace] if palace else [])
         try:
             process = subprocess.Popen([program] + front + argv_tail, stdin=stdin, stdout=out, stderr=err,
                                        cwd=scratch, env=environment(entries))
@@ -520,6 +611,8 @@ def owner(command, args, stdin, out, err, cwd):
     root = find_root(cwd)
     palace = palace_setting(root)
     path = owner_directory(cwd, root, directory, "--allow-project-root" in flags)
+    refuse_planted_config(path)
+    refuse_palace_overlap(path, palace)
     if command == "init":
         tail = ["init", path, "--no-llm"] + (["--yes"] if "--yes" in flags else [])
         note = ("init writes mempalace.yaml into %s and saves the palace path in the program's own configuration"

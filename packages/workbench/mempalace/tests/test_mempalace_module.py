@@ -64,10 +64,10 @@ class Declaration(unittest.TestCase):
         with open(os.path.join(MODULE, HELPER), encoding="utf-8") as handle:
             text = handle.read()
         imported = set(re.findall(r"^(?:import|from) ([a-z_.]+)", text, re.M))
-        self.assertEqual({"os", "re", "secrets", "selectors", "shutil", "signal", "stat", "subprocess", "sys",
+        self.assertEqual({"json", "os", "re", "secrets", "selectors", "shutil", "signal", "stat", "subprocess", "sys",
                           "tempfile", "time", "unicodedata", "wbkit"}, imported)
         for word in ("socket", "urllib", "http", "ssl", "claude", "codex", "safe-git", "code-work",
-                     "groundwork", "--include-media", "--backend", "wake-up", "--llm", "--accept-external-llm",
+                     "groundwork", "--include-media", "wake-up", "--llm", "--accept-external-llm",
                      "--daemon", "--direct", "--background", "--auto-mine", "--api-key", "--endpoint",
                      "--provider"):
             self.assertNotIn(word, text, word)

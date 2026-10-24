@@ -47,9 +47,11 @@ class Launcher(support_install.InstallBase):
         self.package_path = os.path.join(self.dist, "packages", "workbench")
         self.assertTrue(firstparty.is_first_party(self.package_path, self.dist))
         self.home = os.path.join(self.root, "home")
-        os.makedirs(os.path.dirname(os.path.join(self.home, *self.MODEL)))
-        with open(os.path.join(self.home, *self.MODEL), "w") as handle:
-            handle.write("model")
+        os.makedirs(os.path.join(self.home, *self.MODEL))
+        for name in ("config.json", "model.onnx", "special_tokens_map.json", "tokenizer_config.json",
+                     "tokenizer.json", "vocab.txt"):
+            with open(os.path.join(self.home, *self.MODEL, name), "w") as handle:
+                handle.write("model")
         self.vendor = os.path.join(self.root, "fakes", "vendor")
         self.tools = os.path.join(self.root, "fakes", "tools")
         for folder in (self.vendor, self.tools):
@@ -61,7 +63,7 @@ class Launcher(support_install.InstallBase):
         os.symlink(sys.executable, os.path.join(self.tools, "python3"))
         self.control(stdout=support_mempalace.RESULT)
 
-    MODEL = (".cache", "chroma", "onnx_models", "all-MiniLM-L6-v2", "onnx", "model.onnx")
+    MODEL = (".cache", "chroma", "onnx_models", "all-MiniLM-L6-v2", "onnx")
 
     def control(self, **fields):
         import json

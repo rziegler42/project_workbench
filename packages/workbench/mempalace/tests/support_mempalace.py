@@ -21,9 +21,14 @@ FAKE = """#!{python}
 import json, os, subprocess, sys, time
 here = os.path.dirname(os.path.abspath(__file__))
 argv = sys.argv[1:]
+front = {{}}
+while len(argv) >= 2 and argv[0] in ("--backend", "--palace"):
+    front[argv[0]] = argv[1]
+    argv = argv[2:]
 data = sys.stdin.read() if not sys.stdin.isatty() else ""
 control = json.load(open(os.path.join(here, "control.json")))
-record = {{"argv": argv, "env": dict(os.environ), "cwd": os.getcwd(), "stdin": data, "pid": os.getpid(),
+record = {{"argv": argv, "front": front, "env": dict(os.environ), "cwd": os.getcwd(), "stdin": data, "pid": os.getpid(),
+          "program": os.path.abspath(sys.argv[0]),
           "tty": [sys.stdin.isatty(), sys.stdout.isatty(), sys.stderr.isatty()]}}
 with open(os.path.join(here, "calls.jsonl"), "a") as handle:
     handle.write(json.dumps(record) + "\\n")
@@ -33,6 +38,10 @@ if control.get("hang"):
     time.sleep(300)
 if control.get("sleep"):
     time.sleep(control["sleep"])
+if control.get("leave_child"):
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(300)"])
+    open(os.path.join(here, "pids"), "w").write(str(child.pid))
+    sys.exit(0)
 if control.get("stdout_bytes"):
     sys.stdout.write("x" * control["stdout_bytes"])
 if control.get("stderr_bytes"):
@@ -70,10 +79,11 @@ class Palace(unittest.TestCase):
         self.home = os.path.join(self.base, "home")
         for folder in (os.path.join(self.root, ".git"), os.path.join(self.root, ".workbench"),
                        os.path.join(self.root, "docs"), self.outside, self.temp,
-                       os.path.dirname(os.path.join(self.home, *self.helper.MODEL_FILE))):
+                       os.path.join(self.home, *self.helper.MODEL_DIR)):
             os.makedirs(folder)
-        with open(os.path.join(self.home, *self.helper.MODEL_FILE), "w") as handle:
-            handle.write("model")
+        for name in self.helper.MODEL_FILES:
+            with open(os.path.join(self.home, *self.helper.MODEL_DIR, name), "w") as handle:
+                handle.write("model")
         with open(os.path.join(self.root, ".workbench", "manifest.json"), "w") as handle:
             handle.write("{}\n")
         with open(os.path.join(self.root, "docs", "plan.md"), "w") as handle:
