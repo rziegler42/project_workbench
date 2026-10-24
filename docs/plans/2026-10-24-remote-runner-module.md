@@ -1,6 +1,6 @@
 # The remote-runner module
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-24
 Candidate: workbench-v1#remote-runner-module
 Specs: remote-runner (new), code-work, trust-and-approval, module-contract
@@ -342,4 +342,23 @@ for a further round, and whether to approve.
 
 ## Result
 
-Not started.
+Increment A, 2026-10-24: the draft spec `docs/specs/remote-runner.md` is written, with a row in
+`docs/specs/README.md`. The owner chose "Read the program", so the two unknowns were settled by reading the
+`remote-runner` script once (88818 bytes, SHA-256 `dc2d8485aafd140c66a6e883f3bd2d0b0b476c7ba38eb618e704771d14b4c209`,
+read 2026-10-24, treated as data); no job was started and no host contacted.
+
+- Verification as run: `doccheck`, `refcheck` and `git diff --check` print nothing. No code exists yet.
+- What the reading settled. `status` prints JSON with `dut_commit`, `dut_clean`, `commit` and an `integrity` word, so
+  the status is machine-readable and the fallback in choice 7 is not needed. The requirement keys are exactly `os`,
+  `arch`, `min_memory_gib`, `min_cpu_cores` and `labels`, and an unknown key makes a runner ineligible. The program
+  itself needs Python 3.11 (`tomllib`), which agrees with the raised minimum. The change the program needs is small:
+  its project-file path appears in `project_config` (twice), its error messages and its description. Fetch already
+  refuses git metadata, dot-prefixed names, existing files, tracked files (by running `git ls-files`) and links, stages
+  with no-follow flags and returns each file's `sha256`, which matches the split in criterion 6.
+- Departures from the plan's wording, each in the spec: `status` takes an optional `--expect <40 hex>` and sets a
+  `provenance` field, because the job's own record is writable by the job and an independent expected commit is the
+  only useful check; the "hash line" of a fetch is the program's `files` list with `bytes` and `sha256`; the
+  environment allow list includes `SSH_AUTH_SOCK`, which is listed as an open question; a profile name, remote name,
+  job and ref have patterns the spec fixes.
+- Not done: the spec is a draft and awaits the owner's approval; it has had no independent review (only if the owner
+  asks); no code, no test.

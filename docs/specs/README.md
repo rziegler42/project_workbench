@@ -37,5 +37,6 @@ or an evidence note.
 | [`safe-git.md`](safe-git.md) | Local commits of exact paths and approved deletions, as a module of their own |
 | [`model-bridge.md`](model-bridge.md) | The contract of a thin vendor module that lets an engine ask a model one read-only question |
 | [`review-engine.md`](review-engine.md) | The review module that provides `peer-review`: rounds, findings, sealed state, the project setting |
+| [`remote-runner.md`](remote-runner.md) | The module that gives a project its remote job profiles and a guarded way to submit, inspect and fetch |
 | [`harness-modules.md`](harness-modules.md) | How a harness module describes one AI runtime |
 | [`superpowers-ports.md`](superpowers-ports.md) | The superpowers skills the owner uses, and what became of each |
