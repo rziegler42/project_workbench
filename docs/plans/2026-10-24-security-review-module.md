@@ -294,4 +294,8 @@ Round 3 was not run. The owner approved the plan on 2026-10-24, after rounds 1 a
 
 ## Result
 
-Not started.
+- Increment A: `docs/specs/security-review.md` is written (`Status: Draft`): scope, non-goals, the capability, the skill's
+  contract, the agent's declared limits with the reason for each, the limits that remain, and acceptance. `security-review`
+  is added to the core names in `module-contract.md` and the spec has a row in the specs index. `superpowers-ports.md` is
+  untouched. `doccheck`, `refcheck`, `git diff --check` print nothing; `tests.test_skill_names` and `tests.test_boundary`
+  (27 tests) pass. The spec reads `Current` only after the owner approves it. Next: B.
