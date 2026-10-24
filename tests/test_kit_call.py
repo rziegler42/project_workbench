@@ -218,6 +218,33 @@ class FindsWbOutsideTheProject(Call):
         self.run_it()
         self.assertEqual(self.outside, self.records()[-1]["env"]["PATH"])
 
+    def test_only_an_existing_directory_is_a_trusted_entry(self):
+        """A missing entry, a file, and a missing entry reached through `..` are dropped; a directory outside the
+        project and a link to one are kept."""
+        os.mkdir(os.path.join(self.base, "links"))
+        link = os.path.join(self.base, "links", "to-outside")
+        os.symlink(self.outside, link)
+        a_file = os.path.join(self.base, "a-file")
+        with open(a_file, "w"):
+            pass
+        sneaky = os.path.join(self.root, "a", "..", "..", "pwn")
+        self.path([os.path.join(self.root, "missing"), sneaky, a_file, os.path.join(self.base, "none"), link,
+                   self.outside])
+        self.assertEqual([link, self.outside], call.trusted_entries(self.root))
+
+    def test_a_missing_entry_that_goes_up_through_dots_is_not_passed_on_and_cannot_reach_the_project_later(self):
+        """`<project>/a/../../pwn` with `a` missing reads as outside, because the path is cut short textually. Once
+        `a` is a link to a folder inside the project, the same text names `<project>/pwn`."""
+        sneaky = os.path.join(self.root, "a", "..", "..", "pwn")
+        self.path([sneaky, self.outside])
+        self.run_it()
+        self.assertEqual(self.outside, self.records()[-1]["env"]["PATH"])
+        deep = os.path.join(self.root, "x", "y")
+        os.makedirs(deep)
+        os.makedirs(os.path.join(self.root, "pwn"))
+        os.symlink(deep, os.path.join(self.root, "a"))
+        self.assertEqual(os.path.join(self.root, "pwn"), os.path.realpath(sneaky))
+
     def test_containment_fails_closed(self):
         self.assertTrue(call.is_inside(os.path.join(self.root, "missing", "deeper"), self.root))
         self.assertTrue(call.is_inside(self.root, self.root))

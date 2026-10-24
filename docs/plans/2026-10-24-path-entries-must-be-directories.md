@@ -1,6 +1,6 @@
 # Trust only a PATH entry that is an existing directory
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-24
 Candidate: none (closes the first two items of the Deferred work in plan `2026-10-24-containment-of-missing-paths`; no roadmap candidate names it)
 Specs: review-engine
@@ -183,4 +183,10 @@ and without a second round.
 
 ## Result
 
-Not started.
+- Increment A: `wbkit.call.trusted_entries` now also requires `os.path.isdir(entry)`. Two new tests in
+  `tests/test_kit_call.py` (class `FindsWbOutsideTheProject`) failed on the old function and pass now. The failure showed
+  the attack string `<project>/a/../../pwn` reaching the child's `PATH`. The second test also makes `a` a link into the
+  project afterwards and shows the same text then names `<project>/pwn`, so the Low case was real and is closed by the
+  directory filter alone (choice 1). `tests.test_kit_call`, `tests.test_kit_call_launcher` and `tests.test_boundary` (53
+  tests) and the `review-engine` module (325), which uses the kit, pass; `git diff --check` prints nothing. `ask-codex`
+  also uses the kit, and its suite is not run until B. Next: B.
