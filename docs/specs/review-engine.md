@@ -436,7 +436,9 @@ Limits found while building:
 - The document is hashed before the bridge call, which can last 11 minutes, and the vendor reads the path itself, so a
   swap of the file in between can show the reviewer other content than the hash names.
 - A process that the bridge starts in a session of its own survives a timeout, because the engine ends the process
-  group. `wbkit.call` also treats a `PATH` entry that does not exist yet as outside the project.
+  group. `wbkit.call` and the helpers treat a `PATH` entry that does not exist yet as inside the project when an
+  existing ancestor of it is the project or below it, and a part of the path that cannot be examined as inside, so a
+  program put there later is never run.
 - The module is named `review-engine`, not `review`: the installer's boundary test refuses any module, command or helper
   name as a substring in `workbench/` and `tests/`, and `review` is an ordinary word there.
 - A review's directory is inside the module's namespace, `.workbench/workbench/review-engine/`, beside the installed

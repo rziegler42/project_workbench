@@ -1,6 +1,6 @@
 # Make the containment check fail closed for a path that does not exist yet
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-24
 Candidate: none (a defect fix found while building the plan `2026-10-24-agent-confinement`; it is not a roadmap item)
 Specs: review-engine
@@ -197,3 +197,10 @@ The owner approved the plan on 2026-10-24, after this review.
   and `test_a_file_made_later_in_a_dropped_entry_is_not_found` already pin criterion 2 for this helper. So here the fix
   changes no reachable behaviour; it makes the function itself correct, as the other four are. Its shipped approval is
   stale too. Next: E.
+- Increment E: `review-engine.md` now says `wbkit.call` and the helpers treat a missing `PATH` entry (and a part that
+  cannot be examined) as inside the project. On the owner's "Run it for me" I ran `release-approvals`: it wrote 9
+  approvals and warned of 4 records no longer in the release, one more than the three modules I expected (`ask-codex`,
+  `safe-git`, `remote-runner`); I did not identify the fourth. The owner approved the removal after a preview and the
+  four were removed. The full suite passes in all 9 roots (4,093 tests; the same 1 and 2 skips as before, none for
+  stale approvals); `doccheck`, `refcheck` and `git diff --check` print nothing. Not done: a security review of the walk
+  (symlink loops, case-insensitive volumes), which the owner has not asked for. The plan is complete.

@@ -8,7 +8,7 @@
     {
       "declaration_hash": "56198469236c21632edd088a610737b27597365ad5b608fd7a2a8d7e0bd6c877",
       "name": "ask-codex",
-      "tree_hash": "b2aac22db27f78d42a80197d4d96764cc9d71e6835fe7f135176e2f347829457"
+      "tree_hash": "3eefc84558819409b78783129dd1ee547534b7ecb49339a086d3dc2e0aae1b82"
     },
     {
       "declaration_hash": "037e8bf8c7818b53e3b610c1b48e436cf745b35feff93526a77618b323434493",
@@ -33,7 +33,7 @@
     {
       "declaration_hash": "4b8f7c515c504354e5a6691c8ba1f14616926becffd1e249170a3cf44a861b38",
       "name": "remote-runner",
-      "tree_hash": "8605469f4f7cc759753e3160e01aabf8832158ea4c43346761354c6fee13a223"
+      "tree_hash": "a0767923e79030b771f5be4c3130b8156a31c58f799f13a2140254c602458a8a"
     },
     {
       "declaration_hash": "c3d8035f7971b1509cfb90a1b709cafabb914b96b99fda50d64ad6c6eb7630d1",
@@ -43,11 +43,11 @@
     {
       "declaration_hash": "021e910c7d733949b50a496fc46ac1ba91b5ec312f7a74642da6b7aea772c059",
       "name": "safe-git",
-      "tree_hash": "8acce40ab778ac1350bfe7a6ef9e81a9ea11838c53924b10ce73eadd9ee2bb37"
+      "tree_hash": "6e735bb5e08732fd47c12c2a97fe271dd5089e07c541b36b2eb289697281905c"
     }
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "6370167e3d9eb33177bf5195a2acc6e81ad2991349baa8036f61fd328c468ee8",
+  "tree_hash": "27bad40006297f57fd11579dd1f8bbd2662da811d56b97bfa856f38bebdfe344",
   "workbench_version": "0.1.0"
 }
