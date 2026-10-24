@@ -183,4 +183,7 @@ The owner approved the plan on 2026-10-24, after this review.
 - Increment A: `wbkit.call.is_inside` now has the `mempalace` body. Two new tests in `tests/test_kit_call.py` failed on
   the old function (a missing in-project entry was passed to the child; a missing path below the boundary read as
   outside) and pass now. `tests.test_kit_call`, `tests.test_kit_call_launcher` and `tests.test_boundary` (51 tests), the
-  `ask-codex` module (90) and the `review-engine` module (325), which use the kit, pass. Next: B.
+  `ask-codex` module (90) and the `review-engine` module (325), which use the kit, pass.
+- Increment B: the `ask-codex` helper's `is_inside` has the same body. Two new tests in `test_askcodex_run.py`
+  (class `Environment`) failed on the old function and pass now; the module's 92 tests pass. The module's shipped
+  approval is stale until the owner runs `release-approvals` (increment E). Next: C.

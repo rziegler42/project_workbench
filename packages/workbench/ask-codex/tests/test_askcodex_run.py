@@ -75,6 +75,24 @@ class Environment(support_codex.Bridge):
         allowed = set(self.helper._KEPT) | {"PATH", "__CF_USER_TEXT_ENCODING", "LC_ALL", "LC_CTYPE"}
         self.assertEqual([], sorted(set(env) - allowed))
 
+    def test_a_missing_entry_inside_the_project_is_never_passed_on_to_the_program(self):
+        """A directory that does not exist yet is inside when what it would be made in is: a program put there
+        later would otherwise be found."""
+        missing = os.path.join(self.root, "missing-bin")
+        deeper = os.path.join(self.root, "a", "b", "c")
+        self.path([missing, deeper, self.outside], TMPDIR=self.temp, HOME=os.path.join(self.base, "home"))
+        self.assertTrue(self.document()["ok"])
+        self.assertEqual(self.outside, self.calls()[0]["env"]["PATH"])
+
+    def test_containment_fails_closed(self):
+        helper = self.helper
+        self.assertTrue(helper.is_inside(os.path.join(self.root, "missing", "deeper"), self.root))
+        self.assertTrue(helper.is_inside(self.root, self.root))
+        self.assertFalse(helper.is_inside(os.path.join(self.base, "missing"), self.root))
+        self.assertFalse(helper.is_inside(self.outside, self.root))
+        with unittest.mock.patch.object(helper.os.path, "samefile", side_effect=PermissionError):
+            self.assertTrue(helper.is_inside(self.outside, self.root))
+
     def test_the_environment_is_built_from_the_list_and_nothing_else(self):
         self.path([self.outside], **self.SECRETS)
         env = self.helper.environment([self.outside])

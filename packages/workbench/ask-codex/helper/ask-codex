@@ -69,18 +69,22 @@ def plain(text, keep=""):
 
 
 def is_inside(path, boundary):
-    """True when `path` is `boundary` or below it, whatever links and case spellings lead there."""
-    try:
-        current = os.path.realpath(path)
-        while True:
+    """True when `path` is `boundary` or below it, whatever links and case spellings lead there. A part of the
+    path that does not exist yet is skipped (it cannot be the boundary, but something may be put there later),
+    and a part that cannot be examined counts as inside."""
+    current = os.path.realpath(path)
+    while True:
+        try:
             if os.path.samefile(current, boundary):
                 return True
-            parent = os.path.dirname(current)
-            if parent == current:
-                return False
-            current = parent
-    except OSError:
-        return False
+        except FileNotFoundError:
+            pass
+        except OSError:
+            return True
+        parent = os.path.dirname(current)
+        if parent == current:
+            return False
+        current = parent
 
 
 def outermost_boundary(start):
