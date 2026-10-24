@@ -245,6 +245,37 @@ carry out each request; the permission results are read from the run's `permissi
 The decisions `2026-10-24-project-guarantees-a-floor`, `2026-10-24-declared-agent-confinement` and
 `2026-10-24-installer-reads-global-settings-on-request` (all `Proposed`) rest on these results.
 
+### Hooks in an agent's frontmatter (Claude Code 2.1.310, 2026-10-24)
+
+Recorded by increment A of plan `2026-10-24-agent-confinement`. Method: `claude -p` with a small model, run with the owner's real
+user configuration, in a throwaway folder. One project agent with `tools: Bash, Write, Edit, Read` declared a `PreToolUse` hook
+in its frontmatter on those four tools. The hook wrote its whole input to a log and exited 2 when a marker file existed, and 0
+otherwise. One run each, so each result is a single observation.
+
+- **The hook ran, and exit 2 blocked, for `Bash`, `Write`, `Edit` and `Read`** when the session itself was the agent
+  (`--agent`): the command did not run, the file was not written or changed, and the call appeared in `permission_denials`. For
+  an agent the model started as a subagent, the hook ran and blocked `Bash`, `Write` and `Read`; `Edit` was not attempted because
+  the `Read` before it was blocked.
+- **A folder that is not trusted skips the hooks and runs the agent anyway.** In four runs in a folder outside any trusted
+  project, no hook ran and the agent ran its command, write and edit unconfined. The debug log said: "Skipping frontmatter hooks
+  for main-thread agent ... the folder its definition file came from is not trusted (source: projectSettings)". Nothing in the
+  run's output (`permission_denials` empty, exit 0) showed it. **A confinement built on this hook therefore fails open when the
+  folder is untrusted.** A folder below a trusted project was trusted (one run). Whether an interactive session prompts for
+  trust, and whether the skipped hook is announced, was not tested.
+- **The hook input** held `session_id`, `transcript_path`, `cwd`, `prompt_id`, `permission_mode`, `agent_type` (the agent's
+  name), `effort`, `hook_event_name`, `tool_name`, `tool_input` and `tool_use_id`; a subagent's input also held `agent_id`.
+  `tool_input` was `command` and `description` for `Bash`, `file_path` and `content` for `Write`, `file_path` for `Read`, and
+  `file_path`, `old_string`, `new_string` and `replace_all` for `Edit`.
+- **The hook's environment** held `CLAUDE_PROJECT_DIR`, `CLAUDE_CODE_AGENT` (the agent's name) and `CLAUDE_CODE_SESSION_ID`. Its
+  `TMPDIR` was a per-user folder under `/var/folders/`, which is not where the session's scratch area is.
+- **The session's scratch area is not under `TMPDIR`.** In the folder `/private/tmp/claude-<uid>/`, a session had a directory
+  named from its working directory (every `/` and `.` replaced by `-`) and, inside it, a directory named by its session id.
+  `claude -p` created that directory with a `tasks` entry and no `scratchpad`; interactive sessions of other projects had a
+  `scratchpad` directory in the same place. The form is observed, not documented, and was not tested for other characters in the
+  working directory, long names, Linux, or what creates the `scratchpad` directory.
+- **Not tested:** interactive mode; a hook timeout; `MultiEdit` and `NotebookEdit` in an agent's hook; an agent's hook against
+  a session-level hook of the same tool; and a hook in a project that is trusted by its parent but whose agent file is edited.
+
 ### As built, and its limits
 
 Recorded by `claude-harness` (`docs/plans/2026-10-20-claude-harness.md`), each limit found in
