@@ -1,6 +1,6 @@
 # Record the global-configuration design in the roadmap, decisions and specs
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-24
 Candidate: none (direction-setting documents that precede `global-config-migration` and `self-hosting`; no roadmap candidate names it)
 Specs: harness-modules, superpowers-ports
@@ -292,8 +292,23 @@ untrusted advice; each was checked against the repository before it was applied.
   acceptance and the spec amendment prerequisites for building the command).
 
 Nothing remains disputed. After round 3 the owner renamed the candidate `hdl-module` to `verilog-module` (the skills are for
-plain Verilog-2001); that change was not reviewed. The review is not archived; archiving it is the owner's act (`ask-codex archive`), and the plan
-stays `Proposed` until the owner approves it.
+plain Verilog-2001); that change was not reviewed.
+
+Archived by the owner (`ask-codex archive`, closed 2026-10-24T16:03:42Z):
+
+> ## Codex plan review
+>
+> - Plan: docs/plans/2026-10-24-record-the-global-config-design.md (key 612070e28cb3ec18)
+> - Rounds used: 3 of 3
+> - Round 1: model gpt-5.6-luna, effort medium, 3 finding(s) (3 blocker or major), 249536 input and 3964 output tokens
+> - Round 2: model gpt-5.6-luna, effort medium, 1 finding(s) (1 blocker or major), 313719 input and 2811 output tokens
+> - Round 3: model gpt-5.6-luna, effort medium, 2 finding(s) (2 blocker or major), 422889 input and 4420 output tokens
+> - Outcome: not converged (2 blocker or major finding(s) in the last round)
+> - Decisions: 6 applied, 0 rejected
+
+"Not converged" is the review tool's word for a last round that still had findings: the bound was used, the two round 3
+findings were applied, and no fourth round was run to check them. The applied round 3 fixes, and the rename of
+`hdl-module`, were therefore not reviewed.
 
 ## Deferred work
 
@@ -387,3 +402,35 @@ Two specs now state what was found true on 2026-10-24.
     review-engine 325, safe-git 257.
 - Not done: the failures are not fixed here (the `mempalace` ones edit a package and stale its approval; they belong to that
   module's owner); the full suite has not passed since this plan began.
+
+### Completion (2026-10-24)
+
+Closed at the owner's word. Evidence for the completion criteria:
+
+1. The roadmap's "Current state" describes the ten plans it did not name, and the global configuration (increment A).
+2. The seven candidates have sections with outcome, dependencies, boundary and promotion trigger; the slug check found 40
+   sections and 40 slugs in "Suggested order", none missing or repeated (increment A).
+3. The mirror sentence, "ported" in `graphify-module` and `remaining-modules-rename`, the plan receipt and the inheritance
+   wording are gone from the roadmap (increment A; a search finds "ported" only in the two places that mean the old safe-write
+   rules and the superpowers ports).
+4. The three records exist as `Proposed`, are indexed, and a search of them finds no path to untracked material (increment B).
+5. `harness-modules.md` carries the trial's findings with version, date, method, run counts and untested cases;
+   `superpowers-ports.md` carries the plugin inventory with its scope (increment C).
+6. `doccheck`, `refcheck` and `git diff --check` print nothing, and `git diff --name-only` from the commit before this plan
+   to its last commit lists only files under `docs/`.
+
+Not met, and recorded rather than hidden: the full suite did not pass (one intermittent `test_delegation` failure and three
+`mempalace` tests that fail on this machine). The plan changed only documents, so no failure comes from it, but the
+whole-plan verification is not a clean run.
+
+Open after this plan:
+
+- The three decisions are `Proposed`: `2026-10-24-project-guarantees-a-floor`, `2026-10-24-declared-agent-confinement` and
+  `2026-10-24-installer-reads-global-settings-on-request`. Accepting, rejecting or deferring each is the owner's.
+- The review of this plan (three rounds, six findings, all decided) was archived by the owner on 2026-10-24; its summary is in
+  the Review record.
+- The `mempalace` tests need a fix for macOS and for the repeated `os.makedirs`; the `test_delegation` failure needs watching.
+- The trial's untested cases: a project `deny` under global `bypassPermissions`, interactive mode, the edit-gate hook, and
+  agent tools other than `Read`.
+- The seven new roadmap candidates and `global-config-migration`'s first step (the line-by-line comparison) are not started.
+- Nothing is pushed: `main` is ahead of `origin/main` by the commits of this plan.
