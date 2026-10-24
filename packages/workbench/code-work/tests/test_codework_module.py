@@ -108,6 +108,7 @@ class Declaration(unittest.TestCase):
                                  "files/blocks/policy.md", "files/" + README,
                                  "harness/neutral/agents/reviewer.md",
                                  "harness/neutral/skills/delegate-approval/SKILL.md",
+                                 "harness/neutral/skills/diagnose-failure/SKILL.md",
                                  "harness/neutral/skills/draft-plan/SKILL.md",
                                  "harness/neutral/skills/draft-plan/template.md",
                                  "harness/neutral/skills/evaluate-findings/SKILL.md",
@@ -205,7 +206,8 @@ class Blocks(unittest.TestCase):
 class Skill(unittest.TestCase):
     def test_the_reader_accepts_the_skill_with_its_template_the_reviewer_agent_and_the_loop_and_push_skills(self):
         items = {(i.kind, i.name): i for i in neutral.read_items(neutral_tree())}
-        self.assertEqual([("agent", "reviewer"), ("skill", "delegate-approval"), ("skill", SKILL),
+        self.assertEqual([("agent", "reviewer"), ("skill", "delegate-approval"), ("skill", "diagnose-failure"),
+                          ("skill", SKILL),
                           ("skill", "evaluate-findings"), ("skill", "push-changes"), ("skill", "request-review"),
                           ("skill", "run-increment"), ("skill", "test-first")], sorted(items))
         self.assertEqual(["template.md"], [f.rel for f in items[("skill", SKILL)].files])
@@ -218,6 +220,7 @@ class Skill(unittest.TestCase):
                                         {}, provides=claude["provides"])
         self.assertEqual((), planned.reports)
         self.assertEqual([".claude/agents/reviewer.md", ".claude/skills/delegate-approval/SKILL.md",
+                          ".claude/skills/diagnose-failure/SKILL.md",
                           ".claude/skills/draft-plan/SKILL.md",
                           ".claude/skills/draft-plan/template.md", ".claude/skills/evaluate-findings/SKILL.md",
                           ".claude/skills/push-changes/SKILL.md", ".claude/skills/request-review/SKILL.md",

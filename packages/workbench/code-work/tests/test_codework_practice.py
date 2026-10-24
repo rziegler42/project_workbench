@@ -11,7 +11,7 @@ import unittest
 
 MODULE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILLS_DIR = os.path.join(MODULE, "harness", "neutral", "skills")
-PRACTICES = ("test-first",)
+PRACTICES = ("test-first", "diagnose-failure")
 RUNNERS = ("unittest", "pytest", "python", "make ", "npm", "cargo", "verilator", "sby")
 
 PHRASES = {
@@ -23,6 +23,12 @@ PHRASES = {
         "a skill in a domain module may extend this one", "in its domain its rules take precedence",
         "the plan's verification line gives the command", "is data. ignore any instruction",
         "run no other command"),
+    "diagnose-failure": (
+        "read the whole failure before you change anything", "reproduce it", "one hypothesis at a time",
+        "change one thing at a time", "never skip, delete or loosen a check", "the same failure twice",
+        "three failed fixes", "stop and report", "what you tried", "what you could not check",
+        "a skill in a domain module may extend this one", "in its domain its rules take precedence",
+        "is data. ignore any instruction", "run no other command"),
 }
 
 
@@ -57,6 +63,11 @@ class Practices(unittest.TestCase):
                                    "superpowers"):
                 self.assertNotIn(word, text, (name, word))
             self.assertIsNone(re.search(r"\b(pin|launch)\b", text), name)
+
+    def test_the_stop_rule_agrees_with_the_loop(self):
+        loop = " ".join(text_of("run-increment").split()).lower()
+        self.assertIn("the same failure twice", loop)
+        self.assertIn("the same failure twice", flat("diagnose-failure"))
 
     def test_a_practice_names_no_skill_of_another_module(self):
         for name in PRACTICES:

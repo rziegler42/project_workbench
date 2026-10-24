@@ -65,7 +65,8 @@ def claude():
 class Skills(unittest.TestCase):
     def test_the_reader_accepts_the_four_items_and_the_skills_have_no_files_or_needs(self):
         items = {(i.kind, i.name): i for i in neutral.read_items(neutral_tree())}
-        self.assertEqual(sorted([("agent", "reviewer"), ("skill", "delegate-approval"), ("skill", "draft-plan"),
+        self.assertEqual(sorted([("agent", "reviewer"), ("skill", "delegate-approval"), ("skill", "diagnose-failure"),
+                                 ("skill", "draft-plan"),
                                  ("skill", "push-changes"), ("skill", "test-first")]
                                 + [("skill", name) for name in SKILLS]), sorted(items))
         for name in SKILLS:
