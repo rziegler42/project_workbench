@@ -60,12 +60,37 @@ files. Field names are proposals.
 |---|---|---|
 | skill | `name`, `description` | the body is the skill; bundled files are copied as plain files |
 | command | `name`, `description`, `args` | the body is the prompt |
-| agent | `name`, `description`, `tools`, optional `model` | the body is the agent's instructions |
+| agent | `name`, `description`, `tools`, optional `model`, `writes`, `run` | the body is the agent's instructions |
 
 An agent's `tools` is an abstract, restrictive set drawn from `read`, `search`,
 `edit`, `shell`, `web` and `agents`. It limits what the agent has; it grants no
 permission. An item may also declare `needs`, a list of capabilities it cannot work
 without.
+
+**A confined agent.** An agent may declare two more fields that narrow `edit` and `shell` to a scratch area and to pinned
+commands. They are data; the installer enforces them ("The agent gate", below), and no module supplies the enforcement.
+Each is one `key: value` line, like every field here, and a list is comma-separated like `tools`:
+
+```
+tools: read, search, edit, shell
+writes: scratch
+run: python3 {scratch}/check.py, python3 {scratch}/check.py --fast
+```
+
+- `writes` lists the named roots the agent may write under. Only `scratch` is defined: the session's scratch directory,
+  whole, with no sub-pattern. An agent with `writes` may write nowhere else.
+- `run` lists pinned command patterns, at most 4, each at most 200 characters; the whole line is at most 600. A pattern is
+  space-separated tokens. A token is a literal, or `{scratch}/<name>` where `<name>` is one plain file name (letters, digits,
+  `.`, `-`, `_`; not starting with `.` or `-`). No pattern holds a comma, a quote, `;`, `&`, `|`, `$`, a backtick, a
+  parenthesis, `<`, `>`, a backslash, a newline or a tab; a literal token uses letters, digits and `. / _ - : = + @ %`
+  only. An agent with `run` may run those commands and no others.
+- Refused when the item is read, as `tools` is today: a repeated field, an empty or duplicate entry, an unknown root, a
+  pattern outside this grammar, a line over its limit, `writes` without `edit` in `tools`, `run` without `shell`, and either
+  field together with the `agents` tool. The last holds because an agent it started would not be covered by this agent's
+  hook. A confined agent also holds no tool beyond `read`, `search`, `edit`, `shell` and `web`.
+- An agent with either field is installed only where the harness's layout describes a per-agent hook and a scratch directory
+  ("The agent gate"). On any other harness it is skipped with a warning and never installed unconfined, which is the
+  fail-closed rule under "Translation".
 
 ## Translation
 
@@ -77,7 +102,8 @@ the harness module's layout.
   loses convenience.
 - **An item that declares a restriction the harness cannot express is skipped with a
   warning and never installed unrestricted.** A read-only reviewer that cannot be made
-  read-only on a harness is not installed there. This fails closed.
+  read-only on a harness is not installed there. This fails closed. A confined agent
+  (`writes` or `run`) is such an item on a harness without a per-agent hook.
 - A kind the harness lacks (for example project-level commands in Codex) may be
   translated into another kind only where the harness module says so. Otherwise the
   item is skipped with a warning.
@@ -115,8 +141,9 @@ Hooks have no neutral form. They are code that runs, so they ship only as files 
 plain terms when the module is approved. A harness that declares `hooks: none` simply
 does not receive them.
 
-The one hook the installer itself renders is the edit gate, for a harness whose layout carries a `hooks` key
-("The edit gate hook", built). It is not a module's file and not listed under `ships`.
+The hooks the installer itself renders are the edit gate, for a harness whose layout carries a `hooks` key
+("The edit gate hook", built), and the agent gate, one per confined agent, for a harness whose layout describes a per-agent
+hook ("The agent gate", not yet built). Neither is a module's file or listed under `ships`.
 
 ## Root files and instructions
 
@@ -143,6 +170,13 @@ Claude Code 2.1.305 (see "Evidence" below):
 | command | `.claude/commands/<name>.md` (`description`, `argument-hint`; `$ARGUMENTS`) |
 | local permissions and hooks | `.claude/settings.local.json`, which Claude merges over the committed settings and which holds `permissions` and `hooks` |
 
+- For a confined agent ("The agent gate"), the `agent` kind also carries `hook` and `scratch` entries: the key in the
+  agent's front matter that holds hooks, the event, the timeout, the block code, and the template of the session's scratch
+  directory. The Claude module declares `hooks` (`PreToolUse`, timeout 20, block code 2), the matcher `Bash|Edit|Write` taken
+  from the tool names its layout gives `shell` and `edit`, and the scratch template
+  `/private/tmp/claude-{uid}/{cwd_key}/{session_id}/scratchpad`, where `{cwd_key}` is the working directory with every `/` and
+  `.` replaced by `-`. The template is observed in one version on one machine ("Hooks in an agent's frontmatter") and is
+  checked by the guard against the hook input; where a part is missing the guard refuses.
 - A hook that re-injects text after a compaction (a `SessionStart` hook with the `compact` matcher) ships only as
   a `harness/claude/` override. None is built.
 - Excluded from git by `.git/info/exclude`: the root file and everything under
@@ -382,6 +416,75 @@ hook. The rendered entry is fixed by the layout and not chosen by any module. Th
   guards the file at other times; the deny covers the agent's file tools and not a shell.
   Project and local settings precedence, `PATH` for `wb`, and `CLAUDE_PROJECT_DIR` are as listed under "Evidence".
 
+### The agent gate
+
+*(Specified by plan `2026-10-24-agent-confinement`, increment B; not yet built. The decision is
+`docs/decisions/2026-10-24-declared-agent-confinement.md`, accepted. Built against the evidence under "Hooks in an agent's
+frontmatter".)*
+
+For a confined agent ("Neutral items") the installer renders a hook into the agent's own file, under the key the layout names,
+and not into the settings file. The hook therefore applies to that agent only. Its command is fixed by the layout and not chosen
+by any module:
+
+```
+wb agent-gate claude <agent> || exit 2
+```
+
+with the matcher the layout derives from the tool names it gives `shell` and `edit` (`Bash|Edit|Write`), the event, the timeout
+and the block code of the layout. The harness name and the agent name are each checked against `[a-z0-9][a-z0-9_-]{0,63}`
+before they are put in the command. `|| exit 2` has the same reason as for the edit gate: any non-zero exit, including a missing
+`wb`, becomes the one blocking code.
+
+**What the guard reads.** `wb agent-gate` is a command that is safe for the agent to run, like `gate`. It reads the declared
+limits from the installed module's verified neutral item for `<agent>`, found through the same lookup the edit gate uses for its
+process module, and never from the rendered agent file, which the agent's own tools could edit. An agent name that no installed
+module declares as confined is refused. It reads the layout's scratch template and fills it from the hook input (`session_id`,
+`cwd`) and the process (the user id).
+
+**Input and deadline.** The hook input is JSON on standard input, read up to a fixed size; an input that is too large, not an
+object, or missing `tool_name`, `tool_input` or `session_id` is refused. The guard stops itself after 10 seconds and refuses; the
+harness timeout is set above that, because a timed-out command hook does not block.
+
+**Order of checks, for every call.** The first refusal ends it; the guard allows only after every check passes, and exits with the
+block code on anything else, including any error it did not foresee.
+1. The tool name is one the layout gives `edit` or `shell`, and the agent holds that capability by its `writes` or `run`. Any
+   other tool name is refused.
+2. For an edit tool, the path in `tool_input.file_path` must be a non-empty absolute string without a control character. It is
+   resolved part by part with no link followed in a part that exists, and a part that does not exist yet is placed against the
+   scratch directory and is not counted as outside it. The result must lie under the scratch directory, compared in the
+   filesystem's own case rules; `..`, a link on the way, a different case that names another directory, and any error while
+   examining a part are each a refusal and never "outside". A path that is the scratch directory itself is refused.
+3. For the shell tool, `tool_input.command` must be a string of at most 1,000 characters. Any character outside a closed safe set
+   (letters, digits, `. / _ - : = + @ %` and single spaces) is refused, so no quote, `;`, `&`, `|`, `$`, backtick, parenthesis,
+   redirection, newline, tab or backslash reaches a shell. The command is split on single spaces (an empty token is refused) and
+   compared token by token with each pinned pattern; the token counts must be equal and every literal token equal. A
+   `{scratch}/<name>` token must name `<name>` directly inside the scratch directory, with no `..` and no link, by the path rules
+   of step 2. A token that starts with `-` and is not spelled in the pattern is refused, and an argument that is not in the
+   pattern is refused; the pattern is the only list of what may follow.
+4. A pattern that matches allows the call; nothing else does. The command is not run, expanded or parsed by a shell by the
+   guard.
+
+**Layout entries and rendering.** The layout's `agent` kind carries the `hook` and `scratch` entries ("The Claude harness
+module"). Attach renders the hook for each confined agent whose harness describes both, and skips the agent with a warning where
+it does not. The existing edit deny, which already covers `.claude/settings.local.json` and `.git/info/exclude`, also covers each
+rendered confined-agent file, in the relative and in the absolute spelling, so the agent's file tools cannot remove the hook; as
+for the settings file, the deny covers file tools and not a shell. `wb check` reports a confined agent's file edited after attach
+as it does any generated file. Attach prints a note whenever it renders a confined agent, stating the limits below.
+
+**Limits, stated.**
+- **A script the agent writes and then runs is not confined.** A pinned command such as `python3 {scratch}/check.py` runs a file
+  the agent wrote into scratch, and that file can do whatever the user can do. The guard decides which command starts; it
+  cannot decide what the started program does. A module that ships a confined agent accepts this and states it at approval.
+- **The guard runs only where Claude trusts the folder.** Claude skips an agent's frontmatter hooks in a folder it does not trust
+  and runs the agent anyway, with nothing in the run's output ("Hooks in an agent's frontmatter"). In such a folder the agent's
+  `edit` and `shell` tools are unconfined, whatever it declares. The owner accepted this on 2026-10-24 as a stated limit. The
+  guarantee is: enforced in a trusted folder. Whether an interactive session in an untrusted folder runs the agent at all was
+  not tested; if it does, the same limit applies. Reading the folder's trust flag from the owner's global configuration
+  (`global-settings-check`) and a dedicated tool that fails closed are not built.
+- **Verified once.** Each live result is one run of Claude Code 2.1.310. The scratch template is observed, not documented. A
+  later Claude Code version can change either, and a version that no longer matches makes the guard refuse, not allow.
+- **Claude Code only.** opencode and Codex have no per-agent hook in their layouts; a confined agent is not installed there.
+
 ## The opencode harness module
 
 Provides all six capabilities, with hooks as code. Proposed layout, to be verified
@@ -472,3 +575,14 @@ area, therefore does not get a shell. It is given a **dedicated tool**.
 - The Claude root file contains the pointer only. The opencode harness writes no
   root file.
 - A generated file edited after attach is reported by the check.
+- An agent with `writes` or `run` is read and validated: an unknown root, a pattern outside the grammar, a duplicate, an
+  over-long line, a field without its tool, or the `agents` tool alongside either field is refused at read; on a harness without
+  a per-agent hook it is skipped with a warning and never installed.
+- `wb agent-gate` allows a write under the scratch directory and a command that matches a pinned pattern, and refuses a write
+  elsewhere, through a link, with `..`, or in another case; a command with a metacharacter, an extra token, an unspelled option
+  or a placeholder outside scratch; a missing path part counted as outside, and any error while examining a path; an input of
+  the wrong shape, too large, or past the deadline; and an agent name the installed module does not declare.
+- The rendered file of a confined agent carries the hook, the rendered deny covers that file, `wb check` reports it edited,
+  and attach prints the trusted-folder note.
+- A test module with a confined agent goes from declaration to a refused call through attach and the guard, with the hook's
+  command run as the harness runs it.

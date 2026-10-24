@@ -305,3 +305,11 @@ trust-flag read as Deferred work, and the amendments of that day to choice 8, th
 items. The first four runs were in a folder outside any trusted project; the later runs were below this project, whose
 trust was inherited. The interactive check was not run. A hook input dump briefly held a local messaging token in
 untracked scratch; the hook no longer logs it.
+
+**Increment B:** `harness-modules.md` now specifies the fields (`writes`, `run`, their encoding and refusals), the translation
+rule, the layout's `hook` and `scratch` entries, the new section "The agent gate" (input, deadline, order of checks, rendering,
+deny, check, attach note), the three stated limits (an unconfined written script, trusted folder only, verified once) and the
+acceptance criteria. Choices of mine in the text: the safe character set is letters, digits, `. / _ - : = + @ %` and single
+spaces; a command is at most 1,000 characters; the scratch directory itself is not a writable path; the Claude scratch template
+is `/private/tmp/claude-{uid}/{cwd_key}/{session_id}/scratchpad`, taken from A's observation. `doccheck`, `refcheck` and
+`git diff --check` print nothing. The owner reads the spec; no code changed.
