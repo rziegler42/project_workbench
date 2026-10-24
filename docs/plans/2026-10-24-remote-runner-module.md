@@ -35,6 +35,8 @@ When this plan is done:
 - The fetch wrappers (increment D).
 - The skill `run-remote-job` (increment E).
 - Spec edits elsewhere, approvals and the Result (increment F).
+- Fixes from the security review and the spec note about the reach of the overwrite (increment G, added after F on
+  the owner's word of 2026-10-24).
 
 ## Non-goals
 
@@ -140,6 +142,10 @@ When this plan is done:
    one, and none contacts a host.
 9. The specs say what is built and its limits; the full suite, `doccheck`, `refcheck` and `git diff --check` pass; the
    package approvals are released by the owner and the suite then runs with no Claude skip.
+10. The review's findings 2 to 5 are fixed with a test for each that fails before the fix, the skill tells the agent
+    to compare the submitted command with the approved one, and the specs record that the overwrite is kept by reach
+    and instruction on routes the deny rules do not match (finding 1). The approvals are released again by the owner
+    and the suite is green.
 
 ## Increments
 
@@ -266,6 +272,40 @@ approvals (owner-run), this plan's Result.
 **Evidence:** the one local commit (specs, plan, refreshed approval records), trailer
 `Plan: 2026-10-24-remote-runner-module#F`.
 
+### Increment G — Fixes from the security review
+
+**Outcome:** the four module-level findings of the review are fixed and the overwrite's real reach is written down.
+**Dependencies:** F.
+**Affected areas:** `helper/remote-runner`; `harness/neutral/skills/run-remote-job/SKILL.md`; the module's tests
+(`test_remoterunner_run.py`, `test_remoterunner_fetch.py`, `test_remoterunner_skill.py`); `docs/specs/remote-runner.md`;
+`docs/specs/trust-and-approval.md`; the shipped approvals (owner-run); this plan's Result.
+**Steps:**
+1. Tests first, each run and seen to fail on the current code:
+   - Finding 2: a `PATH` entry inside the project that does not exist, one written with `..` that resolves into the
+     project, and one that cannot be examined are not passed to the program and not searched; the program is still
+     found in a trusted entry.
+   - Finding 3: `--ref` is accepted only as 40 lowercase hex digits (a branch name, a tag name, uppercase hex, `+x`,
+     `@` and `HEAD` are refused, and nothing is started); the skill carries a step that compares the `command` in
+     the submit answer with the one the owner approved and stops when it differs, and says to pass a commit.
+   - Finding 4: `--dest` is refused when any of its parts starts with a dot (`.claude`, `.github/workflows`,
+     `out/.hidden`), for `fetch` and `fetch-overwrite`.
+   - Finding 5: the `SIGTERM` handler is installed before the program is started (an ordering test with a patched
+     `Popen`), and the existing signal test still passes.
+2. Fix the helper and the skill. Change the earlier tests that accepted a branch name for `--ref`.
+3. Edit the specs: the stricter `--ref` and `--dest` rules and the `PATH` rule in `remote-runner.md`; a note in
+   `remote-runner.md` ("The overwrite") and `trust-and-approval.md` that the owner-only argument is kept from the
+   agent by the rendered deny rules for `wb run` and by instruction, and that `wb launch`, a path-qualified `wb`,
+   `env wb`, `bash -c` and running the pinned helper file directly are not matched by them (finding 1; the installer
+   does not check `owner` in `launch`, which is deferred below).
+4. Run the module tests and the two root tests, then the document checks. Stop and ask the owner to run
+   `release-approvals`; preview any stale record and delete it only after "remove them"; run the full suite.
+5. Fill the Result.
+**Verification:** the module tests; `tests.test_boundary` and `tests.test_skill_names`; the full suite with no Claude
+skip; `doccheck`, `refcheck` and `git diff --check` print nothing.
+**Evidence:** the one local commit, trailer `Plan: 2026-10-24-remote-runner-module#G` (stale approval records
+deleted in the same commit, so the helper may refuse the commit and the separate `git add` and `git commit` exception
+applies).
+
 ## Verification for the plan as a whole
 
 - `python3 -B -W error tests/run_all.py` is green in every root with no Claude skip; `git diff --check`, `doccheck`
@@ -305,6 +345,11 @@ approvals (owner-run), this plan's Result.
   module unusable; the checks have been run only on 3.14 so far.
 - **The package tree changes.** Approvals go stale; the release is the owner's and stale records are deleted only after
   a preview and "remove them".
+- **The overwrite is kept from the agent by reach, and the reach has gaps.** The deny rules match `wb run` spellings
+  only. `wb launch` (in the installer's agent-safe list, and it does not check `owner`), a path-qualified `wb`,
+  `env wb`, `bash -c` and the pinned helper file run directly all reach `fetch-overwrite` unmatched, so those routes
+  rest on instruction and on the agent not being hostile (security review, finding 1). Increment G records this in the
+  specs; the installer change is deferred.
 - No push, no job submitted, no host contacted, no install into a project, no secret and no deletion beyond stale
   approval records.
 
@@ -330,6 +375,17 @@ Round 2 of 3, 2026-10-24, same model and effort (asked for by the owner). Outcom
 Nothing rejected in full. Left for the owner: whether to record the decision with `ask-codex decide`, whether to ask
 for a further round, and whether to approve.
 
+Security review, 2026-10-24 (asked for by the owner), by the `security-reviewer` agent with experiments against fake
+programs in a scratch directory; partial (about half the areas by experiment, the rest by reading; the real program,
+a real store and the harness's deny matching were not exercised). No Critical or High finding. Five findings: (1)
+Medium, `wb launch` reaches `fetch-overwrite` unmatched by the deny rules because `launch` does not check `owner`
+(confirmed by reading `rules.py` and `commands.py`; an installer gap that `review-engine` shares); (2) Medium, a
+missing in-repo `PATH` entry is treated as trusted; (3) Medium, the profile is checked in the working tree while a
+job runs the command from the submitted revision, and a mutable `--ref` is accepted; (4) Low, `--dest` may be a dot
+folder such as `.claude`; (5) Low, `SIGTERM` between `Popen` and the handler installation. The owner chose to fix 2 to
+5 in increment G and to record 1 in the specs. The agent's other reports (argument corpus, environment, framing,
+`provenance` as evidence only) found no problem.
+
 ## Deferred work
 
 - A change to the `remote-runner` program, outside this repository.
@@ -339,6 +395,10 @@ for a further round, and whether to approve.
 - A rendered `ask` for submit and fetch, and `delegate` for these checkpoints.
 - A project-level setting for the default runner or profile.
 - A live check in a scratch project against the real program.
+- An installer change so that `wb launch` refuses a command's `owner` arguments (or the deny rules also cover
+  `wb launch`), which would also close the same gap for `review-engine`; its own plan.
+- Taking the root the launcher resolved, instead of rediscovering it from the working directory, in the helpers (a
+  nested directory with its own `.git` and manifest is taken as the project: shared kit behaviour, rated Low).
 
 ## Result
 
