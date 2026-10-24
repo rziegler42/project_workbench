@@ -1,7 +1,7 @@
 # Roadmap: workbench-v1
 
 Status: Active
-Updated: 2026-10-22
+Updated: 2026-10-24
 
 This roadmap is direction only. It does not authorize implementation and does not
 change any plan. A candidate is referred to as `workbench-v1#<id>`. Candidates are
@@ -170,7 +170,7 @@ meet here and the order matters.
 `module-commands`, `module-checks`, `module-harness-paths`, `code-work-commit`,
 `checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint`, `compaction-guidance`,
 `remote-runner-module`, `review-engine`, `delegated-approval`, `action-review-engine`,
-`knowledge-base-package`, `port-superpowers`, `global-config-migration`, `self-hosting`, `remaining-modules-rename`.
+`mempalace-module`, `graphify-module`, `knowledge-base-package`, `port-superpowers`, `global-config-migration`, `self-hosting`, `remaining-modules-rename`.
 
 ## Candidates
 
@@ -480,12 +480,45 @@ the facts before the action is made (open in the accepted record).
 stays in the owner's own configuration. It is separate from `review-engine`, and a project may install either.
 **Promotion trigger:** `checkpoint-settings-and-caps` complete and the facts interface decided.
 
+The next three candidates are the knowledge modules, each solving a different problem and none replacing
+another (`docs/specs/knowledge-tools.md`): `mempalace` recalls earlier sessions and decisions, `graphify` shows
+structure and impact, and the knowledge base keeps classified online research. They are built in this order,
+because the first is the smallest and the least entangled; a shared convention is written down only from what
+the first two show.
+
+### mempalace-module — The `mempalace` module
+
+**Outcome:** the first-party module `mempalace`, which provides `memory-recall`: the agent-safe commands
+`status` and `search` over the owner's installed MemPalace, the owner-run `init` and `mine`, a policy block and a
+neutral skill that route questions and treat answers as data. It is tooling and not an MCP server.
+**Dependencies:** `module-commands`, `claude-harness`. The first plan must settle the open
+questions in `docs/specs/mempalace.md` ("Evidence and open questions") by running the real program in a
+scratch palace under `/.debug/`.
+**Boundary:** the module and its tests, with a fake `mempalace` in the tests. No write an agent can make, no
+MCP rendering, and no installation or configuration of the program. Writes to the palace are owner-run only.
+**Promotion trigger:** the owner approves `docs/specs/mempalace.md` and `docs/specs/knowledge-tools.md`.
+
+### graphify-module — The `graphify` module
+
+**Outcome:** the optional module `graphify`, which provides `code-graph`, ported from the owner's
+`claude_global_config` (the `graphify-workflow` skill and its helper) and `claude_project_template` (the guidance,
+`.graphifyignore` and ignore entries). It keeps the freshness status, the rule that an old graph is orientation
+only, and the plan receipt, written as neutral skills and a pinned helper.
+**Dependencies:** `mempalace-module` (for the shared conventions it shows), `code-work-plans` (the plan
+evidence section).
+**Boundary:** the module and a spec of its own. It does not ingest conversation history or the knowledge base.
+The graph output is untracked. This candidate takes `graphify` out of `remaining-modules-rename`.
+**Promotion trigger:** `mempalace-module` complete and the owner chooses to begin it.
+
 ### knowledge-base-package — The knowledge base as a package
 
 **Outcome:** the knowledge base adopts the workbench's package declaration, gets its
-generic name, provides its own capability, and is read through a read-only skill.
-**Dependencies:** `claude-harness`, `groundwork-module`.
-**Boundary:** the knowledge base's own repository changes. Its name is still open.
+generic name, provides its own capability (`knowledge-base`), and is read through a read-only skill. It holds,
+retains and classifies the owner's online research per domain, each item with its provenance.
+**Dependencies:** `claude-harness`, `groundwork-module`; the conventions of `mempalace-module` and
+`graphify-module`.
+**Boundary:** the knowledge base's own repository changes. Its name is still open. It does not hold decisions
+or conversation, and nothing tracked cites a path into it.
 **Promotion trigger:** `groundwork-module` complete and the name chosen.
 
 ### port-superpowers — Port the superpowers skills the owner uses into neutral skills
@@ -548,8 +581,8 @@ does not rewrite its own repository until that agreement is tested.
 
 ### remaining-modules-rename — Remaining modules and the rename pass
 
-**Outcome:** the optional `graphify` module, the `formal` module and the CAD domain
-modules are ported, and the module list is renamed consistently.
+**Outcome:** the `formal` module and the CAD domain
+modules are ported, and the module list is renamed consistently. (`graphify` moved to `graphify-module`.)
 **Dependencies:** `claude-harness`.
 **Boundary:** porting and renaming. Each ported module is checked against the
 specification. Nothing here is required by `code-work`.
