@@ -44,6 +44,37 @@ class Path(support_git.Repo):
         with unittest.mock.patch.dict(os.environ, {"PATH": os.pathsep.join([missing, deeper, self.outside])}):
             self.assertEqual([self.outside], H.trusted_path_entries(self.repo))
 
+    def test_only_an_existing_directory_is_a_trusted_entry(self):
+        sneaky = os.path.join(self.repo, "a", "..", "..", "pwn")
+        a_file = os.path.join(self.scratch, "a-file")
+        with open(a_file, "w") as handle:
+            handle.write("x")
+        link = os.path.join(self.scratch, "to-outside")
+        os.symlink(self.outside, link)
+        entries = [os.path.join(self.repo, "missing"), sneaky, a_file, os.path.join(self.scratch, "none"), link,
+                   self.outside]
+        with unittest.mock.patch.dict(os.environ, {"PATH": os.pathsep.join(entries)}):
+            self.assertEqual([link, self.outside], H.trusted_path_entries(self.repo))
+
+    def test_a_missing_entry_that_goes_up_through_dots_cannot_reach_the_repository_later(self):
+        sneaky = os.path.join(self.repo, "a", "..", "..", "pwn")
+        with unittest.mock.patch.dict(os.environ, {"PATH": os.pathsep.join([sneaky, self.outside])}):
+            self.assertEqual([self.outside], H.trusted_path_entries(self.repo))
+        os.makedirs(os.path.join(self.repo, "x", "y"))
+        os.makedirs(os.path.join(self.repo, "pwn"))
+        os.symlink(os.path.join(self.repo, "x", "y"), os.path.join(self.repo, "a"))
+        self.assertEqual(os.path.join(self.repo, "pwn"), os.path.realpath(sneaky))
+
+    def test_with_every_entry_dropped_the_fallback_path_is_used(self):
+        self.recording_git()
+        sneaky = os.path.join(self.repo, "a", "..", "..", "pwn")
+        with unittest.mock.patch.dict(os.environ, {"PATH": os.pathsep.join([sneaky, os.path.join(self.scratch, "none")])},
+                                      clear=True):
+            with unittest.mock.patch.object(H, "FALLBACK_PATH", [self.outside]):
+                found, entries = H._resolve_git(["git", "rev-parse", "HEAD"], self.repo)
+        self.assertEqual([self.outside], entries)
+        self.assertEqual(os.path.join(self.outside, "git"), found)
+
     def test_containment_fails_closed(self):
         self.assertTrue(H.is_inside(os.path.join(self.repo, "missing", "deeper"), self.repo))
         self.assertTrue(H.is_inside(self.repo, self.repo))

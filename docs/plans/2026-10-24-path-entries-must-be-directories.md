@@ -195,3 +195,9 @@ and without a second round.
   string, the missing entries and the file, and pass now: only the link and the outside directory reach the program, and
   the second test shows the same text names `<project>/pwn` once `a` becomes a link. The module's 94 tests pass;
   `git diff --check` prints nothing. The module's shipped approval is stale until E. Next: C.
+- Increment C: the `safe-git` helper's `trusted_path_entries` now also requires `os.path.isdir(entry)`. Three new tests
+  in `test_safegit_git.py` (class `Path`) failed on the old function and pass now: the existing-directory filter (the
+  attack string, a missing entry, a file and a missing entry outside the repository were kept before), the attack string
+  with a link made afterwards, and an environment whose every entry is dropped, which now gets `FALLBACK_PATH` (before,
+  the missing entries were kept, the fallback was not used and the run was refused). The module's 262 tests pass;
+  `git diff --check` prints nothing. The module's shipped approval is stale until E. Next: D.
