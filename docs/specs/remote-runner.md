@@ -135,9 +135,8 @@ before every argument is checked.
 
 **Shapes.** A `<name>` (profile or remote) matches `[A-Za-z0-9][A-Za-z0-9_-]{0,63}`; a profile must also be one the
 project file declares. A `<job>` matches `[A-Za-z0-9][A-Za-z0-9_-]{0,199}` and holds `--` (the program's own job form).
-A `<ref>` is 40 lowercase hex digits or a ref name of the characters `A-Za-z0-9._/+@-`, at most 200 bytes, with none
-of: a leading `-` or `.`, a trailing `.` or `/`, `..`, `//`, `@{`, `/.`, `.lock` (so no space, control character or
-character git forbids in a ref). A `<path>` is relative and plain by the kit's path rule (at most 512 characters, no
+A `<ref>` is exactly 40 lowercase hex digits. A branch or tag name is refused, because it can move between the
+moment the owner approves a profile and the moment the program resolves it. A `<path>` is relative and plain by the kit's path rule (at most 512 characters, no
 empty, `.` or `..` part, no `.git`, no backslash, colon or control character) and in addition has no leading `-` and
 no part starting with a dot. `--as` is allowed with exactly one path and is a plain file name
 under the same rule. `--dest` is described below.
@@ -163,7 +162,8 @@ For a committed ref the caller expects the 40-hex commit it passed to `--ref`; f
 `dut_commit` that `submit` reported.
 
 **`fetch` and the destination.** Before it starts the program the module checks that `--dest`, if given, resolves
-to an existing directory inside the project root with no link in any component and not inside `.git` or `.workbench`
+to an existing directory inside the project root with no link in any component and with no component starting with a
+dot, so not `.git`, `.workbench`, `.claude`, `.github` or another folder that configures a tool
 (default: the project root; an absolute value is accepted only if it begins with the project root, and the program is
 given the relative form), and that no target path already exists (a file, a directory, a link or a dangling link) and
 none lies below a link or a file. For `fetch-overwrite` an existing regular file is allowed as the target; a folder, a
@@ -178,6 +178,14 @@ passes `--force`, and `fetch-overwrite` is listed under `owner`, which a harness
 to the agent (`module-boundary.md`, "Declaration schema"). The owner can run it. A harness without `permissions`
 leaves the rule to instruction, as it does for every hard stop.
 
+The rendered deny rules match the text of `wb run`, in its usual spellings. They do not match `wb launch <id>
+remote-runner --root <root> -- fetch-overwrite ...` (the installer's `launch` is agent-safe and checks the pin and the
+helper's hash, not the declared `arguments` or `owner`), a path-qualified `wb`, `env wb ...`, `bash -c ...`, or running
+the pinned helper file directly. On those routes the rule rests on instruction and on the agent not being hostile,
+which is the limit the trust specification states for every pin and deny rule. An installer change that makes `launch`
+refuse a command's `owner` arguments is deferred (plan `2026-10-24-remote-runner-module`, security review, finding 1;
+it would also close the same gap for `review-engine`).
+
 ## The checkpoints
 
 `submit-remote-job` and `fetch-remote-output` are declared by `code-work` and default to `stop`. This module declares
@@ -191,7 +199,8 @@ instruction, and a permissive rule of the owner's for `wb run` lets the agent su
 
 - **The program** is found only in an absolute `PATH` entry outside the project (the outermost repository, compared
   by file identity), as the other bridges do; a program of that name inside the project, on a relative entry or on an
-  empty entry is never run. None found is refused with `program_not_found`.
+  empty entry is never run. An entry that is not a folder that exists now, or cannot be examined, is dropped and not
+  passed on, so a file made later in an absent folder of the project is never found by the program. None found is refused with `program_not_found`.
 - **The environment** is an allow list: the trusted `PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `LC_*`, `TERM`,
   `TMPDIR` and `SSH_AUTH_SOCK` (the program reaches its runners over SSH, and the owner's agent is how it signs in).
   No `GIT_*`, `LD_*`, `DYLD_*`, `PYTHON*` or other variable is passed.
@@ -277,6 +286,11 @@ The project's documented minimum Python version is 3.11 (`docs/development.md`).
 
 - The rules for the project file are one text carried by both helpers, because a helper is a standalone file; a test
   requires the two copies to be identical. An empty `os` or `arch` string is accepted (the bound is "at most 64").
+- A security review of the wrapper, asked for by the owner on 2026-10-24, found no Critical or High issue; its fixes
+  are the hex-only `--ref`, the dot rule for `--dest`, the dropping of absent `PATH` entries and the installing of the
+  `SIGTERM` handler before the program starts. A `SIGTERM` that arrives during the start of the program itself, between
+  the system call and the assignment of its handle, is not closed. The review was partial (about half the areas by
+  experiment); it did not exercise the real program, a real store and pin, or the harness's deny matching.
 - The wrapper shows its guarantees against a fake program, never the real one, and no host was contacted. A mismatch
   with the real program's output text, exit codes or flags would be found only by a live check, which has not been
   done, and cannot be until the program reads `.workbench/remote-runner.toml`.

@@ -55,6 +55,9 @@ class Fetch(support_program.Wrapped):
             handle.write("mine\n")
         os.symlink(os.path.join(self.base, "nowhere"), os.path.join(self.root, "dangling"))
         os.symlink(os.path.join(self.root, "real"), os.path.join(self.root, "out", "inner-link"))
+        os.makedirs(os.path.join(self.root, ".claude"))
+        os.makedirs(os.path.join(self.root, ".github", "workflows"))
+        os.makedirs(os.path.join(self.root, "out", ".hidden"))
         os.mkdir(os.path.join(self.root, "adir"))
         refused = {
             "no path": ("fetch", JOB),
@@ -87,6 +90,9 @@ class Fetch(support_program.Wrapped):
             "a dest below a link inside it": ("fetch", JOB, "a.txt", "--dest", "out/inner-link"),
             "a dest that is .git": ("fetch", JOB, "a.txt", "--dest", ".git"),
             "a dest below .workbench": ("fetch", JOB, "a.txt", "--dest", ".workbench"),
+            "a dest that is a dot folder": ("fetch", JOB, "a.txt", "--dest", ".claude"),
+            "a dest below a dot folder": ("fetch", JOB, "a.txt", "--dest", ".github/workflows"),
+            "a dest with a dot part": ("fetch", JOB, "a.txt", "--dest", "out/.hidden"),
             "a dest with a leading dash": ("fetch", JOB, "a.txt", "--dest", "-x"),
             "a target that exists": ("fetch", JOB, "exists.txt"),
             "a target that is a directory": ("fetch", JOB, "adir"),
@@ -150,6 +156,7 @@ class Overwrite(support_program.Wrapped):
         with open(os.path.join(self.root, "exists.txt"), "w") as handle:
             handle.write("mine\n")
         os.makedirs(os.path.join(self.root, "out"))
+        os.makedirs(os.path.join(self.root, ".claude"))
         os.mkdir(os.path.join(self.root, "adir"))
         os.symlink(os.path.join(self.root, "exists.txt"), os.path.join(self.root, "link"))
 
@@ -165,7 +172,8 @@ class Overwrite(support_program.Wrapped):
 
     def test_it_still_refuses_a_directory_a_link_a_bad_path_and_a_bad_dest(self):
         for args in (("adir",), ("link",), ("exists.txt/x",), ("/etc/passwd",), ("..",), (".env",), ("a.txt", "--force"),
-                     ("a.txt", "--dest", "../x"), ("a.txt", "--dest", ".git"), ("a.txt", "b.txt", "--as", "c.txt")):
+                     ("a.txt", "--dest", "../x"), ("a.txt", "--dest", ".git"), ("a.txt", "--dest", ".claude"),
+                     ("a.txt", "b.txt", "--as", "c.txt")):
             with self.subTest(args):
                 code, out, err = self.run_it("fetch-overwrite", JOB, *args)
                 self.assertEqual((1, ""), (code, out))

@@ -712,7 +712,9 @@ arrival is hashed and carries provenance. The channels are:
   existing target or a link before it starts the program; the overwrite is its separate argument `fetch-overwrite`,
   declared `owner`, which a harness with `permissions` denies the agent (`remote-runner.md`, "The overwrite"). A module
   cannot yet declare an added hard stop, so this is kept by reach, and a harness without `permissions` leaves it to
-  instruction.
+  instruction. The rendered deny rules match `wb run` only; `wb launch`, a path-qualified `wb`, `env wb`, `bash -c`
+  and the pinned helper file run directly reach the same argument unmatched, so on those routes it is instruction
+  (`remote-runner.md`, "The overwrite").
 - A tracked document that relies on a knowledge-base entry cites it by store, entry and
   content hash, plus the store's version, and never by a path on any machine. The
   project records only the store's name; each developer maps that name to their own

@@ -555,3 +555,32 @@ Increment F, 2026-10-24: the specs say what is built, the approvals are released
   needs it), so this plan stays `In Progress`; the live check; `ask-codex archive` for this plan's review; pushing the
   commits (7 ahead of `origin/main` once this one is made); the changes to `~/.claude` that
   `global-config-migration` will make.
+
+Increment G, 2026-10-24: the fixes from the security review (findings 2 to 5) are in, and finding 1 is recorded in the
+specs.
+
+- Tests first: written and run before the fixes; 19 failed on the then-current code (the dot `--dest` cases for
+  `fetch` and `fetch-overwrite`, the branch-name and other non-hex `--ref` cases, the absent and unexaminable `PATH`
+  entries, the handler ordering, and the skill's comparison step). Afterwards the module tests (104) pass.
+- Fixes: finding 2, the helper keeps only absolute `PATH` entries that are folders existing now and outside the
+  project; finding 3, `--ref` is exactly 40 lowercase hex digits (the earlier tests that accepted a branch name were
+  changed), and the skill tells the agent to pass a 40-digit commit and to compare the `command` in the submit answer
+  with the one `profiles` showed and the owner approved, stopping on a difference; finding 4, no part of `--dest` may
+  start with a dot; finding 5, the `SIGTERM` handler is installed before `Popen` and put back afterwards (a signal
+  that arrives during `Popen` itself is not closed, and the spec says so).
+- Finding 1: `remote-runner.md` ("The overwrite") and `trust-and-approval.md` say the owner-only argument is kept from
+  the agent by the rendered `wb run` deny rules and by instruction, and that `wb launch`, a path-qualified `wb`,
+  `env wb`, `bash -c` and the pinned helper file run directly are not matched. I read `launch` in the installer: it is
+  agent-safe and does not check `arguments` or `owner`. Nothing in the installer was changed; the fix (and the same gap
+  for `review-engine`) is deferred above.
+- Approvals, owner-run on "Run it for me": the third release wrote 8 records and reported two stale ones (the package
+  and the `remote-runner` module record from increment F); they were removed after a preview and "remove them".
+- Verification as run: `python3 -B -W error tests/run_all.py`: 3,787 tests in 8 roots, OK (skips: 1 in the root suite
+  and 2 in `code-work`, as before; none in `claude`); `tests.test_boundary` and `tests.test_skill_names` pass inside
+  it; `doccheck`, `refcheck` and `git diff --check` print nothing. The real program was not started.
+- Limits of the review itself: partial; about half the areas were tried by experiment and the rest read; the real
+  program, a real store and pin, and the harness's deny matching were not exercised. The wrapper's profile check
+  still reads the working tree, and the program runs the command from the submitted commit, so the skill's
+  comparison step is the defence against a changed command.
+- Still open for the owner: approval of `docs/specs/remote-runner.md` (so the plan stays `In Progress`); the
+  installer change for `launch`; the live check; `ask-codex archive`; the push.

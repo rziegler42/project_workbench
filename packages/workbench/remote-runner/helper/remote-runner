@@ -137,7 +137,6 @@ STOPPED_BIG = 125     # exit status reported when the program was stopped for to
 KEPT = ("HOME", "USER", "LOGNAME", "LANG", "TERM", "TMPDIR", "SSH_AUTH_SOCK")
 JOB = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,199}")
 HEX = re.compile(r"[0-9a-f]{40}")
-REF = re.compile(r"[A-Za-z0-9._/+@-]{1,200}")
 STATES = ("STARTING", "RUNNING", "PASSED", "FAILED", "CANCELLED", "FINISHED", "UNKNOWN_EXIT", "UNKNOWN")
 INTEGRITY = ("ok", "mismatch", "invalid")
 USAGE = {
@@ -146,7 +145,7 @@ USAGE = {
     "status": "usage: remote-runner status <job> [--expect <40 hex>]",
     "artifacts": "usage: remote-runner artifacts <job>",
     "submit": "usage: remote-runner submit (--remote <name> | --best) --profile <name> "
-              "[--ref <ref> | --snapshot]",
+              "[--ref <40 hex> | --snapshot]",
     "fetch": "usage: remote-runner fetch <job> <path> ... [--dest <folder>] [--as <name>] (1 to 16 paths)",
     "fetch-overwrite": "usage: remote-runner fetch-overwrite <job> <path> ... [--dest <folder>] [--as <name>]",
 }
@@ -250,13 +249,10 @@ def need_job(value):
 
 
 def need_ref(value):
-    """A 40-digit commit or a plain ref name: ASCII without a leading dash or dot, a trailing dot or slash,
-    `..`, `//`, `@{`, `/.`, `.lock`, a space, a control character or one git forbids in a ref."""
-    if HEX.fullmatch(value):
-        return value
-    if not REF.fullmatch(value) or value[0] in "-." or value[-1] in "./" or any(
-            bad in value for bad in ("..", "//", "@{", "/.", ".lock")):
-        raise Refused("the ref is not a plain branch name, tag name or 40-digit commit")
+    """A 40-digit lowercase commit and nothing else. A branch or tag name can move between the moment the owner
+    approves a profile and the moment the program resolves it, so a job runs a commit that was named."""
+    if not HEX.fullmatch(value):
+        raise Refused("the ref is not a 40-digit lowercase commit")
     return value
 
 
@@ -280,8 +276,9 @@ def need_file_name(value):
 
 
 def need_dest(root, value):
-    """The existing folder `value`, as a path relative to `root`: inside the project, no link on the way, not in
-    `.git` or `.workbench`."""
+    """The existing folder `value`, as a path relative to `root`: inside the project, no link on the way, and no
+    part starting with a dot, so not `.git`, `.workbench`, `.claude`, `.github` or another folder that
+    configures a tool."""
     if value.startswith("/"):
         prefix = root.rstrip("/") + "/"
         if not value.startswith(prefix):
@@ -291,8 +288,8 @@ def need_dest(root, value):
         parts = safefs.validate_relpath(value)
     except safefs.SafeFsError:
         raise Refused("--dest is not a plain relative folder inside the project")
-    if value.startswith("-") or any(part.casefold() in (".git", ".workbench") for part in parts):
-        raise Refused("--dest is not a plain folder (not .git or .workbench, no leading dash)")
+    if value.startswith("-") or any(part.startswith(".") for part in parts):
+        raise Refused("--dest is not a plain folder (no part starting with a dot, no leading dash)")
     current = root
     for part in parts:
         current = os.path.join(current, part)
@@ -425,9 +422,11 @@ def outermost_boundary(start):
 
 
 def trusted_entries(boundary):
-    """The PATH entries that are absolute and outside the repository: never "", "." or a relative one."""
+    """The PATH entries that are absolute, are folders that exist now and are outside the repository: never "",
+    "." or a relative one, and never an entry that is missing or cannot be examined (a file made there later, inside
+    the repository, would otherwise be found by the program)."""
     return [entry for entry in os.environ.get("PATH", "").split(os.pathsep)
-            if entry and os.path.isabs(entry) and not is_inside(entry, boundary)]
+            if entry and os.path.isabs(entry) and os.path.isdir(entry) and not is_inside(entry, boundary)]
 
 
 def trusted_which(name, entries, boundary):
@@ -469,12 +468,13 @@ def run_program(argv, cwd, env, timeout):
     """Run `argv`; return ``(code, stdout, stderr, over, timed_out)``. Each stream is read to `MAX_OUTPUT` bytes
     and the program is stopped when one passes it, and at `timeout` seconds; the whole process group is killed
     in either case, and on SIGTERM or an interrupt of the helper. The program gets no standard input."""
-    process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               cwd=cwd, env=env, start_new_session=True)
     previous = signal.signal(signal.SIGTERM, _terminated)
+    process = None
     out, err = bytearray(), bytearray()
     over = timed_out = False
     try:
+        process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   cwd=cwd, env=env, start_new_session=True)
         with selectors.DefaultSelector() as pipes:
             pipes.register(process.stdout, selectors.EVENT_READ, out)
             pipes.register(process.stderr, selectors.EVENT_READ, err)
@@ -504,15 +504,16 @@ def run_program(argv, cwd, env, timeout):
             process.wait()
         return process.returncode, bytes(out[:MAX_OUTPUT]), bytes(err[:MAX_OUTPUT]), over, timed_out
     finally:
-        if process.poll() is None:  # an interrupt or SIGTERM: the program is in its own session, so it would run on
-            kill(process)
-            process.wait()
+        if process is not None:
+            if process.poll() is None:  # an interrupt or SIGTERM: the program is in its own session, so it would run on
+                kill(process)
+                process.wait()
+            for pipe in (process.stdout, process.stderr):
+                try:
+                    pipe.close()
+                except (OSError, ValueError):
+                    pass
         signal.signal(signal.SIGTERM, previous)
-        for pipe in (process.stdout, process.stderr):
-            try:
-                pipe.close()
-            except (OSError, ValueError):
-                pass
 
 
 def detail_of(stderr):

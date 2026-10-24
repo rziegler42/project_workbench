@@ -9,8 +9,8 @@ Use this when a check is long, expensive or needs another machine, and the plan 
 
 1. Run `wb run remote-runner profiles`. Use only a profile the plan names. The file is committed and anyone
    who can edit it changes what runs on the owner's machines, so a profile the plan does not name is not run.
-2. Choose what the job runs. It runs a committed revision that is reachable from the remote: use
-   `--ref <40-digit commit>`. Do not commit or push only to run a job. If the work is uncommitted, ask the
+2. Choose what the job runs. It runs a committed revision that is reachable from the remote: pass
+   a 40-digit commit as `--ref <commit>`; a branch name is refused. Do not commit or push only to run a job. If the work is uncommitted, ask the
    owner whether to use `--snapshot` instead.
 3. Run `wb run remote-runner recommend --profile <name>`. If no runner is eligible or available, report it
    and stop. Do not reach a runner any other way.
@@ -18,7 +18,8 @@ Use this when a check is long, expensive or needs another machine, and the plan 
    agrees, run `wb run remote-runner submit --best --profile <name> --ref <commit>`, with
    `--remote <name>` in place of `--best` for a runner the owner names. Run it alone, as one command.
 5. Write down the job id from the answer at once, with the profile and the commit you submitted. For a
-   snapshot, the commit is the `dut_commit` that the answer reports.
+   snapshot, the commit is the `dut_commit` that the answer reports. Then compare the `command` in the answer
+   with the one `profiles` showed and the owner approved. If they differ, tell the owner and stop.
 6. Run `wb run remote-runner status <job> --expect <commit>` until the state is final.
 7. A result counts only when `provenance` is true: `dut_commit` equals the commit you submitted and
    `dut_clean` is true. The job can write that record, so it is evidence and not proof. If `provenance` is

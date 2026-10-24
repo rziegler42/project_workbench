@@ -113,6 +113,12 @@ class Rules(unittest.TestCase):
                      "--snapshot", "uncommitted"):
             self.assertIn(rule, text, rule)
 
+    def test_it_compares_the_submitted_command_with_the_approved_one_and_stops_on_a_difference(self):
+        text = flat()
+        for rule in ("compare the `command` in the answer", "the one `profiles` showed",
+                     "If they differ, tell the owner and stop", "a 40-digit commit"):
+            self.assertIn(rule, text, rule)
+
     def test_a_result_counts_only_with_provenance(self):
         text = flat()
         for rule in ("`provenance`", "`dut_commit`", "`dut_clean`", "the commit you submitted", "--expect",

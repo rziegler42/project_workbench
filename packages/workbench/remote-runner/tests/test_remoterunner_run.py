@@ -30,8 +30,8 @@ class Arguments(support_program.Wrapped):
             (("artifacts", JOB), ["artifacts", JOB]),
             (("submit", "--remote", "box", "--profile", "fast"), ["submit", "--remote", "box", "--profile", "fast"]),
             (("submit", "--best", "--profile", "full"), ["submit", "--best", "--profile", "full"]),
-            (("submit", "--profile", "fast", "--best", "--ref", "feature/x-1"),
-             ["submit", "--best", "--profile", "fast", "--ref", "feature/x-1"]),
+            (("submit", "--profile", "fast", "--best", "--ref", OTHER),
+             ["submit", "--best", "--profile", "fast", "--ref", OTHER]),
             (("submit", "--remote", "box", "--profile", "fast", "--ref", COMMIT),
              ["submit", "--remote", "box", "--profile", "fast", "--ref", COMMIT]),
             (("submit", "--snapshot", "--best", "--profile", "fast"),
@@ -84,6 +84,14 @@ class Arguments(support_program.Wrapped):
             "submit with a ref holding a double slash": ("submit", "--best", "--profile", "fast", "--ref", "a//b"),
             "submit with a ref holding .lock": ("submit", "--best", "--profile", "fast", "--ref", "a.lock"),
             "submit with a ref holding a colon": ("submit", "--best", "--profile", "fast", "--ref", "a:b"),
+            "submit with a branch name as the ref": ("submit", "--best", "--profile", "fast", "--ref", "feature/x-1"),
+            "submit with a short branch name": ("submit", "--best", "--profile", "fast", "--ref", "main"),
+            "submit with HEAD as the ref": ("submit", "--best", "--profile", "fast", "--ref", "HEAD"),
+            "submit with a bare @ as the ref": ("submit", "--best", "--profile", "fast", "--ref", "@"),
+            "submit with a plus ref": ("submit", "--best", "--profile", "fast", "--ref", "+main"),
+            "submit with a ref in capitals": ("submit", "--best", "--profile", "fast", "--ref", "A" * 40),
+            "submit with a ref of 39 digits": ("submit", "--best", "--profile", "fast", "--ref", "a" * 39),
+            "submit with a ref of 41 digits": ("submit", "--best", "--profile", "fast", "--ref", "a" * 41),
             "submit with a ref of 201 characters": ("submit", "--best", "--profile", "fast", "--ref", "a" * 201),
             "submit with a repeated snapshot": ("submit", "--best", "--profile", "fast", "--snapshot",
                                                 "--snapshot"),
@@ -189,6 +197,33 @@ class Lookup(support_program.Wrapped):
         self.assertEqual(1, code)
         self.assertEqual([], self.calls(planted))
 
+    def test_a_missing_entry_inside_the_project_is_neither_searched_nor_passed_to_the_program(self):
+        inside = [os.path.join(self.root, "bin"), os.path.join(self.root, "sub", "..", "later"),
+                  os.path.join(self.root, "sub", "deeper", "none")]
+        self.path(inside + [self.outside])
+        self.document("artifacts", JOB)
+        self.assertEqual(self.outside, self.calls()[0]["env"]["PATH"])
+
+    def test_an_entry_that_cannot_be_examined_or_is_not_a_folder_is_dropped(self):
+        a_file = os.path.join(self.base, "afile")
+        with open(a_file, "w") as handle:
+            handle.write("x")
+        self.path([os.path.join(self.base, "missing"), a_file, os.path.join(a_file, "below"), self.outside])
+        self.document("artifacts", JOB)
+        self.assertEqual(self.outside, self.calls()[0]["env"]["PATH"])
+
+    def test_a_file_made_later_in_a_dropped_entry_is_not_found(self):
+        later = os.path.join(self.root, "bin")
+        self.path([later])
+        code, out, err = self.run_it("artifacts", JOB)
+        self.assertEqual(1, code)
+        self.assertIn("program_not_found", err)
+        self.planted(later)
+        self.path([later])
+        code, out, err = self.run_it("artifacts", JOB)
+        self.assertEqual(1, code)
+        self.assertEqual([], self.calls(later))
+
     def test_no_program_at_all_is_one_refusal(self):
         self.path([os.path.join(self.base, "nothing")])
         code, out, err = self.run_it("artifacts", JOB)
@@ -289,6 +324,24 @@ class Deadline(support_program.Wrapped):
             self.document("status", JOB)
             self.document("artifacts", JOB)
         self.assertEqual([("submit", 600), ("recommend", 120), ("status", 120), ("artifacts", 120)], seen)
+
+    def test_the_sigterm_handler_is_installed_before_the_program_is_started_and_put_back_after(self):
+        events = []
+        real = signal.signal
+
+        def record_signal(number, handler):
+            events.append(("signal", number))
+            return real(number, handler)
+
+        def fake_popen(*args, **kwargs):
+            events.append(("popen",))
+            raise RuntimeError("stop here")
+
+        with unittest.mock.patch.object(self.helper.signal, "signal", record_signal), \
+                unittest.mock.patch.object(self.helper.subprocess, "Popen", fake_popen):
+            with self.assertRaises(RuntimeError):
+                self.helper.run_program(["x"], self.root, {}, 5)
+        self.assertEqual([("signal", signal.SIGTERM), ("popen",), ("signal", signal.SIGTERM)], events)
 
     def test_sigterm_to_the_helper_stops_the_program_and_its_child(self):
         self.control(hang=True)
