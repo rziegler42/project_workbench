@@ -63,3 +63,13 @@ mode, which may ask the owner to trust the project's hooks; and any tool other t
 - `docs/specs/harness-modules.md`, `docs/specs/module-contract.md`
 - `2026-10-22-installer-owns-the-edit-gate`, `2026-10-23-one-owner-per-skill-name`, `2026-10-19-restrictive-only-permissions`
 - Roadmap candidates `agent-confinement` and `security-review-module`
+
+## Dated note, 2026-10-24: the trusted-folder limit
+
+The body above is unchanged. A later trial (Claude Code 2.1.310, `claude -p`) showed that Claude skips an agent's frontmatter hooks
+in a folder it does not trust and runs the agent anyway, with nothing in the run's output. In such a folder the agent's `edit`
+and `shell` tools are unconfined, whatever it declares. The owner accepted this as a stated limit on 2026-10-24: the guarantee
+is enforced in a trusted folder. Decision 6 above, the stated limit, therefore covers this case as well. The open item about
+whether an interactive session asks the owner to trust a project's hooks is untested and stays open; only the owner can run it.
+The rendered agent file is protected by the existing deny on file tools, which now covers it, and not against a shell. The
+specification, "The agent gate", states the built behaviour and what was verified.

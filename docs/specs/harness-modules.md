@@ -421,10 +421,20 @@ hook. The rendered entry is fixed by the layout and not chosen by any module. Th
 
 ### The agent gate
 
-*(Specified by plan `2026-10-24-agent-confinement`, increment B. The guard `wb agent-gate` is built (increment D), and attach
-renders the hook, the deny and the note (increment E); the end-to-end record is increment F. The decision is
+*(As built by plan `2026-10-24-agent-confinement`: the guard `wb agent-gate` (increment D), the hook, the deny and the note
+rendered by attach (increment E), and the end-to-end test (increment F). The decision is
 `docs/decisions/2026-10-24-declared-agent-confinement.md`, accepted. Built against the evidence under "Hooks in an agent's
 frontmatter".)*
+
+**What was verified, and what was not.** Verified by test, on a synthetic harness and module and with no installed first-party
+module: the reading and validation of the fields; each refusal of the guard; the rendered hook, deny and note; the report of
+`check`; and the whole path from the declaration through attach to the command in the agent's own file, run through a shell with
+the hook input on standard input and the exit code read back, with `wb` a stub that calls the installer with the test's store
+and distribution, a permitted and a hostile input each, and a missing `wb`. Verified once live: the trial under "Hooks in an
+agent's frontmatter" (Claude Code 2.1.310, `claude -p`). Not verified: the rendered hook against a live harness (no first-party
+module ships a confined agent yet, and the real Claude layout is untested for the matcher); an interactive session in a folder
+the harness does not trust, which only the owner can run; the case-insensitive filesystem and a different `wb` on `PATH`
+(see the limits below).
 
 For a confined agent ("Neutral items") the installer renders a hook into the agent's own file, under the key the layout names,
 and not into the settings file. The hook therefore applies to that agent only. Its command is fixed by the layout and not chosen

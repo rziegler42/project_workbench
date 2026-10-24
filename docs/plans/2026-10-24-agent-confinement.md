@@ -1,6 +1,6 @@
 # Agents with declared limits, enforced by the installer
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-24
 Candidate: workbench-v1#agent-confinement
 Specs: harness-modules
@@ -386,3 +386,19 @@ refusing `..`, `//`, `~`, `*`, brackets, a trailing slash, non-ASCII and a newli
 the spec's limits, with no code change: the deny is an exact-case pattern, so on a case-insensitive filesystem another session's
 write under another case may not match it; and the hook command finds `wb` through `PATH`. Both are shared with the edit gate and
 neither was tested. Evidence limits: `wb agent-gate` was not run against a live harness, and the real Claude layout was not used.
+
+**Increment F:** `tests/test_agent_render.py` gained `EndToEnd`: it attaches a synthetic module with confined agents, reads the
+command out of the rendered agent file, and runs it through `/bin/sh -c` with the hook input on standard input and the exit code
+read back, as a harness runs a command hook. `wb` there is a stub that calls the installer with the test's store and
+distribution. Covered: the command text; a permitted scratch write and a pinned command (exit 0, no output); a project write, a
+`..` write, a chained, substituted, redirected and extra-token command, an undeclared agent, a tool the agent does not hold,
+non-JSON input, and a missing `wb` (each exit 2, one `refused:` line except the missing `wb`); and that no refused or allowed
+call runs anything. A mutation (the stub always allowing) failed six of the ten tests. The spec's "The agent gate" is now "As
+built" with a statement of what was and was not verified; `docs/development.md` already carries the `wb agent-gate` row (added in
+D). The decision `2026-10-24-declared-agent-confinement` has a dated note of the trusted-folder limit, its body and status line
+unchanged, so `docs/decisions/README.md` needed no change. The full suite is green with nothing edited while it ran: 4,086 tests
+in 9 roots (`tests` 2,607 with 1 skipped; `ask-codex` 90; `claude` 33; `code-work` 338 with 2 skipped; `groundwork` 187;
+`mempalace` 145; `remote-runner` 104; `review-engine` 325; `safe-git` 257).
+Increments D to F touched no module tree. `release-approvals` was run on the owner's word after F: it wrote 9 approvals for 1
+first-party package and changed no tracked file, and 9 record directories are present, so nothing is stale. Criterion 7 is met.
+The plan is Completed; the interactive trust check stays open as a stated limit. Open: the interactive trust check (owner only); the S7 plan; the push.
