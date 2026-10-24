@@ -1,6 +1,6 @@
 # Port the superpowers skills the owner uses into neutral skills
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-23
 Candidate: workbench-v1#port-superpowers
 Specs: code-work, groundwork, harness-modules, superpowers-ports
@@ -323,4 +323,37 @@ Nothing rejected. Left for the owner: whether to approve, and whether to ask for
 
 ## Result
 
-Not started.
+Done on 2026-10-23.
+
+- Increment A (`2596967`): `docs/specs/superpowers-ports.md` lists the 15 skills of the plugin version 7.0.0 with the
+  source URL, the retrieval date and the SHA-256 of each `SKILL.md`, which the owner's files show used (11 of 15) and what
+  became of each. Difference found and recorded, not closed: `receiving-code-review` says to ask when an item is unclear,
+  to apply items one at a time and to check a suggested feature for need; `evaluate-findings` does not.
+- Increment B (`b95a703`): decision `2026-10-23-one-owner-per-skill-name` (`Proposed`; accepting it is the owner's act) and
+  `tests/test_skill_names.py` (8 tests). Two corrections to this plan: the installer's refusal of one path from two modules
+  is `harnessstage.inputs` ("<a> and <b> both supply ..."), not `harnessplan._no_collision`, which only catches a collision
+  after translation; and tests (c) and (d) passed on their first run because increment A had already written the spec table,
+  so only the duplicate-name test was shown to fail, by a deliberate duplicate. No change to the contract was needed:
+  `requires` is per module, so a domain module requires an existing core name or a new one its own plan adds to a spec.
+- Increment C (`35eb5da`): `brainstorm` in `groundwork`, with no template. The module's tests were split into the four
+  skills and the three that have a template; no assertion was loosened. 187 tests. The handoff to a plan skill is optional
+  ("only if one is installed"), as review round 1 required.
+- Increment D (`abb94b2`), E (`ee0fbc3`), F (`9d04057`): `test-first`, `diagnose-failure` and `verify-before-claiming` in
+  `code-work`, with `test_codework_practice.py`. `diagnose-failure` and `run-increment` both carry "the same failure
+  twice", pinned by a test; `diagnose-failure` adds a stop at three failed fixes. The tests caught my own use of the word
+  "make " in D.
+- Increment G: `code-work.md`, `groundwork.md` and the inventory say what is built and its limits. The owner had
+  `release-approvals` run on 2026-10-23: it wrote 7 approvals in three new record directories, and the three stale ones it
+  warned about were removed after a preview and the owner's "remove them".
+- Verification: `python3 -B -W error tests/run_all.py` ran 3683 tests in 7 roots, OK (installer 2454 with 1 skipped,
+  ask-codex 90, claude 32 with no skips, code-work 338 with 2 skipped, groundwork 187, review-engine 325, safe-git 257);
+  `doccheck`, `refcheck` and `git diff --check` print nothing. The plan check was not run: this repository is not a
+  workbench project, so the owner checks plan shape.
+- Criteria: 1 to 7 met. Criterion 2 holds for the record as `Proposed`: the rule is recorded and tested; the owner has not
+  accepted it.
+- Not verified: no live session. Whether Claude loads the skills when it should, or follows them, is unseen. An owner-run
+  check in a scratch project would show it: attach the modules, ask for a new feature, and see whether the agent asks before
+  building. No sentence of the plugin was copied.
+- Left for the owner: accept or change the decision record; whether to follow up the `receiving-code-review` differences, the
+  unused plugin skills and the domain forms of the practices; `global-config-migration` removes the plugin and the routing.
+- Closed: `Status: Completed`.

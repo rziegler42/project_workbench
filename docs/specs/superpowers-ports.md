@@ -1,7 +1,7 @@
 # superpowers-ports
 
-Status: Draft. Written by plan `2026-10-23-port-superpowers`, increments A and B. The placement rule awaits the owner's
-acceptance of its decision record, and the status column is final at increment G.
+Status: Current for the inventory and the four first ports, which plan `2026-10-23-port-superpowers` built. The placement
+rule awaits the owner's acceptance of its decision record.
 
 Terms are defined in `terms.md`. The neutral item format and its translation are in `harness-modules.md`; the modules
 that receive the ports are `code-work.md`, `groundwork.md` and `safe-git.md`.
@@ -62,19 +62,19 @@ and verification") or the `skills:` list of one of the owner's agents (`implemen
 
 Dispositions: **covered** (a workbench item already does the job), **ported** (a new skill is written), **split** (the
 practice has a general part and domain parts that belong to different modules), **not ported** (with the reason), **gap**
-(not done and not planned; a later candidate if the owner wants it). Status is `built` or `planned`.
+(not done and not planned; a later candidate if the owner wants it). Status is `built`, or `none` for a row with no item.
 
 | Superpowers skill | Used (shown by) | Disposition | Workbench skill | Owner module | Status |
 |---|---|---|---|---|---|
-| brainstorming | yes (`CLAUDE.md`, "Starting repository work") | ported | `brainstorm` | `groundwork` | planned |
+| brainstorming | yes (`CLAUDE.md`, "Starting repository work") | ported | `brainstorm` | `groundwork` | built |
 | writing-plans | yes (`CLAUDE.md`, "Skill and agent routing") | covered | `draft-plan` | `code-work` | built |
 | executing-plans | yes (`CLAUDE.md`, "Skill and agent routing") | covered | `run-increment` | `code-work` | built |
 | subagent-driven-development | yes (`CLAUDE.md`, "Skill and agent routing") | covered in part; gap for a fresh implementer per increment | `run-increment` | `code-work` | built |
 | requesting-code-review | yes (`CLAUDE.md`; `workflow-reviewer`) | covered | `request-review` and the `reviewer` agent | `code-work` | built |
 | receiving-code-review | yes (`CLAUDE.md`, "Skill and agent routing") | covered, with differences | `evaluate-findings` | `code-work` | built |
-| test-driven-development | yes (`CLAUDE.md`; `implementer`) | split: general part ported | `test-first` | `code-work` | planned |
-| systematic-debugging | yes (`CLAUDE.md`; `implementer`) | split: general part ported | `diagnose-failure` | `code-work` | planned |
-| verification-before-completion | yes (`CLAUDE.md`; `implementer`, `workflow-reviewer`, `security-reviewer`) | split: general part ported | `verify-before-claiming` | `code-work` | planned |
+| test-driven-development | yes (`CLAUDE.md`; `implementer`) | split: general part ported | `test-first` | `code-work` | built |
+| systematic-debugging | yes (`CLAUDE.md`; `implementer`) | split: general part ported | `diagnose-failure` | `code-work` | built |
+| verification-before-completion | yes (`CLAUDE.md`; `implementer`, `workflow-reviewer`, `security-reviewer`) | split: general part ported | `verify-before-claiming` | `code-work` | built |
 | using-git-worktrees | yes (`CLAUDE.md`, "Skill and agent routing") | not ported | none | none | none |
 | finishing-a-development-branch | yes (`CLAUDE.md`, "Skill and agent routing") | not ported | `push-changes` covers the push | `code-work` | built |
 | using-superpowers | no (the plugin's own start-up rule) | not ported | none | none | none |
@@ -129,7 +129,7 @@ installer refuses a neutral path two modules both supply). The rule, proposed in
    specification. Nothing is added until a domain module exists.
 4. The owner of each ported skill is the Owner column of the inventory; a test checks every row marked built.
 
-Two worked examples, both planned:
+Two worked examples; the general skills are built, the domain forms are not:
 
 - **Test first.** `test-first` is general and owned by `code-work`; its text names no language or runner and says the
   plan's verification line gives the command. A hardware-description module would later ship a differently named skill, for
@@ -142,8 +142,8 @@ Two worked examples, both planned:
 ## Acceptance criteria
 
 1. The table lists all 15 skills of the plugin version 7.0.0 and the provenance table has a hash for each.
-2. Every row marked built names a skill that the owner module ships; every row marked planned is built by the plan
-   `2026-10-23-port-superpowers` or is marked not ported or gap.
+2. Every row marked built names a skill that the owner module ships (`tests/test_skill_names.py`); a row for a skill
+   that is not built says `none` throughout.
 3. Nothing in the spec points at the plugin's path or at `~/.claude` as a source for a requirement.
 4. No two first-party packages ship a skill, agent or command of the same name (`tests/test_skill_names.py`).
 

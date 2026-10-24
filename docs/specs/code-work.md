@@ -41,7 +41,8 @@ Non-goals:
 | checkpoints, caps | the eight checkpoint names and three caps under "Checkpoints" and "Loop caps" (built by plan `2026-10-22-checkpoint-settings-and-caps`) |
 
 It also ships neutral items: skills for drafting a plan, running the increment loop,
-reviewing, asking for a delegated approval, and pushing; and a read-only reviewer agent. Templates stay in the module; no
+reviewing, asking for a delegated approval, and pushing; three general practice skills (`test-first`,
+`diagnose-failure`, `verify-before-claiming`); and a read-only reviewer agent. Templates stay in the module; no
 placeholder plan is installed.
 
 ## Lifecycle
@@ -488,6 +489,14 @@ installer's and is replaced on upgrade only while unedited.
   report and keeps the skills, and the owner then reviews; the reviewer's restriction was shown by tests on the
   rendered file and not in a live session; there is no implementer in a fresh context and no command that starts
   the loop.
+- Built, from plan `2026-10-23-port-superpowers`: the neutral practice skills `test-first`, `diagnose-failure` and
+  `verify-before-claiming`, written new in the workbench's words. Each is general: it names no language, runner or
+  program, and says a skill in a domain module may extend it and takes precedence in its domain, so a domain module
+  ships its own differently named form (`superpowers-ports.md`; decision `2026-10-23-one-owner-per-skill-name`,
+  Proposed). `diagnose-failure` agrees with `run-increment` on stopping at the same failure twice and adds a stop at
+  three failed fixes; `verify-before-claiming` is the rule under `run-increment`'s report. Limits: the skills are
+  advice, and nothing forces an agent to load one or follow it; whether Claude loads them when it should is
+  unverified; the superpowers plugin is still enabled in `~/.claude` until `global-config-migration`.
 - Built, from plan `2026-10-23-push-checkpoint`: `wb run safe-git push-check` (`safe-git.md`, "Push check"), the
   helper's `shared` subcommand, the file `.workbench/shared-branches.json`, and the neutral skill `push-changes`.
   Limits: the skill is advice and no rule is added, so the enforced stop is the floor's `ask` on every push, which
