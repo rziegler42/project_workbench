@@ -36,6 +36,22 @@ class Path(support_git.Repo):
         with unittest.mock.patch.dict(os.environ, {"PATH": os.pathsep.join(entries)}):
             self.assertEqual([self.outside, "/usr/bin"], H.trusted_path_entries(self.repo))
 
+    def test_a_missing_entry_inside_the_repository_is_never_trusted(self):
+        """A directory that does not exist yet is inside when what it would be made in is: a program put there
+        later would otherwise be found."""
+        missing = os.path.join(self.repo, "missing-bin")
+        deeper = os.path.join(self.repo, "a", "b", "c")
+        with unittest.mock.patch.dict(os.environ, {"PATH": os.pathsep.join([missing, deeper, self.outside])}):
+            self.assertEqual([self.outside], H.trusted_path_entries(self.repo))
+
+    def test_containment_fails_closed(self):
+        self.assertTrue(H.is_inside(os.path.join(self.repo, "missing", "deeper"), self.repo))
+        self.assertTrue(H.is_inside(self.repo, self.repo))
+        self.assertFalse(H.is_inside(os.path.join(self.scratch, "missing"), self.repo))
+        self.assertFalse(H.is_inside(self.outside, self.repo))
+        with unittest.mock.patch.object(H.os.path, "samefile", side_effect=PermissionError):
+            self.assertTrue(H.is_inside(self.outside, self.repo))
+
     def test_a_git_inside_the_repository_is_never_the_one_that_runs(self):
         inside = os.path.join(self.repo, "bin")
         os.mkdir(inside)

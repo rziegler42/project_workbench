@@ -186,4 +186,7 @@ The owner approved the plan on 2026-10-24, after this review.
   `ask-codex` module (90) and the `review-engine` module (325), which use the kit, pass.
 - Increment B: the `ask-codex` helper's `is_inside` has the same body. Two new tests in `test_askcodex_run.py`
   (class `Environment`) failed on the old function and pass now; the module's 92 tests pass. The module's shipped
-  approval is stale until the owner runs `release-approvals` (increment E). Next: C.
+  approval is stale until the owner runs `release-approvals` (increment E).
+- Increment C: the `safe-git` helper's `is_inside` has the same body. Two new tests in `test_safegit_git.py` (class
+  `Path`) failed on the old function and pass now; the module's 259 tests pass. Its shipped approval is stale too.
+  Next: D.
