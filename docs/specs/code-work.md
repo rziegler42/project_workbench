@@ -493,7 +493,7 @@ installer's and is replaced on upgrade only while unedited.
   `verify-before-claiming`, written new in the workbench's words. Each is general: it names no language, runner or
   program, and says a skill in a domain module may extend it and takes precedence in its domain, so a domain module
   ships its own differently named form (`superpowers-ports.md`; decision `2026-10-23-one-owner-per-skill-name`,
-  Proposed). `diagnose-failure` agrees with `run-increment` on stopping at the same failure twice and adds a stop at
+  Accepted). `diagnose-failure` agrees with `run-increment` on stopping at the same failure twice and adds a stop at
   three failed fixes; `verify-before-claiming` is the rule under `run-increment`'s report. Limits: the skills are
   advice, and nothing forces an agent to load one or follow it; whether Claude loads them when it should is
   unverified; the superpowers plugin is still enabled in `~/.claude` until `global-config-migration`.

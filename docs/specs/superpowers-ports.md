@@ -1,7 +1,7 @@
 # superpowers-ports
 
 Status: Current for the inventory and the four first ports, which plan `2026-10-23-port-superpowers` built. The placement
-rule awaits the owner's acceptance of its decision record.
+rule is accepted in its decision record.
 
 Terms are defined in `terms.md`. The neutral item format and its translation are in `harness-modules.md`; the modules
 that receive the ports are `code-work.md`, `groundwork.md` and `safe-git.md`.
@@ -118,7 +118,7 @@ only; it is not a line-by-line audit.
 
 A skill name is one path in a harness, so two modules that ship a skill of the same name make the attach fail (the
 installer refuses a neutral path two modules both supply). The rule, proposed in
-`docs/decisions/2026-10-23-one-owner-per-skill-name.md` (Proposed until the owner accepts it):
+`docs/decisions/2026-10-23-one-owner-per-skill-name.md` (Accepted 2026-10-24):
 
 1. A skill, agent or command name has exactly one owner module, and no two first-party packages ship the same name.
 2. A practice that spans modules is **split** into separate skills with separate names. The general part goes to the module

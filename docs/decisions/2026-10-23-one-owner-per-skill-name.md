@@ -1,6 +1,6 @@
 # A skill name has one owner module; a practice that spans modules is split into skills
 
-Status: Proposed
+Status: Accepted (2026-10-24, by the owner; the rule is enforced by `tests/test_skill_names.py` and four ports follow it)
 Date: 2026-10-23
 
 ## Context
