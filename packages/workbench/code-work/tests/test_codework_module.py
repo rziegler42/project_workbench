@@ -115,7 +115,8 @@ class Declaration(unittest.TestCase):
                                  "harness/neutral/skills/push-changes/SKILL.md",
                                  "harness/neutral/skills/request-review/SKILL.md",
                                  "harness/neutral/skills/run-increment/SKILL.md",
-                                 "harness/neutral/skills/test-first/SKILL.md"]), sorted(found))
+                                 "harness/neutral/skills/test-first/SKILL.md",
+                                 "harness/neutral/skills/verify-before-claiming/SKILL.md"]), sorted(found))
 
     def test_only_the_helper_is_larger_than_prose_and_no_other_file_is_executable(self):
         for base, dirs, files in os.walk(MODULE):
@@ -209,7 +210,8 @@ class Skill(unittest.TestCase):
         self.assertEqual([("agent", "reviewer"), ("skill", "delegate-approval"), ("skill", "diagnose-failure"),
                           ("skill", SKILL),
                           ("skill", "evaluate-findings"), ("skill", "push-changes"), ("skill", "request-review"),
-                          ("skill", "run-increment"), ("skill", "test-first")], sorted(items))
+                          ("skill", "run-increment"), ("skill", "test-first"),
+                          ("skill", "verify-before-claiming")], sorted(items))
         self.assertEqual(["template.md"], [f.rel for f in items[("skill", SKILL)].files])
         self.assertEqual((), items[("skill", SKILL)].needs)
 
@@ -224,8 +226,8 @@ class Skill(unittest.TestCase):
                           ".claude/skills/draft-plan/SKILL.md",
                           ".claude/skills/draft-plan/template.md", ".claude/skills/evaluate-findings/SKILL.md",
                           ".claude/skills/push-changes/SKILL.md", ".claude/skills/request-review/SKILL.md",
-                          ".claude/skills/run-increment/SKILL.md", ".claude/skills/test-first/SKILL.md"],
-                         sorted(f.path for f in planned.files))
+                          ".claude/skills/run-increment/SKILL.md", ".claude/skills/test-first/SKILL.md",
+                          ".claude/skills/verify-before-claiming/SKILL.md"], sorted(f.path for f in planned.files))
         by_path = {f.path: f.data for f in planned.files}
         self.assertEqual(neutral_tree()["skills/draft-plan/template.md"],
                          by_path[".claude/skills/draft-plan/template.md"])

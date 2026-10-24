@@ -67,7 +67,8 @@ class Skills(unittest.TestCase):
         items = {(i.kind, i.name): i for i in neutral.read_items(neutral_tree())}
         self.assertEqual(sorted([("agent", "reviewer"), ("skill", "delegate-approval"), ("skill", "diagnose-failure"),
                                  ("skill", "draft-plan"),
-                                 ("skill", "push-changes"), ("skill", "test-first")]
+                                 ("skill", "push-changes"), ("skill", "test-first"),
+                                 ("skill", "verify-before-claiming")]
                                 + [("skill", name) for name in SKILLS]), sorted(items))
         for name in SKILLS:
             self.assertEqual(((), ()), (items[("skill", name)].files, items[("skill", name)].needs), name)

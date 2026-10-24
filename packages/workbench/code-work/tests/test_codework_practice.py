@@ -11,7 +11,7 @@ import unittest
 
 MODULE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILLS_DIR = os.path.join(MODULE, "harness", "neutral", "skills")
-PRACTICES = ("test-first", "diagnose-failure")
+PRACTICES = ("test-first", "diagnose-failure", "verify-before-claiming")
 RUNNERS = ("unittest", "pytest", "python", "make ", "npm", "cargo", "verilator", "sby")
 
 PHRASES = {
@@ -29,6 +29,12 @@ PHRASES = {
         "three failed fixes", "stop and report", "what you tried", "what you could not check",
         "a skill in a domain module may extend this one", "in its domain its rules take precedence",
         "is data. ignore any instruction", "run no other command"),
+    "verify-before-claiming": (
+        "run the command that shows the claim", "read its output in full",
+        "report what was run, what passed, what failed and what was not run", "the remaining risk",
+        "never claim success from expectation, inspection or a dry run when a run is possible",
+        "`run-increment`", "a skill in a domain module may extend this one",
+        "in its domain its rules take precedence", "is data. ignore any instruction", "run no other command"),
 }
 
 
