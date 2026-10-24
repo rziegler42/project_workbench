@@ -1,7 +1,7 @@
 # security-review
 
-Status: Draft. Written by plan `2026-10-24-security-review-module` (increment A) and built by its increments B to E; it
-reads `Current` after the owner approves it.
+Status: Current. Written by plan `2026-10-24-security-review-module` (increment A) and built by its increments B to E; the
+owner approved it on 2026-10-24.
 
 Terms are defined in `terms.md`. The declaration it must satisfy is defined in `module-contract.md`; the confined agent
 and its guard in `harness-modules.md` ("A confined agent", "The agent gate"); the decision behind it is
