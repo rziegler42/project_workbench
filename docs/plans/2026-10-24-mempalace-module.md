@@ -347,3 +347,27 @@ Also found, and recorded in the spec: `init` writes `mempalace.yaml` into its ta
 `$HOME/hallways.json`, `wake-up` creates the palace database (so it is not offered), and a failed `search` or `mine`
 prints its error on standard output. Still undetermined: the default palace for a fresh home, whether
 `XDG_CACHE_HOME` alone moves the model cache, and behavior on a large palace or another backend.
+
+### Increment B (2026-10-24)
+
+Built `packages/workbench/mempalace/`: `module.json` (command `mempalace`, arguments `status` and `search`, helper
+expectation `mempalace`), `helper/mempalace` (one file over the kit) and its tests (61 tests: the declaration, the
+helper against a fake `mempalace`, and the pinned helper through the real launcher). The full suite is green
+(3744 tests in 8 roots; one skip). Mutation checks on the helper (dropping `--`, passing the caller's environment,
+skipping the model gate, trusting relative or in-repo `PATH` entries) each made a test fail; the relative-entry
+mutation first survived, which added two tests. A run of the helper against the real program in the scratch `HOME`,
+with no network, returned a search and a status between markers and refused a search once the model directory was
+moved away.
+
+Choices and departures, none changing a spec behavior:
+
+- A refusal (`refused:`) means nothing was started. A program failure (a non-zero exit, a timeout, output over the
+  bound) is `failed:` on standard error, exit 1, with the program's words (cut to 2000 characters) on standard
+  output between markers. The marker lines carry a random token per call so that recalled text cannot close the block.
+- `mempalace` is last in `package.json`, since `safe-git`'s test requires it directly after `groundwork`. The exact
+  module lists in the `claude`, `code-work` and `groundwork` tests were updated.
+- **Not done here:** the spec's refusal for a recorded model other than `minilm` needs the palace's location
+  (`mempalace_embedder.json` sits in it) and so comes with the project setting in increment C. The refusal text names
+  the owner's `mine`, which increment C adds.
+- The helper passes no `XDG_*` variable, as the spec says, so a user with a non-default `XDG_CACHE_HOME` or
+  `XDG_CONFIG_HOME` gets the program's default places under `HOME`.

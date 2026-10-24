@@ -68,7 +68,8 @@ class Declaration(unittest.TestCase):
 
     def test_the_package_lists_it(self):
         with open(os.path.join(PACKAGE, "package.json"), encoding="utf-8") as handle:
-            self.assertEqual(["ask-codex", "claude", "code-work", "groundwork", "safe-git", "review-engine"],
+            self.assertEqual(["ask-codex", "claude", "code-work", "groundwork", "safe-git", "review-engine",
+                              "mempalace"],
                              json.load(handle)["modules"])
 
     def test_each_readme_says_what_the_area_is_for_how_it_is_named_and_its_status_values(self):
