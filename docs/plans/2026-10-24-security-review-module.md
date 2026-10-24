@@ -306,3 +306,15 @@ Round 3 was not run. The owner approved the plan on 2026-10-24, after rounds 1 a
   and `tests.test_boundary` (29 tests) pass; `git diff --check` prints nothing. `python3 -m workbench verify` on the
   command line refuses every first-party capability name for a third-party run, so the in-test first-party run is the
   check. The package approvals read stale until E. Next: C.
+- Increment C: `harness/neutral/agents/security-reviewer.md` declares `tools: read, search, edit, shell`, `writes: scratch`
+  and four pinned commands, `python3 -I -B {scratch}/probe1.py` to `probe4.py` (the names are settled here; `-I -B` passes the
+  guard's grammar). Its body follows the skill and states the rules of the spec and the fixed report. The module's 24 tests
+  (16 new, seen to fail before the agent existed) cover: the reader accepts it with those limits and no `web` or `agents`;
+  the real translation into the real Claude layout renders the hook `wb agent-gate claude security-reviewer || exit 2` with no
+  report, and skips the agent but installs the skill when the layout has no per-agent hook; the installer's own path and
+  command functions, given that layout's scratch template, allow a write below scratch and each pinned command and refuse the
+  project, `..`, a link out of scratch, a path component or an unpinned name in a pinned command, and every other command
+  (chaining, redirects, expansion, other flags, other interpreters). `tests.test_agent_gate`, `tests.test_agent_render`,
+  `tests.test_skill_names`, `tests.test_boundary`, `tests.test_package` (106 tests) pass. Limit: no real attach of the
+  module into a scratch project was run, so the hook was not run end to end against the installed manifest; that path is
+  covered by the installer's synthetic tests. Next: D.

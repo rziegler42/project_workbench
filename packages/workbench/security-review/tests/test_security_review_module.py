@@ -44,7 +44,7 @@ class Declaration(unittest.TestCase):
         with open(os.path.join(PACKAGE, "package.json"), encoding="utf-8") as handle:
             self.assertIn("security-review", json.load(handle)["modules"])
 
-    def test_every_file_is_the_declaration_or_the_skill_until_the_agent_arrives(self):
+    def test_every_file_is_the_declaration_the_skill_or_the_agent(self):
         found = []
         for base, dirs, files in os.walk(MODULE):
             if base == MODULE:
@@ -52,11 +52,8 @@ class Declaration(unittest.TestCase):
             dirs[:] = [d for d in dirs if d != "__pycache__"]
             for name in files:
                 found.append(os.path.relpath(os.path.join(base, name), MODULE))
-        expected = ["module.json", "harness/neutral/skills/security-review/SKILL.md"]
-        agent = "harness/neutral/agents/security-reviewer.md"
-        if agent in found:  # increment C adds it
-            expected.append(agent)
-        self.assertEqual(sorted(expected), sorted(found))
+        self.assertEqual(sorted(["module.json", "harness/neutral/skills/security-review/SKILL.md",
+                                 "harness/neutral/agents/security-reviewer.md"]), sorted(found))
 
 
 class Skill(unittest.TestCase):
