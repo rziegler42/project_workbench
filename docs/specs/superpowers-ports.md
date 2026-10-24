@@ -114,6 +114,27 @@ only; it is not a line-by-line audit.
 - **executing-plans against `run-increment`.** The plugin runs a whole plan to the end and stops on a blocker. The workbench
   stops after each increment for the owner's verdict. This is intended (`code-work.md`, "The increment loop").
 
+## What stops working when the plugin is removed
+
+Observed on 2026-10-24 by reading the owner's agent definitions and the routing text of the owner's user-level instruction
+file. The comparison covers the agents' `skills:` lists and the routing lines only; it is not a line-by-line audit of either
+file.
+
+- **Three agent definitions name plugin skills in their `skills:` lists.** The reference breaks silently once the plugin is gone.
+  `implementer` names `systematic-debugging`, `test-driven-development` and `verification-before-completion`;
+  `workflow-reviewer` names `requesting-code-review` and `verification-before-completion`; `security-reviewer` names
+  `verification-before-completion`. The workbench skills that replace them are `diagnose-failure`, `test-first`,
+  `request-review` and `verify-before-claiming`. They exist only in a project that installed `code-work`; editing the agent
+  definitions is the owner's, and `global-config-migration` carries it.
+- **The routing text names the plugin's skills** for brainstorming, planning, plan execution, subagent-driven development,
+  receiving and requesting code review, worktrees, debugging and verification. Without the plugin none of them loads. The
+  workbench counterpart of each is the inventory table's row; worktrees are not ported.
+- **The session-start rule.** The plugin injects `using-superpowers` at the start of a session, which tells an agent to look
+  for a skill first. Nothing else the owner has does that. For a workbench project this document relies on the `policy` slot of
+  `AGENTS.md` and the harness's skill listing (see the row for `using-superpowers`); that is stated and has not been tested.
+- **Evidence of use.** Each skill the agents name is also named by the routing text, so dropping or rewriting an agent does
+  not by itself change a row's "used" status; removing the routing lines would.
+
 ## Where a skill goes when it belongs in more than one module
 
 A skill name is one path in a harness, so two modules that ship a skill of the same name make the attach fail (the

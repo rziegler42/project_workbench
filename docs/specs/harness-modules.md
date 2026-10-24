@@ -216,6 +216,35 @@ it, and project against local settings precedence.
   shell sees (so whether `wb` is found); and hooks through a symlinked path. The last 73,000 characters of the
   hooks page were searched for terms and not read in full.
 
+### Global against project settings (Claude Code 2.1.310, 2026-10-24)
+
+What happens when the owner's user-level configuration (`~/.claude`) differs from the project's. Method: `claude -p` runs in a
+throwaway workbench project (122 `deny` and 58 `ask` rules rendered by this harness module), with the user level replaced by a
+throwaway configuration directory chosen with `CLAUDE_CONFIG_DIR` and made deliberately noisy: `allow: Bash(*)`, a `PreToolUse`
+hook on Bash that appended a line to a log, a skill and an agent each named like one of the project's with a marker in its text,
+and an instruction file saying every push is pre-approved and every reply begins with a marker word. The model chose how to
+carry out each request; the permission results are read from the run's `permission_denials`. One or two runs each.
+
+- **A project `deny` held** against the global `allow`, and held with the global default mode `auto`: the command was denied and
+  did not run.
+- **A project `ask` held** against the global `allow`, with `auto`, and with `bypassPermissions`: the command did not run. In
+  `-p` mode an `ask` is denied and not prompted, so what an interactive session shows is not established.
+- **A global hook ran** for commands the project denied and for commands it asked on, so a project cannot switch one off.
+- **A global skill replaced a project skill of the same name** (two runs). The skill that loaded was the global one.
+- **A project agent replaced a global agent of the same name** (one run).
+- **A hook declared in a project agent's frontmatter ran, and blocked.** A `Read` hook logged a line; a hook that exited 2
+  refused the agent's `Read` and the agent reported the hook's message (one run each, the `Read` tool only).
+- **Both instruction files were loaded.** Asked whether a push needed approval, the model treated a global "pre-approved"
+  grant as satisfying the project's "explicit approval" only when asked to push, and said the files do not say which wins.
+  With `CLAUDE_CONFIG_DIR` set, the owner's real user-level instruction file was loaded as well as the throwaway one (cause not
+  established); the real user-level settings file was not (a control command that the real settings ask on ran).
+- **Not tested:** a project `deny` under global `bypassPermissions` (the harness's classifier refused the call and it was not
+  retried), interactive mode against `-p`, the edit-gate hook (the project had no process module), project against local
+  settings precedence, and any agent tool other than `Read`.
+
+The decisions `2026-10-24-project-guarantees-a-floor`, `2026-10-24-declared-agent-confinement` and
+`2026-10-24-installer-reads-global-settings-on-request` (all `Proposed`) rest on these results.
+
 ### As built, and its limits
 
 Recorded by `claude-harness` (`docs/plans/2026-10-20-claude-harness.md`), each limit found in

@@ -353,3 +353,37 @@ Three decision records are written, each `Status: Proposed`, and indexed in `doc
   changed.
 - Not done: the owner has not accepted, rejected or deferred any of the three, and none was reviewed by a second reviewer.
   The trial's untested cases are still untested.
+
+### Increment C (2026-10-24)
+
+Two specs now state what was found true on 2026-10-24.
+
+- `docs/specs/harness-modules.md`: a new subsection in the evidence, "Global against project settings (Claude Code 2.1.310,
+  2026-10-24)": the method in one paragraph and eight findings with run counts (project `deny` and `ask` held against a global
+  `allow`, `auto` and `bypassPermissions`; a global hook ran; a global skill replaced a project skill; a project agent replaced a
+  global agent; an agent's frontmatter hook ran and blocked; both instruction files loaded and the real user-level one loaded
+  under a changed configuration directory), then what was not tested. The existing line that project-against-local precedence is
+  not verified stays, because the trial did not cover it. It names the three `Proposed` decisions as resting on these results.
+- `docs/specs/superpowers-ports.md`: a new section, "What stops working when the plugin is removed": the three agent
+  definitions whose `skills:` lists name plugin skills and the workbench skill that replaces each, the routing text, the
+  session-start rule (stated, not tested), and that dropping an agent does not change a row's "used" status because the routing
+  text names the same skills. It names no path to the owner's files.
+- Verification as run: `doccheck`, `refcheck` and `git diff --check` print nothing; `tests.test_skill_names` ran 8 tests, OK;
+  the `groundwork` suite ran 187 tests, OK. A search of the two specs for `.debug`, `scratch`, `/tmp` and `claude_` finds only
+  three older sentences about scratch projects and files in `harness-modules.md`, none in the new text. Only files under `docs/`
+  changed.
+- A stale editor swap file (`.swp`, ignored by git) in the `code-work` package made the first `groundwork` run fail with
+  `unaccounted-file`; the owner removed it, and the suite then passed.
+- Full suite (`python3 -B -W error tests/run_all.py`, 3956 tests in 9 roots) did not pass. Four failures, none in anything this
+  plan changed:
+  - `test_delegation.Reading.test_the_gate_refuses_a_changed_delegated_plan_like_any_other` failed once with "the convergence
+    command's report is not one line ending in a newline". It passed alone, and the whole module (75 tests) passed on a rerun.
+    Intermittent, cause not found; an earlier plan recorded one unexplained stall in a neighbouring gate test.
+  - Three `mempalace` tests fail on this machine and failed again on a rerun: two expect an exact set of environment variables
+    and macOS adds `__CF_USER_TEXT_ENCODING`; the third calls `os.makedirs` for a folder that an earlier case of the same
+    test already made (`FileExistsError`). They come from the `mempalace` plan, which was run elsewhere, and do not read these
+    documents.
+  - The other roots passed: ask-codex 90, claude 32, code-work 338 (2 skipped), groundwork 187, remote-runner 104,
+    review-engine 325, safe-git 257.
+- Not done: the failures are not fixed here (the `mempalace` ones edit a package and stale its approval; they belong to that
+  module's owner); the full suite has not passed since this plan began.
