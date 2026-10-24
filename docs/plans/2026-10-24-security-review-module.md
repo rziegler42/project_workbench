@@ -318,3 +318,13 @@ Round 3 was not run. The owner approved the plan on 2026-10-24, after rounds 1 a
   `tests.test_skill_names`, `tests.test_boundary`, `tests.test_package` (106 tests) pass. Limit: no real attach of the
   module into a scratch project was run, so the hook was not run end to end against the installed manifest; that path is
   covered by the installer's synthetic tests. Next: D.
+- Increment D: `packages/workbench/code-work/files/blocks/policy.md` gains one bullet (five lines): a change that materially
+  touches the listed boundaries prompts the agent to ask the owner whether to run a security review with an installed module
+  that provides `security-review`, to say so when none is installed, and a review runs only when the owner asks. It names the
+  capability and neither the module, the skill nor the agent. `docs/specs/code-work.md` lists the bullet. The block's line cap
+  in `test_codework_module.py` rises from 24 to 28 (23 lines before, 28 now); that is the one change outside the plan's file
+  list, forced by the bullet. B had left three tests that pin the package's module list or directory listing
+  (`code-work`, `groundwork`, `claude`); they now include `security-review`. `code-work` (339 tests, 2 skipped),
+  `groundwork` (187) and `claude` (33, 12 skipped) module tests pass, as do `tests.test_boundary`, `tests.test_package` and
+  `tests.test_skill_names` (29). The 12 `claude` skips are the stale package approvals and clear after E. `doccheck`,
+  `refcheck` and `git diff --check` print nothing. Next: E.

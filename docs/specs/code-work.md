@@ -402,6 +402,11 @@ The module fills a policy slot with a short, tool-neutral block stating:
 - that approval is a recorded approval and never a status line;
 - that review is mandatory, and the loop caps;
 - what a compaction must preserve;
+- that a change materially touching authentication, authorization, secrets, untrusted input, parsing, the
+  filesystem, a subprocess, a network boundary, dependencies or a build or deployment permission prompts the
+  agent to ask the owner whether to run a security review with an installed module that provides the capability
+  `security-review` (or to say none is installed). It names the capability and no module, and a review runs only
+  when the owner asks;
 - that commit messages describe the change only and carry no tool attribution, which
   is a committed project setting that defaults to on and that a project may switch
   off.

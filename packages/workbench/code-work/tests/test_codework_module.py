@@ -128,7 +128,7 @@ class Declaration(unittest.TestCase):
     def test_the_package_lists_it_between_the_other_two(self):
         with open(os.path.join(PACKAGE, "package.json"), encoding="utf-8") as handle:
             self.assertEqual(["ask-codex", "claude", "code-work", "groundwork", "safe-git", "review-engine",
-                              "mempalace", "remote-runner"],
+                              "mempalace", "remote-runner", "security-review"],
                              json.load(handle)["modules"])
 
     def test_the_readme_states_the_format_the_labels_and_the_status_values(self):
@@ -188,9 +188,22 @@ class Blocks(unittest.TestCase):
         self.assertIn("names the commit it expects and the exact paths", text)
         self.assertIn("carries no attribution unless the project allows it", text)
 
+    def test_the_policy_block_points_to_a_security_review_by_capability_and_never_by_module_or_agent(self):
+        text = " ".join(block("policy").split())
+        bullets = [bullet for bullet in text.split("- ") if "security-review" in bullet]
+        self.assertEqual(1, len(bullets), bullets)
+        for rule in ("materially touches", "authentication", "authorization", "secrets", "untrusted input",
+                     "parsing", "the filesystem", "a subprocess", "a network boundary", "dependencies",
+                     "a build or deployment permission", "ask the owner whether to run a security review",
+                     "an installed module that provides `security-review`", "if none is installed, say so",
+                     "only when the owner asks"):
+            self.assertIn(rule, bullets[0])
+        self.assertNotIn("security-reviewer", text)
+        self.assertNotIn("skill", bullets[0])
+
     def test_the_policy_block_is_short_and_names_no_tool(self):
         text = block("policy")
-        self.assertLessEqual(len(text.splitlines()), 24)
+        self.assertLessEqual(len(text.splitlines()), 28)  # 23 before the security-review bullet, which takes 5
         for word in ("Claude", "claude", "opencode", "Codex", "CLAUDE.md"):
             self.assertNotIn(word, text)
         self.assertEqual({"wb approve-plan", "wb plan-status", "wb settings"},
