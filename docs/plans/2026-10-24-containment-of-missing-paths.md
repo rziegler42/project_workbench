@@ -190,3 +190,10 @@ The owner approved the plan on 2026-10-24, after this review.
 - Increment C: the `safe-git` helper's `is_inside` has the same body. Two new tests in `test_safegit_git.py` (class
   `Path`) failed on the old function and pass now; the module's 259 tests pass. Its shipped approval is stale too.
   Next: D.
+- Increment D: the `remote-runner` helper's `is_inside` has the same body. One new test in `test_remoterunner_run.py`
+  (class `Lookup`, `test_containment_fails_closed`) failed on the old function and pass now; the module's 105 tests
+  pass. Unlike the other three, no in-project `PATH` test was added: `trusted_entries` already drops an entry that is
+  not an existing folder, and `test_a_missing_entry_inside_the_project_is_neither_searched_nor_passed_to_the_program`
+  and `test_a_file_made_later_in_a_dropped_entry_is_not_found` already pin criterion 2 for this helper. So here the fix
+  changes no reachable behaviour; it makes the function itself correct, as the other four are. Its shipped approval is
+  stale too. Next: E.

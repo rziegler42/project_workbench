@@ -224,6 +224,15 @@ class Lookup(support_program.Wrapped):
         self.assertEqual(1, code)
         self.assertEqual([], self.calls(later))
 
+    def test_containment_fails_closed(self):
+        helper = self.helper
+        self.assertTrue(helper.is_inside(os.path.join(self.root, "missing", "deeper"), self.root))
+        self.assertTrue(helper.is_inside(self.root, self.root))
+        self.assertFalse(helper.is_inside(os.path.join(self.base, "missing"), self.root))
+        self.assertFalse(helper.is_inside(self.outside, self.root))
+        with unittest.mock.patch.object(helper.os.path, "samefile", side_effect=PermissionError):
+            self.assertTrue(helper.is_inside(self.outside, self.root))
+
     def test_no_program_at_all_is_one_refusal(self):
         self.path([os.path.join(self.base, "nothing")])
         code, out, err = self.run_it("artifacts", JOB)
