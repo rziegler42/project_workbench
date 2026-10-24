@@ -202,4 +202,18 @@ and repository instructions. No decision to record. Further rounds only on the o
 
 ## Result
 
-Not started.
+Increment A, 2026-10-24: `wb run` runs an owner-run argument of a declared command only when standard input and standard
+output are both terminals.
+
+- Changes: `workbench/commands.py` (`owner_refusal(name, owner, args, stdin, stdout)`; `Request` gains an `owner` field
+  with an empty default; `run` takes `stdin` and defaults both streams to `sys.stdin` and `sys.stdout`, and refuses
+  after `resolve` and before `launch.launch`), `tests/test_owner_run_code.py` (10 tests, synthetic `tool` module).
+- Verification as run: the new tests failed first (5 failures where `wipe` ran with no terminal, and an error for the
+  missing `stdin` parameter), then passed. `tests.test_run`, `test_commands`, `test_owner_run_arguments`,
+  `test_boundary`, `test_launch` and `test_runner` pass. The `review-engine` module tests (325) pass unchanged, so none of
+  them reaches an owner argument through `commands.run`; the `remote-runner` module tests are checked in increment C.
+  `git diff --check` prints nothing.
+- Decision made in the code, for the owner to accept or overturn: the terminal test reads the `stdout` the caller gave
+  `run`, not only `sys.stdout`, because that is where the helper's output goes; the CLI passes none, so it reads the real
+  streams.
+- Not done: `wb launch` (increment B), the specs and the full suite (C); no review or security pass.
