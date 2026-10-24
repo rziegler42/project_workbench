@@ -563,7 +563,9 @@ the rules above are named so a later plan can change them; this plan changes non
   may be empty. Returns the helper's own exit code, or 1 with a `refused:` line if nothing was
   run. Agent may run it. For a pin the installer made, it first requires the declaration installed at
   `--root` to be the one the owner confirmed, and it runs an owner-run argument of the command only when standard
-  input and output are both terminals, as `run` does (plan `2026-10-24-owner-run-in-code`).
+  input and output are both terminals, as `run` does, and the declared `arguments` list applies as for `run`. A pin
+  the owner typed for a declared command's helper uses the project's own declaration; a typed pin for any other helper
+  is left alone (plan `2026-10-24-owner-run-in-code`).
 - **`release-approvals`** Writes the shipped first-party approval records into the workbench
   distribution. Needs no terminal. A maintainer's command at release time. Agent may not run
   it *(my call)*: its records count as approval because the distribution is the trust root

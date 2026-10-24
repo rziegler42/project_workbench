@@ -7,6 +7,7 @@ be shown to have run nothing."""
 import io
 import itertools
 import json
+import os
 import tempfile
 import unittest
 import unittest.mock
@@ -87,10 +88,10 @@ class Allowed(OwnerRun):
 class Launch(OwnerRun):
     """``wb launch <id> <name> --root <dir> -- <args>`` of a pin the installer made."""
 
-    def go_launch(self, *args, root=None):
+    def go_launch(self, *args, root=None, name="tool"):
         out, err = io.StringIO(), io.StringIO()
         with unittest.mock.patch.object(launch, "launch", return_value=0) as spy:
-            code = cli.main(["launch", self.project_id, "tool", "--root", root or self.real, "--"] + list(args),
+            code = cli.main(["launch", self.project_id, name, "--root", root or self.real, "--"] + list(args),
                             out, err, store_root=self.store_root)
         return code, err.getvalue(), spy
 
@@ -148,14 +149,77 @@ class Launch(OwnerRun):
         with tempfile.TemporaryDirectory() as empty:
             self.refused_launch("wipe", root=empty, contains="refused")
 
-    def test_a_pin_the_owner_typed_is_unchanged(self):
+    def test_a_pin_the_owner_typed_for_the_declared_helper_keeps_the_guard(self):
+        """Finding 1 of the security review: a re-pin leaves a pin with no declaration."""
         self.ready()
         self.pin()
+        self.terminals(False, False)
+        self.refused_launch("wipe", contains="wipe")
+        code, err, spy = self.go_launch("check")
+        self.assertEqual((0, ""), (code, err))
+        spy.assert_called_once()
+
+    def test_a_pin_the_owner_typed_for_another_name_or_helper_is_unchanged(self):
+        self.ready()
+        self.pin(name="mine")
+        self.terminals(False, False)
+        code, err, spy = self.go_launch("wipe", name="mine")
+        self.assertEqual((0, ""), (code, err))
+        spy.assert_called_once()
+
+    def test_a_pin_the_owner_typed_for_a_declared_name_at_another_path_is_unchanged(self):
+        self.ready()
+        self.pin(path=".workbench/p/tool/module.json")
         self.terminals(False, False)
         code, err, spy = self.go_launch("wipe")
         self.assertEqual((0, ""), (code, err))
         spy.assert_called_once()
 
+    def test_an_unreadable_root_leaves_a_typed_pin_unchanged(self):
+        self.ready()
+        self.pin()
+        self.terminals(False, False)
+        with tempfile.TemporaryDirectory() as empty:
+            code, err, spy = self.go_launch("wipe", root=empty)
+        self.assertEqual((0, ""), (code, err))
+
+    def unreadable(self, damage):
+        """Finding 2: a module.json at the root that is missing, a link or not JSON."""
+        self.ready()
+        self.terminals(False, False)
+        full = os.path.join(self.real, ".workbench/p/tool/module.json")
+        if damage == "garbage":
+            self.edit(".workbench/p/tool/module.json", lambda data: b"{not json")
+        else:
+            os.remove(full)
+            if damage == "link":
+                os.symlink("/dev/null", full)
+        self.refused_launch("check", contains="declaration")
+
+    def test_a_missing_declaration_is_one_refused_line_and_no_traceback(self):
+        self.unreadable("missing")
+
+    def test_a_linked_declaration_is_one_refused_line_and_no_traceback(self):
+        self.unreadable("link")
+
+    def test_a_malformed_declaration_is_one_refused_line_and_no_traceback(self):
+        self.unreadable("garbage")
+
+    def test_a_damaged_declaration_does_not_unguard_a_typed_pin(self):
+        """A typed pin may fail open only where there is no project, not where an installed declaration is spoiled."""
+        self.ready()
+        self.pin()
+        self.edit(".workbench/p/tool/module.json", lambda data: b"{not json")
+        self.terminals(False, False)
+        self.refused_launch("wipe", contains="declaration")
+
+    def test_an_argument_the_declaration_does_not_list_is_refused_as_run_refuses_it(self):
+        """Finding 3: `launch` applied no `arguments` list."""
+        self.ready()
+        self.terminals(True, True)
+        for argument in ("Wipe", "wipe ", "", "--", "-wipe", "nothing"):
+            with self.subTest(argument):
+                self.refused_launch(argument, contains="not an argument")
 
 class NoOwnerList(Run):
     PLAIN = {"tool": {"helper": HELPER_PATH, "arguments": ["check", "wipe"]}}

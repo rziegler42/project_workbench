@@ -228,7 +228,10 @@ Rules:
   as the rest. `wb run` and `wb launch` also refuse such an argument in their own code unless standard input and
   output are both terminals, whatever the spelling of the command; for a pin the installer made, `wb launch` first
   requires the declaration at its root to be the one the owner confirmed, so a copy that drops the list is refused.
-  That test is a mistake guard like `approve`'s: a process that opens its own pseudo-terminal passes it, and the
+  For a pin the owner typed (which holds no declaration, and replaces an installer's pin when the owner re-pins), `wb run` and
+  `wb launch` use the declaration in the project's own files, which an agent can edit: the owner who pins a command's
+  helper approves how it handles any first argument. `wb launch` also applies the declared `arguments` list, and refuses
+  an installer pin whose command the root no longer declares, a pin made for a check included. That test is a mistake guard like `approve`'s: a process that opens its own pseudo-terminal passes it, and the
   pinned helper file run directly is not a workbench route. A harness that provides no `permissions` still has the
   code check, and the rest is instruction. *(Rendered by the Claude harness module, built by
   `claude-harness`; the opencode module is `opencode-harness`.)* The deny is best effort: it

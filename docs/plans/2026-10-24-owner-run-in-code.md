@@ -27,6 +27,7 @@ When this plan is done:
 - The check and the declaration match for `wb launch` (increment B).
 - The tests of the two modules that run owner arguments, the spec and development edits, the full suite and the
   approvals (increment C).
+- Fixes from the security review of 2026-10-24 (increment D, added after C on the owner's word of the same day).
 
 ## Non-goals
 
@@ -169,6 +170,47 @@ reports no stale record for the two modules.
 
 **Evidence of completion:** the suite's totals, the grep result of step 1, the owner's two trials.
 
+### Increment D — fixes from the security review
+
+**Outcome:** `wb launch` keeps the owner-run guard after the owner re-pins, applies the declared `arguments` list as `wb
+run` does, and never ends in a traceback.
+
+**Dependencies:** C.
+
+**Affected areas:** `workbench/commands.py` (`launch_refusal`), `tests/test_owner_run_code.py`, `docs/specs/trust-and-approval.md`,
+`docs/specs/installer-interface.md`, this plan's Result.
+
+**Steps:**
+
+1. Tests first, each failing before the change. (Finding 1) After `pin` replaces the installer's pin for a declared
+   command (the pin then holds no declaration), `launch ... -- wipe` with no terminal is refused and `-- check` runs; a
+   typed pin whose name is a declared command but whose path is not that command's helper, and a typed pin for a name no
+   module declares, are unchanged. (Finding 2) A `module.json` that is missing, a link or not JSON at the root gives one
+   `refused:` line, exit 1, no traceback, for an installer pin. (Finding 3) Through `launch`, a first argument the
+   declaration does not list (`Wipe`, `wipe `, an empty string, `--`, `-wipe`) is refused as `wb run` refuses it, and the
+   helper is not started.
+2. Run them and see them fail.
+3. `launch_refusal`: catch `CommandError` with the other errors. For a pin without a declaration, look up the declared
+   command of that name at the root with the code `resolve` uses; when exactly one exists and its helper path is the
+   pin's, apply `_arguments` and `owner_refusal` from that declaration, and in every other case, including an unreadable
+   root, change nothing (the owner's own pins of their own tools). For a pin with a declaration, apply `_arguments`
+   after the hash match.
+4. Run the new tests, then the files named in A and B.
+5. State in the specs that a pin typed by the owner trusts the project's own declaration, as `wb run` does, and that
+   `wb launch` refuses an installer pin whose command the root no longer declares (finding 4).
+6. Run the full suite in the background.
+
+**Choice made by me, for the owner to accept or overturn:** finding 1 is fixed in `launch_refusal`, not in `wb pin`. The
+reviewer preferred recording the declaration hash when the owner re-pins. That would make a re-pin stop clearing a
+declaration mismatch, which the messages of `check_pin` and the development notes tell the owner to do, and it records a
+declaration the owner did not read. The cost: for a pin the owner typed, both `wb run` and `wb launch` trust the
+declaration in the project's own files, which an agent can edit; the declaration hash binds only an installer pin.
+That is the existing trust of a typed pin (`module-boundary.md`), now the same on both routes.
+
+**Verification:** the new tests pass and failed first; the full suite passes; the document checks print nothing.
+
+**Evidence of completion:** the test names, the failing-first record and the suite totals in the Result.
+
 ## Verification for the plan as a whole
 
 The full suite (`python3 -B -W error tests/run_all.py`, in the background) and the document checks. Reading alone does
@@ -193,6 +235,14 @@ not prove a boundary; each refusal has a test that failed first.
 Round 1 of 3, 2026-10-24, `ask-codex review-plan`, model `gpt-5.6-luna`, effort medium (asked for by the owner).
 Outcome: converged with no findings. The reviewer found the plan consistent with the current implementation, specs, tests
 and repository instructions. No decision to record. Further rounds only on the owner's word.
+
+Security review, 2026-10-24 (asked for by the owner): a `security-reviewer` subagent tried six areas on a scratch copy of
+`832d2a4`. No Critical or High finding. 1 Medium: a re-pin by the owner leaves a pin without a declaration, and
+`launch_refusal` skipped every check for such a pin. 2 Low: a `CommandError` escaped as a traceback. 3 Low: `wb launch`
+did not apply the declared `arguments` list. 4 Info: a pin made for a check is refused by `wb launch`. Findings 1 to 3
+are fixed in increment D, finding 4 is written into the specs. Sound by experiment: the crafted-root declaration match,
+symlinked and malformed manifests, `wb run` with case, whitespace, empty and `--provides` forms, `wb check`,
+`launch_captured` and `wbkit.call`. The terminal test passes under a pty on both ends and is refused with a pty on one.
 
 ## Deferred work
 
@@ -258,3 +308,23 @@ Increment C, 2026-10-24: the specs and notes state the rule; the full suite pass
 - Not done: no real-process trial of `env`, a path-qualified `wb` or `bash -c` (the `!` trial used the full path of
   `wb`, a path-qualified spelling, which the deny rules do not match and the code check refused). No review or
   security pass.
+
+Increment D, 2026-10-24: the three fixes from the security review. Finding 4 is written into the specs.
+
+- Changes: `workbench/commands.py` (`launch_refusal` rewritten), `tests/test_owner_run_code.py` (24 tests in all, 8 more),
+  `docs/specs/trust-and-approval.md` and `docs/specs/installer-interface.md`.
+  - Finding 1: for a pin with no declaration, the declared command of that name whose helper is the pinned path
+    supplies the `owner` and `arguments` lists. A typed pin for another name or another path, and a root that is not a
+    workbench project (no readable manifest), are unchanged. A damaged installed declaration refuses, so it cannot be
+    used to dodge the guard.
+  - Finding 2: a `CommandError` from reading the installed declarations becomes the `refused:` line.
+  - Finding 3: the declared `arguments` list applies to `launch` as to `run`.
+  - Choice made by me, in the increment text: finding 1 is fixed in `launch_refusal`, not by recording a declaration in
+    `wb pin`.
+- Verification as run: the tests for findings 1 to 3 failed first (finding 2 as the real traceback from
+  `launch_refusal`; finding 1 as the helper running with no terminal after a re-pin; finding 3 as six non-listed first
+  arguments reaching the helper). The test that locked in the old behaviour of a typed pin was replaced. All 24 pass.
+  Full suite: 3,811 tests in 8 roots, OK, with the same 3 skips. `doccheck`, `refcheck` and `git diff --check` print
+  nothing. No module file changed, so no approval is stale.
+- Not done: the fixes have had no independent review (the reviewer saw `832d2a4`, not these changes); no re-run of the
+  owner's two trials, which the change does not affect.

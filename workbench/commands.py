@@ -162,24 +162,38 @@ def resolve(guarded, start, name, args, provides=None):
 def launch_refusal(guarded, project_id, name, root, args, stdin, stdout):
     """Why ``wb launch`` may not run the pinned helper `name` with `args`, or None.
 
-    A pin the installer made records the declaration the owner confirmed. For such a pin the declaration
-    installed at `root` must be that one, and its ``owner`` list is applied as ``wb run`` applies it, so a root
-    whose declaration drops the list is refused. A pin the owner typed has no declaration and no list."""
+    A pin the installer made records the declaration the owner confirmed. For such a pin the declaration installed
+    at `root` must be that one. A pin the owner typed has none (a new pin replaces the old, declaration included):
+    where the project declares a command of that name whose helper is the pinned path, the project's declaration is
+    used as ``wb run`` uses it, and anything else is the owner's own tool and is left alone. Either way the declared
+    ``arguments`` and ``owner`` lists are applied as ``wb run`` applies them."""
     try:
         pin = pins.lookup(guarded, project_id, name)
     except pins.PinError:
         return None  # the launcher says why nothing runs
-    if pin.declaration is None:
-        return None
+    typed = pin.declaration is None
     try:
         with safefs.Root(root, "project root") as held:
             document = manifest.parse(held.read_file(project.MANIFEST))
-            found = [d for d in _declared(held, document) if d.command.name == name]
+            try:
+                found = [d for d in _declared(held, document) if d.command.name == name]
+            except CommandError as exc:
+                return "the declaration of %s cannot be read at the root: %s" % (_shown(name), str(exc)[:200])
     except (safefs.SafeFsError, manifest.ManifestError, pins.PinError) as exc:
+        if typed:
+            return None  # no workbench project here: the owner's own tool
         return "the declaration of %s cannot be read at the root: %s" % (_shown(name), display.clean(str(exc))[:200])
-    if len(found) != 1 or found[0].declaration != pin.declaration:
+    if typed:
+        found = [d for d in found if pin.path == ".workbench/%s/%s/%s" % (d.package, d.module, d.command.helper)]
+        if not found:
+            return None
+    if len(found) != 1 or (not typed and found[0].declaration != pin.declaration):
         return ("the declaration of %s at the root is not the one the owner confirmed for its pin; nothing was run"
                 % _shown(name))
+    try:
+        _arguments(found[0].command, list(args))
+    except CommandError as exc:
+        return str(exc)
     return owner_refusal(name, found[0].command.owner, args, stdin, stdout)
 
 
