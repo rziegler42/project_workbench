@@ -1,6 +1,6 @@
 # A project guarantees a floor under any global setup, not identical behavior
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-24 (a working position; a change is made by a superseding record)
 Date: 2026-10-24
 
 ## Context
@@ -45,7 +45,7 @@ The owner has said this is a working position, not a settled design, and that it
 - A global hook and the global instruction file were observed to apply beside the project's. The workbench can avoid depending
   on them and cannot switch them off.
 - New guarantees are written as code in the installer or the launcher, with a test, and not as text a harness may merge.
-- A check that reports where a global setting may conflict is a separate proposal (`2026-10-24-installer-reads-global-settings-on-request`).
+- A check that reports where a global setting may conflict is a separate decision (`2026-10-24-installer-reads-global-settings-on-request`).
 
 ## Verification
 

@@ -80,6 +80,6 @@ List every record, including rejected and superseded ones.
 | [2026-10-22-installer-owns-the-edit-gate](2026-10-22-installer-owns-the-edit-gate.md) | The installer owns the edit gate and its hook; the process module names what is under way | Accepted by the owner on 2026-10-23 |
 | [2026-10-23-delegated-plan-approval](2026-10-23-delegated-plan-approval.md) | Delegated plan approval is written by the installer, from a sealed review of the same bytes | Accepted by the owner on 2026-10-23 |
 | [2026-10-23-one-owner-per-skill-name](2026-10-23-one-owner-per-skill-name.md) | A skill name has one owner module; a practice that spans modules is split into skills | Accepted |
-| [2026-10-24-project-guarantees-a-floor](2026-10-24-project-guarantees-a-floor.md) | A project guarantees a floor under any global setup, not identical behavior | Proposed |
-| [2026-10-24-declared-agent-confinement](2026-10-24-declared-agent-confinement.md) | An agent's limits are declared as data and enforced by the installer | Proposed |
-| [2026-10-24-installer-reads-global-settings-on-request](2026-10-24-installer-reads-global-settings-on-request.md) | The installer may read a harness's global configuration, read-only, on the owner's request | Proposed |
+| [2026-10-24-project-guarantees-a-floor](2026-10-24-project-guarantees-a-floor.md) | A project guarantees a floor under any global setup, not identical behavior | Accepted |
+| [2026-10-24-declared-agent-confinement](2026-10-24-declared-agent-confinement.md) | An agent's limits are declared as data and enforced by the installer | Accepted |
+| [2026-10-24-installer-reads-global-settings-on-request](2026-10-24-installer-reads-global-settings-on-request.md) | The installer may read a harness's global configuration, read-only, on the owner's request | Accepted |

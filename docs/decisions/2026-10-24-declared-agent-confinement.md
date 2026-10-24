@@ -1,6 +1,6 @@
 # An agent's limits are declared as data and enforced by the installer
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-24 (the design only; nothing is built, and the open items below are settled by the plan that builds it)
 Date: 2026-10-24
 
 ## Context
@@ -38,7 +38,7 @@ installer's code decides, and the harness layout says where the hook goes.
   and puts module code on the permission path.
 - **Keep the agent in the owner's personal configuration.** Rejected: a committed process may not depend on it.
 - **No agent with write access; the parent runs the experiments.** Possible, but it moves hostile inputs into the main
-  session's context, which the agent exists to avoid. Not chosen; it remains the fallback if this decision is rejected.
+  session's context, which the agent exists to avoid. Not chosen; it remains the fallback if this decision is superseded.
 - **An operating-system sandbox.** Not portable across the supported systems and outside what the installer controls.
 
 ## Consequences

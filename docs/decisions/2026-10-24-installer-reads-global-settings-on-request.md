@@ -1,6 +1,6 @@
 # The installer may read a harness's global configuration, read-only, on the owner's request
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-24 (the design only; `repository-boundary.md` is amended and the command built by a later plan, which may wait until the cases the trial did not cover are run)
 Date: 2026-10-24
 
 ## Context
@@ -14,13 +14,13 @@ Two written authorities stand against it. `repository-boundary.md` says the work
 harness's global configuration. The accepted decision `2026-10-19-guarded-store` rejected keeping approvals in a harness's
 global configuration, because the workbench must not depend on one.
 
-This record is a proposal to amend the first and to leave the second unchanged: a read-only report on the owner's request stores
+This record decides to amend the first, in the plan that builds the command, and to leave the second unchanged: a read-only report on the owner's request stores
 nothing there, approves nothing from it, and the workbench works with the configuration absent, so it creates none of the
 dependence the second rejects.
 
 ## Decision
 
-Proposed, and to be accepted by the owner before any plan builds it:
+Accepted as the design; a plan builds it only after `repository-boundary.md` is amended:
 
 1. The installer's own code may read a harness's global configuration, read-only. A module's helper or check never does.
 2. It does so only through an owner-run command that requires a terminal on both ends, with the test already used for the
@@ -34,13 +34,14 @@ Proposed, and to be accepted by the owner before any plan builds it:
    precedence is not verified is reported only as possible.
 7. It begins with the Claude harness. Another harness is added when its global file format is verified.
 
-The rule in `repository-boundary.md` is amended in the plan that builds the command, after this record is accepted. This record
-may also be deferred, or rejected, until the cases the trial did not cover are run.
+The rule in `repository-boundary.md` is amended in the plan that builds the command. Until then the spec still says the
+workbench never reads a harness's global configuration, and nothing reads it. Building the command may be deferred until the
+cases the trial did not cover are run.
 
 ## Alternatives considered
 
 - **No detection; rely on the floor and on code enforcement** (`2026-10-24-project-guarantees-a-floor`). Viable, and the fallback
-  if this record is deferred.
+  while the command is not built.
 - **A check run by a module.** Rejected: project-controlled code would read the owner's private configuration.
 - **Add it to `wb check`.** Rejected: an agent can run it, and its output enters the model's context.
 - **Copy the global configuration into the guarded store.** Rejected: it would copy secrets into a second place.
