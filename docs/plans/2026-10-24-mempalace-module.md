@@ -1,6 +1,6 @@
 # The mempalace module
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-24
 Candidate: workbench-v1#mempalace-module
 Specs: mempalace, knowledge-tools, module-boundary, module-contract, trust-and-approval
@@ -517,5 +517,11 @@ the full suite and `git diff --check`; a search finds no document that describes
 All six increments are committed. The completion criteria are met as follows: (1) the open questions were answered in
 increment A; (2) to (8) by increments B and C and their tests; (9) by D; (10) the full suite passes (3828 tests in 8
 roots, exit 0); (11) the shipped approvals match; (12) F. Two criteria carry their limit in the spec: no hand run was made in a
-live session, and the fixes of the security review's last round were not reviewed. The plan's status is not changed here:
-`Completed` needs the owner's say that the evidence is enough.
+live session, and the fixes of the security review's last round were not reviewed.
+
+Closed on 2026-10-24 at the owner's instruction ("archive it, do not push"), with the state as it was at increment F:
+`Status: Completed`, nothing pushed, the branch `mempalace` seven commits ahead of `main`. The durable choices this plan
+made are recorded in `docs/specs/mempalace.md` and `docs/specs/knowledge-tools.md`, which the owner approved on
+2026-10-24, and the owner chose the one that changed a spec's direction in session (that `search` may rewrite the program's
+bookkeeping). No decision record was written for them; if the owner wants the relaxed read rule of `knowledge-tools.md`
+recorded as a decision for the later modules, it is a new `Proposed` record that the owner accepts.
