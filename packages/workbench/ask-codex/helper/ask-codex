@@ -102,9 +102,11 @@ def outermost_boundary(start):
 
 
 def trusted_entries(boundary):
-    """The PATH entries that are absolute and outside the repository: never "", "." or a relative one."""
+    """The PATH entries that are absolute, are directories that exist now and are outside the repository: never "",
+    "." or a relative one, and never one that is missing or cannot be examined (a missing one that goes up through
+    ".." could later name a place inside the repository)."""
     return [entry for entry in os.environ.get("PATH", "").split(os.pathsep)
-            if entry and os.path.isabs(entry) and not is_inside(entry, boundary)]
+            if entry and os.path.isabs(entry) and os.path.isdir(entry) and not is_inside(entry, boundary)]
 
 
 def trusted_which(name, entries, boundary):

@@ -84,6 +84,28 @@ class Environment(support_codex.Bridge):
         self.assertTrue(self.document()["ok"])
         self.assertEqual(self.outside, self.calls()[0]["env"]["PATH"])
 
+    def test_only_an_existing_directory_is_passed_on_to_the_program(self):
+        sneaky = os.path.join(self.root, "a", "..", "..", "pwn")
+        a_file = os.path.join(self.base, "a-file")
+        with open(a_file, "w") as handle:
+            handle.write("x")
+        link = os.path.join(self.base, "to-outside")
+        os.symlink(self.outside, link)
+        self.path([os.path.join(self.root, "missing"), sneaky, a_file, os.path.join(self.base, "none"), link,
+                   self.outside], TMPDIR=self.temp, HOME=os.path.join(self.base, "home"))
+        self.assertTrue(self.document()["ok"])
+        self.assertEqual(os.pathsep.join([link, self.outside]), self.calls()[0]["env"]["PATH"])
+
+    def test_a_missing_entry_that_goes_up_through_dots_cannot_reach_the_project_later(self):
+        sneaky = os.path.join(self.root, "a", "..", "..", "pwn")
+        self.path([sneaky, self.outside], TMPDIR=self.temp, HOME=os.path.join(self.base, "home"))
+        self.assertTrue(self.document()["ok"])
+        self.assertEqual(self.outside, self.calls()[0]["env"]["PATH"])
+        os.makedirs(os.path.join(self.root, "x", "y"))
+        os.makedirs(os.path.join(self.root, "pwn"))
+        os.symlink(os.path.join(self.root, "x", "y"), os.path.join(self.root, "a"))
+        self.assertEqual(os.path.join(self.root, "pwn"), os.path.realpath(sneaky))
+
     def test_containment_fails_closed(self):
         helper = self.helper
         self.assertTrue(helper.is_inside(os.path.join(self.root, "missing", "deeper"), self.root))

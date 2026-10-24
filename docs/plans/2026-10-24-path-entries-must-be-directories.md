@@ -190,3 +190,8 @@ and without a second round.
   directory filter alone (choice 1). `tests.test_kit_call`, `tests.test_kit_call_launcher` and `tests.test_boundary` (53
   tests) and the `review-engine` module (325), which uses the kit, pass; `git diff --check` prints nothing. `ask-codex`
   also uses the kit, and its suite is not run until B. Next: B.
+- Increment B: the `ask-codex` helper's `trusted_entries` now also requires `os.path.isdir(entry)`. Two new tests in
+  `test_askcodex_run.py` (class `Environment`) failed on the old function, where the program's `PATH` held the attack
+  string, the missing entries and the file, and pass now: only the link and the outside directory reach the program, and
+  the second test shows the same text names `<project>/pwn` once `a` becomes a link. The module's 94 tests pass;
+  `git diff --check` prints nothing. The module's shipped approval is stale until E. Next: C.
