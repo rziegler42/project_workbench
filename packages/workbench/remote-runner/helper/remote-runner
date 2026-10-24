@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+"""``remote-runner``: a project's remote job profiles, read from ``.workbench/remote-runner.toml``.
+
+It is one file that imports the standard library and the workbench kit (``wbkit``); the launcher runs a pinned
+copy of it as ``wb run remote-runner <command>`` (``docs/specs/remote-runner.md``). This increment has one
+command, ``profiles``: it reads the project file without following a link, checks every rule of the spec and
+prints the declared profiles as one JSON line. It starts no program and writes nothing.
+
+A refusal is one ``refused: <reason>`` line on standard error and exit 1. A reason names the rule and repeats
+nothing of the file. The rules for the project file are fenced below because ``remote-runner-check`` carries
+the same text (a helper is a standalone file); a test shows the two are equal.
+"""
+
+import json
+import os
+import re
+import sys
+import tomllib
+
+from wbkit import display, project, safefs
+
+# --- the project file ---
+
+PATH = ".workbench/remote-runner.toml"
+MAX_FILE = 65536
+MAX_PROFILES = 64
+MAX_COMMAND = 4096
+MAX_LABELS = 32
+MAX_NUMBER = 1000000
+NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+NUMBERS = ("min_memory_gib", "min_cpu_cores")
+WORDS = ("os", "arch")
+REQUIREMENTS = WORDS + NUMBERS + ("labels",)
+
+
+class ProjectFileError(Exception):
+    """The project file breaks a rule. The message names the rule and repeats nothing of the file."""
+
+
+def _ascii(text, low):
+    return isinstance(text, str) and len(text) >= low and all(" " <= char <= "~" for char in text)
+
+
+def _requirements(name, table):
+    if not isinstance(table, dict):
+        raise ProjectFileError("profile %s: requirements is not a table" % name)
+    if any(key not in REQUIREMENTS for key in table):
+        raise ProjectFileError("profile %s: requirements holds a key other than %s"
+                               % (name, ", ".join(REQUIREMENTS)))
+    found = {}
+    for key, value in table.items():
+        if key in WORDS:
+            if not _ascii(value, 0) or len(value) > 64:
+                raise ProjectFileError("profile %s: %s is not a string of at most 64 printable ASCII "
+                                       "characters" % (name, key))
+        elif key in NUMBERS:
+            # A comparison is false for nan, and inf is over the bound, so this is a finite number.
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < value <= MAX_NUMBER:
+                raise ProjectFileError("profile %s: %s is not a number above 0 and at most %d"
+                                       % (name, key, MAX_NUMBER))
+        else:
+            if not isinstance(value, list) or len(value) > MAX_LABELS or \
+                    any(not isinstance(item, str) or not LABEL.fullmatch(item) for item in value):
+                raise ProjectFileError("profile %s: labels is not a list of at most %d labels of letters, "
+                                       "digits and ._-" % (name, MAX_LABELS))
+            value = list(value)
+        found[key] = value
+    return found
+
+
+def parse_project_file(data):
+    """``{"project": <id>, "profiles": [{"name", "command", "requirements"}, ...]}`` in file order from the
+    bytes of the project file, or `ProjectFileError`. Unknown keys, tables of another name, repeated keys,
+    wrong types and values outside their bounds are refused rather than ignored."""
+    if len(data) > MAX_FILE:
+        raise ProjectFileError("the file is over %d bytes" % MAX_FILE)
+    try:
+        document = tomllib.loads(data.decode("utf-8"))
+    except UnicodeDecodeError:
+        raise ProjectFileError("the file is not UTF-8 text") from None
+    except (tomllib.TOMLDecodeError, RecursionError, ValueError):
+        raise ProjectFileError("the file is not valid TOML (a repeated key is not valid)") from None
+    if any(key not in ("project", "profiles") for key in document):
+        raise ProjectFileError("the file holds a key or table other than [project] and [profiles]")
+    table = document.get("project")
+    if not isinstance(table, dict):
+        raise ProjectFileError("[project] is missing")
+    if any(key != "id" for key in table):
+        raise ProjectFileError("[project] holds a key other than id")
+    ident = table.get("id")
+    if not isinstance(ident, str) or not NAME.fullmatch(ident):
+        raise ProjectFileError("[project] id is missing or is not letters, digits, _ and - (at most 64)")
+    profiles = document.get("profiles")
+    if not isinstance(profiles, dict) or not profiles:
+        raise ProjectFileError("[profiles] needs at least one profile table")
+    if len(profiles) > MAX_PROFILES:
+        raise ProjectFileError("more than %d profiles" % MAX_PROFILES)
+    found = []
+    for number, (name, body) in enumerate(profiles.items(), 1):
+        if not NAME.fullmatch(name):
+            raise ProjectFileError("profile number %d has a name that is not letters, digits, _ and - "
+                                   "(at most 64)" % number)
+        if not isinstance(body, dict):
+            raise ProjectFileError("profile %s is not a table" % name)
+        if any(key not in ("command", "requirements") for key in body):
+            raise ProjectFileError("profile %s holds a key other than command and requirements" % name)
+        command = body.get("command")
+        if not _ascii(command, 1) or len(command) > MAX_COMMAND:
+            raise ProjectFileError("profile %s: command is missing or is not 1 to %d printable ASCII "
+                                   "characters" % (name, MAX_COMMAND))
+        requirements = _requirements(name, body["requirements"]) if "requirements" in body else {}
+        found.append({"name": name, "command": command, "requirements": requirements})
+    return {"project": ident, "profiles": found}
+
+
+# --- end of the project file ---
+
+USAGE = "usage: remote-runner profiles"
+
+
+class Refused(Exception):
+    """Nothing was done; the message is the reason."""
+
+
+def shown(text, limit=160):
+    return display.ascii_text(str(text))[:limit]
+
+
+def command_profiles(argv, cwd, out, err):
+    if argv:
+        raise Refused(USAGE)
+    try:
+        root = project.find_root(cwd)
+    except project.ProjectError as exc:
+        raise Refused(shown(exc))
+    try:
+        with safefs.Root(root, "project root") as held:
+            data = held.read_if_present(PATH, MAX_FILE)
+    except safefs.SafeFsError as exc:
+        raise Refused("the project file cannot be read: %s" % shown(exc))
+    if data is None:
+        raise Refused("no project file (%s)" % PATH)
+    try:
+        found = parse_project_file(data)
+    except ProjectFileError as exc:
+        raise Refused("%s: %s" % (PATH, exc))
+    out.write(json.dumps({"format": 1, "project": found["project"], "profiles": found["profiles"]}) + "\n")
+    return 0
+
+
+COMMANDS = {"profiles": command_profiles}
+
+
+def main(argv, out, err, cwd):
+    """Run one command from `cwd`. Returns the exit code."""
+    try:
+        if not argv or argv[0] not in COMMANDS:
+            raise Refused(USAGE)
+        return COMMANDS[argv[0]](argv[1:], cwd, out, err)
+    except Refused as exc:
+        err.write("refused: %s\n" % exc)
+        return 1
+    except OSError as exc:
+        err.write("failed: %s\n" % shown(exc.strerror or exc))
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:], sys.stdout, sys.stderr, os.getcwd()))

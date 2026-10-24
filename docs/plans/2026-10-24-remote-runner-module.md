@@ -362,3 +362,28 @@ read 2026-10-24, treated as data); no job was started and no host contacted.
   job and ref have patterns the spec fixes.
 - Not done: the spec is a draft and awaits the owner's approval; it has had no independent review (only if the owner
   asks); no code, no test.
+
+Increment B, 2026-10-24: the module `packages/workbench/remote-runner/` exists (`module.json`, `helper/remote-runner`
+with `profiles`, `helper/remote-runner-check`, and three test files), is listed last in `package.json`, and installs;
+the installer pins both helpers (`remote-runner` as the command, `remote-runner-check` as the check). The project's
+minimum Python is now 3.11 in `docs/development.md`, which is its only statement of it, and a command row for
+`profiles` is added there.
+
+- Verification as run: the module tests (36) pass; `tests.test_boundary` and `tests.test_skill_names` (27) pass;
+  `doccheck`, `refcheck` and `git diff --check` print nothing. The full suite was not run, so the shipped approvals,
+  stale from this increment, are untested until increment F. Tests were written first and failed for the missing
+  module before the code was added.
+- What the tests show: the example file is read in file order; 51 refused cases (not UTF-8, not TOML, arrays too
+  deep for the reader, a repeated key, an unknown key or table at each level, a wrong type, a name, label or id
+  outside its pattern, bounds on commands, labels, numbers and the profile count) are each refused, and no reason
+  repeats anything of the file; a link, a directory or a file over 65,536 bytes is refused and the tree is unchanged;
+  an absent file is `refused: no project file`; `wb check` reports a refused file and a leftover
+  `.claude/remote-runner.toml` under the module's name and reports nothing for a project without the module; the helpers
+  import only the standard library and the kit, never `subprocess`, and a program of the same name on `PATH` is not
+  started.
+- Decisions made in this increment (mine; the owner may change any): there are two helper files because a helper may
+  not be both a command and a check and helpers do not import each other, so the rules for the project file are one
+  fenced text in both, and a test requires the two texts to be equal; `os` and `arch` may be empty strings, as the
+  spec's "at most 64" reads (a runner never matches an empty value, so it fails closed); a reason names a profile
+  only after its name has passed the pattern.
+- Not done: no program is run by either helper; the spec text is unchanged (the "As built" edits are increment F).

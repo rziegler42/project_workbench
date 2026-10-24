@@ -6,8 +6,9 @@ There is nothing to set up and no dependency is installed. The code is Python 3 
 only the standard library, and the repository assumes git, a POSIX shell and `python3`,
 as `docs/specs/repository-boundary.md` states.
 
-Minimum Python version: 3.6, the lowest minor version that has every language feature
-written so far (f-strings are the newest). The checks have been run only on 3.14; the
+Minimum Python version: 3.11, the lowest minor version that has every language feature
+and standard-library module used so far (`tomllib`, which the `remote-runner` module reads
+its project file with, is the newest). The checks have been run only on 3.14; the
 minimum is derived from the features used, not from running older interpreters. Raise
 it here whenever a later increment uses a newer feature.
 
@@ -46,6 +47,7 @@ ambiguous blank.
 | Commit exact paths (local) | `python3 -m workbench run safe-git commit --expected-head <full hash or none> --subject <text> [--body <text>] [--trailer 'Key: value'] [--leave-other-staged] -- <path> ...` (the `safe-git` module's command; needs git; see "The safe-git helper") |
 | Preview and remove exact project paths | `python3 -m workbench run safe-git remove [--recursive] -- <path> ...`, then the same with `--confirm` after the owner approves |
 | Ask a model one read-only question | `python3 -m workbench run --provides model-bridge ask-codex ask [--model <name>] [--effort low\|medium\|high] [--timeout <seconds>] [--root <path>] [--schema <path>]` with the prompt on standard input (the `ask-codex` module's command; needs a `codex` program and a sign-in; see "The ask-codex bridge") |
+| Show a project's remote job profiles | `python3 -m workbench run remote-runner profiles` (the `remote-runner` module's command; reads `.workbench/remote-runner.toml`, starts no program; `wb check` also reports a refused file and a leftover `.claude/remote-runner.toml`; see `docs/specs/remote-runner.md`) |
 | Owner-run: approve a plan (terminal only) | `python3 -m workbench approve-plan <plan>` from anywhere in the project: one argument, no option; runs the project's declared approval command and records the plan's path and region hash after the owner types back the first 12 characters |
 | Is a plan approved (read-only) | `python3 -m workbench plan-status <plan>`: prints `approved:`, `changed since approval:` or `not approved:` and exits 0 only for the first (agent-safe) |
 | Show the checkpoint and cap values that apply (read-only) | `python3 -m workbench settings` from anywhere in the project: no argument, no option; prints `checkpoint <name>: stop\|delegate` and `cap <name>: <n>` lines for what the process module declares, then a `settings:` line per problem in the owner's settings (agent-safe) |
