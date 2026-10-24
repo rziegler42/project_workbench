@@ -172,10 +172,26 @@ investigate it.
 
 The owner approved the plan on 2026-10-24, after this review.
 
+Security review of the finished change, 2026-10-24, asked for by the owner and run by the `security-reviewer` agent with
+scratch experiments (symlink loops and dangling links, links in both directions, case variants, relative, empty, long
+and non-UTF8 paths, an ancestor of the project, and a fake program run end to end through `wbkit.call`). No Critical,
+High or Medium finding. The five copies have identical logic (the kit differs in its docstring wording only), and a
+program planted in a missing project entry is never run.
+
+- Low: Python's non-strict `os.path.realpath` drops a `..` after a component that does not exist, textually. For an
+  entry `<project>/a/../../pwn` with `<project>/a` missing, `is_inside` says outside; if `<project>/a` is later made a
+  link into the project, the same string reaches `<project>/pwn`. It needs a `..` route through a missing project
+  component in the owner's own `PATH` and a project author who can plant the link. Not fixed here; see Deferred work.
+- Not findings: a missing boundary reads as outside (no caller can reach it); any `OSError` counts as inside, so a
+  sandbox that blocks `stat` of ancestors would drop every entry and fail with "not found" (not tested); a NUL byte
+  raises `ValueError` as before (unreachable from the inputs).
+
 ## Deferred work
 
 - Dropping a `PATH` entry that is not a directory in `ask-codex`, `safe-git` and the kit, as `mempalace` and
   `remote-runner` do.
+- Rejecting a `PATH` entry that has a `..` component in the five `trusted_entries` functions, with a regression test in
+  each (the Low finding of the security review). Best done together with the item above, so the approvals go stale once.
 - One shared containment function if the module boundary ever allows a helper to import from the kit.
 
 ## Result
