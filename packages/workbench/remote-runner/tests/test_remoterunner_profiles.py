@@ -68,14 +68,15 @@ class Declaration(unittest.TestCase):
                                             "owner": ["fetch-overwrite"]}}, document["commands"])
         self.assertEqual([{"helper": "helper/remote-runner-check", "kit": 1}], document["checks"])
 
-    def test_every_file_is_the_declaration_or_a_helper(self):
+    def test_every_file_is_the_declaration_a_helper_or_the_skill(self):
         found = []
         for base, dirs, files in os.walk(MODULE):
             if base == MODULE:
                 dirs.remove("tests")  # the module's own tests are not part of what it installs
             for name in files:
                 found.append(os.path.relpath(os.path.join(base, name), MODULE))
-        self.assertEqual(sorted(["module.json", *HELPERS]), sorted(found))
+        self.assertEqual(sorted(["module.json", *HELPERS, "harness/neutral/skills/run-remote-job/SKILL.md"]),
+                         sorted(found))
 
     def test_the_package_lists_it(self):
         with open(os.path.join(PACKAGE, "package.json"), encoding="utf-8") as handle:

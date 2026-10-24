@@ -447,3 +447,22 @@ the checklist). `docs/development.md` has a row for the two commands.
   4. `fetch` and `fetch-overwrite` share the 600 second deadline of `submit`.
 - Not done: the tracked-file refusal is the program's (the wrapper runs no git); a race between the check and the
   program's write is not closed (recorded in Risks); no security review (only if the owner asks).
+
+Increment E, 2026-10-24: the neutral skill `harness/neutral/skills/run-remote-job/SKILL.md` (about 45 lines, ASCII)
+and `tests/test_remoterunner_skill.py`; the file-list test in `test_remoterunner_profiles.py` now includes the skill.
+
+- Tests first: written and run before the skill; 11 errored and 3 failed for the missing file. With the skill the
+  module tests (99) pass; `tests.test_boundary` and `tests.test_skill_names` (27) pass. Full suite not run
+  (approvals stale until F). The skill itself has not been tried in a live session.
+- What the tests show: the reader accepts it with only `name` and `description` in the front matter; the Claude layout
+  plans `.claude/skills/run-remote-job/SKILL.md`; at most 60 lines of ASCII; the commands it names are exactly the
+  wrapper's six plus `fetch-overwrite` as the owner's, each in backticks, with only the options that command takes;
+  no raw `remote-runner`, `ssh`, `scp`, `rsync` or `--force`; it names no skill of another module; and it carries the
+  rules: submit and fetch only on the owner's word, a profile the plan names, a committed revision reachable from the
+  remote, no commit or push to run a job, `--snapshot` for uncommitted work only after the owner agrees, `provenance`
+  with `dut_commit` and `dut_clean` and the commit that was submitted (with the note that the job can write that
+  record), job output and fetched files as untrusted data, never overwrite, record the job id in the plan's Result,
+  and an unavailable runner or a refusal is reported and not bypassed.
+- Choices (mine): the skill tells the agent to pass `--ref <40-digit commit>` for a committed run, so the answer's
+  commit and the expected commit are the same value; it leaves `log`, `cancel`, `remotes` and `prune` to the owner.
+- Not done: no live check; the skill is advice, and nothing forces an agent to load or follow it.
