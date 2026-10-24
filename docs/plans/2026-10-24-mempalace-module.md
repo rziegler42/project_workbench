@@ -496,3 +496,26 @@ were deleted (`9569d07e0804` the old package record, `82f7f21eeffe` `claude`, `8
 packages/workbench` now accepts all seven modules as first-party. The full suite is green: 3828 tests in 8 roots, one
 skip. The helper was also run against the real program, with the backend pin and the pinned model, for a status and for
 a search with a hit.
+
+### Increment F (2026-10-24)
+
+Brought the documents up to date. `docs/specs/mempalace.md`: the status line says it is built; the declaration table lists
+what was built (no `docs-index` fill); `status` on an absent palace is the program's words and not a refusal; `search`
+fixes the backend and does not accept `--backend` or `--palace`; the acceptance criteria say what the tests check; a new
+"As built, and its limits" section lists what was and was not exercised (no hand run in a live session; the default
+palace for a fresh home; `XDG_*` not passed; a real `Ctrl-C` and workers outliving a terminate signal; a concurrent writer;
+`search` rewriting bookkeeping; MiniLM only; the terminal test as friction; the git settings; the owner's privileges).
+`docs/specs/knowledge-tools.md`: a section "What `mempalace` showed", as evidence only, and the status line. `docs/development.md`:
+two command rows and a section "The mempalace module". `README.md`: one bullet.
+
+The document checks (`doccheck`, `refcheck`) were not run: they run in an installed project, and this repository is not one
+(`docs/README.md`: run by the owner in session). The status lines, names and headings follow the forms they check. Run with
+the full suite and `git diff --check`; a search finds no document that describes the module as unbuilt.
+
+## Completion
+
+All six increments are committed. The completion criteria are met as follows: (1) the open questions were answered in
+increment A; (2) to (8) by increments B and C and their tests; (9) by D; (10) the full suite passes (3828 tests in 8
+roots, exit 0); (11) the shipped approvals match; (12) F. Two criteria carry their limit in the spec: no hand run was made in a
+live session, and the fixes of the security review's last round were not reviewed. The plan's status is not changed here:
+`Completed` needs the owner's say that the evidence is enough.

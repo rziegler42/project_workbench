@@ -23,6 +23,10 @@ The code is Python 3 using only the standard library, in `workbench/`, with test
 - **Claude harness.** The first-party module `claude` in `packages/workbench/` places
   the instructions, skills, agents, commands and permissions that other modules ship.
   `attach` renders them per clone, and `install` runs it as its last step.
+- **Memory.** The first-party module `mempalace` lets an agent search the owner's MemPalace (`wb run mempalace search`)
+  and gives the owner terminal-only commands to build it. It is tooling over a pinned helper, not an MCP server, and an
+  agent cannot write to the memory. See the [mempalace specification](docs/specs/mempalace.md) for what it guarantees and
+  what no test covers.
 - **Check.** `check` is read-only. It reads the git index itself and never runs git,
   and it reports tracked files that point at untracked content.
 

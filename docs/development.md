@@ -46,6 +46,8 @@ ambiguous blank.
 | Commit exact paths (local) | `python3 -m workbench run safe-git commit --expected-head <full hash or none> --subject <text> [--body <text>] [--trailer 'Key: value'] [--leave-other-staged] -- <path> ...` (the `safe-git` module's command; needs git; see "The safe-git helper") |
 | Preview and remove exact project paths | `python3 -m workbench run safe-git remove [--recursive] -- <path> ...`, then the same with `--confirm` after the owner approves |
 | Ask a model one read-only question | `python3 -m workbench run --provides model-bridge ask-codex ask [--model <name>] [--effort low\|medium\|high] [--timeout <seconds>] [--root <path>] [--schema <path>]` with the prompt on standard input (the `ask-codex` module's command; needs a `codex` program and a sign-in; see "The ask-codex bridge") |
+| Search the owner's memory (agent-safe) | `python3 -m workbench run mempalace status`, and `python3 -m workbench run mempalace search [--wing <name>] [--room <name>] [--results <1-20>] [--since <date>] [--before <date>] -- <query>` (the `mempalace` module's command; needs a `mempalace` program and its cached embedding model; see "The mempalace module") |
+| Owner-run: build the memory (terminal only) | `python3 -m workbench run mempalace init <dir> [--yes] [--allow-project-root]`, and `python3 -m workbench run mempalace mine <dir> [--confirm] [--wing <name>] [--mode projects\|convos] [--allow-project-root]` (refuse unless standard input and output are terminals; `mine` is a dry run without `--confirm`) |
 | Owner-run: approve a plan (terminal only) | `python3 -m workbench approve-plan <plan>` from anywhere in the project: one argument, no option; runs the project's declared approval command and records the plan's path and region hash after the owner types back the first 12 characters |
 | Is a plan approved (read-only) | `python3 -m workbench plan-status <plan>`: prints `approved:`, `changed since approval:` or `not approved:` and exits 0 only for the first (agent-safe) |
 | Show the checkpoint and cap values that apply (read-only) | `python3 -m workbench settings` from anywhere in the project: no argument, no option; prints `checkpoint <name>: stop\|delegate` and `cap <name>: <n>` lines for what the process module declares, then a `settings:` line per problem in the owner's settings (agent-safe) |
@@ -95,6 +97,34 @@ no state and writes nothing in the project.
 - **A first hand run** starts with `codex exec --help`, to check the flags the bridge passes against the installed
   version; none has been run against a real Codex yet (`docs/specs/model-bridge.md`, "As built, and its limits").
 - **The launcher** passes standard input through to the helper, so `wb run` forwards the prompt.
+
+## The mempalace module
+
+`wb run mempalace status` and `wb run mempalace search` let an agent read the owner's MemPalace; `init` and `mine` are the
+owner's, and build it (`docs/specs/mempalace.md`). The module runs the owner's `mempalace` program and holds no memory of
+its own.
+
+- **What a real call needs.** A `mempalace` program in an absolute `PATH` entry outside the repository (installed with
+  `uv`; the module neither installs nor updates it), and for a search its embedding model in the cache, which only `mine`
+  downloads. The tests need neither: they use a fake `mempalace`, send nothing and never start a real one.
+- **Building the memory (the owner, from a terminal).** `wb run mempalace init <dir>` asks about the detected rooms and
+  writes `mempalace.yaml` into `<dir>`; `wb run mempalace mine <dir>` shows what it would file, and
+  `mine <dir> --confirm` files it. The first real `mine` downloads about 79 MB (the model, from the
+  `chroma-onnx-models` bucket on Amazon S3) and writes `$HOME/hallways.json`. `<dir>` is a directory you name: not the
+  project root unless you add `--allow-project-root`, not one that holds or lies inside the palace, and not one in
+  which a configuration file the program writes through is a link.
+- **Naming a palace.** With nothing set, the program uses its own default. A project may name one in
+  `.workbench/mempalace.json`, `{"format": 1, "palace": "<absolute path>"}`; the helper passes it as `--palace`.
+- **What the helper fixes.** The embedding model (`minilm`), the backend (`chroma`) and git's own settings are fixed by
+  the helper, and only `HOME`, `LANG`, `LC_*` and the resolved `PATH` of the caller reach the program. A palace filed with
+  another model is not supported through this module.
+- **What a search does.** It never changes a stored drawer, but the program rewrites its own index files on every call,
+  so do not run a search while a `mine` runs. A low match score means the memory has nothing on the subject: the program
+  returns its nearest notes for any query.
+- **Evidence and limits.** The run that settled how the program behaves is in `docs/specs/mempalace.md` ("Evidence"); the
+  limits, including what no test covers, are in "As built, and its limits". The raw traces of that run are untracked, in
+  `/.debug/2026-10-24-mempalace-evidence/` on the machine that made them.
+- **A first hand run** has not been made: no live Claude session has used the skill against a real palace.
 
 ## The verify command
 

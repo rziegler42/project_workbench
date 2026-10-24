@@ -1,6 +1,6 @@
 # mempalace
 
-Status: Current. Approved by the owner on 2026-10-24. Nothing here is built. "Evidence" records what the installed program was seen to do on 2026-10-24.
+Status: Current. Approved by the owner on 2026-10-24. Built by plan `2026-10-24-mempalace-module` (increments A to F); "As built, and its limits" lists what was and was not exercised. "Evidence" records what the installed program was seen to do on 2026-10-24.
 
 Terms are defined in `terms.md`. The declaration it must satisfy is defined in `module-contract.md`; the
 launcher, the kit and module commands in `module-boundary.md`; the authority rules in `trust-and-approval.md`.
@@ -12,15 +12,15 @@ Its place among the knowledge modules is in `knowledge-tools.md`.
 MemPalace the owner has installed, and gives the owner commands to build it. It is a front end for the owner's
 `mempalace` program (installed with `uv`); it holds no memory of its own.
 
-| field | proposed value |
+| field | value |
 |---|---|
 | type | `module` |
 | provides | `memory-recall` |
 | requires | nothing |
 | helpers | `mempalace` (expected on `PATH`; a missing one is a warning at install) |
-| fills | `policy` (a short block), `docs-index` (one line) |
+| fills | `policy` (a short block) |
 | writes | nothing outside its namespace |
-| ships | `helper/mempalace`, and one neutral skill, `recall-memory` |
+| ships | `helper/mempalace`; the module also holds one neutral skill, `recall-memory`, and the policy block |
 | commands | `mempalace`, runtime `python`, kit 1; `arguments`: `status`, `search`, `init`, `mine`; `owner`: `init`, `mine` |
 
 It is run as `wb run mempalace status` and `wb run mempalace search ...` by an agent, and `init` and `mine` by
@@ -54,12 +54,14 @@ the owner. The installer pins the helper when the owner confirms the install.
 
 ## Behavior
 
-**`status`** (agent-safe). Runs `mempalace status` and returns its text, bounded. Reports a missing program
-or an absent palace as a refusal that says what to run.
+**`status`** (agent-safe). Runs `mempalace status` and returns its text between markers, bounded. A missing program
+is a refusal. An absent palace is not: the program exits 0 and says "No palace found" and what to run, and that text
+comes back as data.
 
 **`search`** (agent-safe). `wb run mempalace search [--wing <w>] [--room <r>] [--results <n>] [--since <date>]
 [--before <date>] -- <query>`. It passes only those options, with `--results` capped (default 5, ceiling 20),
-and never `--include-media` or `--backend`. The query is one argument after `--`, never parsed as an option, at
+and never `--include-media`; the caller cannot pass `--backend` or `--palace` (the helper fixes the first and the
+project setting supplies the second). The query is one argument after `--`, never parsed as an option, at
 most 1000 characters. The output is returned inside a block that says it is recalled data.
 
 - **What "agent-safe" means here.** A search never changes a stored drawer, an embedding or a document. It is not
@@ -168,21 +170,53 @@ cited from a document.
 ## Acceptance criteria
 
 - The module verifies, and its approval request lists the helper, the command and the `owner` arguments.
-- With a fake `mempalace` on `PATH`, `status` and `search` return its text bounded and marked as data, and
-  report a missing program, a non-zero exit, a timeout and an oversized output as distinct refusals.
-- `search` refuses an unknown option, `--include-media`, `--backend`, an empty query, a query over the limit
-  and `--results` over the ceiling; a query that begins with `-` is passed as a query.
-- `search` refuses, and starts no program, when the embedding model file is absent or the recorded model is not
-  `minilm`; the refusal tells the owner to run `mine`.
-- The child's environment sets `PYTHONDONTWRITEBYTECODE=1`.
-- `init` and `mine` are listed under `owner`; `init` always passes `--no-llm`; `mine` without `--confirm`
-  passes `--dry-run`; a project-root target is refused without the explicit flag.
-- The environment of the child holds only the variables listed above.
+- With a fake `mempalace` on `PATH`, `status` and `search` return its text bounded and marked as data. A missing
+  program is a refusal; a non-zero exit, a timeout and output over the bound are failures that start from the
+  program's words or none.
+- `search` refuses an unknown option (`--include-media`, `--backend` and `--palace` among them), an empty query, a
+  query over the limit and `--results` over the ceiling; a query that begins with `-` is passed as a query.
+- `search` refuses, and starts no program, when any of the six model files is absent (the refusal tells the owner
+  to run `mine`) or, with a palace named by the project, when it was recorded with a model other than `minilm`.
+- The child's environment holds only `HOME`, `LANG`, `LC_*`, the resolved `PATH`, `PYTHONDONTWRITEBYTECODE=1`,
+  `MEMPALACE_EMBEDDING_MODEL=minilm` and the fixed git settings; the program is started with `--backend chroma`.
+- `init` and `mine` are listed under `owner` and run only from a terminal; `init` always passes `--no-llm`; `mine`
+  without `--confirm` passes `--dry-run`; a project-root target, a target that overlaps a palace, and a target holding
+  a link, a directory or a shared file under a name the program writes through are refused.
 - The helper writes nothing in the project, and no test starts a real `mempalace` or reaches a network.
-- A project setting that is a link, malformed, oversized or holds a relative path is refused.
-- The policy block and the skill carry the routing rule and the data-not-authority rule, and `wb check` finds
-  no tracked file naming a palace path.
+- A project setting that is a link, malformed, oversized or holds a relative or unclean path is refused.
+- The policy block and the skill carry the routing rule and the data-not-authority rule, and an install adds no file
+  outside the module's namespace that names a palace path.
 - `python3 -B -W error tests/run_all.py` passes, and the package is released again with its approvals.
+
+## As built, and its limits
+
+Built by plan `2026-10-24-mempalace-module`: the module `packages/workbench/mempalace/` (the declaration, one helper,
+the policy block and the neutral skill `recall-memory`), its 145 tests, and the shipped approvals that make the package
+first-party again (a full suite of 3828 tests in 8 roots passed at the release). The helper was also run against the
+real `mempalace` 3.11.0 in a scratch home, a throwaway project and, for the owner commands, a pseudo-terminal, with no
+network: `status`, a search with a hit, a dry-run `mine`, `init --yes`, and the refusals of a piped run and of the project
+root. A security review by Codex (three rounds, the plan's Review record) raised fourteen findings; eleven were fixed, and
+three (two distinct issues) are recorded as limits below; the fixes of its last round have not been reviewed.
+
+What was not exercised, or is not closed:
+
+- **A hand run in a live session** with a real palace, the real install and Claude loading the skill and obeying the
+  block. Nothing here shows an agent uses the memory well, or that it does not read a result as authority; the block
+  and the skill say so in words and nothing enforces it.
+- **The default palace for a fresh home**, whether `XDG_CACHE_HOME` alone moves the model cache, the program with
+  another backend or model, and a large palace. The helper passes no `XDG_*` variable, so a user with a non-default
+  `XDG_CONFIG_HOME` or `XDG_CACHE_HOME` gets the program's places under `HOME`.
+- **A real interrupt at a terminal** (`Ctrl-C`) during `mine`, and a program that starts workers: a terminate signal
+  stops the program and not what it started ("Limits of the owner commands").
+- **A concurrent writer in the owner's tree** during `init` or `mine`, which no check made beforehand can stop.
+- **`search` is not free of writes**: it rewrites the palace's own bookkeeping, and the lock table grows by a row a
+  search. A palace on a read-only file system, or a `search` during a `mine`, fails or contends.
+- **MiniLM only.** A palace filed with another model is refused for a search when the project names it, and
+  otherwise the program refuses the read.
+- **The terminal test is friction.** A process that allocates its own pseudo-terminal passes it; the harness's deny rule
+  for the `owner` arguments is the barrier where it exists.
+- **The git settings** cover the two settings known to run a program on a read.
+- **The program runs with the owner's privileges** from a `PATH` entry the owner controls; a pin is not a sandbox.
 
 ## Evidence
 
