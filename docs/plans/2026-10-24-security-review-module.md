@@ -299,3 +299,10 @@ Round 3 was not run. The owner approved the plan on 2026-10-24, after rounds 1 a
   is added to the core names in `module-contract.md` and the spec has a row in the specs index. `superpowers-ports.md` is
   untouched. `doccheck`, `refcheck`, `git diff --check` print nothing; `tests.test_skill_names` and `tests.test_boundary`
   (27 tests) pass. The spec reads `Current` only after the owner approves it. Next: B.
+- Increment B: `packages/workbench/security-review/` holds `module.json` (type `module`, provides `security-review`, no
+  helper, command, check, fill or `requires`) and the neutral skill, written in the workbench's words. Its 8 tests were
+  seen to fail before the module existed and pass after (declaration verifies with `first_party=True`, file list,
+  front matter, content, no vendor or personal path, no outside source). `tests.test_package`, `tests.test_skill_names`
+  and `tests.test_boundary` (29 tests) pass; `git diff --check` prints nothing. `python3 -m workbench verify` on the
+  command line refuses every first-party capability name for a third-party run, so the in-test first-party run is the
+  check. The package approvals read stale until E. Next: C.
