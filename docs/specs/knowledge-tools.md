@@ -68,7 +68,10 @@ not first-party uses the `<package>:<name>` form. The names are proposals until 
 
 **Reads and writes.**
 
-- A read that changes nothing and sends nothing out of the machine is a command an agent may run.
+- A read that changes no stored content and sends nothing out of the machine is a command an agent may run.
+  Bookkeeping a store rewrites for itself on a read (an index header, a lock row) is recorded in the module's own
+  spec, with the owner's acceptance; `mempalace` is the first case (`mempalace.md`, `search`). A read that can
+  start a download is not agent-safe unless the module first checks that nothing will be fetched.
 - A command that creates or changes a store, mines content, or can send content to a service is owner-run:
   listed in the command's `owner` field, which a harness that provides `permissions` denies the agent.
 - A result is returned as text marked as data, bounded in size and time, and is never passed to a shell.

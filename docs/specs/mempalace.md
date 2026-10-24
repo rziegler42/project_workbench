@@ -1,6 +1,6 @@
 # mempalace
 
-Status: Current. Approved by the owner on 2026-10-24. Nothing here is built. "Evidence and open questions" separates what was read from the installed program from what is assumed.
+Status: Current. Approved by the owner on 2026-10-24. Nothing here is built. "Evidence" records what the installed program was seen to do on 2026-10-24.
 
 Terms are defined in `terms.md`. The declaration it must satisfy is defined in `module-contract.md`; the
 launcher, the kit and module commands in `module-boundary.md`; the authority rules in `trust-and-approval.md`.
@@ -62,12 +62,31 @@ or an absent palace as a refusal that says what to run.
 and never `--include-media` or `--backend`. The query is one argument after `--`, never parsed as an option, at
 most 1000 characters. The output is returned inside a block that says it is recalled data.
 
+- **What "agent-safe" means here.** A search never changes a stored drawer, an embedding or a document. It is not
+  free of writes: on 2026-10-24 every search rewrote the palace's own bookkeeping, one row added to the lock table
+  of `chroma.sqlite3`, the drawers collection's configuration row, and the index file `length.bin` (same size)
+  (`Evidence`, below). The owner accepted this on 2026-10-24 (option 1 of the choice put to them). Consequences:
+  a palace on a read-only file system makes `search` fail; a `search` run while the owner runs `mine` can contend
+  for the same files, and the owner should not run them together; the lock table grows by a row a search.
+- **Never a download.** Without the embedding model cached the program tries to download it (79 MB, from the
+  `chroma-onnx-models` bucket on Amazon S3). The helper checks first that
+  `$HOME/.cache/chroma/onnx_models/all-MiniLM-L6-v2/onnx/model.onnx` exists and refuses with a message that tells
+  the owner to run `mine` otherwise, so an agent's search can never start a download. The path was seen with `HOME`
+  and `XDG_CACHE_HOME` both set to the same cache; whether `XDG_CACHE_HOME` alone moves it is not tested. The check
+  is right for the `minilm` model the palace recorded (`mempalace_embedder.json`) and refuses any other model name.
+- **Exit codes and streams.** The program exits 0 for a result and for "No results found", and 1 for an absent
+  palace database and for an error, with its message on standard output. The helper reads the exit code and
+  treats the text as data on either stream.
+
 **`init`** and **`mine`** (owner-run). Listed under `owner`, so the harness denies them to the agent.
 
-- `init <dir>` always passes `--no-llm`, so that no provider is contacted. MemPalace's default is to refine
+- `init <dir>` writes `mempalace.yaml` **into `<dir>`**, so an `init` of the project root leaves an untracked file
+  in the project. It also saves the palace path in `$HOME/.config/mempalace/config.json`. It always passes `--no-llm`, so that no provider is contacted. MemPalace's default is to refine
   entities with a language model, and its providers include remote ones (`ollama`, `openai-compat`,
   `anthropic`); the owner who wants one runs `mempalace init` directly and sees what it sends.
-- `mine <dir>` passes `--dry-run` unless `--confirm` is given, so the owner sees what would be filed first.
+- `mine <dir>` passes `--dry-run` unless `--confirm` is given, so the owner sees what would be filed first. The
+  first real `mine` downloads the embedding model, and it writes `$HOME/hallways.json` directly in the home
+  directory. The helper says both before it runs without `--dry-run`.
   The directory must be one the owner names. It is refused when it is the project root, unless
   `--allow-project-root` is also given, so the default does not make the project's tree a second index
   (`knowledge-tools.md`).
@@ -78,12 +97,18 @@ most 1000 characters. The output is returned inside a block that says it is reca
 repository, no shell, a fixed argument shape, a time limit (60 seconds for `status` and `search`, none the
 helper sets for `mine`, which the owner watches), an output cap, the caller's `HOME` used because MemPalace
 reads its configuration from it. No environment variable of the caller is passed on except `HOME`, `PATH`,
-`LANG` and `LC_*`; in particular none that selects a backend or an API key. The helper reads no file of the
+`LANG` and `LC_*`; in particular none that selects a backend or an API key. The installed program reads, among
+others, `MEMPALACE_PALACE_PATH`, `MEMPALACE_BACKEND`, `MEMPALACE_EMBEDDING_API_URL` and `_MODEL` (remote
+embeddings), `MEMPALACE_HUB_FORWARD`, `MEMPALACE_LOG_FILE` and URL and token variables for other stores, and none
+of them reaches the child. The helper sets `PYTHONDONTWRITEBYTECODE=1`, so that running the program writes no
+bytecode into its own install directory. The helper reads no file of the
 project and writes nothing in it.
 
-**Palace location.** The helper does not choose one. MemPalace picks its own (its `--help` names
-`~/.mempalace/palace` and `~/.mempalace/config.json`; `mempalace status` named `~/.config/mempalace/palace` on
-2026-10-24, so the two disagree and the plan resolves which is current). A project may set another with
+**Palace location.** The helper does not choose one. MemPalace picks its own: `--palace` is honoured, and `init
+--palace` saves the path in `$HOME/.config/mempalace/config.json`. Its `--help` names `~/.mempalace/palace`, which
+the program did not use; with no palace the program looked in `~/.config/mempalace/palace` on 2026-10-24. What
+decides the default for a fresh home was not isolated (the evidence run passed `--palace` and then relied on the
+saved path). A project may set another with
 `.workbench/mempalace.json` (`{"format": 1, "palace": "<absolute path>"}`), which the helper passes as
 `--palace`. Absent, nothing is passed. The file is read without following a link, is bounded, and is a change
 `wb acknowledge` lists. An absolute path in a tracked file is a pointer to untracked content and so may not be
@@ -105,6 +130,9 @@ cited from a document.
   report a missing program, a non-zero exit, a timeout and an oversized output as distinct refusals.
 - `search` refuses an unknown option, `--include-media`, `--backend`, an empty query, a query over the limit
   and `--results` over the ceiling; a query that begins with `-` is passed as a query.
+- `search` refuses, and starts no program, when the embedding model file is absent or the recorded model is not
+  `minilm`; the refusal tells the owner to run `mine`.
+- The child's environment sets `PYTHONDONTWRITEBYTECODE=1`.
 - `init` and `mine` are listed under `owner`; `init` always passes `--no-llm`; `mine` without `--confirm`
   passes `--dry-run`; a project-root target is refused without the explicit flag.
 - The environment of the child holds only the variables listed above.
@@ -114,18 +142,33 @@ cited from a document.
   no tracked file naming a palace path.
 - `python3 -B -W error tests/run_all.py` passes, and the package is released again with its approvals.
 
-## Evidence and open questions
+## Evidence
 
-Read on 2026-10-24 from `mempalace --help` and the subcommand help for `search`, `status`, `wake-up`, `init`
-and `mine`. Not verified, and each a question for the plan before it relies on the answer:
+Run on 2026-10-24 by plan `2026-10-24-mempalace-module`, increment A, against `mempalace` 3.11.0 (a `uv` tool on
+Python 3.14), with `strace` 6.19. Every probe ran under `env -i` in a scratch directory, with `HOME`, the XDG
+directories and `TMPDIR` in scratch, `--palace` in scratch and `PYTHONDONTWRITEBYTECODE=1`, and (except one) in a
+network namespace with no network. The traces show only reads of the program's own installation, the system
+Python and locale data outside scratch, and nothing of the owner's real configuration. The one networked run was
+`mine` on a scratch project. The retained traces are untracked, in `/.debug/2026-10-24-mempalace-evidence/`.
 
-1. Whether `search` or `status` write anything (a palace, an index, a cache) or fetch an embedding model from
-   the network on first use. If either does, `search` is not read-only in the sense this spec needs.
-2. What the output looks like and whether a machine-readable form exists. The wrapper assumes plain text.
-3. The exit codes for "no palace" and "no results".
-4. Which of the two palace locations is current, and whether `HOME` is the only thing that decides it.
-5. Whether `mine --dry-run` touches the palace.
-6. Whether `wake-up` should be offered as a third agent-safe command.
+1. **Writes and downloads.** `status` writes nothing in the palace, in every state tried. `search` rewrites the
+   palace's bookkeeping on every call (see `search`), and tries to download the model when it is absent. `wake-up`
+   creates `chroma.sqlite3`, so it is not read-only and is not offered. The first real `mine` downloads the
+   79.3 MB model from the `chroma-onnx-models` bucket on Amazon S3, writes `$HOME/hallways.json`, lock files
+   under `$HOME/.mempalace/locks`, and starts POSIX semaphores in `/dev/shm`; `onnxruntime` also keeps a small
+   cache under `$HOME/.cache/Microsoft/DeveloperTools`.
+2. **Output.** Plain text only. `search` prints a header and numbered hits with wing, room, source, scores and the
+   stored text. It returns the nearest drawers even for an unrelated query. No machine-readable form was found.
+3. **Exit codes.** `status` exits 0 even with no palace; `search` exits 1 with no database or on an error (message
+   on standard output) and 0 for results and for "No results found" under a filter that matches nothing.
+4. **Palace location.** `--palace` is honoured; `init --palace` saves the path in
+   `$HOME/.config/mempalace/config.json`. What decides the default for a fresh home was not isolated.
+5. **`mine --dry-run`** filed nothing and changed no palace file.
+6. **`wake-up`** is not read-only. Not offered.
+7. **A query that begins with `-`**, passed as one argument, was treated as a query.
+
+Not determined: whether `XDG_CACHE_HOME` alone moves the model cache, the default palace for a fresh home, the
+behavior with another backend, and the behavior against a large palace.
 
 ## Governing decisions and references
 

@@ -1,6 +1,6 @@
 # The mempalace module
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-24
 Candidate: workbench-v1#mempalace-module
 Specs: mempalace, knowledge-tools, module-boundary, module-contract, trust-and-approval
@@ -323,4 +323,27 @@ sealed state is untracked, in `/.debug/2026-10-24-plan-review/`.
 
 ## Result
 
-Empty until work starts.
+### Increment A (2026-10-24)
+
+Ran the real `mempalace` 3.11.0 in a scratch directory, confined as the increment describes (`env -i`, scratch
+`HOME` and XDG directories, `--palace` in scratch, `strace` 6.19, a network namespace with no network except for
+one run). The findings are in `docs/specs/mempalace.md` ("Evidence"); the retained traces are in the untracked
+`/.debug/2026-10-24-mempalace-evidence/`, with a README. Real `~/.mempalace`, `~/.config/mempalace`,
+`~/.cache/chroma` and `~/hallways.json` did not exist before or after.
+
+Deviations from the approved text, each made with the owner's word in session:
+
+- Python bytecode (`.pyc`) writes into the program's install directory were allowed as a runtime effect, and
+  `PYTHONDONTWRITEBYTECODE=1` was set for the remaining probes (the owner agreed on 2026-10-24). They happened once,
+  in the `init` probe, before the variable was set.
+- One networked run was allowed by the owner: `mine` of a scratch project, which downloaded the 79.3 MB model into
+  the scratch cache. No other probe had a network.
+- The gate for B stopped on question 1: `search` rewrites the palace's bookkeeping (not drawer content) on every
+  call, so it is not write-free. The owner chose option 1 (accept and document, refuse `search` unless the model is
+  already cached). The spec and `knowledge-tools.md` were changed to match, and the roadmap candidate's boundary
+  now reads "no change to drawer content" in place of "no write". Increments B and C follow the spec as amended.
+
+Also found, and recorded in the spec: `init` writes `mempalace.yaml` into its target directory, `mine` writes
+`$HOME/hallways.json`, `wake-up` creates the palace database (so it is not offered), and a failed `search` or `mine`
+prints its error on standard output. Still undetermined: the default palace for a fresh home, whether
+`XDG_CACHE_HOME` alone moves the model cache, and behavior on a large palace or another backend.
