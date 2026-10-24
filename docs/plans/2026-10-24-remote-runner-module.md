@@ -1,6 +1,6 @@
 # The remote-runner module
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-24
 Candidate: workbench-v1#remote-runner-module
 Specs: remote-runner (new), code-work, trust-and-approval, module-contract
@@ -584,3 +584,11 @@ specs.
   comparison step is the defence against a changed command.
 - Still open for the owner: approval of `docs/specs/remote-runner.md` (so the plan stays `In Progress`); the
   installer change for `launch`; the live check; `ask-codex archive`; the push.
+
+Completion, 2026-10-24: the owner approved `docs/specs/remote-runner.md` and asked for the plan to be completed, so
+the spec reads `Current` and this plan reads `Completed`. Evidence for the criteria: 1, the spec and its approval; 2
+to 4, the module, its install and `wb check` tests; 5, 6 and 8, the wrapper tests against fake programs (104 module
+tests); 7, the skill tests; 9, the full suite (3,787 tests in 8 roots, no Claude skip), the document checks and the
+released approvals of increment G; 10, increment G. Not covered by the criteria and still open: the program must read
+`.workbench/remote-runner.toml` before a real job can be submitted, and no live check has been made; the installer
+change for `wb launch` (deferred); `ask-codex archive` for this plan's review; the push.

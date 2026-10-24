@@ -1,8 +1,9 @@
 # remote-runner
 
-Status: Draft. Written by plan `2026-10-24-remote-runner-module` (increment A), before the module existed, so that the
-module and the change to the external program were built against this text; the module is now built and the text
-matches it ("As built, and its limits"). It awaits the owner's approval and reads `Current` only after it.
+Status: Current, approved by the owner on 2026-10-24. Written by plan `2026-10-24-remote-runner-module` (increment A),
+before the module existed, so that the module and the change to the external program were built against this text; the
+module is built and the text matches it ("As built, and its limits"). The external program does not yet read the
+project file from the path this spec gives (see "What the program must change").
 
 Terms are defined in `terms.md`. The declaration it satisfies is in `module-contract.md`; the launcher, the kit and
 the pin are in `module-boundary.md`; the authority rules, the fetch channel and the floor are in
