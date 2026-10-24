@@ -371,3 +371,33 @@ Choices and departures, none changing a spec behavior:
   the owner's `mine`, which increment C adds.
 - The helper passes no `XDG_*` variable, as the spec says, so a user with a non-default `XDG_CACHE_HOME` or
   `XDG_CONFIG_HOME` gets the program's default places under `HOME`.
+
+### Increment C (2026-10-24)
+
+Added `init` and `mine` (declared under `owner`) and the project's palace setting to the helper and the declaration,
+with 44 new tests (105 in the module; full suite 3788 in 8 roots, green) and mutation checks on the properties that
+matter (`--no-llm` dropped, `mine` not a dry run, no terminal check, project root allowed, setting not passed, recorded
+model not checked, link allowed in the directory, caller's environment passed to an owner command): all eight made a
+test fail. Run against the real program in a scratch `HOME` and a throwaway project, from a pseudo-terminal and with no
+network: `init --yes` wrote `mempalace.yaml` in the named directory and the setting's palace was the one used, a dry-run
+`mine` filed nothing, the project root was refused, and a piped run was refused.
+
+Departures from the approved text, each flagged to the owner when reported:
+
+- **The owner commands run only from a terminal and are handed the terminal; the helper does not capture them.** The
+  approved step said the helper "still caps what it returns". The real `init` asks the owner to accept the rooms unless
+  given `--yes`, and crashes with a traceback on end of input, so a captured run with no input could not serve it.
+  The helper therefore refuses unless standard input and output are terminals (the rule `approve` uses, friction and not
+  authentication, and independent of whether a harness renders the deny) and hands the terminal to the program, with no
+  time limit and no output cap. A terminate signal stops the program itself (not anything it started) and removes the
+  scratch directory; an interrupt at the terminal reaches the program, and the helper waits for it. `docs/specs/mempalace.md`
+  is amended to say so.
+- `init` also refuses the project root, and a directory that holds it, unless `--allow-project-root` is given (the
+  plan named only `mine`); the evidence showed `init` writes `mempalace.yaml` into its target.
+- `mine` takes `--wing` and `--mode projects|convos` only; `--mode extract` needs an extra the owner did not install.
+- Every command now finds the project and refuses outside one, since the setting lives in it.
+- The recorded-model check (deferred from B) is done: with a palace named by the setting, a `mempalace_embedder.json`
+  that names a model other than `minilm`, is unreadable, is a link or is oversized refuses the search.
+
+Not covered by a test: a real interrupt at a terminal (`Ctrl-C`) during `mine`, and a program that spawns workers that
+outlive a terminate signal.

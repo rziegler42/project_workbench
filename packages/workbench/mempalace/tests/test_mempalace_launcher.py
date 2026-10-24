@@ -128,7 +128,7 @@ class Launcher(support_install.InstallBase):
     def test_another_argument_is_refused_by_the_launcher_and_the_program_is_not_started(self):
         place = self.place()
         self.assertEqual(0, self.install(place)[0])
-        for argument in ("mine", "init", "wake-up", "--help", "serve", "sweep"):
+        for argument in ("wake-up", "--help", "serve", "sweep", "repair", "kg", "hook"):
             errors = io.StringIO()
             self.assertEqual(1, commands.run(self.guarded, ["mempalace", argument], errors, cwd=place))
             self.assertIn("is not an argument of the command", errors.getvalue())

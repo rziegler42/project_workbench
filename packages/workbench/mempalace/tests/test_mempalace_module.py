@@ -36,11 +36,11 @@ class Declaration(unittest.TestCase):
         for field in ("requires", "writes", "blocks", "slots", "layout", "checks", "approval"):
             self.assertNotIn(field, document)
 
-    def test_the_command_takes_only_the_two_read_commands(self):
+    def test_the_command_takes_the_two_read_commands_and_the_owners_two(self):
         self.assertEqual(["mempalace"], list(declaration()["commands"]))
         command = declaration()["commands"]["mempalace"]
-        self.assertEqual(["status", "search"], command["arguments"])
-        self.assertNotIn("owner", command)
+        self.assertEqual(["status", "search", "init", "mine"], command["arguments"])
+        self.assertEqual(["init", "mine"], command["owner"])
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
 
     def test_every_file_is_the_declaration_or_the_helper(self):
@@ -56,14 +56,16 @@ class Declaration(unittest.TestCase):
         with open(os.path.join(PACKAGE, "package.json"), encoding="utf-8") as handle:
             self.assertIn("mempalace", json.load(handle)["modules"])
 
-    def test_the_helper_opens_no_connection_and_names_no_other_module_or_the_wrapped_writes(self):
+    def test_the_helper_opens_no_connection_and_names_no_other_module_or_the_options_it_never_passes(self):
         with open(os.path.join(MODULE, HELPER), encoding="utf-8") as handle:
             text = handle.read()
         imported = set(re.findall(r"^(?:import|from) ([a-z_.]+)", text, re.M))
         self.assertEqual({"os", "re", "secrets", "selectors", "shutil", "signal", "stat", "subprocess", "sys",
                           "tempfile", "time", "unicodedata", "wbkit"}, imported)
         for word in ("socket", "urllib", "http", "ssl", "claude", "codex", "safe-git", "code-work",
-                     "groundwork", "--include-media", "--backend", "wake-up", "--llm", "--palace"):
+                     "groundwork", "--include-media", "--backend", "wake-up", "--llm", "--accept-external-llm",
+                     "--daemon", "--direct", "--background", "--auto-mine", "--api-key", "--endpoint",
+                     "--provider"):
             self.assertNotIn(word, text, word)
 
 

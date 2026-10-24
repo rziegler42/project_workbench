@@ -8,6 +8,8 @@ what a control file beside it says: print text, exit with a code, hang, or write
 import io
 import json
 import os
+import pty
+import select
 import sys
 import tempfile
 import unittest
@@ -21,13 +23,16 @@ here = os.path.dirname(os.path.abspath(__file__))
 argv = sys.argv[1:]
 data = sys.stdin.read() if not sys.stdin.isatty() else ""
 control = json.load(open(os.path.join(here, "control.json")))
-record = {{"argv": argv, "env": dict(os.environ), "cwd": os.getcwd(), "stdin": data}}
+record = {{"argv": argv, "env": dict(os.environ), "cwd": os.getcwd(), "stdin": data, "pid": os.getpid(),
+          "tty": [sys.stdin.isatty(), sys.stdout.isatty(), sys.stderr.isatty()]}}
 with open(os.path.join(here, "calls.jsonl"), "a") as handle:
     handle.write(json.dumps(record) + "\\n")
 if control.get("hang"):
     child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(300)"])
     open(os.path.join(here, "pids"), "w").write(str(child.pid))
     time.sleep(300)
+if control.get("sleep"):
+    time.sleep(control["sleep"])
 if control.get("stdout_bytes"):
     sys.stdout.write("x" * control["stdout_bytes"])
 if control.get("stderr_bytes"):
@@ -104,6 +109,37 @@ class Palace(unittest.TestCase):
         out, err = io.StringIO(), io.StringIO()
         code = self.helper.main(list(args), io.BytesIO(b""), out, err, cwd or self.root)
         return code, out.getvalue(), err.getvalue()
+
+    def terminal(self):
+        """``(master, input, output, error)``: a pseudo-terminal whose slave side is three open files, so that
+        `isatty` is true for each and the program started with them writes where the test can read."""
+        master, slave = pty.openpty()
+        files = [os.fdopen(os.dup(slave), "rb", 0), os.fdopen(os.dup(slave), "w"), os.fdopen(os.dup(slave), "w")]
+        os.close(slave)
+        self.addCleanup(os.close, master)
+        for each in files:
+            self.addCleanup(each.close)
+        return (master, *files)
+
+    @staticmethod
+    def drain(master):
+        data = b""
+        while select.select([master], [], [], 0.05)[0]:
+            try:
+                chunk = os.read(master, 65536)
+            except OSError:
+                break
+            if not chunk:
+                break
+            data += chunk
+        return data.decode("utf-8", "replace").replace("\r\n", "\n")
+
+    def owner(self, *args, cwd=None):
+        """``(code, what the helper and the program printed to the terminal)`` of an owner command run from a
+        terminal."""
+        master, tin, tout, terr = self.terminal()
+        code = self.helper.main(list(args), tin, tout, terr, cwd or self.root)
+        return code, self.drain(master)
 
     def search(self, *args, query="why SQLite"):
         return self.run_helper("search", *args, "--", query)

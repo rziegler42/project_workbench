@@ -7,6 +7,9 @@ private copy of it through the kit runner with nothing beside it.
     mempalace status
     mempalace search [--wing <name>] [--room <name>] [--results <1-20>] [--since <date>] [--before <date>]
                      -- <query>
+    mempalace init <dir> [--yes] [--allow-project-root]                    (the owner, from a terminal)
+    mempalace mine <dir> [--confirm] [--wing <name>] [--mode projects|convos]
+                         [--allow-project-root]                            (the owner, from a terminal)
 
 The contract is ``docs/specs/mempalace.md``. The helper starts the ``mempalace`` program, found on a PATH entry
 outside the repository, with no shell, a fixed argument shape, a time limit, a cap on its output and an
@@ -15,6 +18,12 @@ between two marker lines that carry a random token, and the helper never runs it
 never changes a stored drawer, but the program does rewrite its own index and bookkeeping files while it
 searches (``docs/specs/mempalace.md``, "search"), and the helper refuses a search when the embedding model is
 not already cached, so that an agent's search can never start a download.
+
+``init`` and ``mine`` build the palace. They are the owner's: the helper runs them only when standard input and
+output are terminals, and then hands the terminal to the program (the program asks questions and prints
+progress), with no time limit. They pass no option that selects a language-model provider, a key, an endpoint, a
+daemon or a background job, and ``init`` always passes ``--no-llm``. A project may name its palace in
+``.workbench/mempalace.json``; the helper passes it as ``--palace``.
 """
 
 import os
@@ -30,7 +39,7 @@ import tempfile
 import time
 import unicodedata
 
-from wbkit import display
+from wbkit import display, jsonstrict, project
 
 PROGRAM = "mempalace"
 TIMEOUT = 60
@@ -44,8 +53,13 @@ MODEL_FILE = (".cache", "chroma", "onnx_models", "all-MiniLM-L6-v2", "onnx", "mo
 _NAME = r"[A-Za-z0-9_][A-Za-z0-9_.:-]{0,63}"
 _DATE = r"[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}(:[0-9]{2})?)?"
 OPTIONS = ("--wing", "--room", "--results", "--since", "--before")
+MAX_SETTING = 4096
+MODES = ("projects", "convos")
+OWNER_FLAGS = {"init": ("--yes", "--allow-project-root"), "mine": ("--confirm", "--allow-project-root")}
+OWNER_VALUES = {"init": (), "mine": ("--wing", "--mode")}
 USAGE = ("usage: mempalace status | mempalace search [--wing <name>] [--room <name>] [--results <1-%d>] "
-         "[--since <date>] [--before <date>] -- <query>" % CEILING_RESULTS)
+         "[--since <date>] [--before <date>] -- <query> | mempalace init <dir> [--yes] [--allow-project-root] | mempalace mine <dir> "
+         "[--confirm] [--wing <name>] [--mode projects|convos] [--allow-project-root]" % CEILING_RESULTS)
 
 
 class Refused(Exception):
@@ -254,8 +268,9 @@ def wrap(command, text, notes=""):
             % (token, command, text.strip("\n"), notes, token))
 
 
-def query_program(command, argv_tail, cwd):
-    """The cleaned text of one run of the program, or ``Failed`` / ``Refused``."""
+def query_program(command, argv_tail, cwd, palace=None):
+    """The cleaned text of one run of the program, or ``Failed`` / ``Refused``. `palace` is the project's
+    setting, passed as the program's own ``--palace`` option, which goes before the command."""
     boundary = outermost_boundary(cwd)
     entries = trusted_entries(boundary)
     program = trusted_which(PROGRAM, entries, boundary)
@@ -269,7 +284,8 @@ def query_program(command, argv_tail, cwd):
         if is_inside(scratch, boundary):
             raise Refused("the temporary directory is inside the project; set TMPDIR outside it")
         try:
-            code, out, err, over, timed_out = run_program([program, command] + argv_tail, scratch,
+            front = ["--palace", palace] if palace else []
+            code, out, err, over, timed_out = run_program([program] + front + [command] + argv_tail, scratch,
                                                           environment(entries), TIMEOUT)
         except OSError:
             raise Refused("mempalace could not be started")
@@ -290,15 +306,88 @@ def query_program(command, argv_tail, cwd):
         shutil.rmtree(scratch, ignore_errors=True)
 
 
+def read_file(path, limit, what):
+    """The bytes of the regular file `path` (at most `limit`), read without following a link; ``None`` when
+    there is no such file."""
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        raise Refused("%s cannot be opened (a link, or not readable)" % what)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise Refused("%s is not a regular file" % what)
+        data = os.read(descriptor, limit + 1)
+    finally:
+        os.close(descriptor)
+    if len(data) > limit:
+        raise Refused("%s is larger than %d bytes" % (what, limit))
+    return data
+
+
+def find_root(cwd):
+    try:
+        return os.path.realpath(project.find_root(cwd))
+    except project.ProjectError as exc:
+        raise Refused(display.ascii_text(str(exc))[:200])
+
+
+def palace_setting(root):
+    """The palace the project names in ``.workbench/mempalace.json``, or ``None`` when it names none. The file
+    is ``{"format": 1, "palace": "<absolute path>"}``; anything else is refused."""
+    what = ".workbench/mempalace.json"
+    directory = os.path.join(root, ".workbench")
+    try:
+        if stat.S_ISLNK(os.lstat(directory).st_mode):
+            raise Refused(".workbench is a link")
+    except OSError:
+        return None
+    data = read_file(os.path.join(directory, "mempalace.json"), MAX_SETTING, what)
+    if data is None:
+        return None
+    try:
+        document = jsonstrict.parse_object(data, MAX_SETTING)
+    except ValueError as exc:
+        raise Refused("%s is not valid: %s" % (what, display.ascii_text(str(exc))[:80]))
+    palace = document.get("palace")
+    if set(document) != {"format", "palace"} or type(document["format"]) is not int or document["format"] != 1:
+        raise Refused('%s must be {"format": 1, "palace": "<absolute path>"}' % what)
+    if not isinstance(palace, str) or not palace or len(palace) > 512 or plain(palace) != palace \
+            or not os.path.isabs(palace) or os.path.normpath(palace) != palace:
+        raise Refused("%s: palace must be a clean absolute path (no .., no //, no control character)" % what)
+    return palace
+
+
+def check_recorded_model(palace):
+    """Refuse when the palace was filed with an embedding model other than the cached `minilm`. A palace with no
+    record yet is left to the program."""
+    data = read_file(os.path.join(palace, "mempalace_embedder.json"), MAX_SETTING,
+                     "the palace's mempalace_embedder.json")
+    if data is None:
+        return
+    try:
+        document = jsonstrict.parse_object(data, MAX_SETTING)
+    except ValueError:
+        raise Refused("the palace's mempalace_embedder.json is not valid")
+    entry = document.get("mempalace_drawers")
+    name = entry.get("model_name") if isinstance(entry, dict) else None
+    if name != "minilm":
+        raise Refused("the palace was filed with the embedding model %s, and only minilm is cached; "
+                      "search would start a download" % display.ascii_text(str(name))[:40])
+
+
 def status(args, out, cwd):
     if args:
         raise Refused("status takes no argument")
-    out.write(query_program("status", [], cwd))
+    palace = palace_setting(find_root(cwd))
+    out.write(query_program("status", [], cwd, palace))
     return 0
 
 
 def search(args, out, cwd):
     options, query = parse_search(args)
+    palace = palace_setting(find_root(cwd))
     if not model_cached():
         raise Refused("the embedding model is not cached, and a search would start a download; "
                       "the owner runs `wb run mempalace mine` once first")
@@ -307,18 +396,159 @@ def search(args, out, cwd):
         if name in options:
             tail += [name, options[name]]
     tail += ["--", query]
-    out.write(query_program("search", tail, cwd))
+    if palace:
+        check_recorded_model(palace)
+    out.write(query_program("search", tail, cwd, palace))
     return 0
+
+
+def parse_owner(command, args):
+    """``(directory, flags, values)`` for the arguments after ``init`` or ``mine``: one directory, each flag at
+    most once, each value option at most once with a value."""
+    directory, flags, values = None, set(), {}
+    position = 0
+    while position < len(args):
+        name = args[position]
+        if name in OWNER_FLAGS[command]:
+            if name in flags:
+                raise Refused("%s is given twice" % name)
+            flags.add(name)
+            position += 1
+        elif name in OWNER_VALUES[command]:
+            if name in values:
+                raise Refused("%s is given twice" % name)
+            if position + 1 >= len(args):
+                raise Refused("%s needs a value" % name)
+            values[name] = args[position + 1]
+            position += 2
+        elif name.startswith("-"):
+            raise Refused("%s is not an option of %s" % (display.ascii_text(name)[:60], command))
+        else:
+            if directory is not None:
+                raise Refused("%s takes exactly one directory" % command)
+            directory = name
+            position += 1
+    if directory is None:
+        raise Refused("%s needs the directory" % command)
+    if "--wing" in values and not re.fullmatch(_NAME, values["--wing"]):
+        raise Refused("--wing is at most 64 letters, digits and ._:- and does not start with - or .")
+    if "--mode" in values and values["--mode"] not in MODES:
+        raise Refused("--mode is one of %s" % ", ".join(MODES))
+    return directory, flags, values
+
+
+def owner_directory(cwd, root, value, allow_root):
+    """The directory the owner names: an existing directory, with no link in its path, that is not inside
+    ``.git`` or ``.workbench`` and, unless `allow_root`, is neither the project root nor holds it."""
+    if not value or "\0" in value or plain(value) != value:
+        raise Refused("the directory is not a usable path")
+    path = os.path.abspath(os.path.join(cwd, value))
+    try:
+        info = os.lstat(path)
+    except OSError:
+        raise Refused("the directory does not exist")
+    if stat.S_ISLNK(info.st_mode) or os.path.realpath(path) != path:
+        raise Refused("the directory has a link in its path")
+    if not stat.S_ISDIR(info.st_mode):
+        raise Refused("the path is not a directory")
+    if not os.access(path, os.R_OK | os.X_OK):
+        raise Refused("the directory cannot be entered")
+    if path == root or path.startswith(root + os.sep):
+        if any(part in (".git", ".workbench") for part in os.path.relpath(path, root).split(os.sep)):
+            raise Refused("the directory may not be inside .git or .workbench")
+    if (path == root or root.startswith(path.rstrip(os.sep) + os.sep)) and not allow_root:
+        raise Refused("the directory is the project root or holds it, which would make the project's own files a "
+                      "second index; add --allow-project-root if that is meant")
+    return path
+
+
+def owner_terminal(stdin, out):
+    for stream in (stdin, out):
+        try:
+            terminal = stream.isatty()
+        except (ValueError, AttributeError):
+            terminal = False
+        if not terminal:
+            raise Refused("init and mine are the owner's commands and run only from a terminal")
+
+
+def run_owner(argv_tail, palace, cwd, stdin, out, err):
+    """Run the program with the terminal handed to it, and wait for it without a time limit. Returns its exit
+    code. On a terminate signal the program is told to stop and the scratch directory is removed."""
+    boundary = outermost_boundary(cwd)
+    entries = trusted_entries(boundary)
+    program = trusted_which(PROGRAM, entries, boundary)
+    if program is None:
+        raise Refused("mempalace was not found in a trusted PATH entry (an absolute one outside the repository)")
+    temp = os.environ.get("TMPDIR") or tempfile.gettempdir()
+    if is_inside(temp, boundary):
+        raise Refused("the temporary directory is inside the project; set TMPDIR outside it")
+    scratch = tempfile.mkdtemp(prefix="mempalace-", dir=temp)
+    process = None
+    try:
+        if is_inside(scratch, boundary):
+            raise Refused("the temporary directory is inside the project; set TMPDIR outside it")
+        out.flush()
+        err.flush()
+        front = ["--palace", palace] if palace else []
+        try:
+            process = subprocess.Popen([program] + front + argv_tail, stdin=stdin, stdout=out, stderr=err,
+                                       cwd=scratch, env=environment(entries))
+        except OSError:
+            raise Refused("mempalace could not be started")
+        while True:
+            try:
+                code = process.wait()
+                break
+            except KeyboardInterrupt:  # the program shares the terminal and got the same interrupt
+                continue
+        return code if code >= 0 else 1
+    finally:
+        if process is not None and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def owner(command, args, stdin, out, err, cwd):
+    directory, flags, values = parse_owner(command, args)
+    owner_terminal(stdin, out)
+    root = find_root(cwd)
+    palace = palace_setting(root)
+    path = owner_directory(cwd, root, directory, "--allow-project-root" in flags)
+    if command == "init":
+        tail = ["init", path, "--no-llm"] + (["--yes"] if "--yes" in flags else [])
+        note = ("init writes mempalace.yaml into %s and saves the palace path in the program's own configuration"
+                % path)
+    else:
+        tail = ["mine", path]
+        for name in ("--wing", "--mode"):
+            if name in values:
+                tail += [name, values[name]]
+        if "--confirm" in flags:
+            note = ("a first real mine downloads the embedding model (about 79 MB) and writes $HOME/hallways.json; "
+                    "it has no time limit")
+        else:
+            tail.append("--dry-run")
+            note = "this is a dry run and files nothing; add --confirm to file the drawers"
+    err.write("note: %s\n" % note)
+    return run_owner(tail, palace, cwd, stdin, out, err)
 
 
 def main(argv, stdin, out, err, cwd):
     """Run one command from `cwd`. Returns the exit code. A refusal means nothing was started."""
     try:
-        if not argv or argv[0] not in ("status", "search"):
+        if not argv or argv[0] not in ("status", "search", "init", "mine"):
             raise Refused(USAGE)
         if argv[0] == "status":
             return status(argv[1:], out, cwd)
-        return search(argv[1:], out, cwd)
+        if argv[0] == "search":
+            return search(argv[1:], out, cwd)
+        return owner(argv[0], argv[1:], stdin, out, err, cwd)
     except Refused as exc:
         err.write("refused: %s\n" % exc)
         return 1

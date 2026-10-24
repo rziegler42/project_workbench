@@ -19,7 +19,13 @@
       "kit": 1,
       "arguments": [
         "status",
-        "search"
+        "search",
+        "init",
+        "mine"
+      ],
+      "owner": [
+        "init",
+        "mine"
       ]
     }
   }

@@ -26,8 +26,8 @@ class Status(support_mempalace.Palace):
         self.refused("status", "--all", contains="takes no argument")
 
     def test_the_first_argument_must_be_status_or_search(self):
-        for argv in ([], ["wake-up"], ["mine", "."], ["init", "."], ["--help"], ["STATUS"], ["status-x"],
-                     ["--palace", "/tmp/x", "status"]):
+        for argv in ([], ["wake-up"], ["--help"], ["STATUS"], ["status-x"], ["Mine", "."], ["sweep"], ["serve"],
+                     ["repair"], ["--palace", "/tmp/x", "status"]):
             self.refused(*argv, contains="usage: mempalace status")
 
     def test_status_does_not_need_the_model(self):

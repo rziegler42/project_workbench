@@ -73,12 +73,19 @@ most 1000 characters. The output is returned inside a block that says it is reca
   `$HOME/.cache/chroma/onnx_models/all-MiniLM-L6-v2/onnx/model.onnx` exists and refuses with a message that tells
   the owner to run `mine` otherwise, so an agent's search can never start a download. The path was seen with `HOME`
   and `XDG_CACHE_HOME` both set to the same cache; whether `XDG_CACHE_HOME` alone moves it is not tested. The check
-  is right for the `minilm` model the palace recorded (`mempalace_embedder.json`) and refuses any other model name.
+  is right for the `minilm` model. When the project names the palace, the helper also reads the palace's
+  `mempalace_embedder.json` and refuses a palace recorded with any other model name; when it does not, it cannot know
+  where the palace is and checks the model file alone.
 - **Exit codes and streams.** The program exits 0 for a result and for "No results found", and 1 for an absent
   palace database and for an error, with its message on standard output. The helper reads the exit code and
   treats the text as data on either stream.
 
-**`init`** and **`mine`** (owner-run). Listed under `owner`, so the harness denies them to the agent.
+**`init`** and **`mine`** (owner-run). Listed under `owner`, so the harness denies them to the agent. The helper
+also runs them only when standard input and output are terminals (the rule `approve` follows), so that a harness
+with no deny rule does not let an agent run them; that test is friction and not authentication. It then hands the
+terminal to the program, which asks its questions and prints its progress, and waits with no time limit. Without
+`--yes`, `init` asks the owner to accept the detected rooms; the program crashes on end of input, which is why a
+captured run could not serve it (`Evidence`, 2026-10-24).
 
 - `init <dir>` writes `mempalace.yaml` **into `<dir>`**, so an `init` of the project root leaves an untracked file
   in the project. It also saves the palace path in `$HOME/.config/mempalace/config.json`. It always passes `--no-llm`, so that no provider is contacted. MemPalace's default is to refine
@@ -87,22 +94,25 @@ most 1000 characters. The output is returned inside a block that says it is reca
 - `mine <dir>` passes `--dry-run` unless `--confirm` is given, so the owner sees what would be filed first. The
   first real `mine` downloads the embedding model, and it writes `$HOME/hallways.json` directly in the home
   directory. The helper says both before it runs without `--dry-run`.
-  The directory must be one the owner names. It is refused when it is the project root, unless
+  `mine` also takes `--wing <name>` and `--mode projects|convos`, and nothing else.
+- For both, the directory is one the owner names: it exists, is not a link and has no link in its path, and is not
+  inside `.git` or `.workbench`. It is refused when it is the project root or holds it, unless
   `--allow-project-root` is also given, so the default does not make the project's tree a second index
-  (`knowledge-tools.md`).
-- Neither takes `--llm-api-key`, `--llm-provider`, `--llm-endpoint`, `--accept-external-llm`, `--daemon` or
-  `--background`.
+  (`knowledge-tools.md`). `init` takes only `--yes` and `--allow-project-root`.
+- Neither takes `--llm-api-key`, `--llm-provider`, `--llm-endpoint`, `--accept-external-llm`, `--daemon`,
+  `--background` or `--palace` (the project setting supplies that).
 
 **How the program runs.** As `knowledge-tools.md` states: found in an absolute `PATH` entry outside the
-repository, no shell, a fixed argument shape, a time limit (60 seconds for `status` and `search`, none the
-helper sets for `mine`, which the owner watches), an output cap, the caller's `HOME` used because MemPalace
-reads its configuration from it. No environment variable of the caller is passed on except `HOME`, `PATH`,
+repository, no shell, a fixed argument shape, a time limit (60 seconds for `status` and `search`; none for `init` and `mine`, which the owner watches on their
+own terminal), an output cap (for `status` and `search`, whose output is returned to the caller), the caller's
+`HOME` used because MemPalace reads its configuration from it. No environment variable of the caller is passed on except `HOME`, `PATH`,
 `LANG` and `LC_*`; in particular none that selects a backend or an API key. The installed program reads, among
 others, `MEMPALACE_PALACE_PATH`, `MEMPALACE_BACKEND`, `MEMPALACE_EMBEDDING_API_URL` and `_MODEL` (remote
 embeddings), `MEMPALACE_HUB_FORWARD`, `MEMPALACE_LOG_FILE` and URL and token variables for other stores, and none
 of them reaches the child. The helper sets `PYTHONDONTWRITEBYTECODE=1`, so that running the program writes no
-bytecode into its own install directory. The helper reads no file of the
-project and writes nothing in it.
+bytecode into its own install directory. The helper reads one file of the project, the setting below, and the
+palace's `mempalace_embedder.json`, and writes nothing in the project. Every command runs from a project and
+refuses outside one.
 
 **Palace location.** The helper does not choose one. MemPalace picks its own: `--palace` is honoured, and `init
 --palace` saves the path in `$HOME/.config/mempalace/config.json`. Its `--help` names `~/.mempalace/palace`, which
