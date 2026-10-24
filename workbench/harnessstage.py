@@ -151,6 +151,14 @@ def owner_rules(modules):
     return found
 
 
+def confinement_notes(done):
+    """One note for each agent file that carries a hook: the harness runs an agent's own hook only in a folder it
+    trusts, and says nothing when it skips it, so the limit holds only there."""
+    owners = {planned.path: planned.source for planned in done.files}
+    return ["%s is confined by a hook in its own file. The harness runs that hook only in a folder it trusts; in any "
+            "other folder the agent's edit and shell tools are not limited." % owners[path] for path in done.confined]
+
+
 def stage(store_root, harness, modules, snaps, source, version, home, root):
     """Translate and render for `harness` (a ``verify.Verified``), over `modules` in install
     order, whose snapshots are `snaps`. `source` is where the harness package came from and
@@ -165,7 +173,7 @@ def stage(store_root, harness, modules, snaps, source, version, home, root):
     warnings = []
     try:
         done = harnessplan.translate(neutral.read_items(tree), layout, overrides, excludes,
-                                     provides=harness.module.provides)
+                                     provides=harness.module.provides, harness_name=harness.name)
         files = [harnessplan.render_root(layout)] + list(done.files)
         files = [item for item in files if item is not None]
         settings = None
@@ -187,7 +195,7 @@ def stage(store_root, harness, modules, snaps, source, version, home, root):
                                             "name it cannot be written")
             data = harnessplan.render_permissions(
                 owner_rules(modules), layout, os.path.realpath(store_root), os.path.realpath(home),
-                hook_for=harness.name if hook else None, root=os.path.realpath(root))
+                hook_for=harness.name if hook else None, root=os.path.realpath(root), protect=done.confined)
             settings = harnessplan.Planned(local["path"], data, harnessplan.FILE_MODE,
                                            hashlib.sha256(data).hexdigest(), "permissions")
             files.append(settings)
@@ -213,4 +221,4 @@ def stage(store_root, harness, modules, snaps, source, version, home, root):
         raise Refused(["the local manifest cannot be written: %s" % exc])
     return Staged("%s/%s" % (harness.package, harness.name), harness.version, files,
                   settings.path if settings else None, list(layout.get("exclude", ())), document,
-                  done.reports, warnings, list(layout.get("notes", ())))
+                  done.reports, warnings, list(layout.get("notes", ())) + confinement_notes(done))

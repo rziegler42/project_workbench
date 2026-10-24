@@ -89,8 +89,10 @@ run: python3 {scratch}/check.py, python3 {scratch}/check.py --fast
   field together with the `agents` tool. The last holds because an agent it started would not be covered by this agent's
   hook. A confined agent also holds no tool beyond `read`, `search`, `edit`, `shell` and `web`.
 - An agent with either field is installed only where the harness's layout describes a per-agent hook and a scratch directory
-  ("The agent gate"). On any other harness it is skipped with a warning and never installed unconfined, which is the
-  fail-closed rule under "Translation".
+  ("The agent gate") and the harness provides `permissions`, which carry the deny for the agent's file. On any other harness it
+  is skipped with a warning and never installed unconfined, which is the fail-closed rule under "Translation". It is also
+  skipped where a module gives its own file for the agent in `harness/<harness>/agents/` (the file would replace the one that
+  carries the hook), and where the harness name or the agent name is not one the guard's command takes.
 
 ## Translation
 
@@ -143,7 +145,7 @@ does not receive them.
 
 The hooks the installer itself renders are the edit gate, for a harness whose layout carries a `hooks` key
 ("The edit gate hook", built), and the agent gate, one per confined agent, for a harness whose layout describes a per-agent
-hook ("The agent gate": the guard is built; attach does not yet render its hook). Neither is a module's file or listed
+hook ("The agent gate", built). Neither is a module's file or listed
 under `ships`.
 
 ## Root files and instructions
@@ -419,8 +421,8 @@ hook. The rendered entry is fixed by the layout and not chosen by any module. Th
 
 ### The agent gate
 
-*(Specified by plan `2026-10-24-agent-confinement`, increment B. The guard `wb agent-gate` is built (increment D); attach
-does not yet render the hook (increment E). The decision is
+*(Specified by plan `2026-10-24-agent-confinement`, increment B. The guard `wb agent-gate` is built (increment D), and attach
+renders the hook, the deny and the note (increment E); the end-to-end record is increment F. The decision is
 `docs/decisions/2026-10-24-declared-agent-confinement.md`, accepted. Built against the evidence under "Hooks in an agent's
 frontmatter".)*
 
@@ -468,10 +470,27 @@ block code on anything else, including any error it did not foresee.
 
 **Layout entries and rendering.** The layout's `agent` kind carries the `hook` and `scratch` entries ("The Claude harness
 module"). Attach renders the hook for each confined agent whose harness describes both, and skips the agent with a warning where
-it does not. The existing edit deny, which already covers `.claude/settings.local.json` and `.git/info/exclude`, also covers each
-rendered confined-agent file, in the relative and in the absolute spelling, so the agent's file tools cannot remove the hook; as
-for the settings file, the deny covers file tools and not a shell. `wb check` reports a confined agent's file edited after attach
-as it does any generated file. Attach prints a note whenever it renders a confined agent, stating the limits below.
+it does not. The hook is written after the agent's other front-matter lines, in the shape the trial in "Hooks in an agent's
+frontmatter" ran:
+
+```
+hooks:
+  PreToolUse:
+    - matcher: "Bash|Edit|Write"
+      hooks:
+        - type: command
+          command: "wb agent-gate claude <agent> || exit 2"
+          timeout: 20
+```
+
+The key, the event, the timeout and the block code are the layout's. The matcher is every tool name the layout gives `edit` and
+`shell`, the same table that builds the agent's `tools` line, so a tool the agent is granted for either is a tool the hook sees.
+A file the module gives for the harness in `harness/<harness>/agents/` does not replace a confined agent's file: the agent is
+skipped. The existing edit deny, which already covers `.claude/settings.local.json` and `.git/info/exclude`, also covers each
+rendered confined-agent file, from the directory the session starts in, from any directory below it, and by absolute path in
+the project, so the agent's file tools cannot remove the hook; it is rendered with or without the edit gate's hook, and as for
+the settings file the deny covers file tools and not a shell. `wb check` reports a confined agent's file edited after attach as
+it does any generated file. Attach prints a note for each confined agent it renders, stating the trusted-folder limit below.
 
 **Limits, stated.**
 - **A script the agent writes and then runs is not confined.** A pinned command such as `python3 {scratch}/check.py` runs a file
@@ -491,6 +510,10 @@ as it does any generated file. Attach prints a note whenever it renders a confin
   later Claude Code version can change either, and a version that no longer matches makes the guard refuse, not allow. The
   scratch name is derived from the working directory by turning every character that is not a letter or a digit into `-` (observed for `/`, `.` and `_`; assumed for the rest), and a
   working directory with a non-ASCII character makes the guard refuse every call.
+- **The deny matches the file's name as spelled, and the hook command finds `wb` through `PATH`.** On a case-insensitive
+  filesystem a write by another agent or the main session to the same file under another case may not match the deny, and a
+  different `wb` earlier on `PATH` would be the one the hook runs. Both hold equally for the edit gate's settings file and hook.
+  Neither was tested; the confined agent's own writes are limited by its hook in a trusted folder either way.
 - **Claude Code only.** opencode and Codex have no per-agent hook in their layouts; a confined agent is not installed there.
 
 ## The opencode harness module

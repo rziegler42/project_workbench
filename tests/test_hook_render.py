@@ -92,6 +92,65 @@ class Rendered(unittest.TestCase):
             render(hooked(timeout=0))
 
 
+AGENTS = (".fixture/agents/checker.md", ".fixture/agents/writer.md")
+
+
+def protecting(protect=AGENTS, **kwargs):
+    kwargs.setdefault("root", ROOT)
+    return json.loads(harnessplan.render_permissions([], hooked(), "/store", "/home/u", protect=protect, **kwargs))
+
+
+def only(document, text):
+    return sorted(rule for rule in document["permissions"]["deny"] if text in rule)
+
+
+class ProtectedAgents(unittest.TestCase):
+    """The deny of the files that carry a confined agent's hook: the same three spellings as the settings file."""
+
+    def test_each_file_is_denied_relative_from_any_directory_and_by_its_absolute_path(self):
+        found = only(protecting(), "/agents/")
+        wanted = []
+        for path in AGENTS:
+            wanted += ["Edit(%s)" % path, "Edit(**/%s)" % path, "Edit(/%s/%s)" % (ROOT, path)]
+        self.assertEqual(sorted(wanted), found)
+
+    def test_it_needs_no_edit_gate_hook(self):
+        document = protecting()
+        self.assertNotIn("hooks", document)
+        self.assertEqual(6, len(only(document, "/agents/")))
+
+    def test_with_the_edit_gate_hook_both_denies_are_there(self):
+        document = protecting(hook_for=NAME)
+        self.assertIn("hooks", document)
+        self.assertIn("Edit(%s)" % SETTINGS, document["permissions"]["deny"])
+        self.assertEqual(6, len(only(document, "/agents/")))
+
+    def test_nothing_protected_leaves_the_bytes_as_they_were(self):
+        before = harnessplan.render_permissions([], hooked(), "/store", "/home/u", hook_for=NAME, root=ROOT)
+        after = harnessplan.render_permissions([], hooked(), "/store", "/home/u", hook_for=NAME, root=ROOT, protect=())
+        self.assertEqual(before, after)
+
+    def test_a_file_is_denied_whether_or_not_it_is_also_asked_about(self):
+        document = protecting()
+        self.assertEqual([], [rule for rule in document["permissions"]["ask"] if "/agents/" in rule])
+
+    def test_without_a_root_it_cannot_be_rendered(self):
+        with self.assertRaises(harnessplan.PlanError) as caught:
+            harnessplan.render_permissions([], hooked(), "/store", "/home/u", protect=AGENTS)
+        self.assertIn("project", str(caught.exception))
+
+    def test_a_path_that_is_not_a_plain_relative_file_is_refused(self):
+        for path in ("", "/abs/agent.md", "../x.md", ".fixture/../x.md", ".fixture//x.md", ".fixture/./x.md",
+                     ".fixture/*.md", ".fixture/a(b).md", ".fixture/a\nb.md", "~/x.md", None, 7):
+            with self.subTest(path), self.assertRaises(harnessplan.PlanError):
+                protecting(protect=(path,))
+
+    def test_it_is_the_same_bytes_every_time(self):
+        first = harnessplan.render_permissions([], hooked(), "/store", "/home/u", root=ROOT, protect=AGENTS)
+        second = harnessplan.render_permissions([], hooked(), "/store", "/home/u", root=ROOT, protect=tuple(reversed(AGENTS)))
+        self.assertEqual(first, second)
+
+
 class Protected(unittest.TestCase):
     """The deny of the settings file and the git exclude file: one separate hunk, so it can be dropped alone."""
 

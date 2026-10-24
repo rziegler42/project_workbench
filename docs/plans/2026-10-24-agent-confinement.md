@@ -359,3 +359,30 @@ a script for another's pinned command, and a pinned `cd` is unsafe. (2) Not a by
 `Bash|Edit|Write`, which equals the tools an agent holding `edit` and `shell` is rendered with, because the layout lists only
 `Edit` and `Write` for `edit`; E must derive the matcher from that same list and test that they agree. Not changed:
 `guard` does not catch `BaseException`, which no code on its path raises, and a non-zero exit is a block under `|| exit 2`.
+
+**Increment E:** attach renders a confined agent's hook into the agent's own file (`harnessplan._agent_hook`), in the block shape
+the trial ran: the layout's key, event, timeout and block code, the matcher built from every tool name the layout gives `edit`
+and `shell` (the table the agent's `tools` line is built from), and the command `wb agent-gate <harness> <agent> || exit <code>`.
+`translate` takes `harness_name` and returns the paths of the confined files (`Result.confined`); `render_permissions` takes
+`protect`, and denies each such file relative, as `**/`, and by absolute path, with or without the edit gate's hook;
+`harnessstage` passes both and adds one note per confined agent to the notes attach prints. A confined agent is skipped, with a
+report, where a module gives its own file for it (so the carried override issue is closed by refusing, not by rendering), where
+the harness name or agent name is not one the command takes, and where the harness provides no `permissions`. The "does not yet
+render the hook" skip of C is gone. `wb check` needed no change: the file is in the local manifest, and a test shows an edit is
+reported. The tests came first (`test_harnessplan`, `test_hook_render`, and the new `test_agent_render` that attaches through the
+real path); seven mutations (matcher source, override skip, agent-name check, `~` path guard, permissions skip, deny wiring, note)
+were each caught. The plan's "a re-attach is idempotent" is tested as: with the local manifest removed, a second attach leaves
+every file as it was and writes none, because the product refuses a second attach on the same clone. Not done: a test against
+the real Claude layout, which would stale the `claude` shipped record and need the owner's `release-approvals`; the
+matcher-agreement test uses the synthetic layout. The full suite is green: 4,076 tests in 9 roots. No independent security
+review has been run on E.
+
+**Increment E, security review:** an independent adversarial review (a `security-reviewer` agent, on the owner's word) found no
+Critical, High or Medium issue. It ran hostile descriptions, bodies and names (newline, `|`, `;`, `$(`, U+2028, uppercase, 70
+characters) and harness names through `translate`: each stayed one escaped line or was skipped, with no extra key, hook or early
+`---`. It found no path that installs a confined agent without its hook (override, exclude, missing `permissions`, missing
+`local_settings`, collision), a non-confined agent unchanged, the matcher and the `tools` line built from one table, and the deny
+refusing `..`, `//`, `~`, `*`, brackets, a trailing slash, non-ASCII and a newline. Two low residuals, judged here and recorded in
+the spec's limits, with no code change: the deny is an exact-case pattern, so on a case-insensitive filesystem another session's
+write under another case may not match it; and the hook command finds `wb` through `PATH`. Both are shared with the edit gate and
+neither was tested. Evidence limits: `wb agent-gate` was not run against a live harness, and the real Claude layout was not used.

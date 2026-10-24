@@ -1,5 +1,6 @@
 import copy
 import hashlib
+import re
 import unittest
 from unittest import mock
 
@@ -425,12 +426,91 @@ class ConfinedAgents(unittest.TestCase):
             ".fixture/agents/reviewer.md", ".fixture/commands/ship.md",
             ".fixture/skills/sample/SKILL.md"])
 
-    def test_until_the_hook_is_rendered_the_entries_do_not_install_it_either(self):
+    # --- rendering (increment E)
+
+    EXPECTED = (b'---\nname: "checker"\ndescription: "Runs a check"\ntools: "Bash, Edit, Read, Write"\n'
+                b'hooks:\n  PreToolUse:\n    - matcher: "Bash|Edit|Write"\n      hooks:\n'
+                b'        - type: command\n          command: "wb agent-gate fixture checker || exit 2"\n'
+                b'          timeout: 20\n---\nYou check.\n')
+
+    def confined(self, layout=None, **kw):
         from tests.test_layout import confining
-        result = run(layout=confining(), found=self.found())
+        kw.setdefault("harness_name", "fixture")
+        return run(layout=layout or confining(), found=self.found(), **kw)
+
+    def test_the_hook_is_rendered_into_the_agents_own_file(self):
+        result = self.confined()
+        self.assertEqual(by_path(result)[".fixture/agents/checker.md"].data, self.EXPECTED)
+        self.assertEqual(levels(result, "skipped"), [])
+
+    def test_the_file_is_recorded_as_confined(self):
+        self.assertEqual(self.confined().confined, (".fixture/agents/checker.md",))
+        self.assertEqual(run().confined, ())
+
+    def test_an_ordinary_agent_is_byte_identical_to_before(self):
+        plain = by_path(run())[".fixture/agents/reviewer.md"].data
+        self.assertEqual(by_path(self.confined())[".fixture/agents/reviewer.md"].data, plain)
+        self.assertNotIn(b"hooks", plain)
+
+    def test_the_block_code_and_event_come_from_the_layout(self):
+        from tests.test_layout import HOOK, confining
+        layout = confining(hook=dict(HOOK, block_code=3, event="Before", timeout=7))
+        data = by_path(self.confined(layout))[".fixture/agents/checker.md"].data.decode()
+        self.assertIn("  Before:\n", data)
+        self.assertIn('"wb agent-gate fixture checker || exit 3"', data)
+        self.assertIn("timeout: 7\n", data)
+
+    def test_the_matcher_is_every_tool_name_the_layout_gives_edit_and_shell(self):
+        from tests.test_layout import confining
+        layout = confining()
+        layout["kinds"]["agent"]["tools"]["edit"] = ["Edit", "MultiEdit", "NotebookEdit", "Write"]
+        data = by_path(self.confined(layout))[".fixture/agents/checker.md"].data.decode()
+        matcher = re.search(r'matcher: "([^"]*)"', data).group(1).split("|")
+        tools = re.search(r'^tools: "([^"]*)"', data, re.M).group(1).split(", ")
+        table = layout["kinds"]["agent"]["tools"]
+        self.assertEqual(sorted(matcher), sorted(table["edit"] + table["shell"]))
+        # Every edit or shell tool the agent is granted is one the hook matches.
+        self.assertEqual({t for t in tools if t in table["edit"] + table["shell"]}, set(matcher))
+
+    def test_a_harness_name_the_command_cannot_take_skips_the_agent(self):
+        for name in (None, "", "Fixture", "a b", "a;b", "-x", "x" * 65, "a\n"):
+            result = self.confined(harness_name=name)
+            self.assertNotIn(".fixture/agents/checker.md", by_path(result), repr(name))
+            reported = [r for r in levels(result, "skipped") if r.item == "agent/checker"]
+            self.assertEqual(len(reported), 1, repr(name))
+            self.assertIn("harness name", reported[0].message)
+
+    def test_an_agent_name_the_command_cannot_take_skips_the_agent(self):
+        found = self.found()
+        bad = found[0]._replace(name="Checker") if found[0].name == "checker" else None
+        self.assertIsNotNone(bad)
+        from tests.test_layout import confining
+        result = harnessplan.translate([bad], confining(), {}, {}, harness_name="fixture")
+        self.assertEqual(result.files, ())
+        self.assertIn("agent name", levels(result, "skipped")[0].message)
+
+    def test_a_modules_own_file_cannot_replace_the_file_that_carries_the_hook(self):
+        own = b"---\nname: checker\ndescription: x\ntools: Read, Bash\n---\nx\n"
+        result = self.confined(overrides={("agent", "checker"): {"checker.md": own}})
+        self.assertNotIn(".fixture/agents/checker.md", by_path(result))
+        self.assertEqual(levels(result, "overridden"), [])
+        reported = [r for r in levels(result, "skipped") if r.item == "agent/checker"]
+        self.assertEqual(len(reported), 1)
+        self.assertIn("replace", reported[0].message)
+
+    def test_an_override_cannot_carry_a_hook_into_an_ordinary_agent_either(self):
+        own = (b'---\nname: reviewer\ndescription: x\ntools: Read\nhooks: {"PreToolUse": []}\n---\nx\n')
+        result = self.confined(overrides={("agent", "reviewer"): {"reviewer.md": own}})
+        self.assertNotIn(".fixture/agents/reviewer.md", by_path(result))
+
+    def test_a_harness_that_provides_no_permissions_cannot_protect_the_file_and_skips_the_agent(self):
+        result = self.confined(provides=("instructions", "skills", "agents", "commands", "hooks"))
         self.assertNotIn(".fixture/agents/checker.md", by_path(result))
         reported = [r for r in levels(result, "skipped") if r.item == "agent/checker"]
-        self.assertIn("does not yet render", reported[0].message)
+        self.assertIn("permissions", reported[0].message)
+
+    def test_the_same_input_gives_the_same_bytes(self):
+        self.assertEqual(self.confined(), self.confined())
 
     def test_an_agent_with_neither_field_is_installed_as_before(self):
         from tests.test_layout import confining
