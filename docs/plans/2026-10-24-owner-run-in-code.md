@@ -217,3 +217,21 @@ output are both terminals.
   `run`, not only `sys.stdout`, because that is where the helper's output goes; the CLI passes none, so it reads the real
   streams.
 - Not done: `wb launch` (increment B), the specs and the full suite (C); no review or security pass.
+
+Increment B, 2026-10-24: `wb launch` applies the same rule, and for a pin the installer made it requires the
+declaration at `--root` to be the one the owner confirmed.
+
+- Changes: `workbench/commands.py` (`launch_refusal`: no check for a missing pin, which the launcher reports, or for a
+  pin the owner typed; otherwise the manifest and declarations at the root are read as `resolve` reads them, the
+  command's declaration must equal `pin.declaration`, then `owner_refusal` applies), `workbench/cli.py` (the `launch`
+  route calls it and writes one `refused:` line, exit 1), `tests/test_owner_run_code.py` (6 more tests, 16 in all).
+- Verification as run: the three refusal tests failed first (exit 0, the helper would have run), the three tests for
+  unchanged behaviour passed before and after; then all 16 pass. `test_run`, `test_commands`,
+  `test_owner_run_arguments`, `test_boundary`, `test_launch`, `test_runner` and `test_skill_names` pass (224 tests), as do
+  the `remote-runner` module tests (104). `git diff --check` prints nothing.
+- Not run: a real process under `env`, a path-qualified `wb` or `bash -c`. The refusal sits in the code every one of them
+  reaches, and the unit tests drive that code; a real-process trial is left to increment C with the owner's two trials.
+- Decision made in the code, for the owner to accept or overturn: an installer-made pin whose command is no longer
+  declared at the root is now refused by `wb launch`, where before it ran if the hash matched. The plan says the
+  declaration must match; this is the same rule with nothing to match.
+- Not done: the specs, the full suite and the approvals (C); no review or security pass.

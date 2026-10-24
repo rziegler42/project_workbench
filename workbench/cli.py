@@ -393,6 +393,11 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         # Only the wrapper is checked here; nothing else is printed, so the helper's own
         # streams stay clean.
         launch.install_wrapper(guarded, distribution or firstparty.default_distribution())
+        reason = module_commands.launch_refusal(guarded, args.project_id, args.name, args.root, args.args,
+                                                stdin if stdin is not None else sys.stdin, sys.stdout)
+        if reason:
+            err.write("refused: %s\n" % _clean(reason))
+            return 1
         return launch.run(guarded, args.project_id, args.name, args.root, args.args, err)
     notes += launch.install_wrapper(guarded, distribution or firstparty.default_distribution())
     if args.command == "pin":

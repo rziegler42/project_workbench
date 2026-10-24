@@ -159,6 +159,30 @@ def resolve(guarded, start, name, args, provides=None):
     return Request(root, ident, name, args, pin.kit, command.owner)
 
 
+def launch_refusal(guarded, project_id, name, root, args, stdin, stdout):
+    """Why ``wb launch`` may not run the pinned helper `name` with `args`, or None.
+
+    A pin the installer made records the declaration the owner confirmed. For such a pin the declaration
+    installed at `root` must be that one, and its ``owner`` list is applied as ``wb run`` applies it, so a root
+    whose declaration drops the list is refused. A pin the owner typed has no declaration and no list."""
+    try:
+        pin = pins.lookup(guarded, project_id, name)
+    except pins.PinError:
+        return None  # the launcher says why nothing runs
+    if pin.declaration is None:
+        return None
+    try:
+        with safefs.Root(root, "project root") as held:
+            document = manifest.parse(held.read_file(project.MANIFEST))
+            found = [d for d in _declared(held, document) if d.command.name == name]
+    except (safefs.SafeFsError, manifest.ManifestError, pins.PinError) as exc:
+        return "the declaration of %s cannot be read at the root: %s" % (_shown(name), display.clean(str(exc))[:200])
+    if len(found) != 1 or found[0].declaration != pin.declaration:
+        return ("the declaration of %s at the root is not the one the owner confirmed for its pin; nothing was run"
+                % _shown(name))
+    return owner_refusal(name, found[0].command.owner, args, stdin, stdout)
+
+
 USAGE = "usage: wb run [--provides <capability>] <command> [<argument> ...]\n"
 
 _CAPABILITY = re.compile(r"[a-z0-9][a-z0-9:._-]{0,63}\Z")
