@@ -64,7 +64,8 @@ class Declaration(unittest.TestCase):
         self.assertEqual(sorted(HELPERS), sorted(document["ships"]))
         self.assertEqual({"remote-runner": {"helper": "helper/remote-runner", "runtime": "python", "kit": 1,
                                             "arguments": ["profiles", "recommend", "status", "artifacts",
-                                                          "submit"]}}, document["commands"])
+                                                          "submit", "fetch", "fetch-overwrite"],
+                                            "owner": ["fetch-overwrite"]}}, document["commands"])
         self.assertEqual([{"helper": "helper/remote-runner-check", "kit": 1}], document["checks"])
 
     def test_every_file_is_the_declaration_or_a_helper(self):

@@ -417,3 +417,33 @@ input is the null device) and `test_remoterunner_run.py`. `docs/development.md` 
   4. `provenance` does not require `integrity` to be `ok`, as the spec reads. Whether it should is left to the owner
      (a record the job rewrote can pass either way).
 - Not done: `fetch` and `fetch-overwrite` (increment D); a security review of the runner (only if the owner asks).
+
+Increment D, 2026-10-24: `fetch` and `fetch-overwrite` are in `helper/remote-runner`; `module.json` lists both as
+`arguments` and `fetch-overwrite` under `owner`. New tests: `test_remoterunner_fetch.py` (the fake program in
+`support_program.py` gained a fetch mode and a `conformance_problems` function that runs a program directly against
+the checklist). `docs/development.md` has a row for the two commands.
+
+- Tests first: written before the code and run: 14 failed and 2 errored for the missing commands. Then, with the
+  code, the module tests (85) pass; `tests.test_boundary` and `tests.test_skill_names` (27) pass. Full suite not run
+  (approvals stale until F). No real program, no host.
+- What the tests show: `fetch` passes the job and the relative paths, then `--dest` and `--as`, and never `--force`;
+  44 refused shapes (a path that is absolute, has `..`, an empty part, `.git`, a dotted part, a leading dash, a
+  backslash, a control character or is over 512 characters; more than 16 paths; `--dest` outside the project, a dot,
+  missing, a file, a link, below a link, `.git`, `.workbench`; a target that exists as a file, folder, link or
+  dangling link, or lies below a link or a file; `--as` with two paths, a slash, `..`, a dot or dash start, or an
+  existing target) start nothing and leave the tree byte-for-byte as it was; the program's files list with its
+  hashes comes back unchanged in `output`; an AST test shows the helper never calls `open` or a call that writes,
+  moves or links a file; the rendered `.claude/settings.local.json` of an install denies `run remote-runner
+  fetch-overwrite` and none of the other arguments and has no `allow` rule for the module; a program that refuses an
+  existing file, a link target and a dotted name conforms, and one that does not is reported with all three problems,
+  and in that case the wrapper's own check still refuses first.
+- Departures from the spec's wording, to be written into it in increment F (mine; the owner may change any):
+  1. `fetch-overwrite` allows a target that is an existing regular file (that is its purpose) and still refuses an
+     existing folder or link, a link on the way, and every other rule of `fetch`. The spec says only "as `fetch`".
+  2. A path is checked with the kit's path rule: at most 512 characters (the program allows 1,024), and no backslash
+     or colon.
+  3. `--dest` may be given as an absolute path only if it begins with the project root; it is passed on as the
+     relative path.
+  4. `fetch` and `fetch-overwrite` share the 600 second deadline of `submit`.
+- Not done: the tracked-file refusal is the program's (the wrapper runs no git); a race between the check and the
+  program's write is not closed (recorded in Risks); no security review (only if the owner asks).

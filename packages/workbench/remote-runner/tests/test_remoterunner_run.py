@@ -47,7 +47,7 @@ class Arguments(support_program.Wrapped):
         refused = {
             "no command": (),
             "an unknown command": ("log", JOB),
-            "fetch is not built yet": ("fetch", JOB, "a.txt"),
+            "a command that is not wrapped": ("cancel", JOB),
             "an unknown option": ("recommend", "--profile", "fast", "--all"),
             "a repeated option": ("recommend", "--profile", "fast", "--profile", "full"),
             "a missing value": ("recommend", "--profile"),

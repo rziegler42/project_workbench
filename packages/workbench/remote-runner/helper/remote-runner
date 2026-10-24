@@ -20,6 +20,7 @@ import os
 import re
 import selectors
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -146,7 +147,11 @@ USAGE = {
     "artifacts": "usage: remote-runner artifacts <job>",
     "submit": "usage: remote-runner submit (--remote <name> | --best) --profile <name> "
               "[--ref <ref> | --snapshot]",
+    "fetch": "usage: remote-runner fetch <job> <path> ... [--dest <folder>] [--as <name>] (1 to 16 paths)",
+    "fetch-overwrite": "usage: remote-runner fetch-overwrite <job> <path> ... [--dest <folder>] [--as <name>]",
 }
+MAX_PATHS = 16
+SLOW = ("submit", "fetch", "fetch-overwrite")
 
 
 class Refused(Exception):
@@ -253,6 +258,99 @@ def need_ref(value):
             bad in value for bad in ("..", "//", "@{", "/.", ".lock")):
         raise Refused("the ref is not a plain branch name, tag name or 40-digit commit")
     return value
+
+
+def need_path(value):
+    """A path inside a job's output: relative, plain, none of its parts starting with a dot (so not `.git`),
+    not starting with a dash. The helper never reads or writes it; the program does."""
+    try:
+        safefs.validate_relpath(value)
+    except safefs.SafeFsError:
+        raise Refused("a path is not a plain relative path (no '..', '.git', backslash, colon or control "
+                      "character; at most %d characters)" % safefs.MAX_PATH_CHARS)
+    if value.startswith("-") or any(part.startswith(".") for part in value.split("/")):
+        raise Refused("a path starts a part with a dot or starts with a dash")
+    return value
+
+
+def need_file_name(value):
+    if "/" in value:
+        raise Refused("--as is not a plain file name")
+    return need_path(value)
+
+
+def need_dest(root, value):
+    """The existing folder `value`, as a path relative to `root`: inside the project, no link on the way, not in
+    `.git` or `.workbench`."""
+    if value.startswith("/"):
+        prefix = root.rstrip("/") + "/"
+        if not value.startswith(prefix):
+            raise Refused("--dest is outside the project")
+        value = value[len(prefix):]
+    try:
+        parts = safefs.validate_relpath(value)
+    except safefs.SafeFsError:
+        raise Refused("--dest is not a plain relative folder inside the project")
+    if value.startswith("-") or any(part.casefold() in (".git", ".workbench") for part in parts):
+        raise Refused("--dest is not a plain folder (not .git or .workbench, no leading dash)")
+    current = root
+    for part in parts:
+        current = os.path.join(current, part)
+        try:
+            info = os.lstat(current)
+        except OSError:
+            raise Refused("--dest is not an existing folder")
+        if stat.S_ISLNK(info.st_mode):
+            raise Refused("--dest goes through a link")
+        if not stat.S_ISDIR(info.st_mode):
+            raise Refused("--dest is not a folder")
+    return value
+
+
+def check_target(root, base, rel, overwrite):
+    """Refuse a target that would go through a link or already exists (a file, a folder, a link, a dangling
+    link). With `overwrite`, an existing regular file is allowed. The program makes the same refusals and the
+    one about git-tracked files, which needs git; a program that does not is shown by the spec's checklist."""
+    parts = (base.split("/") if base else []) + rel.split("/")
+    current = root
+    for index, part in enumerate(parts):
+        current = os.path.join(current, part)
+        try:
+            info = os.lstat(current)
+        except FileNotFoundError:
+            return
+        except OSError:
+            raise Refused("a target cannot be examined")
+        if stat.S_ISLNK(info.st_mode):
+            raise Refused("a target goes through, or is, a link")
+        if index == len(parts) - 1:
+            if overwrite and stat.S_ISREG(info.st_mode):
+                return
+            raise Refused("a target already exists")
+        if not stat.S_ISDIR(info.st_mode):
+            raise Refused("a file is in the way of a target")
+
+
+def build_fetch(args, root, overwrite):
+    name = "fetch-overwrite" if overwrite else "fetch"
+    words, found = split_arguments(args, ("--dest", "--as"), ())
+    if len(words) < 2 or len(words) - 1 > MAX_PATHS:
+        raise Refused(USAGE[name])
+    job = need_job(words[0])
+    paths = [need_path(each) for each in words[1:]]
+    renamed = None
+    if "--as" in found:
+        if len(paths) != 1:
+            raise Refused("--as needs exactly one path")
+        renamed = need_file_name(found["--as"])
+    dest = need_dest(root, found["--dest"]) if "--dest" in found else None
+    for each in ([renamed] if renamed else paths):
+        check_target(root, dest, each, overwrite)
+    tail = ["fetch", job] + paths
+    tail += ["--dest", dest] if dest else []
+    tail += ["--as", renamed] if renamed else []
+    tail += ["--force"] if overwrite else []
+    return tail, {}
 
 
 def build_recommend(args, root):
@@ -448,7 +546,7 @@ def run_wrapped(name, tail, extra, root, out):
     program = trusted_which(PROGRAM, entries, boundary)
     if program is None:
         raise Refused("program_not_found: no remote-runner program in an absolute PATH entry outside the project")
-    seconds = DEADLINE_SLOW if name == "submit" else DEADLINE_FAST
+    seconds = DEADLINE_SLOW if name in SLOW else DEADLINE_FAST
     code, stdout, stderr, over, timed_out = run_program([program] + tail, root, environment(entries), seconds)
     detail = detail_of(stderr)
     if timed_out:
@@ -472,7 +570,8 @@ def run_wrapped(name, tail, extra, root, out):
 
 
 BUILDERS = {"recommend": build_recommend, "status": build_status, "artifacts": build_artifacts,
-            "submit": build_submit}
+            "submit": build_submit, "fetch": lambda args, root: build_fetch(args, root, False),
+            "fetch-overwrite": lambda args, root: build_fetch(args, root, True)}
 
 
 def main(argv, out, err, cwd):

@@ -17,7 +17,12 @@
         "recommend",
         "status",
         "artifacts",
-        "submit"
+        "submit",
+        "fetch",
+        "fetch-overwrite"
+      ],
+      "owner": [
+        "fetch-overwrite"
       ]
     }
   },
