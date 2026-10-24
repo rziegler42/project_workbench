@@ -1,0 +1,271 @@
+# Agents with declared limits, enforced by the installer
+
+Status: Approved
+Created: 2026-10-24
+Candidate: workbench-v1#agent-confinement
+Specs: harness-modules
+
+## Goal
+
+Build what the accepted decision `2026-10-24-declared-agent-confinement` describes, so that a module can ship an agent that
+writes and runs small scripts in a scratch area and nowhere else, and the installer, not the module, enforces that.
+
+When this plan is done:
+
+- a neutral agent can declare the paths it may write and the commands it may run, as data;
+- the Claude harness layout declares where a session's scratch directory is;
+- the installer renders a per-agent hook for such an agent, and a generic guard in the installer decides each call from
+  the declared limits, refusing on anything it does not understand;
+- an agent whose limits a harness cannot enforce is not installed there;
+- the specification says what is enforced and states the limit: a script the agent writes and runs is not confined;
+- no module ships an elevated agent yet. A test module proves the path from declaration to refusal.
+
+## Scope
+
+- The neutral agent fields, their reader and their validation (`workbench/neutral.py`, `workbench/layout.py`).
+- The layout's scratch-directory entry and its per-agent hook entry, for the Claude module.
+- The guard command and its tests, in the style of the edit gate (`workbench/gate_hook.py`).
+- Rendering the hook into the agent file, and the deny on the rendered agent file (`workbench/harnessplan.py`,
+  `workbench/attach.py`, `workbench/check.py`).
+- The specification change in `docs/specs/harness-modules.md`, including the evidence of a live trial.
+
+## Non-goals
+
+- Shipping an agent, the `security-review` skill or the `security-review-module` candidate. That is the next candidate and
+  waits for this one.
+- Confining what a script the agent wrote does when it runs. The decision states this limit; this plan states it in the
+  spec.
+- opencode and Codex. A harness whose layout has no per-agent hook does not install a confined agent, which is the
+  existing rule that a restriction a harness cannot express is never installed unrestricted.
+- Any change to the edit gate, the floor, or the owner-run list.
+- Any use of a model other than the live trial in increment A.
+
+## Assumptions and constraints
+
+- Python standard library only; tests with `unittest`; the project minimum is 3.11.
+- The decision's trial (2026-10-24, Claude Code 2.1.310, `claude -p`) showed that a hook in a project agent's frontmatter on
+  `Read` runs and that exit 2 blocks. It did not test any other tool, interactive mode, or what the hook input carries for
+  `Bash`, `Write` and `Edit`. Increment A tests those; the later increments are built against what A records.
+- The hook input carries a session id and a working directory (the decision's statement). Whether the scratch directory can be
+  computed from them is **not yet verified**; A verifies it, and if it cannot be computed the layout declares no scratch
+  and the agent is not installed (fail closed), which would end the plan after the spec increments with the owner's decision.
+- The rendered agent file is a harness file the project's own agent could edit. The guard therefore reads the limits from the
+  installed module's verified neutral item, not from the rendered file.
+- The edit gate runs only while a plan is under way; this guard runs on every call of its agent.
+- Editing files under `packages/workbench/claude/` or any module's tree stales its shipped approval. `release-approvals` is the
+  owner's; I run it only on "Run it for me", and delete stale records only after a preview and "remove them".
+- Discovery tooling: graphify: skipped — not installed in this project; the scope was found by reading the decision,
+  `harness-modules.md`, `gate_hook.py`, `layout.py`, `neutral.py` and the Claude module's layout.
+
+### Choices (made by me; the owner may change any)
+
+1. **Two fields, kept small.** An agent declares `writes`, a list of named roots it may write under (only `scratch` is defined),
+   and `run`, a list of pinned command patterns. Whole-root write access only; no sub-patterns inside a root. Cost: an agent
+   cannot be limited to a sub-folder of the scratch area. It does not need to be.
+   **Encoding.** Neutral front matter is one `key: value` line of printable ASCII per field (`neutral._front_matter`), so both
+   fields are one line, and a list is comma-separated like `tools`. This works because no pattern may hold a comma:
+   ```
+   tools: read, search, edit, shell
+   writes: scratch
+   run: python3 {scratch}/check.py, python3 {scratch}/check.py --fast
+   ```
+   Limits: `writes` takes the one word `scratch`; `run` takes at most 4 patterns of at most 200 characters each, and the line
+   is at most 600 characters. A duplicate, an empty entry, an unknown root, a pattern outside the grammar, or a repeated
+   field is refused at read, as `tools` is today. `writes` needs `edit` in `tools`, and `run` needs `shell`; a field without its
+   tool is refused. `module-contract.md` does not define agent front matter (checked), so only `harness-modules.md` changes.
+2. **A pinned command is matched token by token, with no shell parsing.** The pattern is a sequence of space-separated tokens,
+   each a literal or the placeholder `{scratch}/<name>`, where the part after the slash is one plain file name. The guard
+   first refuses any command containing a character outside a closed safe set (no quote, `;`, `&`, `|`, `$`, backtick,
+   parentheses, redirection, newline or backslash), then splits on single spaces and compares token by token. A placeholder
+   token must name a file directly inside the scratch directory, with no link in the path and no `..`. A token starting with
+   `-` that the pattern does not spell is refused. Cost: a pinned command cannot take a quoted argument. Alternative
+   rejected: a regular expression written by the module, which puts module-chosen matching on the permission path.
+3. **The agent file carries the hook; the settings file does not.** The trial put the hook in the agent's own frontmatter, so
+   it applies to that agent only and not to the session. The rendered hook is `wb agent-gate <harness> <agent> || exit 2`,
+   with the same `|| exit` reasoning as the edit gate. The matcher covers the tools the agent holds that can write or run:
+   the layout's edit and shell tool names.
+4. **The scratch directory is a template in the layout,** for example a path built from the temporary directory, the user id,
+   the project's directory name and the session id. The guard fills it from the hook input and the environment and refuses if
+   any part is missing. The exact template is whatever A verifies; this plan does not guess it.
+5. **A confined agent's rendered file is denied for edits,** by extending the existing edit deny (the same function that
+   covers `.claude/settings.local.json`) to the rendered agent paths, in both the relative and the absolute spelling. The
+   deny covers file tools and not a shell, as the spec already says of the settings file.
+6. **The guard command is `wb agent-gate`,** a new `AGENT_SAFE` command beside `gate`. It reads the declared limits from the
+   installed, pinned module through the same lookup the edit gate uses for its process module, never from the rendered file.
+7. **A confined agent may not delegate.** An agent that declares `writes` or `run` and also lists the `agents` tool is refused
+   at read, because the agent it started would not be covered by this agent's hook. A confined agent also gets no tool
+   beyond `read`, `search`, `edit`, `shell` and `web`; the guard covers `edit` and `shell` only, and `web` writes nothing
+   to disk. Alternative rejected: recursive inheritance, which needs a second hook model and has no trial behind it.
+8. **Interactive trust is the owner's to check.** A trial in `claude -p` cannot show whether an interactive session asks
+   the owner to trust the project's hooks. A records the question as open unless the owner runs the check, and the spec
+   says which it is.
+
+## Completion criteria
+
+1. Increment A's trial results are in the spec's Evidence: for `Bash`, `Write` and `Edit` in an agent's frontmatter, whether
+   the hook ran and blocked, the fields the hook input carries, and whether the scratch directory is computable.
+2. A neutral agent with `writes` or `run` is read and validated against the encoding in choice 1; an unknown root, a pattern
+   outside the grammar, a duplicate, an over-long line, a field without its tool, or the `agents` tool alongside either
+   field is refused at read; an agent with these fields on a harness whose layout has no per-agent hook is skipped with a
+   warning and never installed.
+3. `wb agent-gate` allows a write under the scratch directory and a command that matches a pinned pattern, and refuses: a
+   write elsewhere, through a link, with `..`, in another case, or by a missing field; a command with a metacharacter, an
+   extra token, an option the pattern does not spell, or a placeholder outside scratch; an input of the wrong shape, too
+   large, or past the deadline; and an agent name the installed module does not declare. Each is a test.
+4. The rendered agent file for a confined agent carries the hook, the rendered deny covers that file, and `wb check` reports
+   an edited agent file.
+5. A test module with a confined agent goes from declaration to a refused call through attach and the guard, with the
+   hook's command run as the harness runs it.
+6. The spec states the enforcement, the grammar, the stated limit, and what was and was not verified. No spec or decision
+   text claims the live behaviour beyond A's evidence.
+7. `python3 -B -W error tests/run_all.py` is green on this machine; `release-approvals` reports nothing stale;
+   `doccheck`, `refcheck` and `git diff --check` print nothing.
+
+## Increments
+
+### Increment A — A live trial of the open facts
+
+**Outcome:** the facts the later increments depend on are recorded as evidence, or the plan is stopped for the owner.
+**Dependencies:** none. Needs the owner's allowance to run `claude -p` in a throwaway project.
+**Affected areas:** `docs/specs/harness-modules.md` ("Evidence" only). No code.
+**Steps:**
+1. In a throwaway workbench project outside this repository, install a trial agent whose frontmatter declares a hook on
+   `Bash`, `Write` and `Edit`, each hook writing the whole hook input to a log and exiting 0, then 2.
+2. Run `claude -p` with the agent: ask it to run a command, write a file and edit a file. Record for each tool whether the
+   hook ran, whether exit 2 blocked it, and the fields of the hook input (session id, working directory, tool input).
+3. From a session's real scratch directory, record how it relates to the temporary directory, the user id, the project
+   directory and the session id, and whether the hook can compute it.
+4. Record that the interactive trust question was not tested, unless the owner runs it.
+5. Write the results into the spec's Evidence section with the Claude Code version and the date.
+**Stop rule:** if a tool's hook does not block, or the scratch directory cannot be computed, stop and report to the owner
+before B; the plan's later increments change or end.
+**Verification:** `doccheck`, `refcheck` and `git diff --check` print nothing.
+**Evidence:** the one local commit, trailer `Plan: 2026-10-24-agent-confinement#A`.
+
+### Increment B — The specification
+
+**Outcome:** the spec describes the agent fields, the pinned-command grammar, the layout entries, the guard, the rendering and
+the stated limit, built against A's evidence.
+**Dependencies:** A.
+**Affected areas:** `docs/specs/harness-modules.md` (neutral items, translation, a new section beside "The edit gate hook",
+acceptance criteria). `module-contract.md` is not changed: it does not define agent front matter.
+**Steps:**
+1. Add the fields to the neutral agent table with the encoding, example and limits of choice 1, the grammar and the character
+   set, the refusal of `agents` beside either field (choice 7), and the fail-closed rule for a harness with no per-agent hook.
+2. Add the section for the guard: input, the order of checks, the refusals, the deadline, where the limits are read from.
+3. Add the layout entries to the Claude layout table and the rendering rule.
+4. State the limit: a script the agent writes and runs is not confined.
+5. Add acceptance criteria matching completion criteria 2 to 5.
+**Verification:** `doccheck`, `refcheck`, `git diff --check`; the owner reads the spec.
+**Evidence:** the one local commit, trailer `Plan: 2026-10-24-agent-confinement#B`.
+
+### Increment C — Read and validate the fields, and skip what cannot be enforced
+
+**Outcome:** a neutral agent with `writes` and `run` is read and checked; the layout validator accepts the scratch and
+per-agent hook entries; translation skips a confined agent on a harness that has no such hook.
+**Dependencies:** B.
+**Affected areas:** `workbench/neutral.py`, `workbench/layout.py`, `workbench/harnessplan.py` (translation only), their tests,
+and the Claude module's layout in `packages/workbench/claude/module.json` (and its tests).
+**Steps:**
+1. Tests first: each refusal in completion criterion 2 (including the `agents` combination and each limit at, and one past,
+   its bound), the accepted example of choice 1 read back field by field, and the layout validator's refusals for a
+   malformed entry.
+2. Implement the reader, the grammar check and the layout validation, then the skip with a warning.
+3. Add the layout entries to the Claude module.
+**Verification:** the new tests fail before and pass after; the root suite and the `claude` module suite pass;
+`release-approvals` (the owner's) for the edited `claude` module.
+**Evidence:** the one local commit, trailer `Plan: 2026-10-24-agent-confinement#C`.
+
+### Increment D — The guard
+
+**Outcome:** `wb agent-gate <harness> <agent>` decides one call from the declared limits.
+**Dependencies:** C.
+**Affected areas:** a new `workbench/agent_gate.py`, `workbench/cli.py`, `workbench/rules.py` (the command's safe-list entry),
+tests. The edit gate's path helpers are reused, not copied: moved to a shared place only if reuse needs it.
+**Steps:**
+1. Tests first for completion criterion 3, each as a case with the hostile input, using a fake scratch directory and a fake
+   installed module; links, `..`, case variants, a metacharacter set, option-like tokens, NUL, oversize input and the deadline.
+2. Implement the guard: shape, then agent lookup from the installed pinned module, then tool dispatch, then the path or command
+   check; every other outcome is a refusal.
+3. Add the command to the safe-list and the CLI.
+**Verification:** the new tests; the root suite; `git diff --check`. Security review by an independent reviewer only if the owner
+asks (this increment touches untrusted input, paths and command text).
+**Evidence:** the one local commit, trailer `Plan: 2026-10-24-agent-confinement#D`.
+
+### Increment E — Render the hook and protect the rendered file
+
+**Outcome:** attach writes the hook into a confined agent's file, the deny covers that file, and `check` reports an edit to it.
+**Dependencies:** D.
+**Affected areas:** `workbench/harnessplan.py`, `workbench/attach.py`, `workbench/check.py`, `workbench/rules.py` if the deny
+function lives there, tests.
+**Steps:**
+1. Tests first: the rendered frontmatter bytes for a confined and an ordinary agent; the deny patterns in both spellings;
+   the drift report; an unconfined agent's file is byte-identical to before.
+2. Implement the rendering and the extension of the deny. The harness name and agent name are checked against the same
+   pattern as the gate's before they enter the command.
+**Verification:** the new tests; the root suite; a re-attach is idempotent.
+**Evidence:** the one local commit, trailer `Plan: 2026-10-24-agent-confinement#E`.
+
+### Increment F — End to end, and the records
+
+**Outcome:** a test module's confined agent is refused outside its limits through the real attach and the hook's own command; the
+decision and the spec say what is built.
+**Dependencies:** E.
+**Affected areas:** `tests/` (a test module and an end-to-end test), `docs/specs/harness-modules.md` ("As built"),
+`docs/development.md` if a command is added, the plan's Result.
+**Steps:**
+1. Install a test module with a confined agent into a fixture project, attach, and run the rendered hook command as the harness
+   would, with a hostile and a permitted input.
+2. Update the spec from "proposed" to "as built", with what was and was not verified; add `wb agent-gate` to the development
+   documentation.
+3. Run the full suite once with nothing edited meanwhile; record the totals in the Result.
+**Verification:** the end-to-end test; `python3 -B -W error tests/run_all.py`; `doccheck`, `refcheck`, `git diff --check`.
+**Evidence:** the one local commit, trailer `Plan: 2026-10-24-agent-confinement#F`.
+
+## Verification for the plan as a whole
+
+- The full suite is green once after F, with nothing edited while it runs.
+- `release-approvals` reports nothing stale after C; deleting stale records is on "remove them".
+- No agent ships and no live session other than A's trial was run. The owner may run an interactive check of the hook trust
+  question; the spec records whether they did.
+
+## Risks and sensitive actions
+
+- **Hooks that do not block.** A hook that times out or fails to start lets the call through. `|| exit 2` covers a failed start;
+  the guard's own deadline sits below the harness timeout. A's trial is the only evidence for each tool, and the stop rule
+  applies.
+- **A pinned command is still a program.** The pattern pins the command line, not what the named program does. The stated
+  limit is in the spec.
+- **A weak grammar is a bypass.** The grammar refuses before it parses, and each refusal has a test; an independent security
+  review is available at the owner's request.
+- **The scratch directory may not be computable.** Then the plan stops at A, which is a cheap place to find out.
+- **Rendered file edited by the agent.** The deny covers file tools only. A shell can still edit it, and the guard reads its
+  limits from the installed module, so an edited file does not widen the limits.
+- Sensitive actions: running `claude -p` in A (a model call, in a throwaway directory outside this repository, with the owner's
+  allowance); `release-approvals` and stale-record removal (the owner's). Nothing is committed or pushed without the
+  owner's word. Reviews run only when the owner asks.
+
+## Review record
+
+Rounds 1 and 2 of 3, 2026-10-24, `ask-codex review-plan`, model `gpt-5.6-luna`, effort medium (asked for by the owner).
+Outcome: converged. Two findings, both major, both applied:
+
+- R1-F1: the neutral format for `writes` and `run` was not defined against the one-line front matter. Choice 1 now gives the
+  encoding, an example, the limits and the refusals, and increment C tests them. `module-contract.md` was checked and does not
+  define agent front matter.
+- R1-F2: a confined agent that held the `agents` tool could start an agent outside its hook. Choice 7 refuses that
+  combination at read; completion criterion 2 and increments B and C carry it.
+
+Round 2 found nothing. Closed with `ask-codex archive` at 2026-10-24T17:02:09Z after 2 of 3 rounds, 2 decisions applied and
+0 rejected, on the owner's word.
+
+## Deferred work
+
+- `security-review-module`: the module with the skill and its agent, the first user of this plan.
+- opencode and Codex support for per-agent hooks, with `verify-opencode`.
+- Sub-paths inside a root, and a second root (for example the session's temporary directory beside a project scratch), if an
+  agent needs them.
+
+## Result
+
+Empty until the plan is implemented.
