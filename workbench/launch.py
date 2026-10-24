@@ -200,6 +200,7 @@ def launch_captured(guarded, project_id, name, root, args, *, limit, timeout, ki
         out, err = bytearray(), bytearray()
         over = timed_out = False
         deadline = time.monotonic() + timeout
+        exited = False
         with selectors.DefaultSelector() as pipes:
             pipes.register(process.stdout, selectors.EVENT_READ, out)
             pipes.register(process.stderr, selectors.EVENT_READ, err)
@@ -219,8 +220,12 @@ def launch_captured(guarded, project_id, name, root, args, *, limit, timeout, ki
                     else:
                         err += chunk
                         del err[:-STDERR_KEPT]
-                if not ready and process.poll() is not None:
-                    break
+                if ready:
+                    exited = False
+                elif process.poll() is not None:
+                    if exited:
+                        break
+                    exited = True  # it may have written and exited after the wait: look once more
         _kill(process)  # also what a helper that has exited left running in its group
         try:
             process.wait(timeout=5)

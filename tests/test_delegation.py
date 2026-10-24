@@ -9,6 +9,7 @@ import hashlib
 import io
 import json
 import os
+import selectors
 import time
 import unittest
 import unittest.mock
@@ -537,6 +538,22 @@ class Convergence(Delegated):
         self.control(convergence={"sleep": 5})
         with unittest.mock.patch.object(approvalcmd, "TIMEOUT", 0.5):
             self.refuses("did not finish")
+
+
+    def test_an_answer_written_just_after_an_empty_wait_is_still_read(self):
+        class Preempted(selectors.DefaultSelector):
+            """A parent that a loaded machine stops after a wait that found nothing, until the provider has written
+            its answer and exited."""
+
+            def select(self, timeout=None):
+                ready = super().select(timeout)
+                if not ready:
+                    time.sleep(1.0)
+                return ready
+
+        self.control(convergence={"sleep": 0.4})
+        with unittest.mock.patch.object(selectors, "DefaultSelector", Preempted):
+            self.approved()
 
 
 class SameBytes(Delegated):

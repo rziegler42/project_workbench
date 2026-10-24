@@ -170,4 +170,25 @@ isolated `test_delegation` runs were 12 of 12, not 9 of 9.
 
 ## Result
 
-Empty until the plan is implemented.
+**Increment A (`a9a3474`):** the fake program's recorder drops `__CF_USER_TEXT_ENCODING`, and the folder test numbers its
+folders. The `mempalace` suite passes (145). The exact-set assertions are unchanged.
+
+**Increment B:** the cause was found by reading, in step 1, and reproduced deterministically; the load runs in steps 2
+and 3 were not needed. `launch_captured` (`workbench/launch.py`) read the helper's output with a 0.2 second `select`
+and stopped when a wait found nothing and the helper had exited. A helper that wrote its answer and exited after the
+wait returned, but before the exit check, lost its output; the caller then saw no bytes and refused with "report is
+not one line ending in a newline". A loaded machine widens that window. The other ways listed in step 1 (a short read,
+the output limit, the deadline, a report written in two parts) either keep the output or set `over` or `timed_out`
+and are not this failure.
+
+- The fix: when the helper has exited and a wait found nothing, read once more before stopping. A helper that left
+  a child holding the pipe open is still stopped after that one extra pass.
+- The test: `Convergence.test_an_answer_written_just_after_an_empty_wait_is_still_read` in `tests/test_delegation.py`
+  stops the parent for a second after an empty wait, while the provider sleeps 0.4 seconds and then answers. It failed
+  before the fix with the same message and passes after it.
+- Limit: the earlier failure was seen once and was not reproduced as such, so this is the one cause found that fits its
+  message, not proof that it was the cause of that run. No other failure was seen in 12 isolated runs before the fix.
+- Totals after both increments, run once with nothing edited meanwhile: 3,957 tests in 9 roots, all OK (the 3,956 of
+  increment A plus the new test), with the same 3 skips.
+
+The `test_delegation` item under Deferred work applies only if the failure comes back.
