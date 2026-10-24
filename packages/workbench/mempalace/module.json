@@ -12,6 +12,12 @@
   "ships": [
     "helper/mempalace"
   ],
+  "fills": [
+    {
+      "slot": "slot:policy",
+      "source": "files/blocks/policy.md"
+    }
+  ],
   "commands": {
     "mempalace": {
       "helper": "helper/mempalace",

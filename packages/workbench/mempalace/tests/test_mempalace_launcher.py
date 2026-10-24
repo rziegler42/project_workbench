@@ -153,13 +153,45 @@ class Launcher(support_install.InstallBase):
         self.assertIn("has changed since it was pinned", str(caught.exception))
         self.assertEqual([], self.calls())
 
-    def test_the_module_writes_only_its_declaration_and_its_helper_and_names_no_project_path(self):
+    def test_the_policy_block_lands_between_its_markers_in_agents(self):
+        place = self.place()
+        self.assertEqual(0, self.install(place)[0])
+        with open(os.path.join(MODULE, "files", "blocks", "policy.md"), encoding="utf-8") as handle:
+            block = handle.read()
+        agents = self.read(place, "AGENTS.md").decode()
+        self.assertIn("<!-- BEGIN workbench/mempalace slot:policy -->\n" + block
+                      + "<!-- END workbench/mempalace slot:policy -->\n<!-- @slot: policy -->\n", agents)
+
+    def test_claude_receives_the_skill_and_the_docs_index_is_left_alone(self):
+        place = self.place()
+        self.assertEqual(0, self.install(place)[0])
+        self.assertTrue(os.path.isfile(os.path.join(place, ".claude", "skills", "recall-memory", "SKILL.md")))
+        self.assertNotIn("mempalace", self.read(place, "docs", "README.md").decode().lower())
+
+    def test_no_installed_file_outside_the_namespace_names_a_palace_path(self):
+        place = self.place()
+        self.assertEqual(0, self.install(place)[0])
+        for base, dirs, files in os.walk(place):
+            if ".git" in base.split(os.sep):
+                continue
+            for name in files:
+                full = os.path.join(base, name)
+                if os.path.relpath(full, place).startswith(os.path.join(".workbench", "workbench", "mempalace")):
+                    continue
+                with open(full, "rb") as handle:
+                    data = handle.read().decode("utf-8", "replace")
+                for path in ("~/.mempalace", ".config/mempalace", "/palace", "mempalace.json"):
+                    self.assertNotIn(path, data, "%s in %s" % (path, full))
+
+    def test_the_module_writes_only_its_own_namespace_and_names_no_project_path(self):
         place = self.place()
         self.assertEqual(0, self.install(place)[0])
         found = sorted(os.path.relpath(os.path.join(base, name), place)
                        for base, _, files in os.walk(place) if ".git" not in base.split(os.sep)
                        for name in files if "mempalace" in os.path.join(base, name).lower())
-        self.assertEqual([".workbench/workbench/mempalace/helper/mempalace",
+        self.assertEqual([".workbench/workbench/mempalace/files/blocks/policy.md",
+                          ".workbench/workbench/mempalace/harness/neutral/skills/recall-memory/SKILL.md",
+                          ".workbench/workbench/mempalace/helper/mempalace",
                           ".workbench/workbench/mempalace/module.json"], found)
 
 

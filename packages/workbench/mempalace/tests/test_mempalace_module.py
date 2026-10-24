@@ -43,14 +43,18 @@ class Declaration(unittest.TestCase):
         self.assertEqual(["init", "mine"], command["owner"])
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
 
-    def test_every_file_is_the_declaration_or_the_helper(self):
+    def test_it_fills_the_policy_slot_and_nothing_else(self):
+        self.assertEqual([{"slot": "slot:policy", "source": "files/blocks/policy.md"}], declaration()["fills"])
+
+    def test_every_file_is_the_declaration_the_helper_the_block_or_the_skill(self):
         found = []
         for base, dirs, files in os.walk(MODULE):
             if base == MODULE:
                 dirs.remove("tests")  # the module's own tests are not part of what it installs
             for name in files:
                 found.append(os.path.relpath(os.path.join(base, name), MODULE))
-        self.assertEqual(sorted(["module.json", HELPER]), sorted(found))
+        self.assertEqual(sorted(["module.json", HELPER, "files/blocks/policy.md",
+                                 "harness/neutral/skills/recall-memory/SKILL.md"]), sorted(found))
 
     def test_the_package_lists_it(self):
         with open(os.path.join(PACKAGE, "package.json"), encoding="utf-8") as handle:

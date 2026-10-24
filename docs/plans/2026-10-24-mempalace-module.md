@@ -401,3 +401,23 @@ Departures from the approved text, each flagged to the owner when reported:
 
 Not covered by a test: a real interrupt at a terminal (`Ctrl-C`) during `mine`, and a program that spawns workers that
 outlive a terminate signal.
+
+### Increment D (2026-10-24)
+
+Added the policy block (`files/blocks/policy.md`, 10 lines), the neutral skill `recall-memory`
+(`harness/neutral/skills/recall-memory/SKILL.md`) and the `fills` entry for `slot:policy` in `module.json`, with 19 new
+tests (124 in the module; full suite 3807 in 8 roots, green). The block and the skill carry the routing rule in the words
+of `docs/specs/knowledge-tools.md`, the rule that a result is recalled data that current files override, the no-secrets
+rule, and that an agent cannot file a memory. The skill runs only `wb run mempalace search` and `wb run mempalace status`,
+tells the agent to stop and report a refusal, never to run `init` or `mine`, and that a low match score means the memory has
+nothing on the subject (the real program returns the nearest notes even for an unrelated question, found in increment A).
+An install test shows the block between its markers in `AGENTS.md`, Claude receiving the skill, and no installed file outside
+the module's namespace naming a palace path.
+
+Choices and departures:
+
+- **No `docs-index` fill.** The only guide to the module is this repository's own spec, which is not shipped to a project,
+  and the module writes no file of its own, so the index has nothing to point at. The plan allowed this.
+- The block and the skill name `graphify` and "the knowledge base" because the routing rule does, and say a tool that is not
+  installed is skipped; neither module exists yet, and the skill names none of their skills.
+- Whether Claude loads the skill when it should is not tested, as for the other modules' skills.
