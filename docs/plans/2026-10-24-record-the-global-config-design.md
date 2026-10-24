@@ -331,3 +331,25 @@ The roadmap `docs/roadmaps/workbench-v1.md` is refreshed.
 - Limits: the bullets summarize long Results and were drawn from reading each plan's Result section, and the first 30 to 60
   lines of the longer ones; the review-engine increments between C and F, and the middle increments of the remote-runner and
   mempalace plans, were not read in full.
+
+### Increment B (2026-10-24)
+
+Three decision records are written, each `Status: Proposed`, and indexed in `docs/decisions/README.md`.
+
+- `2026-10-24-project-guarantees-a-floor`: the floor (a project's `deny` and `ask` rules, edit gate, owner-run refusals and hard
+  stops), no promise of identical behavior, guarantees that matter enforced in the workbench's code, and no writing of a
+  harness's global configuration. Alternatives include the owner's first statement of the end state (reset the user level and
+  supply everything from the project), rejected in favor of the split. Its Verification section holds the trial's seven
+  findings with the version, date, method and run counts, and what was not tested.
+- `2026-10-24-declared-agent-confinement`: declared limits as data, no general shell for an elevated agent, a generic installer
+  guard rendered as a per-agent hook, the layout naming the temporary directory, and the skill and agent shipped together in
+  an optional module. Open items recorded: the fixed command pattern, how the installer learns the session directory, hook
+  trust in an interactive session, and that the rendered agent file is a harness file the project's own agent could edit.
+- `2026-10-24-installer-reads-global-settings-on-request`: a proposal to amend `repository-boundary.md` and to leave
+  `2026-10-19-guarded-store` unchanged, with the reason; owner-run, terminal-only, read-only, names and paths only; acceptance
+  and the amendment come before any plan builds it; it may be deferred.
+- Verification as run: a search of the three files for `.debug`, `scratch`, `/tmp` and `claude_` finds nothing; `doccheck`,
+  `refcheck` and `git diff --check` print nothing; the index lists all three as `Proposed`. Nothing under `packages/`
+  changed.
+- Not done: the owner has not accepted, rejected or deferred any of the three, and none was reviewed by a second reviewer.
+  The trial's untested cases are still untested.
