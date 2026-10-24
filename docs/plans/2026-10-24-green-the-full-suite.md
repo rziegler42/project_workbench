@@ -1,6 +1,6 @@
 # Get the full suite green on macOS
 
-Status: Approved
+Status: Completed
 Created: 2026-10-24
 Candidate: none (four failures in completed work, found by the full suite on this machine after the `mempalace` merge)
 Specs: mempalace
