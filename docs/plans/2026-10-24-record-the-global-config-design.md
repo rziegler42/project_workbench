@@ -1,6 +1,6 @@
 # Record the global-configuration design in the roadmap, decisions and specs
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-24
 Candidate: none (direction-setting documents that precede `global-config-migration` and `self-hosting`; no roadmap candidate names it)
 Specs: harness-modules, superpowers-ports
@@ -306,4 +306,28 @@ stays `Proposed` until the owner approves it.
 
 ## Result
 
-Not started.
+### Increment A (2026-10-24)
+
+The roadmap `docs/roadmaps/workbench-v1.md` is refreshed.
+
+- "Current state" gained ten bullets, one per plan the roadmap did not name by stem: `increment-loop-and-review-skills`,
+  `push-checkpoint`, `compaction-guidance`, `gate-input-bound-only-under-way`, `review-engine`, `delegated-approval`,
+  `port-superpowers`, `remote-runner-module`, `owner-run-in-code` and `mempalace-module`, each from that plan's own Result and
+  limits, and an eleventh on the global configuration. `2026-10-22-code-work-commit` was not given a bullet: the
+  `safe-git` bullet and the `code-work-commit` candidate already say its helper moved. One earlier sentence (`delegate` has no
+  effect, nothing reads a cap) is now dated to when that plan closed.
+- Wording conflicts removed: the mirror sentence of `global-config-migration` (replaced by "there is no mirror to keep in
+  step"); "ported" in `graphify-module` and `remaining-modules-rename`; the plan receipt and the `code-work-plans` evidence
+  dependency in `graphify-module`; the inheritance wording of `knowledge-base-package` and `researcher-fetch-tool`.
+- Seven candidates added before `global-config-migration`: `architecture-decisions-merge`, `agent-confinement`,
+  `security-review-module`, `verilog-module`, `cad-modules`, `global-settings-check` and `mempalace-scoping`.
+  `global-config-migration` now states the working vision as provisional, makes the line-by-line comparison its first step,
+  lists the superpowers dependencies as items to settle, and depends on the four candidates that supply a global item;
+  `self-hosting` depends on the three that change a shipped module. `remaining-modules-rename` shrinks to the rename pass,
+  because its other contents have candidates of their own (a consequence of the split, for the owner to accept).
+- Verification as run: a script found 40 candidate sections and 40 slugs in "Suggested order", none missing from either and
+  none repeated, and every dependency that names a candidate names a section; `doccheck`, `refcheck` and `git diff --check`
+  print nothing. The review of the diff for statements a plan's result does not record was made by me and not by a reviewer.
+- Limits: the bullets summarize long Results and were drawn from reading each plan's Result section, and the first 30 to 60
+  lines of the longer ones; the review-engine increments between C and F, and the middle increments of the remote-runner and
+  mempalace plans, were not read in full.

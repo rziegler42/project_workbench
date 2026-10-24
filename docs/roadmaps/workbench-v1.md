@@ -150,14 +150,65 @@ meet here and the order matters.
   `wb settings` prints the effective values; and the installer's `wb gate <harness>` refuses a file edit while a plan
   under way is not approved, rendered into the Claude harness as a `PreToolUse` hook (the Claude module now provides
   `hooks`) together with a deny on edits to the rendered settings file. The tool-to-field table is the harness
-  layout's, not the installer's, which departs from the wording of the plan. `delegate` still has no effect, nothing
-  reads a cap yet, a project cannot lower one, and the hook was seen working in a live Claude session on 2026-10-22 (Claude Code 2.1.307; the owner's check,
+  layout's, not the installer's, which departs from the wording of the plan. when this plan closed `delegate` had
+  no effect (the delegated plan approval below gives it one for a plan's approval), nothing read a cap, a project could
+  not lower one, and the hook was seen working in a live Claude session on 2026-10-22 (Claude Code 2.1.307; the owner's check,
   criterion 9 of the plan), which also found that the deny on the rendered settings file does not hold from a
   subdirectory (corrected by plan `2026-10-22-absolute-settings-deny`, which renders the absolute patterns; the owner's
   recheck on 2026-10-23 confirmed it). The decision `2026-10-22-installer-owns-the-edit-gate` is Accepted. A
   project-level setting that the installer can read without naming a module, so that a project may lower a cap, is
   not a candidate yet; add one if the owner wants it. A security review found one Medium finding, fixed; the fixes had
   no second reviewer.
+- The increment loop and the review skills are implemented (plan `2026-10-23-increment-loop-and-review-skills`, increments
+  A to C; completion derived): a neutral `reviewer` agent (`tools: read, search`; it returns findings and a recommendation,
+  never a verdict) and the skills `run-increment`, `request-review` and `evaluate-findings` in `code-work`. The Claude layout
+  renders the agent with a `Read`, `Grep` and `Glob` allowlist. Not seen in a live session; the caps the skills tell the agent
+  to count are not enforced; no security pass over the agent's restriction.
+- The push checkpoint is implemented (plan `2026-10-23-push-checkpoint`, increments A to D; completion derived):
+  `wb run safe-git push-check` (a scan of the commits to be sent for credential patterns, local refs only),
+  `wb run code-work shared` (reads `.workbench/shared-branches.json`) and the skill `push-changes`; the rendered Claude
+  settings ask on every push. The skill is advice, the harness's prompt is what the owner answers, the scan's patterns are a
+  narrow list, and no live session was used.
+- The compaction guidance is implemented (plan `2026-10-23-compaction-guidance`, increments A and B; completion derived): a
+  bullet of the `code-work` policy block. There is no rendered "Compact Instructions" section and no hook; it is advice only
+  and was not used in a live session.
+- The edit gate's input bound is checked only when a plan is under way (plan `2026-10-23-gate-input-bound-only-under-way`,
+  `Candidate: none`): the hook reads at most 16 MiB and applies the 65,536-byte bound after `active` reports a plan under
+  way. A test module stalled once during the work and the cause was not found.
+- The review engine is implemented (plan `2026-10-23-review-engine`, increments A to F; completion derived): the module
+  `review-engine` provides `peer-review`, keeps a sealed review state with bounded rounds, and runs a bridge only through
+  `wb run --provides model-bridge`. A module command may declare `owner` arguments (`extend`, `reset`, `archive`, `prune`,
+  `amend` here), which an attached harness that provides permissions denies the agent. The owner ran a real Codex through the
+  `ask-codex` bridge by hand on 2026-10-23 (Codex CLI 0.163.0). No default bridge exists, the bridge reports no model name or
+  token total without `--model`, and `--effort`, a missing sign-in and a malformed real reply were not tried.
+- Delegated plan approval is implemented (plan `2026-10-23-delegated-approval`, increments A to F; completion derived): the
+  installer's `wb delegate-approve-plan` records an approval made by a delegate from a converged, sealed review of the same
+  bytes; the `review-engine` module answers `convergence`, a process module declares `delegable`, and the skill
+  `delegate-approval` explains it. No vendor bridge ran against it; the owner waived that. Accepted limits: a provider may
+  drift after approval, and two of this repository's 27 plans are no longer delegable.
+- The superpowers inventory and the first ports are done (plan `2026-10-23-port-superpowers`, increments A to G; completion
+  derived): `superpowers-ports.md` lists the plugin's 15 skills (version 7.0.0, with source URL, retrieval date and hashes), 11
+  of them used by the owner's files, and what became of each; the decision `2026-10-23-one-owner-per-skill-name` was accepted
+  on 2026-10-24; `brainstorm` is in `groundwork`, and `test-first`, `diagnose-failure` and `verify-before-claiming` are in
+  `code-work`. The differences from `receiving-code-review` are recorded, not closed. No live session.
+- `remote-runner` is a module (plan `2026-10-24-remote-runner-module`, increments A to G; completion derived): remote job
+  profiles in `.workbench/remote-runner.toml`, a wrapper over the external `remote-runner` program, a checker, and the skill
+  `run-remote-job`. `docs/specs/remote-runner.md` reads `Current`. It was tested only against fake programs; the external
+  program must read the new project file before a real job can run, and that change is outside this repository.
+- Owner-run arguments are enforced in code (plan `2026-10-24-owner-run-in-code`, increments A to D; `Candidate: none`): `wb run`
+  and `wb launch` refuse an owner-run argument unless standard input and output are both terminals, and `wb launch` checks
+  that an installer-made pin's declaration is the one the owner confirmed. A process that opens its own pseudo-terminal passes
+  the test, the pinned helper run directly is not a workbench route, and a pin the owner typed trusts the project's own
+  declaration. The security review found no Critical or High finding; its fixes had no second reviewer.
+- The `mempalace` module is implemented (plan `2026-10-24-mempalace-module`, increments A to F; completion derived): it
+  provides `memory-recall` with the agent-safe `status` and `search` and the owner-run `init` and `mine`, a policy block and
+  the skill `recall-memory`. The facts come from running the real `mempalace` 3.11.0 in a scratch directory; `search`
+  rewrites the program's bookkeeping, which the owner accepted. No live session; the last security-review fixes were not
+  reviewed. `docs/specs/mempalace.md` and `docs/specs/knowledge-tools.md` record it.
+- The global Claude configuration holds work that the design has not yet accounted for: agents, skills, hooks and
+  instruction text. The owner treats the old repositories and that configuration as lessons learned, not authority. The
+  seven candidates that precede `global-config-migration` came from a first-pass inventory; completing it is the first step of
+  `global-config-migration`.
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.
 
@@ -170,7 +221,9 @@ meet here and the order matters.
 `module-commands`, `module-checks`, `module-harness-paths`, `code-work-commit`,
 `checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint`, `compaction-guidance`,
 `remote-runner-module`, `review-engine`, `delegated-approval`, `action-review-engine`,
-`mempalace-module`, `graphify-module`, `knowledge-base-package`, `port-superpowers`, `global-config-migration`, `self-hosting`, `remaining-modules-rename`.
+`mempalace-module`, `graphify-module`, `knowledge-base-package`, `port-superpowers`,
+`architecture-decisions-merge`, `agent-confinement`, `security-review-module`, `verilog-module`, `cad-modules`,
+`global-settings-check`, `mempalace-scoping`, `global-config-migration`, `self-hosting`, `remaining-modules-rename`.
 
 ## Candidates
 
@@ -314,7 +367,8 @@ its templates, skills, indexes and checks. It ships no code.
 
 **Outcome:** the optional `groundwork-research` module: a least-privilege researcher
 agent and a dedicated `fetch-reference` tool that only it holds, with the size, type
-and provenance limits the specification states.
+and provenance limits the specification states. The confinement is the tool, not a guard hook: the owner's earlier
+researcher agent, which relied on a hook over raw web tools, is a lesson learned and is not ported.
 **Dependencies:** `groundwork-module`, and a verified way for each harness to give one
 tool to one agent (`claude-harness` for Claude, `verify-opencode` for opencode).
 **Boundary:** web references only. Remote job output and the knowledge base are other
@@ -500,12 +554,12 @@ MCP rendering, and no installation or configuration of the program. Writes to th
 
 ### graphify-module — The `graphify` module
 
-**Outcome:** the optional module `graphify`, which provides `code-graph`, ported from the owner's
-`claude_global_config` (the `graphify-workflow` skill and its helper) and `claude_project_template` (the guidance,
-`.graphifyignore` and ignore entries). It keeps the freshness status, the rule that an old graph is orientation
-only, and the plan receipt, written as neutral skills and a pinned helper.
-**Dependencies:** `mempalace-module` (for the shared conventions it shows), `code-work-plans` (the plan
-evidence section).
+**Outcome:** the optional module `graphify`, which provides `code-graph` for questions of structure and impact. It is
+designed afresh, with the owner's earlier `graphify` skill, helper and template module as lessons learned and not as a
+source to port. It keeps the freshness status and the rule that an old graph is orientation only, written as neutral
+skills and a pinned helper. It carries no plan receipt and no gate: the discovery gate was dropped on 2026-10-19
+(`code-work.md`: no discovery gate). Whether it is built at all is the owner's choice.
+**Dependencies:** `mempalace-module` (for the shared conventions it shows).
 **Boundary:** the module and a spec of its own. It does not ingest conversation history or the knowledge base.
 The graph output is untracked. This candidate takes `graphify` out of `remaining-modules-rename`.
 **Promotion trigger:** `mempalace-module` complete and the owner chooses to begin it.
@@ -517,8 +571,9 @@ generic name, provides its own capability (`knowledge-base`), and is read throug
 retains and classifies the owner's online research per domain, each item with its provenance.
 **Dependencies:** `claude-harness`, `groundwork-module`; the conventions of `mempalace-module` and
 `graphify-module`.
-**Boundary:** the knowledge base's own repository changes. Its name is still open. It does not hold decisions
-or conversation, and nothing tracked cites a path into it.
+**Boundary:** the knowledge base's own repository changes. Its name is still open. The existing knowledge base and its
+authoring skill are lessons learned: the package is designed against the workbench's contract, and nothing is carried over
+because it exists. It does not hold decisions or conversation, and nothing tracked cites a path into it.
 **Promotion trigger:** `groundwork-module` complete and the name chosen.
 
 ### port-superpowers — Port the superpowers skills the owner uses into neutral skills
@@ -542,28 +597,121 @@ against its licence before any text is copied, and the default is to write new t
 superpowers from the owner's `~/.claude` belongs to `global-config-migration`.
 **Promotion trigger:** `increment-loop-and-review-skills` complete.
 
+The next seven candidates (`architecture-decisions-merge` to `mempalace-scoping`) came from a first-pass inventory of the owner's global Claude configuration and the two earlier
+repositories, made on 2026-10-24. The owner treats those as lessons learned, not authority: each candidate asks what problem
+the old item solved, whether it is still a problem, and what the best form is in the workbench, and the answer may be a port,
+a redesign or a drop. The inventory was not compared line by line (the hook scripts, `settings.json` and `CLAUDE.md` were
+read by their headers and first lines), so it is not claimed complete; `global-config-migration` completes it.
+
+### architecture-decisions-merge — The decision rules the owner's skill carries
+
+**Outcome:** `draft-decision` in `groundwork` carries the rules of the owner's `architecture-decisions` skill that it lacks
+(never `Accepted` on design approval alone, supersede and never edit an accepted record, the status vocabulary and its
+checks), in the workbench's own words; the workbench's dated names win where the two differ.
+**Dependencies:** `groundwork-module`.
+**Boundary:** the `draft-decision` skill and its tests. It edits a shipped package, so its approval is released again by
+the owner.
+**Promotion trigger:** the owner chooses to begin it.
+
+### agent-confinement — Agents with declared limits
+
+**Outcome:** a neutral agent declares its limits as data (the paths it may write and the commands it may run), and the
+installer enforces them with a per-agent hook rendered into the harness, as it enforces the edit gate; the harness layout
+declares where its session scratch directory is. An elevated agent has no general shell: scratch execution goes through one
+pinned command matched by a fixed pattern.
+**Dependencies:** the owner's acceptance of a decision on declared agent confinement (written first as `Proposed`);
+`claude-harness`.
+**Boundary:** the agent fields, the layout's scratch path, the installer's guard and the per-agent hook. It needs a
+specification change and an installer change. A script the agent writes and runs is not confined, and the specification says
+so. No agent ships with it.
+**Promotion trigger:** the decision accepted.
+
+### security-review-module — The security review as a module
+
+**Outcome:** an optional module that holds the `security-review` skill and a security-reviewer agent together, and provides
+a capability of that name, so declining the module declines both. `code-work` names no such module; it points to any module
+that provides the capability.
+**Dependencies:** `agent-confinement`, `code-work-plans`.
+**Boundary:** the skill, the agent and its declared limits. The skill's text is read for accuracy and rewritten in the
+workbench's words; it is not copied.
+**Promotion trigger:** `agent-confinement` complete.
+
+### verilog-module — The Verilog skills
+
+**Outcome:** the optional module `verilog`, with the owner's Verilog simulation skill (`verilog-verilator-sim`) and formal
+verification skill (`verilog-sby-formal`) as neutral skills, text only, after a read of their content for accuracy. Both are
+written for plain Verilog-2001 and say not to use SystemVerilog, so the module is named for the language. A VHDL or
+SystemVerilog module, if the owner writes either, is a separate candidate with its own tools; this one does not widen to cover
+them. The skills are split by the rule of `2026-10-23-one-owner-per-skill-name`.
+**Dependencies:** `claude-harness`, `code-work-plans` (the general practice skills it extends).
+**Boundary:** two skills and their tests. No program is installed or run.
+**Promotion trigger:** the owner chooses to begin it.
+
+### cad-modules — The CAD modules
+
+**Outcome:** a tool-neutral `cad` module (the policy and the document guidance) and a FreeCAD module (the `freecad-scripts`
+skill and its mesh script), each designed against the workbench's contract. Whether the advice about the FreeCAD MCP server
+stays is open.
+**Dependencies:** `claude-harness`, `groundwork-module`.
+**Boundary:** the two modules. The FreeCAD skill is large (about 28 KB with ten reference files) and carries one script that
+runs only under FreeCAD's own interpreter, so its helper is pinned and approved like any other code. A way of working for
+CAD (`cad-work`) stays deferred.
+**Promotion trigger:** the owner chooses to begin it.
+
+### global-settings-check — Where a global setting may conflict with a project's
+
+**Outcome:** an owner-run, read-only command of the installer that reports where a global setting may widen or contradict a
+project's: a global rule, a global hook, a skill or agent of the same name, the default permission mode. The installer's own
+code reads the harness's global configuration, never a module's; it prints names and paths and never values, and decides
+nothing.
+**Dependencies:** the owner's acceptance of a decision that narrows the rule in `repository-boundary.md` that the workbench
+never reads a harness's global configuration (written first as `Proposed`); `claude-harness`.
+**Boundary:** one command, owner-run and terminal-only, read-only, for the Claude harness first. It may never be built: the
+decision can be deferred until the cases the 2026-10-24 trial did not cover are run.
+**Promotion trigger:** the decision accepted and the owner chooses to begin it.
+
+### mempalace-scoping — Project scoping in the `mempalace` module
+
+**Outcome:** the `mempalace` skill and policy block say that a result that comes from another project or wing is background
+and not a fact about this project, say "the palace" where they now say "a memory" (an agent may still write the harness's
+built-in memory where the owner allows it), and state which store answers first for a question both could answer.
+**Dependencies:** `mempalace-module`.
+**Boundary:** the skill, the policy block and their tests. It edits a shipped package, so its approval is released again by
+the owner. A default wing per project is a larger change and is not part of this.
+**Promotion trigger:** the owner chooses to begin it.
+
 ### global-config-migration — Move the owner's global Claude configuration into modules
 
-**Outcome:** the owner's `~/.claude` returns to a mostly default state because what it
-carried for project work is now supplied by installed modules: agents, skills, commands,
-the policy text, the commit helper, the review wiring and the compaction guidance.
-What stays global, and why, is a written list: the owner's own `allow` rules (the
-workbench never writes `allow`), machine-level settings such as authentication, model
-choice and remote hosts, and anything the owner wants in a project that has no workbench.
+**Outcome:** a working vision, which may change as the design is worked out: the owner maintains `~/.claude` and the
+project maintains `<project>/.claude`, and what `~/.claude` carried for project work is supplied by installed modules, so a
+project gives a consistent workbench experience whatever the owner's global settings are. What the project can guarantee
+under any global setup is a floor (its `deny` and `ask` rules, edit gate, owner-run refusals and hard stops); a trial on
+2026-10-24 (Claude Code 2.1.310) found a project `deny` and `ask` holding against a global `allow` and `auto` mode, a global
+hook running beside the project's, a global skill replacing a project skill of the same name, and a project agent replacing
+a global one. The owner decides which global items to remove, and keeps the rest:
+the owner's own `allow` rules (the workbench never writes `allow`), machine-level settings such as authentication, model
+choice and remote hosts, and anything wanted in a project that has no workbench. The owner's earlier repositories,
+`claude_global_config` and `claude_project_template`, are lessons learned and go away when the workbench can run without
+them; there is no mirror to keep in step.
 **Dependencies:** `checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint`,
-`compaction-guidance`, `remote-runner-module`, `review-engine`, `action-review-engine`, and
-`groundwork-module`; hooks rendering for Claude (built by `checkpoint-settings-and-caps`).
-**Boundary:** one global item at a time, each moved only after a test or a recorded run
-shows a project behaves the same without the global copy, so no hard stop, deny rule or
-approver is ever absent in between. The `claude_global_config` mirror is kept in step
-(`~/.claude` and the mirror are updated together). It also settles the open question
-whether the settings file's own path is denied for edits (`harness-modules.md`, "As built,
-and its limits"). It does not move the owner's `allow` rules and does not change what
-the installer writes.
+`compaction-guidance`, `remote-runner-module`, `review-engine`, `action-review-engine`, and `groundwork-module`; hooks
+rendering for Claude (built by `checkpoint-settings-and-caps`); and the candidates from the inventory of the global
+configuration that supply a global item: `architecture-decisions-merge`, `security-review-module`, `verilog-module` and
+`cad-modules`.
+**Boundary:** the first step is a line-by-line comparison of the global agents, skills, hooks, `settings.json` and
+`CLAUDE.md` against the specs and modules, recording what was and was not inspected and a disposition for every item found
+(move, redesign, drop, or keep global); the first-pass inventory behind the seven candidates before this one is its
+starting point and not its end. Then one global item at a time, each moved only after a test or a recorded run
+shows a project behaves the same without the global copy, so no hard stop, deny rule or approver is ever absent in
+between. The superpowers dependencies are items to settle: the three agents' `skills:` lists that name plugin skills, the
+routing in the owner's `CLAUDE.md`, the session-start rule that tells an agent to look for a skill, and the gaps recorded
+in `superpowers-ports.md` (parallel agents, writing skills, a fresh implementer per increment). It also settles the open
+question whether the settings file's own path is denied for edits (`harness-modules.md`, "As built, and its limits"). It
+does not move the owner's `allow` rules and does not change what the installer writes.
 **Promotion trigger:** `checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint`,
-`compaction-guidance`, `remote-runner-module`, `review-engine` and
-`action-review-engine` complete, and the owner chooses to begin removing items from `~/.claude`. Each of those
-earlier plans lists the global items it replaces, so this candidate starts from that list.
+`compaction-guidance`, `remote-runner-module`, `review-engine` and `action-review-engine` complete, and the owner chooses
+to begin removing items from `~/.claude`. Each of those earlier plans lists the global items it replaces, so this
+candidate starts from that list.
 
 ### self-hosting — Self-hosting
 
@@ -572,7 +720,9 @@ generate, and the old template is retired. The document conventions were already
 adopted by `adopt-conventions`, so this candidate is only the proof of agreement and the
 retirement.
 **Dependencies:** `ownership-and-upgrade`, `claude-harness`, `groundwork-module`,
-`checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint`, `compaction-guidance`.
+`checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint`, `compaction-guidance`, and the
+candidates from the inventory of the global configuration that change a shipped module: `architecture-decisions-merge`,
+`mempalace-scoping` and `security-review-module`.
 **Boundary:** agreement between hand-maintained files and generated output, and the
 retirement of the old template, and approving this repository's own plans with `wb approve-plan`. The installer
 does not rewrite its own repository until that agreement is tested.
@@ -581,12 +731,13 @@ does not rewrite its own repository until that agreement is tested.
 
 ### remaining-modules-rename — Remaining modules and the rename pass
 
-**Outcome:** the `formal` module and the CAD domain
-modules are ported, and the module list is renamed consistently. (`graphify` moved to `graphify-module`.)
+**Outcome:** the module list is renamed consistently across the specs, the packages and the roadmap. (`graphify` moved to
+`graphify-module`; the formal-verification and Verilog simulation skills to `verilog-module`; the CAD modules to
+`cad-modules`.)
 **Dependencies:** `claude-harness`.
-**Boundary:** porting and renaming. Each ported module is checked against the
-specification. Nothing here is required by `code-work`.
-**Promotion trigger:** the owner chooses a module to port.
+**Boundary:** renaming only. Each renamed module is checked against its specification. Nothing here is required by
+`code-work`.
+**Promotion trigger:** the owner chooses to begin the rename pass.
 
 ## Deferred
 
