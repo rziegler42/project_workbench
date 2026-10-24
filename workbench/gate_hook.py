@@ -58,26 +58,31 @@ class _Deadline(BaseException):
 # --- the input --------------------------------------------------------------------------------
 
 
-def _read(stdin):
+def document(stdin):
+    """``(object, size)``: the one JSON object on `stdin` and its size in bytes, or ``Refusal``."""
     stream = getattr(stdin, "buffer", stdin)
     data = stream.read(MAX_TRANSPORT + 1)
     if isinstance(data, str):
         data = data.encode("utf-8", "surrogatepass")
     try:
-        document = jsonstrict.parse_object(data, MAX_TRANSPORT)
+        return jsonstrict.parse_object(data, MAX_TRANSPORT), len(data)
     except ValueError as exc:
         raise Refusal("the hook input is not one JSON object within %d bytes (%s)"
                       % (MAX_TRANSPORT, display.ascii_text(str(exc))[:80]))
-    cwd, tool, given = document.get("cwd"), document.get("tool_name"), document.get("tool_input")
+
+
+def _read(stdin):
+    document_, size = document(stdin)
+    cwd, tool, given = document_.get("cwd"), document_.get("tool_name"), document_.get("tool_input")
     if not isinstance(cwd, str) or not isinstance(tool, str) or not isinstance(given, dict):
         raise Refusal("the hook input needs a string cwd, a string tool_name and an object tool_input")
-    return cwd, tool, given, len(data)
+    return cwd, tool, given, size
 
 
 # --- placing a target -------------------------------------------------------------------------
 
 
-def _fold(text):
+def fold(text):
     """`text` with case and Unicode variants folded, so another spelling of a name compares equal."""
     return unicodedata.normalize("NFKD", unicodedata.normalize("NFKD", text).casefold())
 
@@ -110,7 +115,7 @@ def _components(cwd, target):
     return parts
 
 
-def _check_cwd(cwd):
+def check_cwd(cwd):
     if not cwd.startswith("/") or "\0" in cwd or len(cwd) > MAX_TARGET:
         raise Refusal("the working directory is not an absolute path")
     if cwd != "/" and any(piece in ("", ".", "..") for piece in cwd[1:].split("/")):
@@ -130,7 +135,7 @@ def _target_text(tool, given, field):
 
 
 def _within(root_parts, parts):
-    return len(parts) >= len(root_parts) and [_fold(p) for p in parts[:len(root_parts)]] == root_parts
+    return len(parts) >= len(root_parts) and [fold(p) for p in parts[:len(root_parts)]] == root_parts
 
 
 def _resolved(parts):
@@ -164,7 +169,7 @@ def _judge(root_parts, plans, cwd, target):
     inner = parts[len(root_parts):]
     for plan in plans:
         named = plan.split("/")
-        if [_fold(p) for p in inner] == [_fold(p) for p in named]:
+        if [fold(p) for p in inner] == [fold(p) for p in named]:
             if inner != named:
                 raise Refusal("the target spells the plan %s in another way" % display.ascii_text(plan)[:120])
             return "plan"
@@ -199,7 +204,7 @@ def decide(guarded, table, cwd, tool, given, deadline, size=0):
     """Return when the call may go ahead; raise ``Refusal`` otherwise. `table` maps each tool the hook covers to the
     fields of its input that name a file it writes; a tool outside it is refused. `deadline` is a
     ``time.monotonic`` value and `size` the number of bytes of the input, which a plan under way bounds."""
-    _check_cwd(cwd)
+    check_cwd(cwd)
     try:
         root, ident, installed = approvalcmd.installed_modules(cwd)
     except approvalcmd.ApprovalError as exc:
@@ -223,7 +228,7 @@ def decide(guarded, table, cwd, tool, given, deadline, size=0):
     if fields is None:
         raise Refusal("the tool %s is not one the gate reads a target from" % display.ascii_text(tool)[:40])
     targets = [_target_text(tool, given, field) for field in fields]
-    root_parts = [_fold(p) for p in _resolved([p for p in root.split("/") if p])]
+    root_parts = [fold(p) for p in _resolved([p for p in root.split("/") if p])]
     places = [_judge(root_parts, plans, cwd, target) for target in targets]
     if all(place != "inside" for place in places):
         return
@@ -255,18 +260,16 @@ def _disarm(previous):
         signal.signal(signal.SIGALRM, previous)
 
 
-def run(stdin, err, prepare, *, deadline=DEADLINE):
-    """Decide the call on `stdin`. `prepare` returns ``(guarded store, table)``, or raises ``Refusal``. Returns 0 to
-    allow; otherwise writes one ``refused:`` line to `err` and returns 2."""
+def guard(err, body, *, deadline=DEADLINE):
+    """Call `body(limit)`, where `limit` is the ``time.monotonic`` value the total deadline falls at. Returns 0 when
+    it returns; otherwise writes one ``refused:`` line to `err` and returns 2, for a ``Refusal``, for any other
+    failure, and for the deadline. Both guards (this one and ``agent_gate``) end every call this way."""
     reason = None
     previous = None
     try:
         try:
             previous = _arm(deadline)
-            started = time.monotonic()
-            guarded, table = prepare()
-            cwd, tool, given, size = _read(stdin)
-            decide(guarded, table, cwd, tool, given, started + deadline, size)
+            body(time.monotonic() + deadline)
         except Refusal as exc:
             reason = str(exc)
         except _Deadline:
@@ -281,3 +284,15 @@ def run(stdin, err, prepare, *, deadline=DEADLINE):
         return 0
     err.write("refused: %s\n" % display.clean(reason).replace("\n", " ")[:600])
     return 2
+
+
+def run(stdin, err, prepare, *, deadline=DEADLINE):
+    """Decide the call on `stdin`. `prepare` returns ``(guarded store, table)``, or raises ``Refusal``. Returns 0 to
+    allow; otherwise writes one ``refused:`` line to `err` and returns 2."""
+
+    def body(limit):
+        guarded, table = prepare()
+        cwd, tool, given, size = _read(stdin)
+        decide(guarded, table, cwd, tool, given, limit, size)
+
+    return guard(err, body, deadline=deadline)

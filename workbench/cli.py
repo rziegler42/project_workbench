@@ -10,8 +10,8 @@ import os
 import re
 import sys
 
-from . import (acknowledge, approve, attach, check, delegation, firstparty, gate_hook, harnesses, install, launch, pins, planapprovals,
-               preview, recover, settings, settingscmd, sources, store, target, upgrade, verify)
+from . import (acknowledge, agent_gate, approve, attach, check, delegation, firstparty, gate_hook, harnesses, install, launch,
+               pins, planapprovals, preview, recover, settings, settingscmd, sources, store, target, upgrade, verify)
 from . import commands as module_commands
 from .wbkit import display, safefs
 
@@ -43,6 +43,7 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench delegate-approve-plan <plan>\n"
          "       python3 -m workbench settings   (read-only)\n"
          "       python3 -m workbench gate <harness>   (read-only; the harness's hook runs it)\n"
+         "       python3 -m workbench agent-gate <harness> <agent>   (read-only; a confined agent's hook runs it)\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
 
@@ -323,6 +324,18 @@ def _gate(tokens, err, store_root, distribution, stdin):
     return gate_hook.run(stdin if stdin is not None else sys.stdin, err, prepare)
 
 
+def _agent_gate(tokens, err, distribution, stdin):
+    """``agent-gate <harness> <agent>``: a confined agent's hook command. Exit 0 allows, 2 refuses with one line on
+    standard error and nothing else, and a usage error is 2 as well, as for ``gate``. It opens no store: the limits
+    come from the installed module and the layout of the harness."""
+    name = r"[a-z0-9][a-z0-9_-]{0,63}"
+    if len(tokens) != 2 or not all(re.fullmatch(name, token) for token in tokens):
+        err.write(agent_gate.USAGE)
+        return 2
+    return agent_gate.run(stdin if stdin is not None else sys.stdin, err,
+                          lambda: agent_gate.known(distribution, tokens[0]), tokens[1])
+
+
 def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=None, home=None):
     """Run a command. `store_root`, `distribution`, `stdin` and `home` are for tests; the command
     line cannot set them."""
@@ -342,6 +355,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         return _run(argv[1:], out, err, store_root, distribution)
     if argv and argv[0] == "gate":
         return _gate(argv[1:], err, store_root, distribution, stdin)
+    if argv and argv[0] == "agent-gate":
+        return _agent_gate(argv[1:], err, distribution, stdin)
     if argv and argv[0] == "settings":
         return _settings(argv[1:], out, err, store_root, distribution)
     if argv and argv[0] in ("approve-plan", "plan-status", "delegate-approve-plan"):

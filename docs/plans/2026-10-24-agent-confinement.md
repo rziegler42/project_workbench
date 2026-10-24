@@ -328,3 +328,34 @@ was run on the owner's word, and three stale shipped records were removed after 
 green: 3,991 tests in 9 roots. One earlier full run stopped making progress in the first root (no CPU for 21 minutes, a
 leftover child process, a wait on a condition variable); it was stopped, and the verbose run of that root and the next full run
 passed. The cause was not found and the hang was not reproduced.
+
+**Increment D:** `wb agent-gate <harness> <agent>` is built in `workbench/agent_gate.py`, routed in `cli.py` and listed in
+`rules.AGENT_SAFE`. It reads the agent's limits from the installed module's neutral agent file after its hash equals the
+manifest's, never from a rendered file; checks the shape of `cwd` and `session_id` before the lookup; allows a write only
+strictly below the scratch directory (no `..`, `.` or empty part, no link in a part that exists, the scratch directory spelled
+exactly as filled, an unexaminable part a refusal); and allows a command only after the closed character set and a token-by-token
+match. Beyond D's listed areas: `gate_hook.py` gained the shared `guard` and `document`, and `fold` and `check_cwd` became public
+(the plan's "moved only if reuse needs it" applied); `layout.facts` gained `agent_gate`; `docs/development.md` and
+`installer-interface.md` list the command; two spec sentences no longer say "not built". Existing tests changed: the layout facts
+tests and the `claude` module's harness-facts test (which staled its shipped record; `release-approvals` was run on the owner's
+word and two stale records were removed after a preview). The guard's 53 tests were written after the code, not before; a
+mutation check (no link check, `..` normalised away) was caught by them, and the character set alone is not caught by any
+command test because token equality refuses the same commands, so one test calls it directly. The full suite is green: 4,044 tests
+in 9 roots. A project path with a space, or a character outside letters, digits, `. _ -` and `/`, makes every call refuse, since
+the scratch name cannot be derived; only `/` and `.` becoming `-` was observed. No independent security review has been run.
+**For E:** `harnessstage._override` lets a module ship `harness/<harness>/agents/<name>.md`, which replaces the rendered file;
+E must refuse an override of a confined agent or render the hook into it.
+
+**Increment D, security review:** an independent adversarial review (a `security-reviewer` agent, on the owner's word) found no
+direct bypass of the path or command checks and five points, each judged here. (1) Fixed: the guard took the project from the
+hook's `cwd`, so an agent could build a project with a matching manifest and agent file inside its scratch area and move the
+working directory there; the guard now refuses a working directory or project root (also through a link) at or below the
+template's literal leading part, with three regression tests that fail without it. (3) Fixed: Claude's directory names turn
+`_` into `-` (seen for `claude_global_config`), so the key is now every non-alphanumeric ASCII character turned into `-`, a
+non-ASCII working directory is refused, and the spec's limit says the rule was observed for `/`, `.` and `_` and assumed for the
+rest. (4) Fixed: a Bash call with a field outside `command`, `description`, `timeout` and `run_in_background` (for example
+`dangerouslyDisableSandbox`) is refused. (5) Recorded in the spec: the scratch directory is per session, so one agent can plant
+a script for another's pinned command, and a pinned `cd` is unsafe. (2) Not a bypass today and carried to E: the matcher is
+`Bash|Edit|Write`, which equals the tools an agent holding `edit` and `shell` is rendered with, because the layout lists only
+`Edit` and `Write` for `edit`; E must derive the matcher from that same list and test that they agree. Not changed:
+`guard` does not catch `BaseException`, which no code on its path raises, and a non-zero exit is a block under `|| exit 2`.

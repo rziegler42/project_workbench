@@ -143,7 +143,8 @@ does not receive them.
 
 The hooks the installer itself renders are the edit gate, for a harness whose layout carries a `hooks` key
 ("The edit gate hook", built), and the agent gate, one per confined agent, for a harness whose layout describes a per-agent
-hook ("The agent gate", not yet built). Neither is a module's file or listed under `ships`.
+hook ("The agent gate": the guard is built; attach does not yet render its hook). Neither is a module's file or listed
+under `ships`.
 
 ## Root files and instructions
 
@@ -418,7 +419,8 @@ hook. The rendered entry is fixed by the layout and not chosen by any module. Th
 
 ### The agent gate
 
-*(Specified by plan `2026-10-24-agent-confinement`, increment B; not yet built. The decision is
+*(Specified by plan `2026-10-24-agent-confinement`, increment B. The guard `wb agent-gate` is built (increment D); attach
+does not yet render the hook (increment E). The decision is
 `docs/decisions/2026-10-24-declared-agent-confinement.md`, accepted. Built against the evidence under "Hooks in an agent's
 frontmatter".)*
 
@@ -474,7 +476,11 @@ as it does any generated file. Attach prints a note whenever it renders a confin
 **Limits, stated.**
 - **A script the agent writes and then runs is not confined.** A pinned command such as `python3 {scratch}/check.py` runs a file
   the agent wrote into scratch, and that file can do whatever the user can do. The guard decides which command starts; it
-  cannot decide what the started program does. A module that ships a confined agent accepts this and states it at approval.
+  cannot decide what the started program does. A module that ships a confined agent accepts this and states it at approval. The
+  scratch directory is per session and not per agent, so a script written by one confined agent can be started by another
+  agent's, or the main session's, pinned command. A pinned command that changes the working directory (`cd`) is also unsafe: the
+  guard refuses a project root or working directory inside the part of the scratch template before its first placeholder, but
+  cannot judge what a pinned command does.
 - **The guard runs only where Claude trusts the folder.** Claude skips an agent's frontmatter hooks in a folder it does not trust
   and runs the agent anyway, with nothing in the run's output ("Hooks in an agent's frontmatter"). In such a folder the agent's
   `edit` and `shell` tools are unconfined, whatever it declares. The owner accepted this on 2026-10-24 as a stated limit. The
@@ -482,7 +488,9 @@ as it does any generated file. Attach prints a note whenever it renders a confin
   not tested; if it does, the same limit applies. Reading the folder's trust flag from the owner's global configuration
   (`global-settings-check`) and a dedicated tool that fails closed are not built.
 - **Verified once.** Each live result is one run of Claude Code 2.1.310. The scratch template is observed, not documented. A
-  later Claude Code version can change either, and a version that no longer matches makes the guard refuse, not allow.
+  later Claude Code version can change either, and a version that no longer matches makes the guard refuse, not allow. The
+  scratch name is derived from the working directory by turning every character that is not a letter or a digit into `-` (observed for `/`, `.` and `_`; assumed for the rest), and a
+  working directory with a non-ASCII character makes the guard refuse every call.
 - **Claude Code only.** opencode and Codex have no per-agent hook in their layouts; a confined agent is not installed there.
 
 ## The opencode harness module

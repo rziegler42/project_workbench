@@ -524,6 +524,8 @@ def facts(layout):
     directory and of the settings file). ``directories``: those that are directories. ``generated``: each
     kind's directory, which holds files the installer generates. ``tolerated``: the declared paths.
     ``hook_targets``: the pairs ``(tool, fields)`` of the hook's ``targets`` table, or empty.
+    ``agent_gate``: ``(edit tool names, shell tool names, scratch template)`` of a layout that describes a per-agent
+    hook, or empty.
     """
     roots, directories, generated = [], [], []
     root = layout.get("root", "none")
@@ -547,9 +549,13 @@ def facts(layout):
     unique = lambda items: tuple(dict.fromkeys(items))
     hooks = layout.get("hooks", "none")
     targets = hooks.get("targets", {}) if isinstance(hooks, dict) else {}
+    agent = layout.get("kinds", {}).get("agent", {})
+    confining = "hook" in agent and "scratch" in agent
     return {"roots": unique(roots), "directories": unique(directories),
             "generated": unique(generated), "tolerated": tuple(layout.get("tolerated", [])),
-            "hook_targets": tuple((tool, tuple(fields)) for tool, fields in targets.items())}
+            "hook_targets": tuple((tool, tuple(fields)) for tool, fields in targets.items()),
+            "agent_gate": (tuple(agent["tools"]["edit"]), tuple(agent["tools"]["shell"]), agent["scratch"])
+            if confining else ()}
 
 
 def _overlaps(written, out):

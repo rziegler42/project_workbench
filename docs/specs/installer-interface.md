@@ -171,6 +171,7 @@ says so.
 | `delegate-approve-plan` | project | a plan path | the guarded store: a delegated plan approval record | no, agent-run | built |
 | `settings` | project | nothing | nothing | no | built |
 | `gate` | project | a harness name, and the hook's JSON on standard input | nothing | no | built |
+| `agent-gate` | project | a harness name, an agent name, and the hook's JSON on standard input | nothing | no | built |
 
 - `verify --no-harness-required` turns off the rule that a selection needs a harness module
   (`module-contract.md`). It is a check option and installs nothing, so it does not weaken a

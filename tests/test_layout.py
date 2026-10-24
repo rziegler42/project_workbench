@@ -59,7 +59,7 @@ class Facts(unittest.TestCase):
         self.assertEqual(layout.facts(FIXTURE), {
             "roots": ("FIXTURE.md", ".fixture"), "directories": (".fixture",),
             "generated": (".fixture/skills", ".fixture/prompts"),
-            "tolerated": (".fixture/shared.json",), "hook_targets": ()})
+            "tolerated": (".fixture/shared.json",), "hook_targets": (), "agent_gate": ()})
 
     def test_facts_of_the_synthetic_layout_include_its_settings_directory(self):
         found = layout.facts(SYNTHETIC)
@@ -69,7 +69,8 @@ class Facts(unittest.TestCase):
                          (".fixture/skills", ".fixture/agents", ".fixture/commands"))
 
     def test_a_layout_with_nothing_gives_empty_facts(self):
-        empty = {"roots": (), "directories": (), "generated": (), "tolerated": (), "hook_targets": ()}
+        empty = {"roots": (), "directories": (), "generated": (), "tolerated": (), "hook_targets": (),
+                 "agent_gate": ()}
         self.assertEqual(layout.facts({}), empty)
         self.assertEqual(layout.facts({"root": "none", "local_settings": "none", "kinds": {}}), empty)
 
@@ -615,5 +616,8 @@ class ConfinementEntries(unittest.TestCase):
             fields = dict(SYNTHETIC["kinds"]["agent"]["fields"], **{field: field})
             self.bad(edit(["kinds", "agent", "fields"], fields, confining()), "not a neutral agent field")
 
-    def test_the_agent_entry_does_not_change_the_facts(self):
-        self.assertEqual(layout.facts(confining()), layout.facts(SYNTHETIC))
+    def test_the_agent_entry_adds_only_the_agent_gate_fact(self):
+        found = layout.facts(confining())
+        self.assertEqual((("Edit", "Write"), ("Bash",), SCRATCH), found["agent_gate"])
+        self.assertEqual(dict(layout.facts(SYNTHETIC), agent_gate=found["agent_gate"]), found)
+        self.assertEqual((), layout.facts(SYNTHETIC)["agent_gate"])
