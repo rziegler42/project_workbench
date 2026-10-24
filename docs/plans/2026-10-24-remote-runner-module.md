@@ -466,3 +466,32 @@ and `tests/test_remoterunner_skill.py`; the file-list test in `test_remoterunner
 - Choices (mine): the skill tells the agent to pass `--ref <40-digit commit>` for a committed run, so the answer's
   commit and the expected commit are the same value; it leaves `log`, `cancel`, `remotes` and `prune` to the owner.
 - Not done: no live check; the skill is advice, and nothing forces an agent to load or follow it.
+
+Increment F, 2026-10-24: the specs say what is built, the approvals are released and the full suite is green.
+
+- Specs: `remote-runner.md` has the as-built departures worked into its text and a new section "As built, and its
+  limits"; `code-work.md` points its remote-job non-goal at the module and says the skill does not commit or push to
+  run a job; `trust-and-approval.md` says `fetch` passes no force option and that the overwrite is kept from the agent
+  by `owner`. `module-contract.md` needed no change (no field changed). No statement that the module is not built was
+  found by search in the specs or the roadmap.
+- Approvals, owner-run on "Run it for me": `release-approvals` ran twice. The first wrote 8 records and reported one
+  stale package record, removed after the preview and "remove them". The first full-suite run then failed four tests
+  that listed the package's modules exactly (in the `claude`, `code-work` and `groundwork` module tests); I added
+  `remote-runner` to them. That changed those modules' hashes, so a second release was needed, which reported four stale
+  records (the earlier records of those three modules and the package record from the first release); they were
+  removed after a preview and "remove them".
+- Verification as run: `python3 -B -W error tests/run_all.py`: 3,782 tests in 8 roots, OK (the root suite has 1
+  skip and `code-work` 2, both unrelated; the `claude` root skips nothing); `doccheck`, `refcheck` and `git diff
+  --check` print nothing. The real `remote-runner` was never started and no host was contacted.
+- What the real program must change: read the project file from `.workbench/remote-runner.toml` instead of
+  `.claude/remote-runner.toml` (the working-tree read, the `git show` of a revision, its error messages and its
+  description). Until then the module cannot submit a real job. Its other behaviour listed in the spec matches what was
+  read on 2026-10-24, but no run confirmed it.
+- Remaining risks: the checkpoints are instruction (a permissive `allow` rule of the owner's for `wb run` lets an agent
+  submit without a prompt); the fetch hash, tracked-file refusal and no-follow write are the program's, and the
+  race between the wrapper's check and the program's write is not closed; the runner has had no security review; the
+  skill is untried in a live session; the minimum Python version is now 3.11 for the whole project.
+- Not done and left to the owner: approval of `docs/specs/remote-runner.md` (it is `Draft`; completion criterion 1
+  needs it), so this plan stays `In Progress`; the live check; `ask-codex archive` for this plan's review; pushing the
+  commits (7 ahead of `origin/main` once this one is made); the changes to `~/.claude` that
+  `global-config-migration` will make.

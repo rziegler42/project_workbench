@@ -1,8 +1,8 @@
 # remote-runner
 
-Status: Draft. Written by plan `2026-10-24-remote-runner-module` (increment A), before the module exists, so that the
-module and the change to the external program are built against this text. It awaits the owner's approval and
-reads `Current` only after it.
+Status: Draft. Written by plan `2026-10-24-remote-runner-module` (increment A), before the module existed, so that the
+module and the change to the external program were built against this text; the module is now built and the text
+matches it ("As built, and its limits"). It awaits the owner's approval and reads `Current` only after it.
 
 Terms are defined in `terms.md`. The declaration it satisfies is in `module-contract.md`; the launcher, the kit and
 the pin are in `module-boundary.md`; the authority rules, the fetch channel and the floor are in
@@ -131,37 +131,43 @@ before every argument is checked.
 | `artifacts` | `<job>` | `remote-runner artifacts <job>` |
 | `submit` | exactly one of `--remote <name>` and `--best`, `--profile <name>`, and at most one of `--ref <ref>` and `--snapshot` | `remote-runner submit` with the same options |
 | `fetch` | `<job>`, one to 16 `<path>`, optional `--dest <dir>`, optional `--as <name>` | `remote-runner fetch` with the same arguments |
-| `fetch-overwrite` | as `fetch` | `remote-runner fetch` with `--force` added; owner-only |
+| `fetch-overwrite` | as `fetch`, except that an existing regular file may be a target | `remote-runner fetch` with `--force` added last; owner-only |
 
 **Shapes.** A `<name>` (profile or remote) matches `[A-Za-z0-9][A-Za-z0-9_-]{0,63}`; a profile must also be one the
 project file declares. A `<job>` matches `[A-Za-z0-9][A-Za-z0-9_-]{0,199}` and holds `--` (the program's own job form).
-A `<ref>` is 40 lowercase hex digits or a ref name of ASCII, at most 200 bytes, with none of: a leading `-` or `.`, a
-trailing `.` or `/`, `..`, `//`, `@{`, a space or control character, `.lock`. A `<path>` is as the program
-validates it (at most 1,024 characters, relative, no empty, `.` or `..` part, no control character, no leading `-`)
-and in addition holds no part starting with a dot. `--as` is allowed with exactly one path and is a plain file name
+A `<ref>` is 40 lowercase hex digits or a ref name of the characters `A-Za-z0-9._/+@-`, at most 200 bytes, with none
+of: a leading `-` or `.`, a trailing `.` or `/`, `..`, `//`, `@{`, `/.`, `.lock` (so no space, control character or
+character git forbids in a ref). A `<path>` is relative and plain by the kit's path rule (at most 512 characters, no
+empty, `.` or `..` part, no `.git`, no backslash, colon or control character) and in addition has no leading `-` and
+no part starting with a dot. `--as` is allowed with exactly one path and is a plain file name
 under the same rule. `--dest` is described below.
 
 **Output.** One JSON line: `{"format": 1, "command": "<name>", "exit": <int>, "untrusted_job_data": true,
 "output": "<text>", "truncated": <bool>}` where `output` is the program's standard output, decoded with replacement,
 control characters other than newline and tab removed, and cut at 65,536 bytes (`truncated` says whether it was).
 Standard error of the program is not returned; a non-zero exit is reported by `exit` and a one-line reason (the
-last non-empty line of its standard error, at most 200 printable ASCII characters) in `detail`. `status` adds a
+last non-empty line of its standard error, at most 200 printable ASCII characters) in `detail`. A program stopped at
+its deadline is reported with `exit` 124 and `detail` `stopped after <n> seconds`, and one stopped for too much output
+with `exit` 125 and `truncated` true. The helper exits 0 only when the program exited 0, and 1 otherwise. `status` adds a
 `data` object and a `provenance` field (below). The module returns what the program says. It does not interpret a
 log or a fetched file.
 
 **Provenance.** `status` adds `data`, holding only these fields of the program's view, each kept only if it
 matches the pattern: `state` (the nine names above), `commit` and `dut_commit` (40 lowercase hex or null),
 `dut_clean` (boolean or null), `integrity` (`ok`, `mismatch`, `invalid`), `snapshot` (boolean) and `base_commit`
-(40 hex or null). `provenance` is `true` only when `--expect` was given, and `commit`, `dut_commit` and `--expect`
-are all equal and `dut_clean` is true; it is `false` otherwise (and `null` when `--expect` is absent). The record
+(40 hex or null). `provenance` is `true` only when `--expect` was given, the program exited 0, and `commit`, `dut_commit` and `--expect`
+are all equal and `dut_clean` is true; it is `false` otherwise (and `null` when `--expect` is absent). It does not
+look at `integrity` (see "Open questions"). The record
 is writable by the job, so `provenance` is evidence of the program's record and not a proof; the skill says so.
 For a committed ref the caller expects the 40-hex commit it passed to `--ref`; for a snapshot it expects the
 `dut_commit` that `submit` reported.
 
 **`fetch` and the destination.** Before it starts the program the module checks that `--dest`, if given, resolves
 to an existing directory inside the project root with no link in any component and not inside `.git` or `.workbench`
-(default: the project root), and that no target path already exists (a file, a directory, a link or a dangling
-link). It runs no git, so it does not check whether a target is tracked: that check is the program's. A target that
+(default: the project root; an absolute value is accepted only if it begins with the project root, and the program is
+given the relative form), and that no target path already exists (a file, a directory, a link or a dangling link) and
+none lies below a link or a file. For `fetch-overwrite` an existing regular file is allowed as the target; a folder, a
+link and a link on the way are still refused. It runs no git, so it does not check whether a target is tracked: that check is the program's. A target that
 the module cannot rule out is left to the program, which refuses.
 
 ## The overwrite
@@ -259,3 +265,28 @@ environment and working directory, shows each item. No item needs the real progr
 - Whether a rendered `ask` for `submit` and `fetch`, or `delegate` for these checkpoints, is wanted.
 - Whether `log`, `cancel`, `remotes` and `prune` should be wrapped, and under which checkpoint.
 - Whether the program should keep reading the old path during a move.
+- Whether `provenance` should also require the program's `integrity` to be `ok`. The job can write its own record, so
+  either choice is evidence and not proof.
+
+## As built, and its limits
+
+Built by plan `2026-10-24-remote-runner-module` (increments B to F): `packages/workbench/remote-runner/` with
+`module.json`, `helper/remote-runner` (`profiles`, `recommend`, `status`, `artifacts`, `submit`, `fetch`,
+`fetch-overwrite`), `helper/remote-runner-check`, the neutral skill `run-remote-job`, and tests against fake programs.
+The project's documented minimum Python version is 3.11 (`docs/development.md`).
+
+- The rules for the project file are one text carried by both helpers, because a helper is a standalone file; a test
+  requires the two copies to be identical. An empty `os` or `arch` string is accepted (the bound is "at most 64").
+- The wrapper shows its guarantees against a fake program, never the real one, and no host was contacted. A mismatch
+  with the real program's output text, exit codes or flags would be found only by a live check, which has not been
+  done, and cannot be until the program reads `.workbench/remote-runner.toml`.
+- The checkpoints are instruction. The module renders no `ask` for submit or fetch, so a permissive `allow` rule of the
+  owner's for `wb run` lets an agent submit without a prompt. The overwrite is kept from the agent by `owner`, which
+  the rendered Claude settings deny (a test pins it); a harness without `permissions` leaves it to instruction.
+- The tracked-file refusal and the hash check of a fetch are the program's. The wrapper's pre-check covers an existing
+  target and a link; a race between the check and the program's write is not closed. The conformance function in the
+  module's tests shows whether a program refuses an existing file, a link target and a dotted name.
+- `provenance` is the program's record of a job, which the job itself can write. It is evidence for the owner, not proof.
+- Not wrapped: `log`, `cancel`, `remotes` and `prune`. No security review of the runner has been done; the owner asks
+  for one with the `security-review` skill. The skill is advice, and whether an agent loads it is unverified.
+- The shipped approval of the package is the owner's release (`wb release-approvals`).

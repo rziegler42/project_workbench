@@ -708,7 +708,11 @@ arrival is hashed and carries provenance. The channels are:
 
 - Fetching remote job output is a checkpoint that stops by default and may be
   delegated. Overwriting an existing or tracked file with fetched content, for example
-  with a force option, is a hard stop.
+  with a force option, is a hard stop. The `remote-runner` module's `fetch` passes no force option and refuses an
+  existing target or a link before it starts the program; the overwrite is its separate argument `fetch-overwrite`,
+  declared `owner`, which a harness with `permissions` denies the agent (`remote-runner.md`, "The overwrite"). A module
+  cannot yet declare an added hard stop, so this is kept by reach, and a harness without `permissions` leaves it to
+  instruction.
 - A tracked document that relies on a knowledge-base entry cites it by store, entry and
   content hash, plus the store's version, and never by a path on any machine. The
   project records only the store's name; each developer maps that name to their own
