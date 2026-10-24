@@ -1,6 +1,6 @@
 # Make the containment check fail closed for a path that does not exist yet
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-24
 Candidate: none (a defect fix found while building the plan `2026-10-24-agent-confinement`; it is not a roadmap item)
 Specs: review-engine
@@ -180,4 +180,7 @@ The owner approved the plan on 2026-10-24, after this review.
 
 ## Result
 
-Not started.
+- Increment A: `wbkit.call.is_inside` now has the `mempalace` body. Two new tests in `tests/test_kit_call.py` failed on
+  the old function (a missing in-project entry was passed to the child; a missing path below the boundary read as
+  outside) and pass now. `tests.test_kit_call`, `tests.test_kit_call_launcher` and `tests.test_boundary` (51 tests), the
+  `ask-codex` module (90) and the `review-engine` module (325), which use the kit, pass. Next: B.

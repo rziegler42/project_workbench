@@ -209,6 +209,23 @@ class FindsWbOutsideTheProject(Call):
         call.run_command(inner, "echo", limit=1 << 20, timeout=20)
         self.assertEqual("outside", self.records()[-1]["me"])
 
+    def test_a_missing_entry_inside_the_project_is_never_passed_on_to_the_child(self):
+        """A directory that does not exist yet is inside when what it would be made in is: a program put there
+        later would otherwise be found by the command."""
+        missing = os.path.join(self.root, "missing-bin")
+        deeper = os.path.join(self.root, "a", "b", "c")
+        self.path([missing, deeper, self.outside])
+        self.run_it()
+        self.assertEqual(self.outside, self.records()[-1]["env"]["PATH"])
+
+    def test_containment_fails_closed(self):
+        self.assertTrue(call.is_inside(os.path.join(self.root, "missing", "deeper"), self.root))
+        self.assertTrue(call.is_inside(self.root, self.root))
+        self.assertFalse(call.is_inside(os.path.join(self.base, "missing"), self.root))
+        self.assertFalse(call.is_inside(self.outside, self.root))
+        with unittest.mock.patch.object(call.os.path, "samefile", side_effect=PermissionError):
+            self.assertTrue(call.is_inside(self.outside, self.root))
+
     def test_a_path_entry_spelled_in_another_case_does_not_get_past_the_check(self):
         self.fake(os.path.join(self.root, "bin"), self.inside_log, "inside")
         self.path([os.path.join(self.root, "bin").upper()])

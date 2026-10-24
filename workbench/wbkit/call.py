@@ -46,18 +46,22 @@ class CallError(Exception):
 
 
 def is_inside(path, boundary):
-    """Whether `path`, with links resolved, is `boundary` or below it, whatever case it is spelled in."""
-    try:
-        current = os.path.realpath(path)
-        while True:
+    """Whether `path`, with links resolved, is `boundary` or below it, whatever case it is spelled in. A part of
+    the path that does not exist yet is skipped (it cannot be the boundary, but something may be put there later),
+    and a part that cannot be examined counts as inside."""
+    current = os.path.realpath(path)
+    while True:
+        try:
             if os.path.samefile(current, boundary):
                 return True
-            parent = os.path.dirname(current)
-            if parent == current:
-                return False
-            current = parent
-    except OSError:
-        return False
+        except FileNotFoundError:
+            pass
+        except OSError:
+            return True
+        parent = os.path.dirname(current)
+        if parent == current:
+            return False
+        current = parent
 
 
 def outermost_boundary(start):
