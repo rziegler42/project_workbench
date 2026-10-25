@@ -1,6 +1,6 @@
 # Self-hosting: agreement with installer output, and retiring the old template
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-25
 Candidate: workbench-v1#self-hosting
 Specs: repository-boundary
@@ -198,4 +198,13 @@ not archived. The owner approved the plan on 2026-10-25 after round 1 and withou
 
 ## Result
 
-Not started.
+- Increment A: `tests/test_self_hosting.py` and `tests/fixtures/self_hosting_dispositions.json`. The test runs
+  `preview` on the nine first-party modules into a scratch directory (nothing written), reads the seven seeded paths and the
+  slot blocks of `AGENTS.md` and `docs/README.md` from its output, and checks each against one record. Six paths are
+  recorded `diverged` with a reason and `docs/references/README.md` is `absent`; none is `identical`. It has 3 tests and
+  they pass. Run on the real data with a record removed, a `diverged` file marked `identical`, and an invented path added,
+  it fails each time (checked with a scratch script, not committed); a second test pins the messages for those three
+  and for a wrong `absent`, a new seeded path and a changed slot list. Like the other tests that use the real package it
+  skips while the shipped approvals are stale, so it does not run in that window. `test_boundary`,
+  `test_module_test_imports` and `test_maintainer_dirs` pass; `doccheck` and `git diff --check` print nothing. The full
+  suite has not been run yet (B). Next: B.
