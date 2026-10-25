@@ -307,7 +307,7 @@ replaced by this paragraph. (3) The twelve non-pip inventory rows could be read 
 and cite Increments A and B. (4) Attributing the prompt to the floor was an inference: softened above. The reviewer read only
 the two changed regions and could not run commands or read the user level. The review is not an approval.
 
-### Increment C (done, reviewed, not yet committed)
+### Increment C (done, reviewed, committed as `5e5174b`)
 
 Started 2026-10-25 at commit `f4b3816`. `wb plan-status` printed `approved` (re-approved by the owner after the Result heading was
 corrected from a misspelling). The removal and the gate run were made by the owner, recorded below the steps.
