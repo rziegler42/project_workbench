@@ -191,7 +191,7 @@ Review: the `reviewer` agent, one exchange of six. No blocking finding. Applied:
 
 Committed as `a31c426`.
 
-### Increment B (done, not yet committed)
+### Increment B (done)
 
 Ran at commit `a31c426`, 2026-10-25, Python 3.15.0, Darwin 25.6.0. The approver program, its configuration, rubric, schema and
 eight rule files were copied into a new scratch directory in the layout the program expects (no log); the copy hashed
@@ -243,4 +243,25 @@ Also found by that review and read only: a leading space, an environment prefix,
 spelling make a line unreviewed, and `git -C x push`, `--force-with-lease` and similar forms tokenize but match no rule; these are
 properties of the existing approver, recorded for the owner's decision and not a request to patch it.
 
-Not done: Increment C and the commit.
+Committed as `e112c47`.
+
+### Increment C (drafted, reviewed, not yet committed)
+
+Wrote `docs/decisions/2026-10-25-approver-coverage-for-the-module-commands.md`, `Proposed`, and its row in the decisions README.
+It sets out three choices: (1) the owner changes the approver program, in a narrow variant 1a (the collectors keep calling the
+global `claude-workflow` program, so M14 stays blocked) and a wide variant 1b (the collectors take facts from the module, so M14
+can follow); (2) the owner waits and the coverage is built into `action-review-engine`; (3) the owner keeps the global helpers
+and M9, M14 and M16 stay blocked. Each has its costs and who makes the change; it recommends nothing and accepts nothing. It cites
+B's measured and read-only results and the commit. The plan's wording of three choices holds: 1a and 1b are two variants of
+the first, since the evidence showed the program's dependence on the global helper.
+
+Verification as run: `doccheck`, `refcheck` and `git diff --check` exit clean. `wb check` reports one problem before the commit,
+that the README row points to the new decision file, which git does not yet track; it clears when both are committed together.
+
+Review: the `reviewer` agent (one exchange): no blocking finding; six non-blocking findings, all applied: line numbers and the
+missing items in the patch list, the four facts (what the approver sees, what a project without the owner's settings gets, who
+makes the change, the cost) stated for each choice, the wording of why the global `ask` entries are needed under choice 2, a
+qualified claim about what 1a unblocks (M9 still needs the F-B1 test, M16 the `remote-runner` program change), two phrases that
+steered toward an option neutralized, and option 3's claim softened. A review with no blocking finding is not an approval.
+
+Not done: the commit, and the owner's choice. The owner alone accepts a decision.
