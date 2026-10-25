@@ -27,6 +27,8 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench preview install [<target> | --dir <path>] --package <source> [--ref <ref>] ...\n"
          "                                            [--package ...] --select <module> ...   (read-only)\n"
          "       python3 -m workbench install <same arguments as preview install>   (owner-run, terminal only)\n"
+         "       python3 -m workbench preview adopt <same arguments as preview install>   (read-only;\n"
+         "                                            a repository that has content, nothing in it is changed)\n"
          "       python3 -m workbench preview upgrade [<target> | --dir <path>] [--package <source> [--ref <ref>]] ...\n"
          "                                            (read-only; no --select, no download)\n"
          "       python3 -m workbench upgrade <same arguments as preview upgrade>   (owner-run, terminal only)\n"
@@ -159,8 +161,8 @@ def _project_command(tokens, out, err, store_root, distribution, upgrading=False
 
 
 def _preview(argv, out, err, store_root, distribution, home=None):
-    if len(argv) < 2 or argv[1] not in ("install", "upgrade", "add"):
-        err.write("preview takes install, upgrade or add\n%s" % USAGE)
+    if len(argv) < 2 or argv[1] not in ("install", "adopt", "upgrade", "add"):
+        err.write("preview takes install, adopt, upgrade or add\n%s" % USAGE)
         return 2
     upgrading = argv[1] == "upgrade"
     opened = _project_command(argv[2:], out, err, store_root, distribution, upgrading)
@@ -168,7 +170,8 @@ def _preview(argv, out, err, store_root, distribution, home=None):
         return opened
     if argv[1] in ("upgrade", "add"):
         return upgrade.run_preview(opened[1], opened[0], out, err, distribution, mode=argv[1])
-    return preview.run(opened[1], opened[0], out, err, distribution, home=home)
+    return preview.run(opened[1], opened[0], out, err, distribution, home=home,
+                       adopt=argv[1] == "adopt")
 
 
 def _upgrade(tokens, out, err, store_root, distribution, stdin, mode="upgrade"):

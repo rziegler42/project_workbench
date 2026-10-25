@@ -10,7 +10,7 @@ and the write cannot differ.
 import os
 import shutil
 
-from . import (__version__, base, declarations, firstparty, gate, harnessstage, installplan, manifest,
+from . import (__version__, adoptplan, base, declarations, firstparty, gate, harnessstage, installplan, manifest,
                projectfs, refusal, snapshot, sources, target, verify)
 from .wbkit import display, safefs
 
@@ -24,10 +24,9 @@ def _recorded_source(resolved, name):
     return ("local:%s" % name) if resolved.local else resolved.source
 
 
-def prepare(guarded, held, resolved, select, distribution, seed, version, which=shutil.which,
-            home=None, now=None):
-    """Verify, gate, snapshot and plan, the harness files included. Returns ``(plan, warnings)``;
-    raises ``Refused``. `home` is the directory the rendered permission rules name."""
+def _gather(guarded, resolved, select, distribution, which):
+    """Verify, gate and snapshot the selection. Returns ``(modules, snaps, loaded_base, packages,
+    origins, warnings)``; raises ``Refused``."""
     distribution = distribution or firstparty.default_distribution()
     paths = [item.path for item in resolved]
     result = verify.verify_packages(
@@ -57,6 +56,15 @@ def prepare(guarded, held, resolved, select, distribution, seed, version, which=
         info.name, _recorded_source(origins[info.name], info.name), origins[info.name].ref,
         origins[info.name].commit, info.tree_hash) for info in result.packages
         if info.name in used)
+    return modules, snaps, loaded_base, packages, origins, list(result.warnings)
+
+
+def prepare(guarded, held, resolved, select, distribution, seed, version, which=shutil.which,
+            home=None, now=None):
+    """Verify, gate, snapshot and plan, the harness files included. Returns ``(plan, warnings)``;
+    raises ``Refused``. `home` is the directory the rendered permission rules name."""
+    modules, snaps, loaded_base, packages, origins, warnings = _gather(
+        guarded, resolved, select, distribution, which)
     # `verify` required exactly one harness module in the selection.
     harness = next(m for m in modules if m.type == "harness")
     staged = harnessstage.stage(
@@ -75,7 +83,30 @@ def prepare(guarded, held, resolved, select, distribution, seed, version, which=
                                  loaded_base, seed, version, staged, now)
     except (installplan.PlanError, manifest.ManifestError) as exc:
         raise Refused([str(exc)])
-    return plan, list(result.warnings)
+    return plan, warnings
+
+
+def prepare_adopt(guarded, held, resolved, select, distribution, seed, version,
+                  which=shutil.which, now=None):
+    """The plan of ``wb adopt``: the same verification, gate and snapshots, then what is at each
+    planned path. No harness is staged, since adopt attaches nothing. Returns ``(plan, warnings)``;
+    raises ``Refused``."""
+    if held.state == "existing":
+        raise Refused(["the target is an existing project; use wb upgrade or wb add"])
+    if held.state != "adoptable":
+        raise Refused(["the target holds no content to adopt (%s); use wb install" % held.state])
+    modules, snaps, loaded_base, packages, origins, warnings = _gather(
+        guarded, resolved, select, distribution, which)
+    selection = installplan.Selection(modules, packages)
+    try:
+        found = adoptplan.inspect(held, selection, snaps, loaded_base)
+        plan = installplan.build(held, selection, snaps, loaded_base, seed, version, None, now,
+                                 adopted=found)
+    except adoptplan.Conflicts as exc:
+        raise Refused(exc.lines)
+    except (installplan.PlanError, manifest.ManifestError, safefs.SafeFsError) as exc:
+        raise Refused([str(exc)])
+    return plan, warnings
 
 
 def resolve_all(guarded, packages):
@@ -86,14 +117,20 @@ def resolve_all(guarded, packages):
 
 
 def run(guarded, parsed, out, err, distribution=None, seed=None, version=None,
-        which=shutil.which, home=None):
-    """Print the preview and return 0, or print ``refused:`` lines and return 1."""
+        which=shutil.which, home=None, adopt=False):
+    """Print the preview and return 0, or print ``refused:`` lines and return 1. With `adopt`, the
+    preview of ``wb adopt``."""
     try:
-        with target.open_target(parsed.target, guarded.root) as held:
+        with target.open_target(parsed.target, guarded.root, adopt=adopt) as held:
             resolved = resolve_all(guarded, parsed.packages)
-            plan, warnings = prepare(guarded, held, resolved, parsed.select, distribution,
-                                     seed or manifest.new_seed(), version or __version__, which,
-                                     home)
+            if adopt:
+                plan, warnings = prepare_adopt(guarded, held, resolved, parsed.select, distribution,
+                                               seed or manifest.new_seed(), version or __version__,
+                                               which)
+            else:
+                plan, warnings = prepare(guarded, held, resolved, parsed.select, distribution,
+                                         seed or manifest.new_seed(), version or __version__,
+                                         which, home)
             text = installplan.render(plan, held.path)
     except target.TargetError as exc:
         return target.write_refusal(err, exc)

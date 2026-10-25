@@ -34,9 +34,14 @@ Action = collections.namedtuple("Action", "kind path owner_class mode size hash 
 PackageSource = collections.namedtuple("PackageSource", "name source ref commit tree")
 # `modules`: the install-ordered ``verify.Verified`` records; `packages`: their PackageSource.
 Selection = collections.namedtuple("Selection", "modules packages")
+# `command` is ``install`` or ``adopt``; `not_filled` lists, for an adoption, the blocks whose file
+# already exists, as ``(path, slot, block id)``.
 Plan = collections.namedtuple(
     "Plan", "target_identity state actions modules manifest seed project_id store_writes "
-            "git_init digest harness pins", defaults=(None, ()))
+            "git_init digest harness pins command not_filled", defaults=(None, (), "install", ()))
+# What `adopt` found at the paths the install plan would write: `kept` maps a seeded path that
+# exists to ``(sha256, size)``; `reused` holds the planned directories that already exist.
+Adopted = collections.namedtuple("Adopted", "kept reused")
 
 MARKER_PATH = ".workbench/local/incomplete"
 GIT_DETAIL = "an empty repository on branch main, written by the workbench; git is not run"
@@ -193,10 +198,15 @@ def assemble(selection, snapshots, base):
 # --- the manifest ------------------------------------------------------------------
 
 
-def manifest_document(selection, files, blocks, base, seed, workbench_version):
+def manifest_document(selection, files, blocks, base, seed, workbench_version, kept=()):
+    """The manifest. A file in `kept` (path to hash) is recorded at that hash: it is the project's
+    own file and the manifest records the bytes the installer last saw."""
     entries = []
     for path in files.order:
         item = files.items[path]
+        if path in kept:
+            entries.append({"class": item["class"], "hash": kept[path], "path": path})
+            continue
         original = item["data"]
         if item["blocks"]:
             original = without_blocks(original)
@@ -254,8 +264,14 @@ def json_store(document):
     return (json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n").encode("ascii")
 
 
-def build(target, selection, snapshots, base, seed, workbench_version, harness=None, now=None):
+def build(target, selection, snapshots, base, seed, workbench_version, harness=None, now=None,
+          adopted=None):
     """Build the whole plan. Raises PlanError; nothing is read or written.
+
+    `adopted` (an ``Adopted``) makes it the plan of ``wb adopt``: the seeded paths in `adopted.kept`
+    are kept as they are and recorded at their own hash, their slot blocks are not filled, a planned
+    directory in `adopted.reused` is not created, there is no ``.git`` to make and no harness is
+    attached. The state must then be ``adoptable``, and for an install it must not be.
 
     `now` is the time the pins record. The caller fixes it once for the command and passes it to every
     build, so the plan the owner confirms and the plan that is written are the same bytes.
@@ -264,13 +280,25 @@ def build(target, selection, snapshots, base, seed, workbench_version, harness=N
     action: the files are per-clone and written once the install itself is complete, but the
     digest covers every path, hash, exclude line and the local manifest."""
     if target.state == "existing":
-        raise PlanError("the target is an existing project; use upgrade or add a module")
+        raise PlanError("the target is an existing project; use %s" % (
+            "wb upgrade or wb add" if adopted is not None else "upgrade or add a module"))
+    if adopted is None and target.state == "adoptable":
+        raise PlanError("the target is a repository that has content; use wb adopt")
+    if adopted is not None and target.state != "adoptable":
+        raise PlanError("the target holds no content to adopt; use wb install")
+    kept = {} if adopted is None else adopted.kept
     try:
         project = manifest.project_id(seed)
     except manifest.ManifestError as exc:
         raise PlanError(str(exc))
     files, blocks = assemble(selection, snapshots, base)
-    document = manifest_document(selection, files, blocks, base, seed, workbench_version)
+    for path in kept:
+        if path not in files.items or files.items[path]["class"] != "seeded":
+            raise PlanError("%s is kept but is not a seeded path of this selection" % path)
+    not_filled = tuple((b["path"], b["slot"], b["block"]) for b in blocks if b["path"] in kept)
+    blocks = [b for b in blocks if b["path"] not in kept]
+    document = manifest_document(selection, files, blocks, base, seed, workbench_version,
+                                 {path: found[0] for path, found in kept.items()})
     try:
         manifest_bytes = manifest.serialize(document)
     except manifest.ManifestError as exc:
@@ -296,15 +324,21 @@ def build(target, selection, snapshots, base, seed, workbench_version, harness=N
     made = {".workbench", ".workbench/local"}
     for directory in sorted({"/".join(p.split("/")[:n]) for p in files.order
                              for n in range(1, len(p.split("/")))} - made):
-        actions.append(Action("create-dir", directory, "scratch", "-", 0, "", "", None))
+        reused = adopted is not None and directory in adopted.reused
+        actions.append(Action("reuse-dir" if reused else "create-dir", directory, "scratch", "-",
+                              0, "", "", None))
     for path in files.order:
         item = files.items[path]
+        if path in kept:
+            actions.append(Action("keep-file", path, item["class"], "-", kept[path][1],
+                                  kept[path][0], "kept as it is", None))
+            continue
         detail = ", ".join("%s slot:%s" % (who, slot) for slot, who in item["blocks"])
         actions.append(_file_action(path, item["data"], item["class"], item["x"],
                                     ("with blocks: " + detail) if detail else ""))
 
     baselines = {a.path: a.hash for a in actions
-                 if a.kind == "create-file" and a.path != MARKER_PATH}
+                 if a.kind in ("create-file", "keep-file") and a.path != MARKER_PATH}
     store_writes = (
         ("projects/%s/baselines" % project, json_store({"baselines": baselines, "format": 1})),
         ("projects/%s/seen" % project, json_store(
@@ -313,9 +347,11 @@ def build(target, selection, snapshots, base, seed, workbench_version, harness=N
     # The owner who types this plan's digest confirms the bytes of every helper it writes, so the
     # helpers the modules declare are pinned in the same step.
     made = pinplan.changes(
-        {}, pinplan.wanted(selection.modules, lambda path: _sha(files.items[path]["data"])
+        {}, pinplan.wanted(selection.modules, lambda path: (
+            kept[path][0] if path in kept else _sha(files.items[path]["data"]))
                            if path in files.items else None),
-        "workbench install", approvals.utc_now() if now is None else now, set(files.order))
+        "workbench adopt" if adopted is not None else "workbench install",
+        approvals.utc_now() if now is None else now, set(files.order))
     if made:
         store_writes += (("projects/%s/pins" % project,
                           pins.serialize(pinplan.apply({}, made))),)
@@ -326,7 +362,7 @@ def build(target, selection, snapshots, base, seed, workbench_version, harness=N
                      "source": public_source(s.source), "tree": s.tree}
                     for s in sorted(selection.packages, key=lambda p: p.name))
     fields = {
-        "command": "install",
+        "command": "adopt" if adopted is not None else "install",
         "target": {"device": target.identity[0], "inode": target.identity[1],
                    "state": target.state},
         "workbench": workbench_version, "base": base.tree_hash,
@@ -339,8 +375,11 @@ def build(target, selection, snapshots, base, seed, workbench_version, harness=N
     }
     if harness is not None:
         fields["harness"] = _harness_fields(harness)
+    if adopted is not None:
+        fields["not_filled"] = [list(row) for row in not_filled]
     return Plan(target.identity, target.state, tuple(actions), modules, document, seed,
-                project, store_writes, git_init, digest_of(fields), harness, tuple(made))
+                project, store_writes, git_init, digest_of(fields), harness, tuple(made),
+                "adopt" if adopted is not None else "install", not_filled)
 
 
 def _local_manifest(harness):
@@ -408,12 +447,16 @@ def _render_harness(harness):
 
 def render(plan, target_path, show_digest=False):
     """The preview text. Every name, path and package-supplied string is ASCII-escaped."""
-    lines = ["target: %s" % _show(target_path), "command: install",
+    adopting = plan.command == "adopt"
+    lines = ["target: %s" % _show(target_path), "command: %s" % plan.command,
              "state: %s" % plan.state]
     counts = collections.Counter(a.kind for a in plan.actions)
     summary = ", ".join("%d %s" % (counts[k], k) for k in
-                        ("make-target", "create-dir", "create-file", "git-init") if counts[k])
-    lines.append("summary: %s; %d store writes" % (summary, len(plan.store_writes)))
+                        ("make-target", "create-dir", "reuse-dir", "create-file", "keep-file",
+                         "git-init") if counts[k])
+    lines.append("summary: %s; %d store writes%s" % (
+        summary, len(plan.store_writes),
+        ("; %d not filled" % len(plan.not_filled)) if plan.not_filled else ""))
     flags = ["%s module %s/%s" % (m["type"], _show(m["package"]), _show(m["name"]))
              for m in plan.modules if m["type"] in ("harness", "process")]
     if flags:
@@ -429,11 +472,14 @@ def render(plan, target_path, show_digest=False):
     lines.append("actions:")
     for a in plan.actions:
         row = "  %s %s" % (a.kind, _show(a.path))
-        if a.kind == "create-file":
+        if a.kind in ("create-file", "keep-file"):
             row += " [%s] %s %d bytes sha256 %s" % (a.owner_class, a.mode, a.size, a.hash)
         if a.detail:
             row += " (%s)" % _show(a.detail)
         lines.append(row)
+    for path, slot, who in plan.not_filled:
+        lines.append("  not filled: %s slot:%s from %s; wb upgrade offers it"
+                     % (_show(path), _show(slot), _show(who)))
     lines.append("guarded store:")
     for path, data in plan.store_writes:
         lines.append("  write %s sha256 %s" % (path, _sha(data)))
@@ -442,9 +488,18 @@ def render(plan, target_path, show_digest=False):
         lines.extend(pinplan.lines(plan.pins, _show))
     if plan.git_init:
         lines.append("git: creates %s" % GIT_DETAIL)
+    elif adopting:
+        lines.append("git: the existing .git is used as it is and is not read; no remote is "
+                     "recorded")
     else:
         lines.append("git: an existing .git is used as it is; no remote is recorded")
-    lines.extend(_render_harness(plan.harness))
+    if adopting:
+        lines.append("harness: adopt attaches nothing; run wb attach for %s afterwards, once "
+                     "any existing harness file with other content is resolved"
+                     % ", ".join(_show("%s/%s" % (m["package"], m["name"])) for m in plan.modules
+                                 if m["type"] == "harness"))
+    else:
+        lines.extend(_render_harness(plan.harness))
     if show_digest:
         lines.append("digest: %s" % plan.digest)
     return "\n".join(lines) + "\n"

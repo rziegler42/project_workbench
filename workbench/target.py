@@ -17,7 +17,7 @@ import stat
 from . import projectfs, unfinished
 from .wbkit import display, safefs
 
-STATES = ("new-missing", "new-empty", "new-git", "existing")
+STATES = ("new-missing", "new-empty", "new-git", "existing", "adoptable")
 
 _MARKER = (".workbench", "local", "incomplete")
 
@@ -250,7 +250,7 @@ def _real_dir_at(name, dirfd):
     return info is not None and stat.S_ISDIR(info.st_mode)
 
 
-def _classify(fd, resolved, marked=False):
+def _classify(fd, resolved, marked=False, adopt=False):
     names = set(os.listdir(fd))
     if ".workbench" in names and _real_dir_at(".workbench", fd) and _marker_present(fd):
         if marked:
@@ -283,6 +283,15 @@ def _classify(fd, resolved, marked=False):
         finally:
             os.close(inner)
         return "existing"
+    if git is None:
+        if adopt:
+            raise TargetError("refused: adopt needs the directory's own .git directory, and "
+                              "does not make one: %s" % resolved)
+    elif ".workbench" not in names:
+        if adopt:
+            return "adoptable"
+        raise TargetError("refused: the directory holds other content and is not a project; "
+                          "wb adopt installs into a repository that has content: %s" % resolved)
     raise TargetError("refused: the directory holds other content and is not a project: %s"
                       % resolved)
 
@@ -290,13 +299,15 @@ def _classify(fd, resolved, marked=False):
 # --- opening ------------------------------------------------------------------
 
 
-def open_target(spelling, store_root, home=None, marked=False):
+def open_target(spelling, store_root, home=None, marked=False, adopt=False):
     """Inspect, resolve once, open and classify a target; return a held ``Target``.
 
     Raises TargetError naming the place and the reason. Nothing is created. `home` replaces
     ``HOME`` for the refused-place check; the account database's home is always checked too.
     `marked` is for the command that clears an unfinished write: a target with a marker is then
-    returned as ``existing`` instead of refused; every other check is the same.
+    returned as ``existing`` instead of refused; every other check is the same. `adopt` is for the
+    command that installs into a repository that has content: a directory with its own real `.git`,
+    other content and no `.workbench` is then returned as ``adoptable`` instead of refused.
     """
     safefs.require_support()
     if spelling == "":
@@ -324,7 +335,7 @@ def open_target(spelling, store_root, home=None, marked=False):
     fd, held = opened
     try:
         if state is None:
-            state = _classify(fd, resolved, marked)
+            state = _classify(fd, resolved, marked, adopt)
         return Target(resolved, state, fd, name, held)
     except UnfinishedMarker as exc:
         try:
