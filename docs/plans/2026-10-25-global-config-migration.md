@@ -191,7 +191,7 @@ medium, bound 3 rounds). Findings are advice and were judged by the author; the 
 
 ## Result
 
-### Increment A (done, uncommitted until the owner says commit)
+### Increment A (done)
 
 - Wrote `docs/specs/global-config-inventory.md` (Draft) and its index row in `docs/specs/README.md`. It lists 30 global
   files with their SHA-256 hashes: 5 agents, 2 hook programs, 11 approver data files, 4 authored skills with 3 reference
@@ -265,7 +265,7 @@ medium, bound 3 rounds). Findings are advice and were judged by the author; the 
   so the group splits and the quoted paraphrases rest on this author; the gates for the `move` rows were not run.
 - Committed as `2e8f843`.
 
-### Increment D (done, uncommitted until the owner says commit)
+### Increment D (done)
 
 - Extended `docs/specs/global-config-inventory.md` with "The move list": rules of the order, eighteen moves M1 to M18 (each with
   its items, gate, blockers, proposed carrying plan and the owner's removal step), the findings that need their own plan, and
@@ -295,3 +295,4 @@ medium, bound 3 rounds). Findings are advice and were judged by the author; the 
   settings-path test are named in the moves and were not run.
 - Remaining for the owner: the moves above, each its own plan; whether later plans name this roadmap candidate; and the decision
   records the owner may ask for.
+- Committed as `927ddc2`.
