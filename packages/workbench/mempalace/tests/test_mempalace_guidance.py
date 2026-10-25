@@ -63,9 +63,26 @@ class Policy(unittest.TestCase):
 
     def test_the_block_forbids_secrets_and_says_an_agent_cannot_file_a_memory(self):
         text = flat(block())
-        for rule in ("Put no secret, token or credential into a memory question",
-                     "An agent cannot file or change a memory", "tell the owner", "Only the owner builds the memory"):
+        for rule in ("Put no secret, token or credential into a palace question",
+                     "An agent cannot add to or change the palace", "tell the owner", "Only the owner builds the memory"):
             self.assertIn(rule, text, rule)
+
+    def test_the_block_says_a_result_is_background_unless_it_names_this_project(self):
+        text = flat(block())
+        for rule in ("A result is about this project only when its wing or source file names this project",
+                     "Any other result, one with no wing or an unclear source included, is background",
+                     "not a fact about this project", "name its wing when you quote it"):
+            self.assertIn(rule, text, rule)
+
+    def test_the_block_says_the_built_in_memory_is_read_first_and_is_a_separate_store(self):
+        text = flat(block())
+        for rule in ("Where the harness's built-in memory could also answer, read it first",
+                     "search the palace only when it does not",
+                     "Writing the harness's built-in memory is a separate act that this block neither grants nor forbids"):
+            self.assertIn(rule, text, rule)
+
+    def test_the_block_does_not_call_the_palace_a_memory(self):
+        self.assertNotIn("a memory", flat(block()))
 
     def test_the_block_is_short_names_no_harness_and_holds_no_marker_or_path(self):
         text = block()
@@ -155,9 +172,27 @@ class Skill(unittest.TestCase):
 
     def test_it_says_an_agent_cannot_file_and_the_owner_does(self):
         text = flat(skill_text())
-        for rule in ("You cannot add to or change the memory", "tell the owner what it is and let them file it",
+        for rule in ("You cannot add to or change the palace", "tell the owner what it is and let them file it",
                      "Do not file a secret, and do not ask the owner to"):
             self.assertIn(rule, text, rule)
+
+    def test_it_says_a_result_is_background_unless_it_names_this_project(self):
+        text = flat(skill_text())
+        for rule in ("A result is about this project only when its wing or its source file names this project",
+                     "Any other result, including one with no wing or an unclear source, is background",
+                     "it is not a fact about this project", "say which wing it came from",
+                     "Narrow with `--wing <name>` when you know the wing for this project"):
+            self.assertIn(rule, text, rule)
+
+    def test_it_says_the_built_in_memory_is_read_first_and_is_a_separate_store(self):
+        text = flat(skill_text())
+        for rule in ("Where the harness's built-in memory could also answer the question, read it first",
+                     "Search the palace only when it does not answer",
+                     "Writing the harness's built-in memory is a separate act that this skill neither grants nor forbids"):
+            self.assertIn(rule, text, rule)
+
+    def test_it_does_not_call_the_palace_a_memory(self):
+        self.assertNotIn("a memory", flat(skill_text()))
 
     def test_it_requires_no_other_modules_skill_and_names_none(self):
         text = skill_text()

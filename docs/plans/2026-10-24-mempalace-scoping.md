@@ -1,6 +1,6 @@
 # Project scoping in the mempalace skill and policy
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-24
 Candidate: workbench-v1#mempalace-scoping
 Specs: mempalace
@@ -164,4 +164,11 @@ confirmed choice 1.
 
 ## Result
 
-Not started.
+- Increment A: `SKILL.md` and `policy.md` carry the three rules. The skill has a paragraph on the order of stores, a
+  "Whose note it is" paragraph and a closing sentence that the built-in memory is a separate act it neither grants nor
+  forbids; the block has the same three in a clause or a bullet each and stays at 14 lines (its first draft had 15 and the
+  existing length test caught it). "a memory" is gone from both texts. The module's tests: 152 pass. Before the edit, 8 tests
+  failed on the old text: the 2 existing tests whose assertions I edited (one in the block, one in the skill) and the 6 new
+  ones (in each of the block and the skill: the background rule, the order and separate store, and "not a memory").
+  I left "Only the owner builds the memory" and "the owner has to build the memory" as they are, since the plan changes only
+  "a memory". The module's shipped approval is stale until B. Next: B.
