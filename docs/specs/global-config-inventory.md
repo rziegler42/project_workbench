@@ -494,7 +494,11 @@ terminal, after the gate has been recorded. The agent does not write the user le
 `wb run safe-git remove` and the module's `wb run remote-runner submit` and `fetch`. That is not a data edit. Read on
 2026-10-25 (the approver program, SHA-256 `94ac5e8cd05473081ff0004130592cdb94e0bbd19199777574c599a23cca2b0b`, matching the
 inventory above): the spellings, the supported tools, the installed-helper check and the delegable rules are constants of the
-program, and a rule for a tool outside its list is refused as a config error (read, not run; whether the refusal silences the other rules is untested, F-A1). So stage 1 needs a change to the program, or its
+program, and a rule for a tool outside its list is refused as a config error. Run on a scratch copy of the program on 2026-10-25 (F-A1): none of the four module
+spellings matches, a rule for an unsupported tool is refused, and with one refused rule file the matching functions raise for every
+command that begins with a listed spelling and tokenizes, covered or not (F-A1). By reading, not by a run: the review of a commit or a
+removal also calls the global `claude-workflow` program as a library, so a patch that adds
+spellings is not enough once that program is removed (M14). So stage 1 needs a change to the program, or its
 redesign into the engine, and the owner makes either. The plan `2026-10-25-approver-coverage-for-module-spellings` ended after
 its Increment A (`Superseded`) for that reason; the carrying plan of stage 1 is now
 `2026-10-25-approver-program-and-the-module-spellings`, which tests the matching code on a scratch copy and puts the choice to
@@ -709,8 +713,28 @@ Findings are for the owner to plan or dismiss. None changes a shipped module her
   action unless the rules and the list of spellings change first. The list of spellings, the supported tools, the
   installed-helper check and the delegable rules are constants of the approver program (read 2026-10-25, SHA-256
   `94ac5e8cd05473081ff0004130592cdb94e0bbd19199777574c599a23cca2b0b`), not data, so the change is a change to the program,
-  not an edit of a rule file. That a rule file naming an unsupported tool is refused, and whether the refusal silences the
-  other rules, is read and untested; the plan `2026-10-25-approver-program-and-the-module-spellings` tests it. This fixes the order of the move list: the approver's
+  not an edit of a rule file. Measured on 2026-10-25 by the plan `2026-10-25-approver-program-and-the-module-spellings` (Increment B),
+  on a scratch copy of the program and of the rules, calling the matching functions only (no model call, no real run;
+  Python 3.15.0, Darwin 25.6.0, repository commit `a31c426`): the control lines `claude-workflow commit`, `claude-workflow remove`,
+  `remote-runner submit`, `remote-runner fetch` and `git push` each matched their rule; `wb run safe-git commit`, `wb run safe-git remove`,
+  `wb run remote-runner submit`, `wb run remote-runner fetch` and `wb run safe-git push-check` matched nothing, because the raw text
+  starts with no listed spelling, so the rules were never read. A rule file whose tool is `wb`, `safe-git` or `wb run safe-git`
+  is refused ("rule tool is not supported"). So is a malformed file, a file missing a key and a file naming an unknown collector.
+  In each case loading the rules raised for the whole directory, and every one of the five control lines then raised the same
+  error instead of matching: with one bad rule file, the matching functions raise for every command that begins with a listed spelling and tokenizes, covered
+  or not (a security review of 2026-10-25 measured `git status` and `git push` alike, and a bad, empty or missing `config.json`
+  or a missing rules directory has the same effect; a line that fails to tokenize is not affected). By reading, not by a run, the
+  hook's entry point swallows that error, so no verdict, no outcome row and no unmatched row is recorded and no decision is made,
+  and the normal prompt is expected. The owner's mode is `delegate` (the configuration file read on 2026-10-25), so under such an
+  error the delegated commit and archive no longer auto-allow and fall back to a prompt: a loss of convenience and of the log, not a
+  bypass. Any change that adds a rule file for new spellings can disable the delegation and the log with one typo. A valid extra
+  rule loaded and left all five controls matching. Not run: the entry point itself (it would reach a model), and the outcome hooks.
+  What a patch would touch, by reading (line numbers of the program read on 2026-10-25): the spelling lists and the map from
+  spelling to tool (lines 43 to 59), the supported tools (60), the installed-helper table (`INSTALLED_TOOLS`, 38 to 39), `split_command` (100), the check that a command runs the installed helper
+  (`resolve_invocation`, from 449, which reads a spelling's last word as a path under the home directory), the collectors that
+  call the global `claude-workflow` program as a library (`load_helper`, 387; `collect_commit`, 867; `collect_remove`, 947), and the
+  rule files for the new spellings. `DELEGABLE` (77) stays as it is if commit is not delegated. The outcome hooks follow the
+  matching (`process_outcome`, 2225; read, not run), but the settings file needs its own hook entries per spelling. This fixes the order of the move list: the approver's
   coverage of a new spelling comes before the helper moves (`workbench-v1#global-config-migration`: "no hard stop,
   deny rule or approver is ever absent in between").
 - **F-A2: stale pointers in the approver.** Its header cites a specification and an active-plan file by names this repository

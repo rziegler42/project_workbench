@@ -189,4 +189,58 @@ Review: the `reviewer` agent, one exchange of six. No blocking finding. Applied:
 (finding 1), and a pointer to F-A1 for the untested claim in M1 (finding 2). Not applied: re-wrapping of two long lines
 (finding 3, cosmetic). The reviewer could not read the user level or run the checks. Its recommendation is not a verdict.
 
-Not done: Increments B and C.
+Committed as `a31c426`.
+
+### Increment B (done, not yet committed)
+
+Ran at commit `a31c426`, 2026-10-25, Python 3.15.0, Darwin 25.6.0. The approver program, its configuration, rubric, schema and
+eight rule files were copied into a new scratch directory in the layout the program expects (no log); the copy hashed
+identical to the originals. The experiment script lives in a separate scratch directory and ran with `python3 -I -B`. The
+program's top level was read first: stdlib imports, constants and definitions, with `main()` behind an `__main__` guard, so
+importing it runs nothing. The script asserted that the program's home directory was inside the scratch copy. Only `split_command`,
+`tokenize`, `load_rules` and `match_event` were called; no model call, no `process`, `evaluate` or `main`.
+
+Results (run, output read):
+- Controls: `claude-workflow commit`, `claude-workflow remove`, `remote-runner submit`, `remote-runner fetch` and `git push` lines
+  each matched their rule. This shows the harness can match.
+- `wb run safe-git commit`, `wb run safe-git remove`, `wb run remote-runner submit`, `wb run remote-runner fetch` and
+  `wb run safe-git push-check` matched nothing. Reason, from the printed intermediate values: `split_command` returned `None`
+  (no listed spelling is a prefix of the text), so no rule was read.
+- Rule directories with one extra file: tool `wb`, `safe-git` and `wb run safe-git` each raised "rule tool is not supported";
+  malformed JSON, a missing `tool` key and an unknown collector each raised their own `ConfigError`. In all six, `load_rules`
+  raised for the whole directory and each of the five control lines then raised the same error instead of matching (this is the
+  behaviour of `load_rules` and `match_event`; that the real hook calls them on every covered event is by reading). A valid
+  extra rule (control) loaded, nine rules, and all five controls matched. A first run of that control failed because of my own
+  input (a subcommand with a digit); it was corrected and rerun.
+- By reading only: `main()` wraps `process()` in a handler that swallows any exception, so, by reading, no verdict is recorded and
+  no decision is made, and the normal prompt is expected. Not run, because it would reach a model.
+- Patch list, by reading: spelling lists and the spelling-to-tool map (lines 43 to 59), `SUPPORTED_TOOLS` (60),
+  `INSTALLED_TOOLS` (38 to 39), `split_command` (100; it must consume a multi-word prefix such as `wb run safe-git` and map it to a
+  tool), `resolve_invocation` (from 449; it reads a spelling's last word as a path under the home directory), the collectors that call
+  the global `claude-workflow` program as a library (`load_helper` 387, `collect_commit` 867, `collect_remove` 947), new rule files,
+  and per-spelling hook entries in the settings file. The outcome hooks follow the matching, because `process_outcome` (2225) calls
+`match_event`; this was read, not run. `DELEGABLE` (77) stays if commit is not delegated. Finding: the approver's
+  review of a commit or removal depends on the global `claude-workflow` program, so M14 would break it even with spellings added.
+
+Verification as run: the originals' hashes (program, configuration, rubric, schema, eight rules) were identical before and after
+(`diff` of the two lists, clean); the program's hash is `94ac5e8cd05473081ff0004130592cdb94e0bbd19199777574c599a23cca2b0b`,
+the same as in Increment A, so the line numbers below are those of that file. The scratch copy holds only copied files (no
+bytecode). Spec edits are in M1 and F-A1. `doccheck`, `refcheck`, `git diff --check`, `wb run code-work check` (44 plans) and
+`wb check` exit clean. The script is untracked scratch; its inputs were the five control lines above, the five module lines
+above, and six one-file variants of the rules directory (three unsupported tool names, malformed JSON, a missing key, an unknown
+collector) plus the valid-extra-rule control.
+
+Reviews of B: the `reviewer` agent (one exchange): no blocking finding; applied the checks line, `process_outcome` in the patch
+list, the run/read split in M1 and the swallow wording, the program hash, and a description of the inputs. Not applied: the
+re-wrapping of long lines (cosmetic). The `security-reviewer` agent (the owner asked for it): no Critical or High finding; it
+reproduced the match results with 15 variants of its own. Medium, applied: the refused-file effect reaches every command that
+begins with a listed spelling and tokenizes, covered or not (`git status` included), and a bad or missing `config.json` or rules
+directory has the same effect; the owner's mode is `delegate`, so such an error removes the commit and archive auto-allow and
+the log, and falls back to a prompt. My Result had measured only the five controls. Low, applied: the patch list gained
+`INSTALLED_TOOLS` and `split_command`. Low, noted: the experiment script's check that the program's home is inside the scratch
+copy is a tautology, since the home derives from the argument; the safety came from passing the scratch path, not from the check.
+Also found by that review and read only: a leading space, an environment prefix, `;`, `&&`, `|` or a redirect after the
+spelling make a line unreviewed, and `git -C x push`, `--force-with-lease` and similar forms tokenize but match no rule; these are
+properties of the existing approver, recorded for the owner's decision and not a request to patch it.
+
+Not done: Increment C and the commit.
