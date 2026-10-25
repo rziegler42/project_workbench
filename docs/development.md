@@ -33,6 +33,8 @@ ambiguous blank.
 | Owner-run: pin a helper's content (terminal only) | `python3 -m workbench pin <project-id> <name> <helper> --root <project-dir> [--kit N]` |
 | Preview an install (read-only) | `python3 -m workbench preview install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Owner-run: install a new project (terminal only) | `python3 -m workbench install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
+| Preview an adoption (read-only) | `python3 -m workbench preview adopt [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
+| Owner-run: adopt a repository that has content (terminal only) | `python3 -m workbench adopt [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Owner-run: accept changes made to a project (terminal only) | `python3 -m workbench acknowledge [<target> \| --dir <path>]` |
 | Owner-run: clear the marker of an unfinished write (terminal only) | `python3 -m workbench recover [<target> \| --dir <path>]` |
 | Owner-run: attach the harness to a clone (terminal only) | `python3 -m workbench attach [<target> \| --dir <path>] --harness <package>/<module>` |
@@ -253,7 +255,8 @@ the `--package` before it. Options are not abbreviated.
 
 - **A target** is a missing directory whose parent exists, an empty directory, or a directory
   holding only a real `.git`. A symbolic link, the root, a home directory, the guarded store
-  or anything containing it, a directory with other content, an existing project and a
+  or anything containing it, a directory with other content (`adopt` takes one that has its own
+  real `.git`, see "Adopting a repository that has content"), an existing project and a
   directory holding `.workbench/local/incomplete` (an unfinished install or upgrade) are refused, before
   any source is read (`docs/specs/installer-interface.md`, "The target").
 - **A source** is a local package directory (it holds `package.json`; a link is refused and a
@@ -296,6 +299,36 @@ the `--package` before it. Options are not abbreviated.
 | 2 | usage error |
 | 3 | stopped after writing; the marker is left |
 | 130 | interrupted before anything was written |
+
+### Adopting a repository that has content
+
+`install` refuses a directory that has content, and names `adopt` when that directory has its own
+real `.git`. `python3 -m workbench preview adopt` and `python3 -m workbench adopt` take the same
+arguments as `preview install` and `install` and add the project around what is there. The
+specification is "`adopt`" in `docs/specs/installer-interface.md`.
+
+- **The target** is a directory with its own real `.git` (not a file or a link), at least one
+  other entry, and no `.workbench` entry of any kind. A name that differs from `.workbench` only in
+  case counts as one. An existing project is refused and `upgrade` is named.
+- **Nothing that exists is written.** `adopt` creates only the paths that are missing and never
+  opens an existing file for writing. A seeded file that exists is kept and the manifest records it at
+  the hash of its own bytes. An existing directory is reused. A file where the plan needs a
+  directory, a link, a name that differs only in case or form, and a kept file that is too large,
+  not a regular file or hard-linked are conflicts. A conflict refuses the whole command, lists
+  every one and writes nothing.
+- **Unfilled blocks.** A slot block whose file exists is not filled by `adopt`. The summary counts
+  these and names `wb upgrade`, which classifies the kept file **skip** and offers the block as an
+  append.
+- **No harness.** `adopt` does not attach. Run `wb attach --harness <package>/<module>`
+  afterwards. It leaves a harness file with the same bytes as it would write and refuses one with
+  other content, naming it. Resolve that first, and keep harness files untracked.
+- **The digest** covers the bytes of every kept file, so the owner's answer confirms what was read.
+  Nothing is committed.
+- **A failure after the first write** is exit 3 as for `install`, and `wb recover` clears the
+  marker. It refuses if a kept file was changed, removed or replaced since the adoption started.
+- **Afterwards** an adopted project is an existing project: `check`, `acknowledge`, `upgrade` and
+  `attach` work as they do on an installed one. `tests/test_adopt_lifecycle.py` runs each on a
+  scratch repository.
 
 ## Acknowledging, upgrading and adding
 

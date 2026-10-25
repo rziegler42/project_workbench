@@ -58,6 +58,12 @@ exact arguments as the command table in [Development](docs/development.md) state
 5. `python3 -m workbench check <target>` reports drift and tracked files that depend on
    untracked content. It is read-only.
 
+A repository that already has content is adopted instead, with `python3 -m workbench preview adopt` and
+`python3 -m workbench adopt` (same arguments as `preview install` and `install`). `adopt` creates only
+what is missing and changes no file that exists; it attaches nothing, so run `attach` and then
+`upgrade` to add the blocks it could not fill. See "Adopting a repository that has content" in
+[Development](docs/development.md).
+
 `upgrade`, `add`, `acknowledge`, `recover` and `attach` are described in
 [Development](docs/development.md). The owner-run commands refuse to run from an agent
 session. Run the tests with `python3 -B -W error tests/run_all.py`.
