@@ -1,0 +1,48 @@
+{
+  "name": "review-engine",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Asks a second model to review a plan, spec, roadmap or decision, a bounded number of times, and keeps what came back in a sealed state.",
+  "provides": [
+    "peer-review"
+  ],
+  "requires": [
+    "model-bridge"
+  ],
+  "ships": [
+    "helper/review-engine"
+  ],
+  "commands": {
+    "review-engine": {
+      "helper": "helper/review-engine",
+      "runtime": "python",
+      "kit": 1,
+      "arguments": [
+        "status",
+        "init",
+        "review-plan",
+        "review-spec",
+        "review-roadmap",
+        "review-adr",
+        "decide",
+        "amend",
+        "extend",
+        "reset",
+        "archive",
+        "prune",
+        "convergence"
+      ],
+      "owner": [
+        "amend",
+        "extend",
+        "reset",
+        "archive",
+        "prune"
+      ]
+    }
+  },
+  "convergence": {
+    "command": "review-engine",
+    "argument": "convergence"
+  }
+}

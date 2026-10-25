@@ -371,10 +371,40 @@ Increment D, security review of B and C, 2026-10-25 (`security-reviewer` agent, 
 
 - Reconciling the text of each `diverged` seeded file with its seed (Choice 6 keeps them as they are).
 - Adopting a directory with no `.git`, or a worktree or submodule.
-- `docs/references/README.md` for this repository.
 - The `mempalace` live check, and the owner-only trust check with a live run of `security-reviewer` (earlier plans).
 - The owner's: archiving `claude_project_template` and its mentions in `~/.claude` (`global-config-migration`).
 
 ## Result
 
-Not started.
+Increments A to E are local commits (`6e96c08`, `6e1fbb0`, `59da8a2`, `cc85bbe`, `66c21bc`, `aa5a9ed`); F is the
+commit that carries this text. Nothing is pushed.
+
+**Increment F, 2026-10-25.**
+
+- `wb preview adopt` on this repository, with the nine first-party modules: 71 create-dir, 5 reuse-dir, 55 create-file,
+  6 keep-file, 3 store writes, 5 blocks not filled. The kept files are the six `diverged` seeded files:
+  `AGENTS.md`, `docs/README.md`, `docs/plans/README.md`, `docs/decisions/README.md`, `docs/roadmaps/README.md`,
+  `docs/specs/README.md`. The not-filled blocks are `docs-index` (code-work, groundwork) and `policy` (code-work,
+  groundwork, mempalace); `wb upgrade` offers them as appends.
+- The owner ran `wb adopt`: 127 paths created, 6 existing files kept, nothing committed, no harness attached.
+- Harness files: only `CLAUDE.md` existed with other content (the old template's, 47 bytes; `attach` writes
+  `@AGENTS.md\n`). The owner moved it aside, and `attach` then wrote 26 files and `.workbench/local/harness.json`.
+  `attach` needed `--package packages/workbench` because the package was installed from a local directory.
+- `wb check` first failed on `.claude/remote-runner.toml`, the old template's path. The owner moved it to
+  `.workbench/remote-runner.toml`, which then failed because it declared no profile. A `full` profile running
+  `python3 -B -W error tests/run_all.py` was added, and `wb check` passes.
+- The edit gate is active. Its first refusal (before `wb` was on the owner's `PATH`) failed closed with
+  `wb: command not found`; its second refused every edit until the owner ran `wb approve-plan` for this plan.
+  Both are the behaviour the specs describe.
+- One test met the new state: `tests/fixtures/self_hosting_dispositions.json` recorded `docs/references/README.md` as
+  `absent`, but `adopt` creates it from the `groundwork` seed. It is now `identical`. The plan's step 6 expectation
+  that the file stays absent did not hold; the deferred item below is therefore done.
+- `docs/specs/installer-interface.md` no longer says `adopt` is proposed or unbuilt.
+- Verification: `python3 -B -W error tests/run_all.py` is green, 4224 tests in 10 roots, with the same three skips as
+  before (one in `tests`, two in `code-work`); `doccheck`, `refcheck` and `git diff --check` print nothing.
+
+**Not verified:** `adopt` on a repository other than scratch fixtures and this one; a remote-runner job; a live check
+that a session follows the installed policy blocks once they are filled (they are not filled yet).
+
+**Next:** run `wb upgrade` to append the five unfilled blocks, which is a separate decision. The harness files stay
+untracked and are never committed.

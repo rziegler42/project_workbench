@@ -1,0 +1,602 @@
+#!/usr/bin/env python3
+"""``remote-runner``: a project's remote job profiles, and a guarded way to use the ``remote-runner`` program.
+
+It is one file that imports the standard library and the workbench kit (``wbkit``); the launcher runs a pinned
+copy of it as ``wb run remote-runner <command>`` (``docs/specs/remote-runner.md``). ``profiles`` reads
+``.workbench/remote-runner.toml`` without following a link and prints the declared profiles. ``recommend``,
+``status``, ``artifacts`` and ``submit`` check every argument first and then start the program, and only the
+program, in the one argument shape the spec lists: found only in an absolute ``PATH`` entry outside the
+project, with an environment of its own, from the project root, with no standard input, bounded output, a
+deadline and a process group that is killed. Its output is returned bounded, cleaned and marked untrusted.
+
+A refusal is one ``refused: <reason>`` line on standard error and exit 1, and nothing is started. A reason
+names the rule and repeats nothing of the project file. The rules for the project file are fenced below
+because ``remote-runner-check`` carries the same text (a helper is a standalone file); a test shows the two
+are equal.
+"""
+
+import json
+import os
+import re
+import selectors
+import signal
+import stat
+import subprocess
+import sys
+import time
+import tomllib
+import unicodedata
+
+from wbkit import display, project, safefs
+
+# --- the project file ---
+
+PATH = ".workbench/remote-runner.toml"
+MAX_FILE = 65536
+MAX_PROFILES = 64
+MAX_COMMAND = 4096
+MAX_LABELS = 32
+MAX_NUMBER = 1000000
+NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+NUMBERS = ("min_memory_gib", "min_cpu_cores")
+WORDS = ("os", "arch")
+REQUIREMENTS = WORDS + NUMBERS + ("labels",)
+
+
+class ProjectFileError(Exception):
+    """The project file breaks a rule. The message names the rule and repeats nothing of the file."""
+
+
+def _ascii(text, low):
+    return isinstance(text, str) and len(text) >= low and all(" " <= char <= "~" for char in text)
+
+
+def _requirements(name, table):
+    if not isinstance(table, dict):
+        raise ProjectFileError("profile %s: requirements is not a table" % name)
+    if any(key not in REQUIREMENTS for key in table):
+        raise ProjectFileError("profile %s: requirements holds a key other than %s"
+                               % (name, ", ".join(REQUIREMENTS)))
+    found = {}
+    for key, value in table.items():
+        if key in WORDS:
+            if not _ascii(value, 0) or len(value) > 64:
+                raise ProjectFileError("profile %s: %s is not a string of at most 64 printable ASCII "
+                                       "characters" % (name, key))
+        elif key in NUMBERS:
+            # A comparison is false for nan, and inf is over the bound, so this is a finite number.
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < value <= MAX_NUMBER:
+                raise ProjectFileError("profile %s: %s is not a number above 0 and at most %d"
+                                       % (name, key, MAX_NUMBER))
+        else:
+            if not isinstance(value, list) or len(value) > MAX_LABELS or \
+                    any(not isinstance(item, str) or not LABEL.fullmatch(item) for item in value):
+                raise ProjectFileError("profile %s: labels is not a list of at most %d labels of letters, "
+                                       "digits and ._-" % (name, MAX_LABELS))
+            value = list(value)
+        found[key] = value
+    return found
+
+
+def parse_project_file(data):
+    """``{"project": <id>, "profiles": [{"name", "command", "requirements"}, ...]}`` in file order from the
+    bytes of the project file, or `ProjectFileError`. Unknown keys, tables of another name, repeated keys,
+    wrong types and values outside their bounds are refused rather than ignored."""
+    if len(data) > MAX_FILE:
+        raise ProjectFileError("the file is over %d bytes" % MAX_FILE)
+    try:
+        document = tomllib.loads(data.decode("utf-8"))
+    except UnicodeDecodeError:
+        raise ProjectFileError("the file is not UTF-8 text") from None
+    except (tomllib.TOMLDecodeError, RecursionError, ValueError):
+        raise ProjectFileError("the file is not valid TOML (a repeated key is not valid)") from None
+    if any(key not in ("project", "profiles") for key in document):
+        raise ProjectFileError("the file holds a key or table other than [project] and [profiles]")
+    table = document.get("project")
+    if not isinstance(table, dict):
+        raise ProjectFileError("[project] is missing")
+    if any(key != "id" for key in table):
+        raise ProjectFileError("[project] holds a key other than id")
+    ident = table.get("id")
+    if not isinstance(ident, str) or not NAME.fullmatch(ident):
+        raise ProjectFileError("[project] id is missing or is not letters, digits, _ and - (at most 64)")
+    profiles = document.get("profiles")
+    if not isinstance(profiles, dict) or not profiles:
+        raise ProjectFileError("[profiles] needs at least one profile table")
+    if len(profiles) > MAX_PROFILES:
+        raise ProjectFileError("more than %d profiles" % MAX_PROFILES)
+    found = []
+    for number, (name, body) in enumerate(profiles.items(), 1):
+        if not NAME.fullmatch(name):
+            raise ProjectFileError("profile number %d has a name that is not letters, digits, _ and - "
+                                   "(at most 64)" % number)
+        if not isinstance(body, dict):
+            raise ProjectFileError("profile %s is not a table" % name)
+        if any(key not in ("command", "requirements") for key in body):
+            raise ProjectFileError("profile %s holds a key other than command and requirements" % name)
+        command = body.get("command")
+        if not _ascii(command, 1) or len(command) > MAX_COMMAND:
+            raise ProjectFileError("profile %s: command is missing or is not 1 to %d printable ASCII "
+                                   "characters" % (name, MAX_COMMAND))
+        requirements = _requirements(name, body["requirements"]) if "requirements" in body else {}
+        found.append({"name": name, "command": command, "requirements": requirements})
+    return {"project": ident, "profiles": found}
+
+
+# --- end of the project file ---
+
+PROGRAM = "remote-runner"
+DEADLINE_SLOW = 600   # seconds for submit
+DEADLINE_FAST = 120   # seconds for every other command
+MAX_OUTPUT = 1048576  # bytes read from the program before it is stopped
+MAX_SHOWN = 65536     # bytes of output returned
+MAX_DETAIL = 200
+STOPPED_SLOW = 124    # exit status reported when the program was stopped at its deadline
+STOPPED_BIG = 125     # exit status reported when the program was stopped for too much output
+KEPT = ("HOME", "USER", "LOGNAME", "LANG", "TERM", "TMPDIR", "SSH_AUTH_SOCK")
+JOB = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,199}")
+HEX = re.compile(r"[0-9a-f]{40}")
+STATES = ("STARTING", "RUNNING", "PASSED", "FAILED", "CANCELLED", "FINISHED", "UNKNOWN_EXIT", "UNKNOWN")
+INTEGRITY = ("ok", "mismatch", "invalid")
+USAGE = {
+    "profiles": "usage: remote-runner profiles",
+    "recommend": "usage: remote-runner recommend --profile <name>",
+    "status": "usage: remote-runner status <job> [--expect <40 hex>]",
+    "artifacts": "usage: remote-runner artifacts <job>",
+    "submit": "usage: remote-runner submit (--remote <name> | --best) --profile <name> "
+              "[--ref <40 hex> | --snapshot]",
+    "fetch": "usage: remote-runner fetch <job> <path> ... [--dest <folder>] [--as <name>] (1 to 16 paths)",
+    "fetch-overwrite": "usage: remote-runner fetch-overwrite <job> <path> ... [--dest <folder>] [--as <name>]",
+}
+MAX_PATHS = 16
+SLOW = ("submit", "fetch", "fetch-overwrite")
+
+
+class Refused(Exception):
+    """Nothing was started; the message is the reason."""
+
+
+def shown(text, limit=160):
+    return display.ascii_text(str(text))[:limit]
+
+
+def plain(text):
+    """`text` without control, format and separator characters, except the newline and the tab."""
+    return "".join(char for char in text if char in "\n\t" or (unicodedata.category(char)[0] != "C"
+                                                              and unicodedata.category(char) not in ("Zl", "Zp")))
+
+
+# --- finding the project and its profiles ---
+
+
+def find_root(cwd):
+    try:
+        return project.find_root(cwd)
+    except project.ProjectError as exc:
+        raise Refused(shown(exc))
+
+
+def read_profiles(root):
+    """The validated project file at `root`, or `Refused`."""
+    try:
+        with safefs.Root(root, "project root") as held:
+            data = held.read_if_present(PATH, MAX_FILE)
+    except safefs.SafeFsError as exc:
+        raise Refused("the project file cannot be read: %s" % shown(exc))
+    if data is None:
+        raise Refused("no project file (%s)" % PATH)
+    try:
+        return parse_project_file(data)
+    except ProjectFileError as exc:
+        raise Refused("%s: %s" % (PATH, exc))
+
+
+def command_profiles(argv, root, out):
+    if argv:
+        raise Refused(USAGE["profiles"])
+    found = read_profiles(root)
+    out.write(json.dumps({"format": 1, "project": found["project"], "profiles": found["profiles"]}) + "\n")
+    return 0
+
+
+# --- arguments ---
+
+
+def split_arguments(args, values, flags):
+    """``(words, options)``: the words that are not options, and ``{option: value or True}``. An option is
+    accepted at most once and a value is the next argument; anything else that starts with a dash is refused."""
+    words, found, place = [], {}, 0
+    while place < len(args):
+        item = args[place]
+        if item in values or item in flags:
+            if item in found:
+                raise Refused("%s is given more than once" % item)
+            if item in flags:
+                found[item] = True
+                place += 1
+                continue
+            if place + 1 >= len(args):
+                raise Refused("%s needs a value" % item)
+            found[item] = args[place + 1]
+            place += 2
+        elif item.startswith("-"):
+            raise Refused("%s is not an option of this command" % shown(item, 40))
+        else:
+            words.append(item)
+            place += 1
+    return words, found
+
+
+def need_name(value, what):
+    if not NAME.fullmatch(value):
+        raise Refused("%s is not letters, digits, _ and - (at most 64)" % what)
+    return value
+
+
+def need_profile(root, value):
+    need_name(value, "the profile")
+    if value not in [each["name"] for each in read_profiles(root)["profiles"]]:
+        raise Refused("the profile %s is not declared in %s" % (value, PATH))
+    return value
+
+
+def need_job(value):
+    if not JOB.fullmatch(value) or "--" not in value:
+        raise Refused("the job is not of the program's form (letters, digits, _ and -, holding --, "
+                      "at most 200 characters)")
+    return value
+
+
+def need_ref(value):
+    """A 40-digit lowercase commit and nothing else. A branch or tag name can move between the moment the owner
+    approves a profile and the moment the program resolves it, so a job runs a commit that was named."""
+    if not HEX.fullmatch(value):
+        raise Refused("the ref is not a 40-digit lowercase commit")
+    return value
+
+
+def need_path(value):
+    """A path inside a job's output: relative, plain, none of its parts starting with a dot (so not `.git`),
+    not starting with a dash. The helper never reads or writes it; the program does."""
+    try:
+        safefs.validate_relpath(value)
+    except safefs.SafeFsError:
+        raise Refused("a path is not a plain relative path (no '..', '.git', backslash, colon or control "
+                      "character; at most %d characters)" % safefs.MAX_PATH_CHARS)
+    if value.startswith("-") or any(part.startswith(".") for part in value.split("/")):
+        raise Refused("a path starts a part with a dot or starts with a dash")
+    return value
+
+
+def need_file_name(value):
+    if "/" in value:
+        raise Refused("--as is not a plain file name")
+    return need_path(value)
+
+
+def need_dest(root, value):
+    """The existing folder `value`, as a path relative to `root`: inside the project, no link on the way, and no
+    part starting with a dot, so not `.git`, `.workbench`, `.claude`, `.github` or another folder that
+    configures a tool."""
+    if value.startswith("/"):
+        prefix = root.rstrip("/") + "/"
+        if not value.startswith(prefix):
+            raise Refused("--dest is outside the project")
+        value = value[len(prefix):]
+    try:
+        parts = safefs.validate_relpath(value)
+    except safefs.SafeFsError:
+        raise Refused("--dest is not a plain relative folder inside the project")
+    if value.startswith("-") or any(part.startswith(".") for part in parts):
+        raise Refused("--dest is not a plain folder (no part starting with a dot, no leading dash)")
+    current = root
+    for part in parts:
+        current = os.path.join(current, part)
+        try:
+            info = os.lstat(current)
+        except OSError:
+            raise Refused("--dest is not an existing folder")
+        if stat.S_ISLNK(info.st_mode):
+            raise Refused("--dest goes through a link")
+        if not stat.S_ISDIR(info.st_mode):
+            raise Refused("--dest is not a folder")
+    return value
+
+
+def check_target(root, base, rel, overwrite):
+    """Refuse a target that would go through a link or already exists (a file, a folder, a link, a dangling
+    link). With `overwrite`, an existing regular file is allowed. The program makes the same refusals and the
+    one about git-tracked files, which needs git; a program that does not is shown by the spec's checklist."""
+    parts = (base.split("/") if base else []) + rel.split("/")
+    current = root
+    for index, part in enumerate(parts):
+        current = os.path.join(current, part)
+        try:
+            info = os.lstat(current)
+        except FileNotFoundError:
+            return
+        except OSError:
+            raise Refused("a target cannot be examined")
+        if stat.S_ISLNK(info.st_mode):
+            raise Refused("a target goes through, or is, a link")
+        if index == len(parts) - 1:
+            if overwrite and stat.S_ISREG(info.st_mode):
+                return
+            raise Refused("a target already exists")
+        if not stat.S_ISDIR(info.st_mode):
+            raise Refused("a file is in the way of a target")
+
+
+def build_fetch(args, root, overwrite):
+    name = "fetch-overwrite" if overwrite else "fetch"
+    words, found = split_arguments(args, ("--dest", "--as"), ())
+    if len(words) < 2 or len(words) - 1 > MAX_PATHS:
+        raise Refused(USAGE[name])
+    job = need_job(words[0])
+    paths = [need_path(each) for each in words[1:]]
+    renamed = None
+    if "--as" in found:
+        if len(paths) != 1:
+            raise Refused("--as needs exactly one path")
+        renamed = need_file_name(found["--as"])
+    dest = need_dest(root, found["--dest"]) if "--dest" in found else None
+    for each in ([renamed] if renamed else paths):
+        check_target(root, dest, each, overwrite)
+    tail = ["fetch", job] + paths
+    tail += ["--dest", dest] if dest else []
+    tail += ["--as", renamed] if renamed else []
+    tail += ["--force"] if overwrite else []
+    return tail, {}
+
+
+def build_recommend(args, root):
+    words, found = split_arguments(args, ("--profile",), ())
+    if words or "--profile" not in found:
+        raise Refused(USAGE["recommend"])
+    return ["recommend", "--profile", need_profile(root, found["--profile"])], {}
+
+
+def build_status(args, root):
+    words, found = split_arguments(args, ("--expect",), ())
+    if len(words) != 1:
+        raise Refused(USAGE["status"])
+    expect = found.get("--expect")
+    if expect is not None and not HEX.fullmatch(expect):
+        raise Refused("--expect is not 40 lowercase hex digits")
+    return ["status", need_job(words[0])], {"expect": expect}
+
+
+def build_artifacts(args, root):
+    words, found = split_arguments(args, (), ())
+    if len(words) != 1:
+        raise Refused(USAGE["artifacts"])
+    return ["artifacts", need_job(words[0])], {}
+
+
+def build_submit(args, root):
+    words, found = split_arguments(args, ("--remote", "--profile", "--ref"), ("--best", "--snapshot"))
+    if words or "--profile" not in found or ("--remote" in found) == ("--best" in found) \
+            or ("--ref" in found and "--snapshot" in found):
+        raise Refused(USAGE["submit"])
+    tail = ["submit"]
+    tail += ["--remote", need_name(found["--remote"], "the remote")] if "--remote" in found else ["--best"]
+    tail += ["--profile", need_profile(root, found["--profile"])]
+    if "--ref" in found:
+        tail += ["--ref", need_ref(found["--ref"])]
+    if "--snapshot" in found:
+        tail += ["--snapshot"]
+    return tail, {}
+
+
+# --- running the program ---
+
+
+def is_inside(path, boundary):
+    """True when `path` is `boundary` or below it, whatever links and case spellings lead there. A part of the
+    path that does not exist yet is skipped (it cannot be the boundary, but something may be put there later),
+    and a part that cannot be examined counts as inside."""
+    current = os.path.realpath(path)
+    while True:
+        try:
+            if os.path.samefile(current, boundary):
+                return True
+        except FileNotFoundError:
+            pass
+        except OSError:
+            return True
+        parent = os.path.dirname(current)
+        if parent == current:
+            return False
+        current = parent
+
+
+def outermost_boundary(start):
+    """The outermost ancestor of `start` that holds a `.git` entry. A PATH entry is trusted only when it is
+    outside this one, so a repository embedded in another cannot make the outer one look outside."""
+    current = os.path.realpath(start)
+    found = None
+    while True:
+        if os.path.lexists(os.path.join(current, ".git")):
+            found = current
+        parent = os.path.dirname(current)
+        if parent == current:
+            return found or os.path.realpath(start)
+        current = parent
+
+
+def trusted_entries(boundary):
+    """The PATH entries that are absolute, are folders that exist now and are outside the repository: never "",
+    "." or a relative one, and never an entry that is missing or cannot be examined (a file made there later, inside
+    the repository, would otherwise be found by the program)."""
+    return [entry for entry in os.environ.get("PATH", "").split(os.pathsep)
+            if entry and os.path.isabs(entry) and os.path.isdir(entry) and not is_inside(entry, boundary)]
+
+
+def trusted_which(name, entries, boundary):
+    """The first executable file `name` in a trusted entry that does not resolve into the repository."""
+    for entry in entries:
+        candidate = os.path.join(entry, name)
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK) \
+                and not is_inside(candidate, boundary):
+            return candidate
+    return None
+
+
+def environment(entries):
+    """What the program sees: a short list of the caller's variables, its ``LC_*`` variables and the trusted
+    PATH. `SSH_AUTH_SOCK` is there because the program reaches its runners over SSH. Nothing else is passed."""
+    env = {name: os.environ[name] for name in KEPT if name in os.environ}
+    env.update({name: value for name, value in os.environ.items() if name.startswith("LC_")})
+    env["PATH"] = os.pathsep.join(entries)
+    return env
+
+
+def kill(process):
+    """Stop the program and anything it started in its own process group."""
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+    try:
+        process.kill()
+    except ProcessLookupError:
+        pass
+
+
+def _terminated(number, frame):
+    raise SystemExit(128 + number)
+
+
+def run_program(argv, cwd, env, timeout):
+    """Run `argv`; return ``(code, stdout, stderr, over, timed_out)``. Each stream is read to `MAX_OUTPUT` bytes
+    and the program is stopped when one passes it, and at `timeout` seconds; the whole process group is killed
+    in either case, and on SIGTERM or an interrupt of the helper. The program gets no standard input."""
+    previous = signal.signal(signal.SIGTERM, _terminated)
+    process = None
+    out, err = bytearray(), bytearray()
+    over = timed_out = False
+    try:
+        process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   cwd=cwd, env=env, start_new_session=True)
+        with selectors.DefaultSelector() as pipes:
+            pipes.register(process.stdout, selectors.EVENT_READ, out)
+            pipes.register(process.stderr, selectors.EVENT_READ, err)
+            deadline = time.monotonic() + timeout
+            while (process.stdout in pipes.get_map() or process.stderr in pipes.get_map()) and not over:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    timed_out = True
+                    break
+                for key, _ in pipes.select(min(left, 0.2)):
+                    chunk = os.read(key.fileobj.fileno(), 65536)
+                    if not chunk:
+                        pipes.unregister(key.fileobj)
+                    else:
+                        key.data.extend(chunk)
+                        over = over or len(key.data) > MAX_OUTPUT
+        if not timed_out and not over:
+            try:
+                process.wait(timeout=max(0.0, deadline - time.monotonic()))
+            except subprocess.TimeoutExpired:
+                timed_out = True
+        kill(process)  # also what a program that has exited left running in its group
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            kill(process)
+            process.wait()
+        return process.returncode, bytes(out[:MAX_OUTPUT]), bytes(err[:MAX_OUTPUT]), over, timed_out
+    finally:
+        if process is not None:
+            if process.poll() is None:  # an interrupt or SIGTERM: the program is in its own session, so it would run on
+                kill(process)
+                process.wait()
+            for pipe in (process.stdout, process.stderr):
+                try:
+                    pipe.close()
+                except (OSError, ValueError):
+                    pass
+        signal.signal(signal.SIGTERM, previous)
+
+
+def detail_of(stderr):
+    """The last non-empty line of the program's standard error, as printable ASCII of at most 200 characters."""
+    for line in reversed(stderr.decode("utf-8", "replace").splitlines()):
+        text = "".join(char for char in line if " " <= char <= "~").strip()
+        if text:
+            return text[:MAX_DETAIL]
+    return ""
+
+
+def job_data(raw):
+    """The fields of the program's status view that match their pattern, and nothing else."""
+    try:
+        view = json.loads(raw.decode("utf-8"))
+    except (ValueError, RecursionError):
+        return {}
+    if not isinstance(view, dict):
+        return {}
+    commit = lambda v: v is None or (isinstance(v, str) and HEX.fullmatch(v) is not None)
+    rules = {"state": lambda v: isinstance(v, str) and v in STATES, "commit": commit, "dut_commit": commit,
+             "dut_clean": lambda v: v is None or isinstance(v, bool),
+             "integrity": lambda v: isinstance(v, str) and v in INTEGRITY,
+             "snapshot": lambda v: isinstance(v, bool), "base_commit": commit}
+    return {key: view[key] for key, ok in rules.items() if key in view and ok(view[key])}
+
+
+def run_wrapped(name, tail, extra, root, out):
+    boundary = outermost_boundary(root)
+    entries = trusted_entries(boundary)
+    program = trusted_which(PROGRAM, entries, boundary)
+    if program is None:
+        raise Refused("program_not_found: no remote-runner program in an absolute PATH entry outside the project")
+    seconds = DEADLINE_SLOW if name in SLOW else DEADLINE_FAST
+    code, stdout, stderr, over, timed_out = run_program([program] + tail, root, environment(entries), seconds)
+    detail = detail_of(stderr)
+    if timed_out:
+        code, detail = STOPPED_SLOW, "stopped after %d seconds" % seconds
+    elif over:
+        code, detail = STOPPED_BIG, "stopped: output over %d bytes" % MAX_OUTPUT
+    document = {"format": 1, "command": name, "exit": code, "untrusted_job_data": True,
+                "output": plain(stdout[:MAX_SHOWN].decode("utf-8", "replace")),
+                "truncated": over or len(stdout) > MAX_SHOWN}
+    if code != 0:
+        document["detail"] = detail
+    if name == "status":
+        data = job_data(stdout)
+        expect = extra["expect"]
+        document["data"] = data
+        document["provenance"] = None if expect is None else (
+            code == 0 and data.get("commit") == expect and data.get("dut_commit") == expect
+            and data.get("dut_clean") is True)
+    out.write(json.dumps(document) + "\n")
+    return 0 if code == 0 else 1
+
+
+BUILDERS = {"recommend": build_recommend, "status": build_status, "artifacts": build_artifacts,
+            "submit": build_submit, "fetch": lambda args, root: build_fetch(args, root, False),
+            "fetch-overwrite": lambda args, root: build_fetch(args, root, True)}
+
+
+def main(argv, out, err, cwd):
+    """Run one command from `cwd`. Returns the exit code: 0 when it succeeded, 1 on a refusal, a failed program
+    or a program that was stopped."""
+    try:
+        if not argv or (argv[0] != "profiles" and argv[0] not in BUILDERS):
+            raise Refused("usage: remote-runner %s, with their options" % "|".join(["profiles"] + sorted(BUILDERS)))
+        root = find_root(cwd)
+        if argv[0] == "profiles":
+            return command_profiles(argv[1:], root, out)
+        tail, extra = BUILDERS[argv[0]](argv[1:], root)
+        return run_wrapped(argv[0], tail, extra, root, out)
+    except Refused as exc:
+        err.write("refused: %s\n" % exc)
+        return 1
+    except OSError as exc:
+        err.write("failed: %s\n" % shown(exc.strerror or exc))
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:], sys.stdout, sys.stderr, os.getcwd()))

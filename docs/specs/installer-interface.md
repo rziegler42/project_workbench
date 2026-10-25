@@ -163,7 +163,7 @@ says so.
 |---|---|---|---|---|---|
 | `install` | project | target, a module selection | committed content, manifest, the project's store directory, then per-clone harness files | yes, owner-run | built |
 | `preview` | project | `install`, `adopt`, `upgrade` or `add` and their arguments | nothing; no network, it reads only the approved cache | no | built |
-| `adopt` | project | target, a module selection (as `install`) | committed content for the paths that are missing, manifest, the project's store directory; never an existing file and no harness file | yes, owner-run | proposed (`adopt-existing-repository`) |
+| `adopt` | project | target, a module selection (as `install`) | committed content for the paths that are missing, manifest, the project's store directory; never an existing file and no harness file | yes, owner-run | built (`adopt-existing-repository`) |
 | `attach` | project | target, `--harness` | per-clone harness files, `.git/info/exclude`, the local manifest | no, but owner-run (harness deny rule) | built |
 | `check` | project | target | nothing | no | built |
 | `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run | built |
@@ -306,12 +306,13 @@ publishes, and none edits a living or historical document** (`repository-boundar
   preview there. An agent runs `wb preview install ...` to see the same preview and write
   nothing (the preview and approval section).
 
-### `adopt` (proposed by plan `2026-10-25-adopt-existing-repository`)
+### `adopt` (built by plan `2026-10-25-adopt-existing-repository`)
 
 `wb adopt [<target> | --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...`
 
-Everything in this section is *(my call)* until the owner accepts the decision
-`2026-10-25-adopt-an-existing-repository-without-editing-it`. Nothing here is built.
+The owner accepted the decision `2026-10-25-adopt-an-existing-repository-without-editing-it`,
+and the command is built and was run on this repository. Items marked *(my call)* are choices the
+plan made and the owner may still change.
 
 - **Needs:** an adoptable directory (the states table): its own real `.git`, content besides `.git`,
   and no `.workbench` entry of any kind. The arguments, the selection (exactly one harness module,

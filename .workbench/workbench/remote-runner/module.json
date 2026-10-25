@@ -1,0 +1,35 @@
+{
+  "name": "remote-runner",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Remote job profiles for a project, and a guarded way to use the remote-runner program.",
+  "ships": [
+    "helper/remote-runner",
+    "helper/remote-runner-check"
+  ],
+  "commands": {
+    "remote-runner": {
+      "helper": "helper/remote-runner",
+      "runtime": "python",
+      "kit": 1,
+      "arguments": [
+        "profiles",
+        "recommend",
+        "status",
+        "artifacts",
+        "submit",
+        "fetch",
+        "fetch-overwrite"
+      ],
+      "owner": [
+        "fetch-overwrite"
+      ]
+    }
+  },
+  "checks": [
+    {
+      "helper": "helper/remote-runner-check",
+      "kit": 1
+    }
+  ]
+}

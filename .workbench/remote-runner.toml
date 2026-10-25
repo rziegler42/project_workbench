@@ -1,0 +1,24 @@
+# Remote-runner project contract.
+#
+# `remote-runner` reads this file from a committed revision, so commit it before
+# submitting a job. Host details (SSH names, workspace roots, capacity) belong in
+# the per-user ~/.claude/remotes.toml, never here. A profile is a project command
+# plus the requirements a runner must meet.
+#
+# The `full` profile runs the whole test suite, as docs/development.md documents.
+# Add requirements only when a runner needs them; use only commands this project
+# documents in docs/development.md.
+
+[project]
+id = "project-workbench"
+
+# [profiles.fast]
+# command = "make test-fast"
+#
+# [profiles.fast.requirements]
+# min_cpu_cores = 4
+# min_memory_gib = 8
+# labels = ["test"]
+#
+[profiles.full]
+command = "python3 -B -W error tests/run_all.py"
