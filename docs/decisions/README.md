@@ -83,3 +83,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-24-project-guarantees-a-floor](2026-10-24-project-guarantees-a-floor.md) | A project guarantees a floor under any global setup, not identical behavior | Accepted |
 | [2026-10-24-declared-agent-confinement](2026-10-24-declared-agent-confinement.md) | An agent's limits are declared as data and enforced by the installer | Accepted |
 | [2026-10-24-installer-reads-global-settings-on-request](2026-10-24-installer-reads-global-settings-on-request.md) | The installer may read a harness's global configuration, read-only, on the owner's request | Accepted |
+| [2026-10-25-adopt-an-existing-repository-without-editing-it](2026-10-25-adopt-an-existing-repository-without-editing-it.md) | Adopt an existing repository without editing it | Proposed |

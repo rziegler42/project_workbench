@@ -214,7 +214,12 @@ recorded in the manifest.
   filled block is a `slot block`. The declaration has no field to choose the class, and
   `ownership-and-upgrade` defers one: the fixed mapping stands, and a field can be added later
   without breaking it *(owner)*.
-- **This repository's own seeded files may differ from the installer's.** The installer cannot be run on a directory
+- **A kept seeded file** *(proposed by `adopt-existing-repository`; my call)*. `adopt` finds a seeded path that already
+  exists in the directory it adopts. It keeps the file and records it as `seeded` with the hash of the bytes there,
+  not the hash of the seed, because the manifest records the bytes the installer last saw and "seeded with an entry is
+  skip always" then means a later edit changes nothing. The file's slot blocks are not filled by `adopt` and have no
+  entry; `upgrade` offers them.
+- **This repository's own seeded files may differ from the installer's.** `install` cannot be run on a directory
   that has content, and a seeded file is the project's afterwards, so equal bytes are not the test of agreement.
   `tests/test_self_hosting.py` installs the first-party modules into a scratch directory, and
   `tests/fixtures/self_hosting_dispositions.json` records for each seeded path whether this repository's file is
@@ -291,6 +296,18 @@ are not repeated here.
 - Stops, before writing anything, on any verification failure defined in
   `module-contract.md` or on a missing approval.
 - A harness is mandatory at install.
+
+### adopt *(proposed by `adopt-existing-repository`; my call)*
+
+- Installs the selected modules into a directory that has its own real `.git`, has content and has no `.workbench`.
+  It does what `install` does for every path that does not exist, and it writes nothing into a path that does. It
+  does not create `.git`, does not attach, and does not edit an existing file: no marker is added and no block is
+  appended. The outcomes per path (create, keep, refuse, not filled), the order and the exit codes are in
+  `installer-interface.md`.
+- A kept seeded file is recorded in the manifest as `seeded` with the hash of the bytes there. A path a module owns,
+  or one of the wrong type, refuses the whole command with every conflict listed.
+- The result is an existing project for every other operation. The blocks that belong in a kept file are offered by
+  `upgrade`; the harness is attached by `attach`.
 
 ### attach
 
@@ -391,3 +408,9 @@ are not repeated here.
   does not change the file otherwise.
 - A tracked file that links to a path under `.workbench/local/` is reported by the
   check, and a plain mention of that path is not.
+- *(Proposed by `adopt-existing-repository`.)* After `adopt`, every file that existed before is byte-identical, a kept
+  seeded file is in the manifest at the hash of its own bytes, the tree contains no harness file, and nothing was
+  committed. `check` passes on the adopted project, and `upgrade` classifies each kept seeded file **skip** and offers
+  the blocks that were not filled.
+- *(Proposed by `adopt-existing-repository`.)* `adopt` refuses a directory with no real `.git`, a `.git` that is a file
+  or link, and any `.workbench` entry, and writes nothing.

@@ -328,7 +328,7 @@ review or in the security pass:
 - **`install` attaches as its last step,** after its own unfinished-write marker is removed. If
   attach fails, the install is complete, `install` prints `failed:` and names `wb attach`, and
   exits 3.
-- **The deny list** covers the guarded store and every owner-run command (`install`, `upgrade`,
+- **The deny list** covers the guarded store and every owner-run command (`install`, `adopt`, `upgrade`,
   `add`, `attach`, `acknowledge`, `recover`, `approve`, `pin`, `release-approvals`) in five
   spellings: `wb` and the four interpreter forms of `-m workbench` (`rules.SPELLINGS`). `wb preview` is not denied. A Bash deny is not a security
   boundary; see "Verified rendering rules".

@@ -217,7 +217,7 @@ Rules:
   A convenience allowance is personal and lives in the owner's own configuration.
 - A rule is rendered into local, uncommitted harness configuration only.
 - A harness that provides `permissions` renders a `deny` for each owner-run command, so an
-  agent cannot run it: `wb install`, `wb upgrade`, `wb add`, `wb attach`, `wb acknowledge`,
+  agent cannot run it: `wb install`, `wb adopt`, `wb upgrade`, `wb add`, `wb attach`, `wb acknowledge`,
   `wb recover`, `wb approve`, `wb pin`, `wb release-approvals` and `wb approve-plan`, in the `wb` spelling and
   the four interpreter spellings of `-m workbench` (`rules.SPELLINGS`). The read-only `wb preview` is not denied. The commands
   are listed in `installer-interface.md`. A module command may also declare owner-run arguments

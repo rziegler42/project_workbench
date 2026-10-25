@@ -32,8 +32,8 @@ Non-goals:
 words for its own use:
 
 - **target**: the project directory a project command works on.
-- **project command**: a command that acts on the state of a project: `install`, `attach`,
-  `check`, `upgrade` and adding a module.
+- **project command**: a command that acts on the state of a project: `install`, `adopt`,
+  `attach`, `check`, `upgrade` and adding a module.
 - **package command**: a command that acts on a package directory, a download or a helper
   and not on a project's state: `verify`, `approve`, `pin`, `launch` and
   `release-approvals`.
@@ -110,6 +110,7 @@ already makes *(from the code)*.
 | an empty directory | new project |
 | a directory that holds only `.git`, and `.git` is a real directory (not a link, not a file) | new project |
 | a directory with its own `.git` that is a real directory, and `.workbench/manifest.json` that is a regular file (not a link, not a directory) | existing project *(owner)* |
+| a directory with its own `.git` that is a real directory, at least one entry besides `.git`, and no `.workbench` entry of any kind | adoptable; only `adopt` works on it *(my call)* |
 | any other directory | refused |
 | a file, or any other non-directory | refused |
 | a symbolic link, as the typed final component | refused by rule 5 |
@@ -139,8 +140,15 @@ already makes *(from the code)*.
   following links. A `.workbench` that is a link makes the target "any other directory", not
   an existing project.
 - **rule:** which operation a command can perform is limited by the state. `install` needs a
-  new project; `attach`, `check`, `upgrade` and adding a module need an existing one. A
-  command used on the wrong state refuses and says which state it found *(my call)*.
+  new project; `adopt` needs an adoptable directory; `attach`, `check`, `upgrade` and adding a
+  module need an existing one. A command used on the wrong state refuses and says which state it
+  found *(my call)*.
+- **rule:** the adoptable state is decided from files alone, as the others are, and without git.
+  A directory with content and no `.git`, a `.git` that is a file (a worktree or submodule) or a
+  link, or a `.workbench` of any kind (a link, a file, an empty directory, or a directory holding
+  an unfinished-write marker) is "any other directory" and is refused, and `adopt` says which of
+  these it found. A `.workbench` with a manifest is an existing project, and `adopt` says to use
+  `upgrade` or add a module. `install` on an adoptable directory refuses and names `adopt` *(my call)*.
 
 ## The commands
 
@@ -154,7 +162,8 @@ says so.
 | command | kind | takes | writes | terminal only | state |
 |---|---|---|---|---|---|
 | `install` | project | target, a module selection | committed content, manifest, the project's store directory, then per-clone harness files | yes, owner-run | built |
-| `preview` | project | `install`, `upgrade` or `add` and their arguments | nothing; no network, it reads only the approved cache | no | built |
+| `preview` | project | `install`, `adopt`, `upgrade` or `add` and their arguments | nothing; no network, it reads only the approved cache | no | built |
+| `adopt` | project | target, a module selection (as `install`) | committed content for the paths that are missing, manifest, the project's store directory; never an existing file and no harness file | yes, owner-run | proposed (`adopt-existing-repository`) |
 | `attach` | project | target, `--harness` | per-clone harness files, `.git/info/exclude`, the local manifest | no, but owner-run (harness deny rule) | built |
 | `check` | project | target | nothing | no | built |
 | `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run | built |
@@ -208,7 +217,9 @@ publishes, and none edits a living or historical document** (`repository-boundar
   following links. A path that already exists, tracked or not, is a conflict for the owner;
   the local manifest or any scratch file does not change that. A command never overwrites a
   file except a module-owned file or block that the preview shows as a replacement and whose
-  hash still equals the installed hash.
+  hash still equals the installed hash. `adopt` is the one command that meets a seeded path that
+  already exists and does not call it a conflict: it keeps the file and records it, and it still
+  never writes into it (`adopt`, below).
 - **The manifest is acknowledged first.** A changed committed manifest, or a changed file
   under `.workbench/`, is first-tier content (`trust-and-approval.md`, Acknowledgement). A
   command that acts on it refuses until the owner has acknowledged the change with
@@ -245,7 +256,8 @@ publishes, and none edits a living or historical document** (`repository-boundar
 `wb install [<target> | --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...`
 
 - **Needs:** a new project (the states table). An existing project is refused, and the message
-  says to use `upgrade` or add a module.
+  says to use `upgrade` or add a module. An adoptable directory is refused, and the message says to
+  use `adopt`.
 - **Selection.** The modules to install are named as `verify` names them, `<module>` or
   `<package>/<module>`. Each package comes from a `--package` source: a local package
   directory or a URL. `--package` may repeat; a `--ref <ref>` names the branch, tag or commit of
@@ -293,6 +305,84 @@ publishes, and none edits a living or historical document** (`repository-boundar
 - **Agent may run it:** no *(owner)*. The owner runs `install`, from a terminal, and approves the
   preview there. An agent runs `wb preview install ...` to see the same preview and write
   nothing (the preview and approval section).
+
+### `adopt` (proposed by plan `2026-10-25-adopt-existing-repository`)
+
+`wb adopt [<target> | --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...`
+
+Everything in this section is *(my call)* until the owner accepts the decision
+`2026-10-25-adopt-an-existing-repository-without-editing-it`. Nothing here is built.
+
+- **Needs:** an adoptable directory (the states table): its own real `.git`, content besides `.git`,
+  and no `.workbench` entry of any kind. The arguments, the selection (exactly one harness module,
+  verified and approved) and the sources are those of `install`. `adopt` never initializes a
+  repository, never runs git and never reads `.git/config`: a directory without a real `.git`
+  directory is refused.
+- **Reads and checks, in this order, before anything is written:** the common checks of rule 10
+  (the state last); each source and the selection and approvals, exactly as `install`; then every
+  path the install plan would write, each inspected without following a link, through a descriptor
+  held from the target, and hashed with no filters. The reads are bounded: a file over the bound
+  (proposed 256 MiB in all, as `acknowledge`'s comparison) refuses. The preview never prints the
+  content of an existing file.
+- **What happens to each path of the install plan.** The plan is the one `install` would make.
+  Each path gets exactly one outcome:
+
+  | the path | outcome |
+  |---|---|
+  | does not exist | **create**, exclusively, as `install` does |
+  | a seeded file (the base's `AGENTS.md` and `docs/README.md`, or a file from a module's `writes`) that is a regular file | **keep**: not read for content, not written, recorded in the manifest as `seeded` with the hash of the bytes there |
+  | a directory the plan needs, which is a real directory | reused |
+  | a module-owned path or a living or historical path that exists in any form | **refuse** the whole command |
+  | a file where the plan has a directory, a directory or any non-regular file where it has a file, or a link at any component of a planned path | **refuse** the whole command |
+  | a slot block whose file already exists | **not filled**: the file, the slot and the `wb upgrade` that offers the block are named; the block has no manifest entry |
+
+  A refusal lists every conflict and writes nothing. A block is filled only into a file `adopt`
+  creates, which is the file a new project would have. `adopt` never adds a marker to an existing
+  file and never appends a block to one: filling the blocks of an existing seeded file is the
+  existing, approved behavior of `upgrade` (`repository-boundary.md`, "Classification on upgrade"),
+  which classifies a block with no entry as **create** where the marker is present and **append**
+  where it is not.
+- **Then:** the preview and its approval (see "The preview and approval"). The digest covers, for a
+  kept file, its path, class, size and hash; and for everything else what it covers for `install`.
+  Nothing is written before the owner has approved the preview.
+- **Writes**, after approval, in `install`'s order with these differences: the unfinished-write
+  marker first and removed last, then the directories, the files that are missing, the manifest
+  (with each kept file as `seeded` and its hash) and `.workbench/.gitignore`, the project's store
+  directory with the first-seen record (the resolved path; the message says no remote was recorded),
+  and the baselines for exactly the files in the preview, kept files included at the hash of the
+  bytes there. It does **not** create `.git`, and it does **not attach**. Everything is left
+  uncommitted.
+- **Between preview and write.** After the approval and before the first write, every kept file is
+  read again on a held descriptor, and so is every path that was missing. A kept file whose hash
+  changed, or a missing path that now exists, refuses and writes nothing.
+- **Never** opens an existing file for writing, truncates, renames or replaces one, deletes
+  anything, or runs a program.
+- **It does not attach,** and says so at the end. The edit gate and the rest of the harness are
+  rendered into per-clone files by `attach`, so an adopted project is installed but not gated until
+  the owner runs `wb attach --harness <package>/<module>`. A harness file that already exists with
+  other content is a conflict for `attach` (its rule above), which the owner resolves first. `adopt`
+  does not look at harness files, so it neither reports them nor works around them.
+- **The marker and `recover`.** The marker is the one `install` writes (see "Failure part-way").
+  Its `files` list may record a kept file with the operation `keep`, with the same hash before and
+  after. `recover` treats a kept file as `before` while it holds the recorded hash and as `other`
+  otherwise, never writes it and never removes it; what it removes is what it removes after an
+  `install`. Whether this needs a new format number is for the build to decide.
+- **Refuses** any verification failure, any missing approval, a state other than adoptable (naming
+  the state found), a refused target, and every conflict above. After a failure part-way, the report
+  says what was written.
+- **Terminal and exit codes.** Owner-run and terminal-only, checked before anything is read, as
+  `install` is. Exit 0 done; 1 refused or cancelled; 2 usage; 3 stopped after writing. There is no
+  attach step, so the exit 3 of `install` for a failed attach does not exist here. Standard output
+  ends with the count of paths created, the count kept, the blocks not filled, that nothing was
+  committed, and the `wb attach` and `wb upgrade` that follow.
+- **Contacts the network and writes a cache directory** for each source that is not a local
+  directory, in `adopt` itself and never in `preview`.
+- **Agent may run it:** no. The owner runs `adopt` from a terminal and approves the preview there.
+  An agent runs `wb preview adopt ...` to see the same plan and write nothing. Every harness denies
+  `wb adopt` as it denies `wb install` (see "The preview and approval", rule 2).
+- **An adopted project is an existing project** for every other command. `check`, `acknowledge`,
+  `upgrade` and adding a module treat it as they treat an installed one; `upgrade` classifies each
+  kept seeded file **skip** and offers each block that was not filled.
 
 ### `attach` (built by `claude-harness`)
 
@@ -577,10 +667,10 @@ the rules above are named so a later plan can change them; this plan changes non
 
 ## The preview and approval
 
-Applies to `install`, `upgrade` and adding a module. The split between a read-only `preview`
-and an owner-run write is a **rule** *(owner)*; the layout of the text is a proposal.
+Applies to `install`, `adopt`, `upgrade` and adding a module. The split between a read-only
+`preview` and an owner-run write is a **rule** *(owner)*; the layout of the text is a proposal.
 
-1. **Two verbs.** `wb preview <install | upgrade | add> ...` takes the same arguments as the
+1. **Two verbs.** `wb preview <install | adopt | upgrade | add> ...` takes the same arguments as the
    command it previews. It is read-only, may be run by an agent, and prints the preview. It
    exits 0 when a preview was produced and 1 when the command would have been refused. It
    prints no typing token. **rule:** it contacts no network and writes nothing, not even a
@@ -588,13 +678,13 @@ and an owner-run write is a **rule** *(owner)*; the layout of the text is a prop
    and verifies them again, and it refuses and names a source that is not cached and approved.
    An agent therefore cannot make the workbench contact an address it chose, and the approval
    a preview needs always came from the owner *(my call; found in review)*. `wb install`,
-   `wb upgrade` and `wb add` write, and are owner-run.
+   `wb adopt`, `wb upgrade` and `wb add` write, and are owner-run.
 2. **The write commands are owner-run and terminal-only.** They need a terminal on both
    standard input and standard output, checked on file descriptors as `approve` does, and
    refuse with `refused:` and exit 1 otherwise. They are denied to an agent by the harness,
    exactly as `approve`, `pin` and `attach` are. **rule:** the harness modules render a `deny`
-   for `wb install`, `wb upgrade`, `wb add`, `wb attach`, `wb acknowledge`, `wb approve`, `wb pin` and
-   `wb release-approvals`, and the neutral rule list carries them (`harness-modules.md`,
+   for `wb install`, `wb adopt`, `wb upgrade`, `wb add`, `wb attach`, `wb acknowledge`, `wb approve`,
+   `wb pin` and `wb release-approvals`, and the neutral rule list carries them (`harness-modules.md`,
    "Permissions"; `trust-and-approval.md`, "Rendering rules"). *(This requirement is not yet
    in those two specifications; the plan `2026-10-20-installer-interface` adds it.)*
 3. **One process, nothing stored.** A write command computes the preview itself, in its own
@@ -721,7 +811,7 @@ and an owner-run write is a **rule** *(owner)*; the layout of the text is a prop
   `failed:` with the cause, then exactly which paths it wrote and which it did not, and
   exits 3. It never deletes or reverts anything it did not itself create, and it never
   continues after an error.
-- **rule:** `install` creates `.workbench/local/incomplete` before anything else it writes
+- **rule:** `install` (and `adopt`) creates `.workbench/local/incomplete` before anything else it writes
   and removes it last. A directory holding it is not an existing project: `check`, `attach`,
   `upgrade` and `add` report it and refuse, and only a completed install removes it. This
   closes the window in which a part-written manifest would otherwise make a half-installed
