@@ -203,7 +203,9 @@ three rounds are used. A review with no findings is not an approval; the plan st
 
 ## Result
 
-### Increment A (done, uncommitted until the owner says commit)
+### Increment A (done)
+
+- Committed as `97bc7c3`.
 
 - Wrote the `Proposed` decision `docs/decisions/2026-10-25-module-commands-and-the-approver.md`: Question 1 (what prompts for
   the module commands) with three options, Question 2 (whether the module commit spelling is delegated), the alternatives
@@ -222,3 +224,25 @@ three rounds are used. A review with no findings is not an approval; the plan st
   level was read or written in this increment.
 - Next: **stop for the owner.** The owner accepts Question 1 and Question 2 (the accept-decision checkpoint). Under option 2,
   Increment B follows; under option 1 or 3 the plan ends after A, as the plan says.
+
+### Decision accepted, Increment B stopped, plan ends after A
+
+- On 2026-10-25 the owner accepted the decision `2026-10-25-module-commands-and-the-approver` with option 2 for Question 1 (the
+  owner adds global `ask` entries) and option 1, not delegated, for Question 2. The status line and the README row were
+  edited at the owner's request; that edit is uncommitted until the owner says commit.
+- Increment B was started and stopped at its step 1. Reading the approver at the user level, read only, showed that the
+  spellings it matches (`SPELLINGS`, `SPELLING_TOOL`), the tools a rule may name (`SUPPORTED_TOOLS`), the installed-helper
+  check (`INSTALLED_TOOLS`, `resolve_invocation`) and the delegable rules (`DELEGABLE`) are constants in the approver program,
+  not data. A rule file naming a tool outside `SUPPORTED_TOOLS` is refused by the rule check, and a `wb run safe-git commit`
+  line begins with none of the listed spellings, so it is never matched. Teaching the approver the module spellings is a change
+  to its program, which this plan lists as a non-goal. The data-only runbook of B therefore cannot work, and whether a refused
+  rule file silences the other rules was not tested.
+- Provenance: read on 2026-10-25 at commit `97bc7c3` of this repository; the hashes of the approver's configuration, rubric,
+  verdict schema, seven rule files, hook program and settings file were taken; all but the settings file match the spec's
+  inventory (the settings file hash was not compared with the spec). Nothing was written at the user level and no command was run to
+  test a prompt.
+- By the owner's choice (option 1 of the two the agent offered) the plan ends after A. B and C were not done. The owner closes
+  the plan (`Superseded`, or `Completed` for A alone). M1 stage 1, and with it the blockers on M9, M14 and M16, stay open until
+  a new plan covers a change to the approver program (or its redesign into `action-review-engine`), which is the owner's to
+  plan and make. The inventory spec's M1, F-A1 and F-B2 text does not yet say that the approver's spellings are code, not
+  data; correcting it is a spec edit for a later step.

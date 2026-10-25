@@ -1,6 +1,6 @@
 # What prompts for the module commands, so the owner's approver can review them
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-25
 Date: 2026-10-25
 
 ## Context
@@ -28,8 +28,8 @@ known. The 2026-10-24 trial ran `-p`, where an `ask` is denied and not prompted.
 
 ## Decision
 
-Not yet made. This record sets out the choices for the owner, who alone accepts one. Nothing here is built, and nothing at the
-user level changes by writing it.
+The owner chose **option 2** for Question 1 and **option 1 (not delegated)** for Question 2, and accepted the record on
+2026-10-25. The choices are set out below. Nothing here is built, and nothing at the user level changes by writing this record.
 
 **Question 1: what raises a prompt for the module commands.** One of:
 
