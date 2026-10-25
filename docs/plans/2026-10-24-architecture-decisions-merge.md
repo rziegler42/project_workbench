@@ -1,6 +1,6 @@
 # The decision rules the owner's skill carries
 
-Status: Approved
+Status: In Progress
 Created: 2026-10-24
 Candidate: workbench-v1#architecture-decisions-merge
 Specs: groundwork
@@ -194,4 +194,12 @@ and without a second round.
 
 ## Result
 
-Not started.
+- Increment A: `draft-decision`'s `SKILL.md` carries four new sections between the numbered steps and "Rules:": "Approval and
+  acceptance" (rules 1 and 2), "Changing an accepted record" (rules 3 and 4), "The index and the statuses" (rule 5) and
+  "The record itself" (rule 6). Seven new tests in `test_groundwork_module.py` (class `Skills`) pin every clause listed in
+  the increment step, six of which failed on the old skill and pass now; the seventh, the negative guard (no
+  `Verification`, no implementation-evidence requirement, no present-before-write, one `set the status to Accepted`
+  sentence and it is the "Never" one), passed on the old skill by design and still does. The frontmatter, the numbered steps,
+  the "Rules:" list and the template are unchanged, and the module's 194 tests pass. The text was checked against
+  `groundwork.md` ("Decisions", "What is checked") and `docs/decisions/README.md`: rule 3 adds the timing the spec leaves open
+  (choice 2) and contradicts neither. The module's shipped approval is stale until B. Next: B.

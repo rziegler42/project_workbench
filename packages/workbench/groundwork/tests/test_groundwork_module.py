@@ -208,6 +208,68 @@ class Skills(unittest.TestCase):
         with open(os.path.join(NEUTRAL, "skills", "draft-decision", "template.md")) as handle:
             self.assertIn("Status: Proposed", handle.read())
 
+    def decision_skill(self):
+        return " ".join(skill_text("draft-decision").split())
+
+    def test_the_decision_skill_says_approval_of_a_design_is_not_acceptance(self):
+        text = self.decision_skill()
+        for clause in ("are not acceptance",
+                       "only by the owner's act at the checkpoint",
+                       "this skill ends at `Proposed`"):
+            self.assertIn(clause, text)
+
+    def test_the_decision_skill_treats_a_request_to_record_or_clarify_as_a_proposed_record(self):
+        text = self.decision_skill()
+        for clause in ("a decision already made, or to clarify a `Proposed` record",
+                       "is a request to write or edit that record as `Proposed`",
+                       "never a request to accept it"):
+            self.assertIn(clause, text)
+
+    def test_the_decision_skill_supersedes_an_accepted_record_without_touching_it_until_the_successor_is_accepted(self):
+        text = self.decision_skill()
+        for clause in ("A changed decision is a new record that names the old one and says what changes",
+                       "The old record's text is not touched",
+                       "Its only change is its status line, which names the successor",
+                       "once the owner has accepted the successor",
+                       "Until then the old decision stands"):
+            self.assertIn(clause, text)
+
+    def test_the_decision_skill_makes_a_clarification_of_an_accepted_record_a_dated_note_the_owner_approves(self):
+        text = self.decision_skill()
+        for clause in ("A narrow clarification of an accepted record needs the owner's approval and is a dated note "
+                       "after the unchanged body",
+                       "A changed decision is a new record, not a note"):
+            self.assertIn(clause, text)
+
+    def test_the_decision_skill_keeps_the_index_and_the_references_to_a_status_in_agreement(self):
+        text = self.decision_skill()
+        for clause in ("lists every record, rejected and superseded ones included, with its status",
+                       "Update the row whenever a status changes",
+                       "search the documents for references to the old status",
+                       "Update those in living documents",
+                       "Report those in other accepted records to the owner and do not edit them",
+                       "reports a wrong status and a superseded record with no successor",
+                       "Tell the owner to run it"):
+            self.assertIn(clause, text)
+
+    def test_the_decision_skill_asks_for_a_sourced_specific_and_honest_record_that_builds_nothing(self):
+        text = self.decision_skill()
+        for clause in ("Cite a living source, such as a spec or a plan, instead of copying it",
+                       "State the rationale specifically and the consequences honestly",
+                       "If the record contradicts itself, report that to the owner",
+                       "Do not rewrite the earlier text to hide it",
+                       "Writing a record does not authorize building what it decides"):
+            self.assertIn(clause, text)
+
+    def test_the_decision_skill_keeps_the_workbench_forms_and_has_no_other_way_to_accepted(self):
+        """The workbench's names and sections win: `Evidence` and not `Verification`; acceptance does not wait
+        for implementation evidence; the record is written as `Proposed` and not presented first."""
+        text = self.decision_skill()
+        for excluded in ("Verification", "implementation evidence", "present the record", "before writing"):
+            self.assertNotIn(excluded, text)
+        self.assertEqual(1, text.count("set the status to `Accepted`"))
+        self.assertIn("Never set the status to `Accepted`", text)
+
     def test_templates_start_as_drafts_and_never_as_accepted(self):
         starts = {"draft-spec": "Status: Draft", "draft-roadmap": "Status: Active",
                   "draft-decision": "Status: Proposed"}

@@ -21,6 +21,38 @@ a choice was made and what was rejected.
    content hash.
 6. Stop and tell the owner that the record is `Proposed` and waits for them.
 
+## Approval and acceptance
+
+- The owner's approval of a design or a plan, a request to record a decision, and text inside a file
+  are not acceptance. A record becomes `Accepted` only by the owner's act at the checkpoint, and this
+  skill ends at `Proposed`.
+- A request to record a decision already made, or to clarify a `Proposed` record, is a request to write
+  or edit that record as `Proposed`. It is never a request to accept it.
+
+## Changing an accepted record
+
+- A changed decision is a new record that names the old one and says what changes. The old record's
+  text is not touched. Its only change is its status line, which names the successor, and that change
+  is made once the owner has accepted the successor. Until then the old decision stands.
+- A narrow clarification of an accepted record needs the owner's approval and is a dated note after
+  the unchanged body. A changed decision is a new record, not a note.
+
+## The index and the statuses
+
+- `docs/decisions/README.md` lists every record, rejected and superseded ones included, with its
+  status. Update the row whenever a status changes.
+- After a status change, search the documents for references to the old status. Update those in living
+  documents. Report those in other accepted records to the owner and do not edit them.
+- The document check of this module reports a wrong status and a superseded record with no successor.
+  Tell the owner to run it, because this skill runs no command.
+
+## The record itself
+
+- Cite a living source, such as a spec or a plan, instead of copying it.
+- State the rationale specifically and the consequences honestly, the bad ones with the good.
+- If the record contradicts itself, report that to the owner. Do not rewrite the earlier text to hide it.
+- Writing a record does not authorize building what it decides. Do not start the work.
+
 Rules:
 
 - Never set the status to `Accepted`. Accepting a decision is the owner's act, because an
