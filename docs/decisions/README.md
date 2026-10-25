@@ -85,4 +85,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-24-installer-reads-global-settings-on-request](2026-10-24-installer-reads-global-settings-on-request.md) | The installer may read a harness's global configuration, read-only, on the owner's request | Accepted |
 | [2026-10-25-adopt-an-existing-repository-without-editing-it](2026-10-25-adopt-an-existing-repository-without-editing-it.md) | Adopt an existing repository without editing it | Accepted by the owner on 2026-10-25 |
 | [2026-10-25-module-commands-and-the-approver](2026-10-25-module-commands-and-the-approver.md) | What prompts for the module commands, so the owner's approver can review them | Accepted by the owner on 2026-10-25 |
-| [2026-10-25-approver-coverage-for-the-module-commands](2026-10-25-approver-coverage-for-the-module-commands.md) | How the approver comes to review the module commands | Proposed |
+| [2026-10-25-approver-coverage-for-the-module-commands](2026-10-25-approver-coverage-for-the-module-commands.md) | How the approver comes to review the module commands | Accepted by the owner on 2026-10-25 (option 1a) |

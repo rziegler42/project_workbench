@@ -264,4 +264,13 @@ makes the change, the cost) stated for each choice, the wording of why the globa
 qualified claim about what 1a unblocks (M9 still needs the F-B1 test, M16 the `remote-runner` program change), two phrases that
 steered toward an option neutralized, and option 3's claim softened. A review with no blocking finding is not an approval.
 
-Not done: the commit, and the owner's choice. The owner alone accepts a decision.
+Committed as `a6a83a5`.
+
+### The owner's choice
+
+On 2026-10-25 the owner chose option 1a and asked for the record to be made; the decision is `Accepted by the owner on
+2026-10-25 (option 1a)`. Completion criterion 3 is met by that acceptance. The patch itself is not part of this plan (its
+non-goals): it needs its own plan, which does not exist and needs the owner's approval. M1 stage 1, and with it the blockers
+on M9 and M16 (not M14), stay open until the owner applies the patch.
+
+Not done: the plan's status is still `Proposed` in the file; closing it is the owner's call.

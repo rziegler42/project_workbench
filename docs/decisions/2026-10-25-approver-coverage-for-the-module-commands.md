@@ -1,6 +1,6 @@
 # How the approver comes to review the module commands
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-25 (option 1a)
 Date: 2026-10-25
 
 ## Context
@@ -38,7 +38,10 @@ untested. It matters only for the `git push` prompt (move M9), which the project
 
 ## Decision
 
-The owner chooses one. Nothing here is built, and nothing at the user level changes by writing this record.
+The owner chose **option 1a** (the narrow change to the approver program) and accepted the record on 2026-10-25. The choices are
+set out below as they were written. Nothing here is built, and nothing at the user level changes by writing this record. The
+owner makes the change to the program; the agent prepares and tests a patch on a scratch copy under its own plan, which does not
+exist yet and needs the owner's approval.
 
 1. **The owner changes the approver program** so that it recognises the module spellings. The agent cannot write the user level,
    so the owner makes the change, or has it prepared as a patch to review. The list of what changes (read, not run; line numbers of the
