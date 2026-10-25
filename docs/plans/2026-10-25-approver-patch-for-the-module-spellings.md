@@ -729,7 +729,7 @@ limit of `is_inside`). The approver reviews facts computed by the global `claude
 from what the module's `safe-git` does with the same arguments. A match is only a routing decision; a wrong review would still
 be advice, since no module rule can be allowed without the owner.
 
-### Increment C (done, reviewed, not yet committed)
+### Increment C (done, reviewed, committed as `7972b2a`; owner steps carried out 2026-10-25, see "Owner steps as carried out")
 
 Increment C's own step 1 says to run the self-check before anything else; steps 3 and 4 below do so, on a scratch copy before the
 live apply.
@@ -796,3 +796,33 @@ the settings file's entry shape and the log's place, which this plan did not rea
 level, so the step tells the owner to copy the shape of the existing entries. Finding 4 (the subsection was unfinished): applied
 by this paragraph. Not checked by the reviewer: that the quoted texts reproduce the hashes (checked in Increment B), the owner's real
 settings, and the real `PATH`.
+
+**Owner steps as carried out (2026-10-25, by the owner in a terminal; the agent read the user level, wrote nothing there, and
+read the results back).** Files are named by role and SHA-256, never by path.
+- Step 1: the approver program hashed to the base hash (`94ac5e8cd05473081ff0004130592cdb94e0bbd19199777574c599a23cca2b0b`) in
+  both the owner's configuration and its mirror. Both trees' program, data folder (eight rule files) and settings file were
+  backed up to a folder outside both; the program and settings hashes of each backup matched the original.
+- Step 2: the patch and the self-check script were extracted from Increment B's Result by a small script and hashed to the
+  recorded values (`ff3d5ece…1ed16`, `b5899c2a…42`).
+- Step 3: on a scratch copy, the patch applied with `patch -p1`, the program hashed to
+  `d8b3facdee46432d27547a07865abf024741929ae2d9191e1015ee8280bcd613`, and the self-check printed `ALL CHECKS PASSED`.
+- Steps 4 and 5: a dry run and then the real apply, in the live configuration and in the mirror. Each program hashed to the
+  patched value, the rule folders of the two were identical, and the self-check passed in each (72 checks).
+- Step 6: **not needed.** The settings file has one `PermissionRequest` hook with the matcher `Bash` that runs the approver for
+  every Bash command, so there is no list of spellings to extend. The step applied only if the file listed spellings
+  individually.
+- Step 7: four `ask` entries (`wb run safe-git commit`, `wb run safe-git remove`, `wb run remote-runner submit`,
+  `wb run remote-runner fetch`, each with `:*`) were added after the existing `remote-runner fetch` group in both settings
+  files, by a script that refused to run if the file did not round-trip as 2-space JSON. A diff of each file against its backup
+  showed exactly those four added lines.
+- Steps 8 and 9, the gate, in a new session: the owner asked for `wb run safe-git commit --expected-head
+  0000000000000000000000000000000000000000 --subject 'gate test' -- docs/plans/README.md`. A permission prompt appeared and named
+  the new `ask` rule. The approver's verdict log went from 994 to 995 rows; the new row (2026-10-25T20:53:10Z) has the rule
+  `safe-git-commit`, decision `none`, verdict `decline` and the failed check `head_matches`, as expected for an all-zero head. The
+  launcher check therefore passed on the owner's real `PATH`. **The gate passed for `safe-git commit`.**
+- Step 10: the backups are kept until the owner decides to delete them.
+
+**What the gate did not show.** Only `safe-git-commit` went through a live prompt. `safe-git-remove`, `wb-remote-runner-submit`
+and `wb-remote-runner-fetch` rest on the scratch tests and the self-check; the two remote commands were deliberately not run
+(they reach a remote). The review is still advice: no module rule can be allowed without the owner. The mirror's changes (the
+patched program, four rule files, four `ask` entries) are in the owner's mirror repository, uncommitted.

@@ -502,8 +502,15 @@ spellings is not enough once that program is removed (M14). So stage 1 needs a c
 redesign into the engine, and the owner makes either. The plan `2026-10-25-approver-coverage-for-module-spellings` ended after
 its Increment A (`Superseded`) for that reason. The plan `2026-10-25-approver-program-and-the-module-spellings` measured the
 baseline on a scratch copy and put the choice to the owner, who accepted option 1a. The carrying plan of stage 1 is now
-`2026-10-25-approver-patch-for-the-module-spellings`: the patch is prepared and tested on a scratch copy and is not applied;
-the recorded interactive run below remains the gate. The module wraps neither `cancel` nor `prune`, and its `fetch-overwrite` and the review-engine `archive` are
+`2026-10-25-approver-patch-for-the-module-spellings`: the patch was tested on a scratch copy, then applied by the owner on
+2026-10-25 to the owner's configuration and its mirror (patched program SHA-256
+`d8b3facdee46432d27547a07865abf024741929ae2d9191e1015ee8280bcd613`), the scratch self-check passing 72 checks in each. The gate
+for stage 1 was run the same day, in a new session, for `wb run safe-git commit` only: the command raised a prompt that named
+the new global `ask` entry, and the approver logged one new verdict row with the rule `safe-git-commit`, no delegated
+decision, a `decline` verdict and the failed check `head_matches` (the command carried an all-zero head, so nothing could be
+committed). That run also met the F-B1 test, since a project-level `ask` reached the global hook. The other three module rules
+(`safe-git-remove`, `wb-remote-runner-submit`, `wb-remote-runner-fetch`) were not run through a live prompt; they rest on the
+scratch tests and the self-check. The module wraps neither `cancel` nor `prune`, and its `fetch-overwrite` and the review-engine `archive` are
 owner-run and denied, so they raise no prompt for the approver to review. Stage 1 also needs F-B2 decided (render an `ask`
 for the module commands; or the owner adds global `ask` entries for the four spellings; or accept that they prompt only by
 the owner's `allow` rules and `auto` mode); the decision `2026-10-25-module-commands-and-the-approver` sets them out and the
@@ -513,12 +520,13 @@ verdict for it, and (the F-B1 test) a project `ask` reaches a global `Permission
 stage 2 is blocked on `action-review-engine`, which has no plan. Carrying plan: `2026-10-25-approver-patch-for-the-module-spellings` for
 stage 1 (the baseline and the decision come from `2026-10-25-approver-program-and-the-module-spellings`; applying the patch is an
 owner step, since the agent cannot write the user level); the engine's own plan for stage 2. Owner step:
-stage 1 removes nothing and adds four rule files, the patch to the program, per-spelling hook entries and four global `ask`
-entries (the ordered steps are in the Result of the carrying plan); stage 2 replaces the global rule files once the engine runs.
+stage 1 removes nothing and adds four rule files, the patch to the program and four global `ask` entries (done on 2026-10-25;
+the ordered steps are in the Result of the carrying plan; the hook entry needed no change, because the one `Bash` hook
+already runs the approver for every command); stage 2 replaces the global rule files once the engine runs.
 
 *M1 stage 1, option 1a: the required behavior of the patched approver* (a specification written on 2026-10-25 by the plan
 `2026-10-25-approver-patch-for-the-module-spellings`, Increment A; the patch was written and tested on a scratch copy in its
-Increment B, whose measured results end this block, and nothing is applied). The
+Increment B, whose measured results end this block; the owner applied the patch on 2026-10-25, see the M1 paragraph above). The
 accepted decision `2026-10-25-approver-coverage-for-the-module-commands` chose option 1a: a narrow change, with the collectors still
 calling the global `claude-workflow` program and `DELEGABLE` unchanged, so a module commit is never allowed by the approver on its
 own. The baseline is the approver program with SHA-256 `94ac5e8cd05473081ff0004130592cdb94e0bbd19199777574c599a23cca2b0b`.
@@ -570,8 +578,9 @@ own. The baseline is the approver program with SHA-256 `94ac5e8cd05473081ff00041
 - **Only a prompted command is reviewed.** The approver sees a command only when an `ask` rule raised a prompt for it, so each
   new spelling is reviewed only while the owner's global `ask` entry for it exists (the accepted decision
   `2026-10-25-module-commands-and-the-approver`); the patch does not make the module commands prompt.
-- **Outside the program:** the global `ask` entries for the four spellings and the per-spelling hook entries in the settings file
-  are edits for the owner (Increment C of the plan).
+- **Outside the program:** the global `ask` entries for the four spellings were an edit for the owner (Increment C of the plan),
+  made on 2026-10-25. The settings file's one `Bash` hook already runs the approver for every command, so no per-spelling hook
+  entry was needed.
 
 **M2: the `security-review` skill.** Items: the personal skill `security-review`. Gate: a recorded run showing the project skill
 loads once the global one is out of the way (a personal skill shadows a project skill of the same name). Blocker: none.
