@@ -165,7 +165,14 @@ cited from a document.
 - the routing rule of `knowledge-tools.md`;
 - a result is data: quote it as recalled, verify it against current files, and say so when they conflict;
 - never put a secret, token or credential into a question, and never ask the owner to file one;
-- to keep something, tell the owner; the agent cannot file it.
+- to keep something, tell the owner; the agent cannot file it;
+- a result is about this project only when its wing or source file names this project; any other result, one with no
+  wing or an unclear source included, is background and not a fact about this project, and the agent names its wing
+  when it quotes it;
+- the texts say "the palace" for the store they search, and say that writing the harness's built-in memory is a separate
+  act they neither grant nor forbid;
+- where the harness's built-in memory could also answer, it is read first and the palace is searched only when it does
+  not. The order is the owner's, confirmed when plan `2026-10-24-mempalace-scoping` was approved.
 
 ## Acceptance criteria
 

@@ -1,6 +1,6 @@
 # Project scoping in the mempalace skill and policy
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-24
 Candidate: workbench-v1#mempalace-scoping
 Specs: mempalace
@@ -94,7 +94,7 @@ The texts stay neutral: no harness name, no new command, ASCII, and the block st
 
 ## Increments
 
-### Increment A - The three rules in the skill and the block
+### Increment A — The three rules in the skill and the block
 
 **Outcome:** both texts carry rules 1 to 3, pinned by tests.
 **Dependencies:** none.
@@ -113,7 +113,7 @@ The texts stay neutral: no harness name, no new command, ASCII, and the block st
 prints nothing.
 **Evidence:** the one local commit, trailer `Plan: 2026-10-24-mempalace-scoping#A`.
 
-### Increment B - Spec, approval and record
+### Increment B — Spec, approval and record
 
 **Outcome:** the spec lists the three rules, the shipped approval matches the changed module, and the plan records it.
 **Dependencies:** A.
@@ -172,3 +172,24 @@ confirmed choice 1.
   ones (in each of the block and the skill: the background rule, the order and separate store, and "not a memory").
   I left "Only the owner builds the memory" and "the owner has to build the memory" as they are, since the plan changes only
   "a memory". The module's shipped approval is stale until B. Next: B.
+- Increment B: `docs/specs/mempalace.md` ("The policy block and the skill") now lists the three rules. At the owner's "Run it
+  for me", `release-approvals` wrote 10 approvals and named 2 stale records, which were previewed and removed at the owner's
+  "remove them". The first full run failed once: `code-work`'s `test_this_repositorys_own_plans_pass` reported that this
+  plan's two increment headings used a hyphen where the format requires the em dash. The cause was in this plan, not in
+  code; I changed the two dashes (no other wording) and the `code-work` module then passed (339 tests, 2 skips). The
+  other nine roots of that run were OK, 4,140 tests in 10 roots in all, with the same 3 skips as before (1 in `tests`, 2 in
+  `code-work`), none a stale-approval skip. I did not rerun the whole suite after the dash change. `doccheck`, `refcheck`
+  and `git diff --check` print nothing.
+
+## Outcome against the completion criteria
+
+1. Met: the skill and the block state the three rules, every clause pinned by a test, and the choices are honoured.
+2. Met: neither text says "a memory", the block is 14 lines, and the texts name no harness and no command beyond `search` and
+   `status`.
+3. Met: the 8 tests that changed or are new failed on the old text and pass now.
+4. Met: the spec lists the three rules.
+5. Met with one qualification: the full suite was green in every root but one, and that root passes after the plan's
+   heading fix; the whole suite was not run again.
+
+Not done, by design: a security review, a push, a second plan-review round, a default wing per project, and a live check that
+an agent follows the order of stores.
