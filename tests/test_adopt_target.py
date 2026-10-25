@@ -82,6 +82,15 @@ class AdoptableTest(TargetTest):
                     self.put("%s/.workbench/other.txt" % name)
                 self.refused_adopt(place, "refused:")
 
+    def test_a_workbench_spelled_in_another_case_is_refused(self):
+        # On a case-insensitive volume `.WORKBENCH` is the same directory as `.workbench`.
+        for index, spelling in enumerate((".WORKBENCH", ".WorkBench")):
+            with self.subTest(spelling=spelling):
+                name = "case%d" % index
+                place = self.adoptable(name)
+                self.put("%s/%s/local/incomplete" % (name, spelling))
+                self.refused_adopt(place, "refused:", ".workbench")
+
     def test_a_workbench_without_git_is_refused(self):
         self.make("lone")
         self.put("lone/.workbench/manifest.json")

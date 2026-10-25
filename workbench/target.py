@@ -289,6 +289,10 @@ def _classify(fd, resolved, marked=False, adopt=False):
                               "does not make one: %s" % resolved)
     elif ".workbench" not in names:
         if adopt:
+            if any(name.casefold() == ".workbench" for name in names):
+                raise TargetError("refused: a name that differs from .workbench only in case "
+                                  "is here, and adopt needs a directory with no .workbench: %s"
+                                  % resolved)
             return "adoptable"
         raise TargetError("refused: the directory holds other content and is not a project; "
                           "wb adopt installs into a repository that has content: %s" % resolved)

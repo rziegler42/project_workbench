@@ -342,6 +342,31 @@ the plan for each, and the owner decided R2-F1 and R2-F2 as applied. The review 
   hashing.
 - R2-F2 (minor, `Specs:` line): the plan changes `trust-and-approval` and `harness-modules`. Accepted: both are listed.
 
+Increment D, security review of B and C, 2026-10-25 (`security-reviewer` agent, two rounds, scratch copies only, Python
+3.15 on case-insensitive APFS). I reproduced each finding before acting on it.
+
+- D-F1 (medium, `target.py` `_classify`): a `.WORKBENCH` directory passed the "no `.workbench` entry of any kind" check
+  on a case-insensitive volume, so `adopt` planned into a directory the repository controls. Reproduced with a failing
+  test; fixed by refusing any case variant of `.workbench`. Test: `test_a_workbench_spelled_in_another_case_is_refused`.
+- D-F2 (low, `adoptplan.py` `kind_of`): `agents.md` or `Docs/` beside a planned `AGENTS.md` or `docs` made the preview
+  say "create" and `adopt` fail half-way (nothing lost: creates are exclusive). Reproduced; fixed by treating a name that
+  differs only in case or Unicode form as a conflict. Tests: the two `differs_only_in_case` tests. Trade-off: on a
+  case-sensitive volume a repository with `Docs/` and no `docs/` is refused too; it fails closed.
+- The second round attacked the fix (nested variants, Kelvin sign, `.GIT`, NFC/NFD, trailing dot and space, fullwidth)
+  and found no bypass. Names a volume does not fold do not collide, so the preview passes them.
+- Accepted, no code change (Low): a kept file edited after the last re-check leaves a manifest hash that reads as
+  "edited"; the file is never overwritten. The hash is a claim about one moment.
+- Accepted, no code change (Low, pre-existing): the best-effort deny patterns in `rules.py` do not match `./wb`,
+  `env`-prefixed, path-qualified or `-I` spellings, for `install` as much as `adopt`. The guard that holds is the
+  terminal check on stdin and stdout in `install.py`; it was not tested against a pty.
+- Found sound, by test: links and special files at kept and planned paths; a link or swap of a kept file and of a
+  planned directory after the re-check (exit 3, nothing written through it); `recover` with a kept file modified,
+  removed, replaced by a link or a directory (refuses, marker stays), and with a colliding user directory (survives);
+  escape characters in the target name; hard links, FIFOs, oversized files. By reading only: the digest covers kept
+  hashes and sizes, `reuse-dir` against `create-dir` and `not_filled`; creates use `O_EXCL|O_NOFOLLOW` through held
+  descriptors; reads are bounded; no kept file can be pinned as a helper.
+- Not tested: sockets (path too long) and device nodes (`mknod` not permitted); volumes other than APFS.
+
 ## Deferred work
 
 - Reconciling the text of each `diverged` seeded file with its seed (Choice 6 keeps them as they are).

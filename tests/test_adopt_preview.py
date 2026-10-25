@@ -204,6 +204,17 @@ class AdoptConflictTest(AdoptPreviewBase):
         place = self.repo(files={"AGENTS.md/inner.txt": b"x"})
         self.refused(place, path, "AGENTS.md")
 
+    def test_a_name_that_differs_only_in_case_from_a_planned_file_is_refused(self):
+        # On a case-insensitive volume `agents.md` is `AGENTS.md`; the preview must not say "create".
+        path = self.good_set()
+        place = self.repo(files={"agents.md": OWN_AGENTS})
+        self.refused(place, path, "AGENTS.md", "case")
+
+    def test_a_name_that_differs_only_in_case_from_a_planned_directory_is_refused(self):
+        path = self.good_set()
+        place = self.repo(files={"Docs/readme.md": b"x"})
+        self.refused(place, path, "docs", "case")
+
     def test_a_link_on_a_planned_file_is_refused(self):
         path = self.good_set()
         place = self.repo()

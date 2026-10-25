@@ -16,6 +16,8 @@ time without following a link, and a file is hashed with no filters. The caller 
 file's content.
 """
 
+import unicodedata
+
 from . import installplan, projectfs
 from .wbkit import safefs
 
@@ -23,7 +25,13 @@ from .wbkit import safefs
 MAX_TOTAL_BYTES = 256 * 1024 * 1024
 
 _KIND_WORDS = {"dir": "a directory", "file": "a file", "symlink": "a link",
-               "other": "not a regular file"}
+               "other": "not a regular file",
+               "variant": "a name that differs only in case or form"}
+
+
+def _same_name(name):
+    """The spelling a case-insensitive or normalising volume treats as this name."""
+    return unicodedata.normalize("NFD", name).casefold()
 
 
 class Conflicts(installplan.PlanError):
@@ -60,7 +68,14 @@ def inspect(held, selection, snapshots, base):
         found = listings[parent]
         if found is None:
             return None
-        return dict(found).get(name)
+        entries = dict(found)
+        if name in entries:
+            return entries[name]
+        # A volume that folds case or form would open a differently spelled name for this one.
+        folded = _same_name(name)
+        if any(_same_name(other) == folded for other in entries):
+            return "variant"
+        return None
 
     def conflict(rel, why):
         bad.add(rel)
