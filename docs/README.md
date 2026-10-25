@@ -51,3 +51,13 @@ until then by the owner in session:
 
 Until the workbench exists, approval is the owner's explicit statement in
 session and a `Status:` line is informational.
+<!-- BEGIN workbench/code-work slot:docs-index -->
+- [Plans](plans/README.md): the work in hand, as increments
+<!-- END workbench/code-work slot:docs-index -->
+<!-- BEGIN workbench/groundwork slot:docs-index -->
+- [Specs](specs/README.md): what is true now
+- [Roadmaps](roadmaps/README.md): where the work is heading
+- [Decisions](decisions/README.md): why choices were made
+- [References](references/README.md): the outside material the work rests on
+<!-- END workbench/groundwork slot:docs-index -->
+<!-- @slot: docs-index -->
