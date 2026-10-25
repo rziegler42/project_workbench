@@ -239,3 +239,27 @@ medium, bound 3 rounds). Findings are advice and were judged by the author; the 
   line. The reviewer could not read the settings file or the approver, so the counts and the approver claims rest on this
   author and the generating script.
 - Not done: the settings-path test, and any interactive check of how `ask` and the approver behave.
+- Committed as `8a3080d`.
+
+### Increment C (done, uncommitted until the owner says commit)
+
+- Extended `docs/specs/global-config-inventory.md` with the owner's user-level instruction file (281 lines, read in full): every
+  heading and 70 paragraph-group rows, each with one disposition against the module policy blocks, skills and specs: 21 `move`,
+  16 `redesign`, 33 `keep global`, none `drop` (CS1 becomes `drop` when the mirror repository is archived). Three rows
+  (CS1, RP1, RP3) are two-part and are to be split in increment D.
+- Proposals (not decisions) for the superpowers dependencies: repoint or drop the plugin skills in three agents' `skills:`
+  lists; rewrite the routing to name the workbench skills; test the session-start rule once with the plugin off in a scratch
+  configuration before disabling it; leave `dispatching-parallel-agents` and `writing-skills` as gaps; the plugin stays
+  `redesign`. The session-start test was not run.
+- Findings F-C1 to F-C7: the retired single-plan fallback, plan edits, the discovery gate and receipt, who decides a security
+  review, the mirror rule, the project file and branch form of the remote paragraphs, and the compaction recommendation.
+- Verification as run: `doccheck`, `refcheck` and `git diff --check` exit 0 (re-run after the review edits, below). A script
+  counted the rows and confirmed each has a leading disposition; every heading of the file appears in the spec. The
+  instruction file, the settings file and the 30 earlier files have the same hashes at the end as at the start, so this work
+  wrote nothing at the user level. A search of the spec finds no global path, host name or credential.
+- Review: one round with the `reviewer` agent, no blocking findings. Applied: F-C5 now cites the roadmap sentence and no
+  longer says the owner updates a mirror; the F-C3 date is credited to the roadmap; F-C7 added for the compaction rule that
+  `code-work.md` does not carry; RP3's cover corrected (`groundwork.md` policy block carries none of it; the renumbering rule is in
+  `code-work.md`); two citations renamed; the hashes section and a stale commit reference fixed; the conflict between the agents'
+  rows ("repointed") and proposal 1 stated. Noted for D: the compound rows. The reviewer could not read the instruction file,
+  so the group splits and the quoted paraphrases rest on this author; the gates for the `move` rows were not run.
