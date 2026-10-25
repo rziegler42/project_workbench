@@ -1,6 +1,6 @@
 # The decision rules the owner's skill carries
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-24
 Candidate: workbench-v1#architecture-decisions-merge
 Specs: groundwork
@@ -203,3 +203,21 @@ and without a second round.
   the "Rules:" list and the template are unchanged, and the module's 194 tests pass. The text was checked against
   `groundwork.md` ("Decisions", "What is checked") and `docs/decisions/README.md`: rule 3 adds the timing the spec leaves open
   (choice 2) and contradicts neither. The module's shipped approval is stale until B. Next: B.
+- Increment B: `docs/specs/groundwork.md` "As built" now has one sentence naming what `draft-decision` carries beyond
+  drafting. At the owner's "Run it for me", `release-approvals` wrote 10 approvals (2 new directories) and named 2 stale
+  records, which were previewed and removed at the owner's "remove them". The full suite passes: 4,134 tests in 10 roots,
+  OK, with the same 3 skips as before this plan (1 in `tests`, 2 in `code-work`), so none is a stale-approval skip.
+  `doccheck`, `refcheck` and `git diff --check` print nothing.
+
+## Outcome against the completion criteria
+
+1. Met: the skill states rules 1 to 6, every clause pinned by a test, and the four choices are honoured (the negative test
+   passes).
+2. Met: the skill's existing sentences, frontmatter and template are unchanged, and the module's existing tests pass without
+   edit.
+3. Met for the six tests that can fail on the old skill; the seventh is the negative guard, which passed before by design.
+4. Met: `groundwork.md` "As built" says what the skill carries.
+5. Met: the full suite is green after the owner's `release-approvals`.
+
+Not done, by design: a security review, a push, a second plan-review round, and the three Deferred items. Whether Claude loads
+the skill when it should is still unverified.

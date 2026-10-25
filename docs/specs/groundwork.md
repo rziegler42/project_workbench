@@ -234,7 +234,12 @@ tier). Recording evidence and correcting a typo are not checkpoints.
 
 The module is `packages/workbench/groundwork/`. It ships no code: a declaration, four READMEs, two
 slot blocks and four neutral skills: three that draft a document (`draft-spec`, `draft-roadmap`,
-`draft-decision`), each with its own template beside it, and `brainstorm`, which has none. `brainstorm`
+`draft-decision`), each with its own template beside it, and `brainstorm`, which has none. `draft-decision`
+also carries the rules for a record after it is drafted: approval of a design or a request to record a decision is never
+acceptance and the skill ends at `Proposed`; a changed decision is a new record, and the old one changes only its status
+line, once the owner has accepted the successor; a clarification of an accepted record is a dated note the owner approves;
+the index and the references to a status are kept in agreement and the owner is told to run the document check; a record
+cites living sources, reports its own contradictions and authorizes no building. `brainstorm`
 finds out what the owner wants before a spec is drafted: it asks before it builds, one question at a time,
 writes a project's design in `docs/specs/`, builds nothing until the owner approves the design, and hands
 on to `draft-spec` and, only if a plan skill is installed, to that. It requires no other module and names
