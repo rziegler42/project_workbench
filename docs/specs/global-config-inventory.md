@@ -514,7 +514,8 @@ stage 1 (the change to the program is an owner step, since the agent cannot writ
 stage 1 adds and removes nothing; stage 2 replaces the global rule files once the engine runs.
 
 *M1 stage 1, option 1a: the required behavior of the patched approver* (a specification written on 2026-10-25 by the plan
-`2026-10-25-approver-patch-for-the-module-spellings`, Increment A; the patch is not yet written, and nothing is applied). The
+`2026-10-25-approver-patch-for-the-module-spellings`, Increment A; the patch was written and tested on a scratch copy in its
+Increment B, whose measured results end this block, and nothing is applied). The
 accepted decision `2026-10-25-approver-coverage-for-the-module-commands` chose option 1a: a narrow change, with the collectors still
 calling the global `claude-workflow` program and `DELEGABLE` unchanged, so a module commit is never allowed by the approver on its
 own. The baseline is the approver program with SHA-256 `94ac5e8cd05473081ff0004130592cdb94e0bbd19199777574c599a23cca2b0b`.
@@ -530,15 +531,15 @@ own. The baseline is the approver program with SHA-256 `94ac5e8cd05473081ff00041
   `submit`, `fetch`); a rule's flags must include every flag its collector reads, or the collector fails with a missing key. The
   module's `fetch` never passes `--force` (`remote-runner.md`), but the collector reads `args["--force"]` and the check
   `no_fetch_force` refuses a force, so the fetch rule declares `--force` and, by reading, a command that carries it fails that check and is
-  not approved (a design inference from the collector and the check, to be exercised when the patch is written). The module's `submit` requires exactly one of `--remote` and `--best`, allows at most one of `--ref` and `--snapshot`, and
+  not approved (confirmed in Increment B: the flag reaches the collector's arguments and the check refuses it; the collector itself was not run). The module's `submit` requires exactly one of `--remote` and `--best`, allows at most one of `--ref` and `--snapshot`, and
   its `fetch` takes one job and one to sixteen paths (`remote-runner.md`); a rule cannot say so, the global rules do not
   either, and the module refuses otherwise, so the new rules keep the global rules' bounds. The paths of `commit` and `remove`
   follow `--` or plain words; the matcher's argument parser handles both (by reading). The flags of the module's `commit` and `remove` equal those of the global rules
   (`safe-git.md`); no difference was found.
-- **`split_command` should need no change** (by reading, to be confirmed when the patch is written): it matches a raw-text
-  prefix, and a multi-word spelling is such a prefix. By reading, the patch adds the two spellings to the map from spelling to
-  tool, the two tool names to the supported-tools list, and a branch in the installed-helper check; the plan's Increment B
-  confirms or corrects this list. It adds no spelling with a `python3` prefix or a path, since the module is run as `wb run ...`
+- **`split_command` needs no change** (confirmed by test in Increment B): it matches a raw-text
+  prefix, and a multi-word spelling is such a prefix. The patch adds the two spellings to the map from spelling to
+  tool, the two tool names to the supported-tools list, and a branch in the installed-helper check (a new function for the
+  launcher); `INSTALLED_TOOLS` needs no entry. It adds no spelling with a `python3` prefix or a path, since the module is run as `wb run ...`
   only.
 - **The installed-helper check treats `wb` as it treats plain `git` plus an interpreter check.** It looks up `wb` the way the
   shell would and refuses a relative or empty path entry that holds one, and an absolute entry inside the repository; it
@@ -551,6 +552,18 @@ own. The baseline is the approver program with SHA-256 `94ac5e8cd05473081ff00041
 - **Must be unchanged:** every existing spelling, rule and control (`claude-workflow` commit and remove, `remote-runner` submit and
   fetch, `git push`, `ask-codex archive`); `DELEGABLE`; the collectors; the rubric (the new rules name the existing sections); the
   rule directory must still load, since one refused file silences the review of every listed spelling (F-A1).
+- **Measured on a scratch copy, 2026-10-25** (Python 3.15.0, Darwin 25.6.0; the plan's Result holds the commands, hashes and
+  the patch). Against the unpatched copy 59 of 83 tests passed and 24 failed for the stated reasons; against the patched copy
+  all 91 pass (8 launcher tests were added after the security review and failed first), with the controls and `DELEGABLE`
+  unchanged. 42 hostile strings and malformed events behaved as predicted. A self-check passes on the patched copy and fails
+  on the base, on four broken variants (a mistyped collector, invalid JSON, the rule files missing, the rule files without the
+  program patch) and on the patch before the security fixes; 14 changes to the new rule files were all caught. The launcher
+  check requires `wb`, the file it resolves to and `python3` (which the real launcher runs through `PATH`) to lie outside the
+  repository. The patch changes one program file and adds four rule files, and applies to the base hash. An independent review
+  and a security review were run and judged (the plan's Result). The review of a commit or a removal still takes its facts from
+  the global `claude-workflow` program (option 1a), which may differ from what the module's commands do with the same
+  arguments. Not run: the hook's entry point, a model call, the collectors and the checks behind them,
+  and an interactive session; the recorded interactive run remains the gate.
 - **Only a prompted command is reviewed.** The approver sees a command only when an `ask` rule raised a prompt for it, so each
   new spelling is reviewed only while the owner's global `ask` entry for it exists (the accepted decision
   `2026-10-25-module-commands-and-the-approver`); the patch does not make the module commands prompt.
