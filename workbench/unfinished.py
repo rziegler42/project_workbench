@@ -1,6 +1,6 @@
 """The record an unfinished write leaves in its marker ``.workbench/local/incomplete``.
 
-``install``, ``upgrade`` and ``add`` write the marker first and remove it last. The marker holds
+``install``, ``adopt``, ``upgrade`` and ``add`` write the marker first and remove it last. The marker holds
 a strict JSON record of the plan being written: the command, the project id when known, the
 workbench version, each file write (path, operation, the hash the file had before and the hash it
 will have after), each directory the plan creates, the files of the ``.git`` skeleton with the
@@ -25,8 +25,8 @@ from .wbkit import display, safefs
 
 FORMAT = 1
 MAX_ENTRIES = 10000          # files, directories, .git entries and store entries together
-COMMANDS = ("install", "upgrade", "add")
-OPERATIONS = ("create", "replace")
+COMMANDS = ("install", "adopt", "upgrade", "add")
+OPERATIONS = ("create", "replace", "keep")
 _LOCAL = (".workbench", "local")
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}\Z")
@@ -126,8 +126,10 @@ def _check_files(items):
         before = _hex(item["before"], "a before hash", allow_none=True)
         if (op == "create") != (before is None):
             _fail("a file entry's before hash does not fit its operation")
-        files.append(FileWrite(_project_path(item["path"], "a file path"), op, before,
-                               _hex(item["after"], "an after hash")))
+        after = _hex(item["after"], "an after hash")
+        if op == "keep" and before != after:
+            _fail("a kept file's hash before and after must be the same")
+        files.append(FileWrite(_project_path(item["path"], "a file path"), op, before, after))
     _unique([f.path for f in files], "files")
     return tuple(files)
 
@@ -276,7 +278,8 @@ def parse(data):
 BUDGET = 256 * 1024 * 1024       # bytes read in one examination; beyond it a path is not read
 MAX_LISTED = 500
 
-# `kind` is "file", "dir", "git" or "store"; `state` is before/after/other for a file,
+# `kind` is "file", "dir", "git" or "store"; `state` is before/after/other for a file (kept
+# for a file an adoption keeps, while it holds the recorded bytes),
 # absent/empty/holds/other for a directory, absent/after/other for a .git entry, before/after/other
 # for a store entry (before: absent for an install, the old baselines for an upgrade or add).
 Item = collections.namedtuple("Item", "kind path state detail")
@@ -298,8 +301,14 @@ def _file_item(writer, entry, spent):
         return Item("file", entry.path, "other", _short(exc))
     if state is None:
         return Item("file", entry.path, "before" if entry.op == "create" else "other",
-                    "" if entry.op == "create" else "missing; it was to be replaced")
+                    "" if entry.op == "create" else "missing; it was to be %s" % (
+                        "kept" if entry.op == "keep" else "replaced"))
     spent[0] += len(state.data)
+    if entry.op == "keep":
+        # A file an adoption keeps is never written: it is "kept" while it holds the recorded bytes.
+        if state.hash == entry.after:
+            return Item("file", entry.path, "kept", "")
+        return Item("file", entry.path, "other", "holds other content")
     if state.hash == entry.after:
         return Item("file", entry.path, "after", "")
     if entry.op == "replace" and state.hash == entry.before:
@@ -388,7 +397,7 @@ def _short(exc):
 
 
 def _summary_files(record, items, git):
-    files = [i.state for i in items if i.kind == "file"]
+    files = [i.state for i in items if i.kind == "file" and i.state != "kept"]
     dirs = [i.state for i in items if i.kind == "dir"]
     if "other" in dirs or not files:
         return "mixed"

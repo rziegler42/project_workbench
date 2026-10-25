@@ -44,7 +44,7 @@ class OwnerRun(unittest.TestCase):
 
     def test_the_constant_is_the_documented_list(self):
         self.assertEqual(set(rules.OWNER_RUN), {
-            "install", "upgrade", "add", "attach", "acknowledge", "recover", "approve", "pin",
+            "install", "adopt", "upgrade", "add", "attach", "acknowledge", "recover", "approve", "pin",
             "release-approvals", "approve-plan"})
 
     def test_the_cli_routes_nothing_that_is_unclassified(self):

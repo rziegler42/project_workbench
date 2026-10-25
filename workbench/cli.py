@@ -27,6 +27,7 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench preview install [<target> | --dir <path>] --package <source> [--ref <ref>] ...\n"
          "                                            [--package ...] --select <module> ...   (read-only)\n"
          "       python3 -m workbench install <same arguments as preview install>   (owner-run, terminal only)\n"
+         "       python3 -m workbench adopt <same arguments as preview install>   (owner-run, terminal only)\n"
          "       python3 -m workbench preview adopt <same arguments as preview install>   (read-only;\n"
          "                                            a repository that has content, nothing in it is changed)\n"
          "       python3 -m workbench preview upgrade [<target> | --dir <path>] [--package <source> [--ref <ref>]] ...\n"
@@ -191,6 +192,14 @@ def _install(tokens, out, err, store_root, distribution, stdin, home=None):
         return opened
     return install.run(opened[1], opened[0], stdin if stdin is not None else sys.stdin, out, err,
                        distribution, home=home)
+
+
+def _adopt(tokens, out, err, store_root, distribution, stdin):
+    opened = _project_command(tokens, out, err, store_root, distribution)
+    if isinstance(opened, int):
+        return opened
+    return install.run(opened[1], opened[0], stdin if stdin is not None else sys.stdin, out, err,
+                       distribution, adopt=True)
 
 
 def _acknowledge(tokens, err, out, store_root, stdin):
@@ -376,6 +385,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         return _check(argv[1:], out, err, store_root, distribution)
     if argv and argv[0] in ("upgrade", "add"):
         return _upgrade(argv[1:], out, err, store_root, distribution, stdin, argv[0])
+    if argv and argv[0] == "adopt":
+        return _adopt(argv[1:], out, err, store_root, distribution, stdin)
     if argv and argv[0] == "install":
         return _install(argv[1:], out, err, store_root, distribution, stdin, home)
     try:

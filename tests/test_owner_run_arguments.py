@@ -109,7 +109,7 @@ class Patterns(unittest.TestCase):
             neutral.read_rules([{"action": "deny", "tool": "shell", "pattern": text}])
 
     def test_the_compiled_in_owner_run_list_is_unchanged(self):
-        self.assertEqual(("install", "upgrade", "add", "attach", "acknowledge", "recover", "approve", "pin",
+        self.assertEqual(("install", "adopt", "upgrade", "add", "attach", "acknowledge", "recover", "approve", "pin",
                           "release-approvals", "approve-plan"), rules.OWNER_RUN)
 
 

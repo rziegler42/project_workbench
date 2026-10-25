@@ -1,4 +1,4 @@
-"""``wb recover``: clear the marker an unfinished ``install``, ``upgrade`` or ``add`` left.
+"""``wb recover``: clear the marker an unfinished ``install``, ``adopt``, ``upgrade`` or ``add`` left.
 
 The marker ``.workbench/local/incomplete`` holds a record of the plan that was being written
 (``unfinished``). This command is the owner's way past the refusal every other command gives for a
@@ -76,10 +76,12 @@ def judge(found):
     if found.files == "after" and found.store in ("none", "partial"):
         if state == ("after", "none") and record.command in ("upgrade", "add"):
             return _UNSTORED, []
-        if record.command == "install":
-            lines.append("an install that wrote its files but not all of its store cannot be "
-                         "completed: put the project back as it was before the install (remove "
-                         "the files it wrote), run `wb recover` again, then install again")
+        if record.command in ("install", "adopt"):
+            lines.append("an %(c)s that wrote its files but not all of its store cannot be "
+                         "completed: put the project back as it was before the %(c)s (remove "
+                         "the files it created%(k)s), run `wb recover` again, then %(c)s again"
+                         % {"c": record.command,
+                            "k": ", never one it kept" if record.command == "adopt" else ""})
     return None, lines
 
 

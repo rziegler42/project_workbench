@@ -364,8 +364,8 @@ Everything in this section is *(my call)* until the owner accepts the decision
   does not look at harness files, so it neither reports them nor works around them.
 - **The marker and `recover`.** The marker is the one `install` writes (see "Failure part-way").
   Its `files` list may record a kept file with the operation `keep`, with the same hash before and
-  after. `recover` treats a kept file as `before` while it holds the recorded hash and as `other`
-  otherwise, never writes it and never removes it; what it removes is what it removes after an
+  after. `recover` reports a kept file as `kept` while it holds the recorded hash, which does not count
+  against any outcome, and as `other` otherwise, which refuses; it never writes or removes it; what it removes is what it removes after an
   `install`. Whether this needs a new format number is for the build to decide.
 - **Refuses** any verification failure, any missing approval, a state other than adoptable (naming
   the state found), a refused target, and every conflict above. After a failure part-way, the report

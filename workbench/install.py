@@ -1,4 +1,6 @@
-"""``wb install``: write a new project, after the owner types the plan's digest.
+"""``wb install``: write a new project, after the owner types the plan's digest. ``wb adopt`` is
+the same command for a repository that has content (``adopt=True`` below): it creates what is
+missing, keeps every seeded file that exists and changes no file that is there.
 
 Owner-run and terminal-only, like ``approve``. The order is fixed by
 ``docs/specs/installer-interface.md``:
@@ -80,6 +82,10 @@ def _git_init(held, writer):
 def _still_the_same(held):
     """The held target is the same place, in the same state, as when it was classified."""
     held.recheck()
+    if held.state == "adoptable":
+        info = os.stat(".git", dir_fd=held.fd, follow_symlinks=False)
+        if not stat.S_ISDIR(info.st_mode):
+            raise target.TargetError("refused: .git is not a real directory: %s" % held.path)
     if held.state in ("new-empty", "new-git"):
         names = sorted(os.listdir(held.fd))
         if names != ([] if held.state == "new-empty" else [".git"]):
@@ -100,9 +106,11 @@ def record_of(plan):
     ``unfinished.UnfinishedError`` when the plan cannot be recorded."""
     files = [(a.path, "create", None, a.hash) for a in plan.actions
              if a.kind == "create-file" and a.path != installplan.MARKER_PATH]
+    # A file an adoption keeps is recorded as unchanged, so `wb recover` can tell it was never written.
+    files += [(a.path, "keep", a.hash, a.hash) for a in plan.actions if a.kind == "keep-file"]
     dirs = [".workbench"] + [a.path for a in plan.actions if a.kind == "create-dir"]
     store = [(path, None, unfinished.sha(data)) for path, data in plan.store_writes]
-    return unfinished.build("install", plan.project_id, plan.manifest["workbench"], files, dirs,
+    return unfinished.build(plan.command, plan.project_id, plan.manifest["workbench"], files, dirs,
                             installplan.GIT_SKELETON if plan.git_init else (), store)
 
 
@@ -114,6 +122,8 @@ def _write(guarded, held, plan, progress, record):
             writer.make_target()
         elif action.kind == "git-init":
             _git_init(held, writer)
+        elif action.kind in ("reuse-dir", "keep-file"):
+            continue        # an adoption writes nothing at a directory or file that is there
         elif action.kind == "create-dir":
             writer.create_dir(action.path)
         elif action.path == installplan.MARKER_PATH:
@@ -128,11 +138,25 @@ def _write(guarded, held, plan, progress, record):
     writer.remove_marker()
 
 
-def _finish(held, progress, out):
+def _finish(held, progress, out, plan=None):
     done = [path for path in progress.writer.written if path != projectfs.MARKER]
     try:
-        out.write("wrote %d paths in %s\nnothing was committed\n"
-                  % (len(done), display.ascii_text(held.path)))
+        if plan is not None and plan.command == "adopt":
+            kept = sum(1 for a in plan.actions if a.kind == "keep-file")
+            out.write("adopted %s: created %d paths, kept %d existing file%s, %d block%s not "
+                      "filled\nnothing was committed, and no harness was attached\n"
+                      % (display.ascii_text(held.path), len(done), kept, "" if kept == 1 else "s",
+                         len(plan.not_filled), "" if len(plan.not_filled) == 1 else "s"))
+            out.write("next: run `wb attach --harness %s` yourself (an existing harness file with "
+                      "other content must be resolved first)%s\n" % (
+                          display.ascii_text(", ".join("%s/%s" % (m["package"], m["name"])
+                                                       for m in plan.modules
+                                                       if m["type"] == "harness"))[:140],
+                          "; `wb upgrade` offers the blocks that were not filled"
+                          if plan.not_filled else ""))
+        else:
+            out.write("wrote %d paths in %s\nnothing was committed\n"
+                      % (len(done), display.ascii_text(held.path)))
         out.flush()
     except BrokenPipeError:
         pass
@@ -176,17 +200,26 @@ def _refuse(err, text):
     return 1
 
 
-def _run(guarded, command, stdin, out, err, distribution, seed, version, which, progress, home):
+def _run(guarded, command, stdin, out, err, distribution, seed, version, which, progress, home,
+         adopt=False):
+    verb = "adopt" if adopt else "install"
+
+    def plan_of(held, resolved, seed, version, now):
+        if adopt:
+            return preview.prepare_adopt(guarded, held, resolved, command.select, distribution,
+                                         seed, version, which, now)
+        return preview.prepare(guarded, held, resolved, command.select, distribution, seed,
+                               version, which, home, now)
+
     try:
-        with target.open_target(command.target, guarded.root) as held:
+        with target.open_target(command.target, guarded.root, adopt=adopt) as held:
             fetched = []
             try:
                 resolved = _resolve(guarded, command.packages, out, fetched)
                 seed = seed or manifest.new_seed()
                 version = version or __version__
                 now = approvals.utc_now()
-                plan, warnings = preview.prepare(guarded, held, resolved, command.select,
-                                                 distribution, seed, version, which, home, now)
+                plan, warnings = plan_of(held, resolved, seed, version, now)
             except sources.SourceError as exc:
                 raise preview.Refused([str(exc)])
             except preview.Refused as exc:
@@ -196,20 +229,19 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
             progress.plan = plan
             for warning in warnings:
                 err.write("warning: %s\n" % _text(warning))
-            if held.state == "new-git":
+            if held.state in ("new-git", "adoptable"):
                 err.write("warning: the existing .git is used as it is; no remote is recorded\n")
             out.write(installplan.render(plan, held.path, show_digest=True))
-            out.write("\nTo install, type the first %d characters of the digest shown above and "
+            out.write("\nTo %s, type the first %d characters of the digest shown above and "
                       "press Enter.\nAnything else cancels and writes nothing.\n> "
-                      % CONFIRM_CHARS)
+                      % (verb, CONFIRM_CHARS))
             out.flush()
             if not confirm.typed_matches(stdin, plan.digest):
                 out.write("cancelled: nothing was written\n")
                 return 1
             try:
                 _still_the_same(held)
-                again, _ = preview.prepare(guarded, held, resolved, command.select, distribution,
-                                           seed, version, which, home, now)
+                again, _ = plan_of(held, resolved, seed, version, now)
             except preview.Refused as exc:
                 raise preview.Refused(["the packages changed while the plan was shown: %s; "
                                        "nothing was written" % "; ".join(exc.lines)])
@@ -224,12 +256,14 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
                 _write(guarded, held, plan, progress, record)
             except (Exception, KeyboardInterrupt) as exc:
                 cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
-                confirm.report_failure(progress, cause, err)
+                confirm.report_failure(progress, cause, err, what=verb)
                 return 3
             try:
-                _finish(held, progress, out)
+                _finish(held, progress, out, plan)
             except KeyboardInterrupt:
                 pass  # the install is complete; the attach below still runs
+            if adopt:
+                return 0
             return _attach(held, progress, plan, out, err)
     except target.TargetError as exc:
         return target.write_refusal(err, exc)
@@ -242,17 +276,19 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
 
 
 def run(guarded, command, stdin, out, err, distribution=None, seed=None, version=None,
-        which=shutil.which, home=None):
-    """Install into a new target after the owner types the digest. Returns the exit code:
-    0 done, 1 refused or cancelled, 3 stopped after writing, 130 interrupted before writing."""
+        which=shutil.which, home=None, adopt=False):
+    """Install into a new target after the owner types the digest; with `adopt`, into a repository
+    that has content, changing nothing that is there. Returns the exit code: 0 done, 1 refused or
+    cancelled, 3 stopped after writing, 130 interrupted before writing."""
+    verb = "adopt" if adopt else "install"
     if not (approve.is_terminal(stdin) and approve.is_terminal(out)):
-        return _refuse(err, "install is owner-run: standard input and output must both be "
+        return _refuse(err, "%s is owner-run: standard input and output must both be "
                             "terminals. Run this command yourself, from your own terminal; "
-                            "`preview install` shows the same plan without writing.")
+                            "`preview %s` shows the same plan without writing." % (verb, verb))
     progress = confirm.Progress()
     try:
         return _run(guarded, command, stdin, out, err, distribution, seed, version, which,
-                    progress, home)
+                    progress, home, adopt)
     except KeyboardInterrupt:
         try:
             out.write("\ncancelled: nothing was written\n")
