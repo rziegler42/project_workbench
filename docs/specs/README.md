@@ -37,6 +37,7 @@ or an evidence note.
 | [`safe-git.md`](safe-git.md) | Local commits of exact paths and approved deletions, as a module of their own |
 | [`model-bridge.md`](model-bridge.md) | The contract of a thin vendor module that lets an engine ask a model one read-only question |
 | [`review-engine.md`](review-engine.md) | The review module that provides `peer-review`: rounds, findings, sealed state, the project setting |
+| [`action-review.md`](action-review.md) | Draft design of the action-review engine: the `describe` interface of the module that owns an action, the verdict, the thin hook |
 | [`knowledge-tools.md`](knowledge-tools.md) | The three knowledge modules (`mempalace`, `graphify`, the knowledge base): which problem each owns, routing, shared conventions |
 | [`mempalace.md`](mempalace.md) | The module that lets an agent search the owner's MemPalace; owner-run commands build it |
 | [`remote-runner.md`](remote-runner.md) | The module that gives a project its remote job profiles and a guarded way to submit, inspect and fetch |
