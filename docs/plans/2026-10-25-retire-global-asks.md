@@ -176,7 +176,7 @@ asked for; whether to have one is the owner's call.
 - The question of an `ask` for `go install` in the project's install list is the owner's, for a separate change to the
   floor.
 
-## Resul
+## Result
 
 ### Increment A (done, reviewed, committed as `a333708`)
 
@@ -211,7 +211,7 @@ deviation is only of place. `workbench/rules.py` is untouched.
   review.
 - **Next:** Increments B and C stop for the owner's removals.
 
-### Increment B (done, reviewed, not yet committed)
+### Increment B (done, reviewed, committed as `f4b3816`)
 
 Started 2026-10-25 at commit `a333708`. The plan's approval is the owner's record (`wb plan-status` printed `approved`).
 At the start nothing was removed and no gate had run; the owner then made the removals and the gate run, recorded below. The agent read the user-level settings file once, read-only, and found it holds all
@@ -306,3 +306,94 @@ Result heading and opening paragraph still said nothing was done: corrected. (2)
 replaced by this paragraph. (3) The twelve non-pip inventory rows could be read as live evidence: they now say "not run live"
 and cite Increments A and B. (4) Attributing the prompt to the floor was an inference: softened above. The reviewer read only
 the two changed regions and could not run commands or read the user level. The review is not an approval.
+
+### Increment C (done, reviewed, not yet committed)
+
+Started 2026-10-25 at commit `f4b3816`. `wb plan-status` printed `approved` (re-approved by the owner after the Result heading was
+corrected from a misspelling). The removal and the gate run were made by the owner, recorded below the steps.
+
+**Owner steps.** Every step is the owner's, in a terminal. `USER` and `MIRROR` are the roles named under Increment B; the
+owner supplies the paths. Backups from Increment B (`.bak-m8`) predate the M8 removals, so they are not current: make new ones.
+
+1. Back up both files, each next to itself: copy `USER` to `USER.bak-m9` and `MIRROR` to `MIRROR.bak-m9`.
+2. Save the script below as `remove_m9.py` in your own work folder (untracked). It removes exactly `Bash(git push:*)`, refuses
+   unless the file reads back byte for byte as the JSON it parses to, and does nothing unless given `--apply`.
+
+   ```python
+   import json, os, sys, tempfile
+
+   ENTRY = "Bash(git push:*)"
+
+   path = sys.argv[1]
+   apply = "--apply" in sys.argv[2:]
+   with open(path, encoding="utf-8") as handle:
+       text = handle.read()
+   data = json.loads(text)
+   for indent in (2, 4, 1, 3, 8):
+       for tail in ("\n", ""):
+           if json.dumps(data, indent=indent, ensure_ascii=False) + tail == text:
+               break
+       else:
+           continue
+       break
+   else:
+       sys.exit("refused: the file does not round-trip, so a rewrite would change more than the entry")
+   ask = data["permissions"]["ask"]
+   print("present:", ENTRY in ask)
+   data["permissions"]["ask"] = [entry for entry in ask if entry != ENTRY]
+   print("ask entries remaining: %d (was %d); go install kept: %s"
+         % (len(data["permissions"]["ask"]), len(ask), "Bash(go install:*)" in data["permissions"]["ask"]))
+   if not apply:
+       sys.exit("dry run: nothing written; rerun with --apply")
+   out = json.dumps(data, indent=indent, ensure_ascii=False) + tail
+   descriptor, name = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)))
+   with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+       handle.write(out)
+   os.chmod(name, os.stat(path).st_mode & 0o7777)
+   os.replace(name, path)
+   print("written")
+   ```
+3. Dry run on `USER`: `python3 -I -B remove_m9.py USER`; then `python3 -I -B remove_m9.py USER --apply`.
+4. Diff: `diff USER.bak-m9 USER`. Exactly one line should be gone, the `git push` entry.
+5. Repeat steps 3 and 4 on `MIRROR` with `MIRROR.bak-m9`.
+6. Paste the output and each diff here. The agent then reads `USER` read-only to confirm only that entry is gone, and stops
+   if not.
+
+**Gate run, after step 6.** Use a throwaway attached project with no remote, or one whose remote you name, never this
+repository. (a) Count the rows of the approver's verdict log and note the number. (b) In a new Claude Code session in that
+project, ask the agent to run `git push`. A prompt should appear. Decline it. (c) Count the rows again. Paste the prompt text,
+both counts, and the new row's rule, decision and verdict (rows hold command hashes, not command text), and say that nothing was
+pushed. Give `claude --version` and the project's `git rev-parse HEAD`. If no prompt appears, restore `USER` and `MIRROR` from
+the `.bak-m9` files and stop; that is a finding about the floor. If the prompt appears but the log gains no row, restore the
+entry and stop; that is a finding about the approver. This plan changes neither.
+
+**Removals, made by the owner 2026-10-25.** On both files the dry run printed `present: True`, `74 (was 75)` and `go install kept:
+True`; `--apply` wrote; `diff` against the `.bak-m9` backup showed exactly one `ask` line gone (`Bash(git push:*)`) and nothing added.
+The agent then read the user-level file read-only: 74 `ask` entries, and among the push and install forms only
+`Bash(go install:*)` remains. The agent wrote nothing at the user level or the mirror. As a deviation from step 2, the agent saved
+the script in its scratch folder, transcribed from the block above, and the owner ran it from there; it touched only the two named
+files.
+
+**Gate run, made by the owner.** Throwaway attached project with no remote and no commits, Claude Code 2.1.310 (so there is no
+project commit to give). The approver's verdict log went from 1006 to 1007 rows. In a new session the agent was asked to run
+`git push`; the session showed a permission prompt reading "Ask rule Bash(git push) overrides auto mode for this command". The
+owner chose No, and the command did not run (the project has no remote, so nothing could have been pushed). The one new row
+has rule `git-push`, decision `none`, verdict `decline`, mode `delegate`, reason `failed_checks`, with the failed checks
+`remote_is_configured`, `remote_transport_safe`, `push_target_known`, `outgoing_known` and `outgoing_trusted`; it holds a command
+hash and no command text. Conclusion: with the user-level `git push` entry gone, the project's own rule still prompts, and the
+global approver still fires on that prompt and logs a verdict, so the F-B1 inference holds for this case. The prompt names the
+pattern `git push`, not its source. Only the bare `git push` form was run; `git push origin main` and the force forms rest on the
+Increment A test, which pins the rendering and not Claude Code's live matching. The backups (`.bak-m9`) remain with the owner.
+
+All the gate-run details above (prompt text, counts, the row's fields) are from the owner's pasted terminal output, and the
+owner confirmed choosing No. The decline came from failed remote checks, so it is no evidence about a push with a remote
+configured.
+
+**Verification as run:** `git diff --check`, `wb check`, `doccheck`, `refcheck`, `wb run code-work check` (46 plans), all clean.
+The full test suite was not rerun: no code changed since Increment A.
+**Not done:** a push.
+**Review:** the `reviewer` agent, one exchange (of a cap of 6), no blocking finding, five not blocking. (1) The "pending"
+verification line: replaced by this paragraph. (2) Provenance of the gate-run details: stated above. (3) The inventory's F-B1
+text still called the case untested: a clause now points at this run and limits it to one case. (4) The script's location was
+a deviation from step 2: named above. (5) The re-approval wording was unverifiable by the reviewer and is left as the plan
+status reported it. The reviewer read only the two changed regions and ran nothing. The review is not an approval.

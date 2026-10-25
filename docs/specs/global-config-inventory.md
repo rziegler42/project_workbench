@@ -189,7 +189,7 @@ Each helper command below is listed in five spellings (bare name, the user bin p
 | `remote-runner prune` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: the module renders none for these (`remote-runner.md`, "The checkpoints"); only a `deny` on `fetch-overwrite` | `keep global`: gates the program and triggers the approver; stays, because the module wraps the program and does not replace it (a module command for `submit` or `fetch` is a new spelling, not a replacement; `cancel` and `prune` are not wrapped) |
 | `remote-runner fetch` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: the module renders none for these (`remote-runner.md`, "The checkpoints"); only a `deny` on `fetch-overwrite` | `keep global`: gates the program and triggers the approver; stays, because the module wraps the program and does not replace it (a module command for `submit` or `fetch` is a new spelling, not a replacement; `cancel` and `prune` are not wrapped) |
 | `Bash(git commit:*)` | 1 | only `git commit --amend*` | `keep global`: the project does not ask for a plain raw commit; the owner's rule keeps raw commits prompted |
-| `Bash(git push:*)` | 1 | `ask` on every `git push` and each force form | `move`: the floor renders it (`code-work.md`, "Push"); that the global approver hook also fires on the project's prompt is an inference (F-B1) |
+| `Bash(git push:*)` | 1 | `ask` on every `git push` and each force form | `move`: the floor renders it (`code-work.md`, "Push"). Done: the owner removed the entry; the bare `git push` prompted from the floor's pattern in an attached project and the approver logged one verdict row for it, so the inference of F-B1 held for that case (plan `2026-10-25-retire-global-asks`, C); the other forms are pinned by a test, not run live |
 | `Bash(git tag:*)` | 1 | none | `keep global`: no project rule for tags |
 | `Bash(git switch:*)` | 1 | none | `keep global`: no project rule for switching |
 | `Bash(git stash:*)` | 1 | only `git stash drop*` | `keep global`: the project asks for the destructive form only |
@@ -630,8 +630,11 @@ declined it. Only that one form was run; the other twelve are pinned by a test o
 
 **M9: the `git push` prompt.** Items: the `ask` entry `Bash(git push:*)`. Gate: the F-B1 test of M1 passed, and a recorded run
 in an attached project where a push prompts and the approver logs a verdict with the global entry removed. Blocker: M1 stage 1.
-The approver's `git-push` rule, its outcome hooks and the allow rules stay. Carrying plan: `retire-global-asks`. Owner step:
-remove the entry.
+The approver's `git-push` rule, its outcome hooks and the allow rules stay. Carrying plan: `retire-global-asks`. Done
+2026-10-25 by the owner: the entry was removed from the user-level settings file and its mirror (each diff showed exactly that
+one line gone). In a throwaway attached project with no remote, Claude Code 2.1.310, `git push` prompted with "Ask rule
+Bash(git push) overrides auto mode", and the owner declined it. The approver's verdict log gained exactly one row, rule
+`git-push`, verdict `decline`. Only the bare `git push` form was run; the others are pinned by a test of the floor's rendering.
 
 **M10: the agents' `skills:` lists.** Items: `implementer`, `workflow-reviewer`, SA9. Proposal 1 of "Superpowers dependencies"
 applies: repoint or drop the plugin skills; the owner chooses. Gate: a recorded run in a scratch configuration with the plugin
@@ -827,7 +830,9 @@ Findings are for the owner to plan or dismiss. None changes a shipped module her
   commands, `ask-codex archive`, `git push`) ends the approver's review of that command whether or not the hook stays. The
   one exception is `git push`: the project renders its own `ask` for every push, and the 2026-10-24 trial showed a global
   hook runs for commands a project asks on (`harness-modules.md`, "Evidence"), so the approver probably still looks. That trial ran a `PreToolUse` hook under `-p`, where an `ask` is denied and not
-  prompted, so a `PermissionRequest` hook firing on a project `ask` in an interactive session is an inference and untested.
+  prompted, so a `PermissionRequest` hook firing on a project `ask` in an interactive session was an inference and untested. On 2026-10-25 an interactive run covered one case: with the user-level entry gone, a bare `git push`
+in a project with no remote raised the project's prompt and the approver logged one `git-push` verdict row (`decline`, from
+failed remote checks); it says nothing about a push with a remote configured (plan `2026-10-25-retire-global-asks`, C).
 - **F-B2: the module commands that replace the gated ones render no `ask`.** `wb run safe-git commit`, `remove`, and the
   `wb run remote-runner` commands `submit` and `fetch` (the module wraps no other asked command) raise no prompt from the
   project's render (read on 2026-10-25), and
