@@ -240,7 +240,7 @@ Result already states. A review with no blocking finding is not an approval.
 
 Committed as `ee81294`. Not done in A: Increments B and C.
 
-### Increment B (done, reviewed, not yet committed)
+### Increment B (done, reviewed, committed as `6720b44`)
 
 Ran 2026-10-25 at commit `ee81294`, Python 3.15.0, Darwin 25.6.0, on a scratch copy of the approver in the layout it expects
 (the program under `hooks/` and its data under `codex-approver/`). The user-level files were read only: the hashes of the program
@@ -728,3 +728,71 @@ repository being worked on), and not a `PATH` entry spelled in another case on a
 limit of `is_inside`). The approver reviews facts computed by the global `claude-workflow` program (option 1a), which may differ
 from what the module's `safe-git` does with the same arguments. A match is only a routing decision; a wrong review would still
 be advice, since no module rule can be allowed without the owner.
+
+### Increment C (done, reviewed, not yet committed)
+
+Increment C's own step 1 says to run the self-check before anything else; steps 3 and 4 below do so, on a scratch copy before the
+live apply.
+
+Written 2026-10-25 at commit `6720b44`. Nothing was applied and no user-level file was written; the hashes below are the ones recorded
+in Increment B. Files are named by role and SHA-256, never by path.
+
+**Owner steps, in order.** Each is the owner's, in a terminal. Stop at the first step that fails.
+1. **Back up** the approver program, the folder of its data (configuration, rubric, schema and the eight rule files) and the
+   settings file that holds the hook entries, in both the owner's configuration and its mirror. The program must hash to
+   `94ac5e8cd05473081ff0004130592cdb94e0bbd19199777574c599a23cca2b0b` before the patch; if it does not, stop, because the patch
+   was written against that program only.
+2. **Save the two texts from Increment B's Result as files, each ending in one newline, and check their hashes** (for example with
+   `shasum -a 256 <file>`): the patch must hash to `ff3d5ece0142bd22779e831a19b0984509dfc23756b62ce015abb93758ed1a16` and the
+   self-check script (saved as `selfcheck.py`) to `b5899c2ad0fefb9cf1c4a902b56b1281d512cbc3bc9254f9175153e3fe4e6642`. If either
+   differs, the copy altered it (the patch has two whitespace-only context lines written empty): save it again from the text
+   and stop if it still differs. In these steps the **root** is a directory that holds the program's folder `hooks/` and the data
+   folder `codex-approver/` side by side, and the patch applies with `-p1` from it.
+3. **Try the patch on a scratch copy first, before touching the live files.** Copy the backed-up program and data folder into a new
+   scratch root in that layout, apply the patch there with `git apply -p1` (or `patch -p1`), and check that the program hashes to
+   `d8b3facdee46432d27547a07865abf024741929ae2d9191e1015ee8280bcd613`. Run the self-check on the scratch root:
+   `python3 -I -B selfcheck.py <scratch root> d8b3facdee46432d27547a07865abf024741929ae2d9191e1015ee8280bcd613`. It must print
+   `ALL CHECKS PASSED` and exit 0 (72 checks). If it does not, stop; nothing live has changed. The self-check reads and writes
+   nothing but a temporary directory and does not run the hook's entry point. The patch also adds the four rule files
+   (`safe-git-commit`, `safe-git-remove`, `wb-remote-runner-submit`, `wb-remote-runner-fetch`).
+4. **Apply the patch live** in the same way to the owner's configuration, check the same program hash, and run the same self-check
+   against the live root. It must pass again. If any part of step 4 fails, restore the backup of the affected files and stop.
+5. **Repeat step 4 in the mirror**, so the two copies hash alike. On any failure restore that copy from its backup.
+6. **Add one hook entry per new spelling** in the settings file, with the same events and timeouts as the existing entries for
+   the approver (the spellings are `wb run safe-git` and `wb run remote-runner`). Match how the existing entries are written; if the
+   file lists spellings individually, add the two module spellings the same way.
+7. **Add the four global `ask` entries** the accepted decision `2026-10-25-module-commands-and-the-approver` chose, one per command
+   (`wb run safe-git commit`, `wb run safe-git remove`, `wb run remote-runner submit`, `wb run remote-runner fetch`), written in
+   the form of the existing `ask` entries for the global commands.
+   If an edit to the settings file fails or the file no longer parses, restore it from its backup (step 1) and stop.
+8. **Start a new session** so the settings and the program are read again.
+9. **Run the interactive gate of M1 stage 1** and record it. The gate, as the inventory spec words it: a `wb run safe-git commit`
+   raises a prompt, the approver logs a verdict for it, and (the F-B1 test) a project `ask` reaches a global `PermissionRequest`
+   hook. Use harmless command text. Write down the command, whether a prompt appeared, and the new row in the approver's own
+   log (its time and the rule id, which should be one of the four new ids). Where the log lives and the shape of the entries in
+   the settings file are in the owner's configuration, which this plan did not read; read the existing entries and copy their
+   shape. Say so in the record if anything differed from these steps.
+10. **Keep the backup** until the gate has passed; delete it only then.
+
+**If the patch is wrong.** The failure is quiet: the approver stops reviewing and stops delegating the commit for the listed
+spellings, and the prompt falls back to the ordinary permission rules. The sign is that the approver's log gets no new row for a
+reviewed command (the new commands and the existing ones alike) after a prompt that should have been reviewed. The self-check in
+step 3 (on a scratch copy) and step 4 are the guard; if a log row is missing after both passed, restore the backup and report it. No module rule can be allowed
+without the owner, so a wrong patch cannot approve a command by itself.
+
+**Spec.** In `global-config-inventory`, the M1 paragraph now says the patch is prepared and tested on a scratch copy and not
+applied, and that the recorded interactive run is the gate. This plan is named as the carrying plan of stage 1; the earlier plan is
+named only as the source of the baseline and the decision. Owner step text in the spec was changed from "adds and removes
+nothing" to what step 3 to 7 add.
+
+**Checks, as run:** `doccheck`, `refcheck`, `git diff --check`, `wb run code-work check` (45 plans) and `wb check` were clean
+before the review; they are rerun after the edits it caused (see the end of this subsection).
+
+**Review.** One `reviewer` exchange (not an approval); no blocking finding. Finding 1 (the self-check ran only after the live
+apply): applied; steps 3 and 4 now try the patch on a scratch copy first. Finding 2 (a restore instruction only at one step):
+applied, in steps 4, 5 and 7. Finding 3 (the owner could not act from the text alone): applied for the self-check script's hash,
+the definition of the root, the hashing command, the scratch-copy command line and what to record at the gate; not applied for
+the settings file's entry shape and the log's place, which this plan did not read and cannot name without reading the user
+level, so the step tells the owner to copy the shape of the existing entries. Finding 4 (the subsection was unfinished): applied
+by this paragraph. Not checked by the reviewer: that the quoted texts reproduce the hashes (checked in Increment B), the owner's real
+settings, and the real `PATH`.

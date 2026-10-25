@@ -500,18 +500,21 @@ command that begins with a listed spelling and tokenizes, covered or not (F-A1).
 removal also calls the global `claude-workflow` program as a library, so a patch that adds
 spellings is not enough once that program is removed (M14). So stage 1 needs a change to the program, or its
 redesign into the engine, and the owner makes either. The plan `2026-10-25-approver-coverage-for-module-spellings` ended after
-its Increment A (`Superseded`) for that reason; the carrying plan of stage 1 is now
-`2026-10-25-approver-program-and-the-module-spellings`, which tests the matching code on a scratch copy and puts the choice to
-the owner. The module wraps neither `cancel` nor `prune`, and its `fetch-overwrite` and the review-engine `archive` are
+its Increment A (`Superseded`) for that reason. The plan `2026-10-25-approver-program-and-the-module-spellings` measured the
+baseline on a scratch copy and put the choice to the owner, who accepted option 1a. The carrying plan of stage 1 is now
+`2026-10-25-approver-patch-for-the-module-spellings`: the patch is prepared and tested on a scratch copy and is not applied;
+the recorded interactive run below remains the gate. The module wraps neither `cancel` nor `prune`, and its `fetch-overwrite` and the review-engine `archive` are
 owner-run and denied, so they raise no prompt for the approver to review. Stage 1 also needs F-B2 decided (render an `ask`
 for the module commands; or the owner adds global `ask` entries for the four spellings; or accept that they prompt only by
 the owner's `allow` rules and `auto` mode); the decision `2026-10-25-module-commands-and-the-approver` sets them out and the
 owner accepted it on 2026-10-25. *Stage 2, when `action-review-engine` exists:* redesign the rules and rubric into the
 engine. Gate for stage 1: a recorded interactive run in which a `wb run safe-git commit` raises a prompt, the approver logs a
 verdict for it, and (the F-B1 test) a project `ask` reaches a global `PermissionRequest` hook. Blocker: the F-B2 choice;
-stage 2 is blocked on `action-review-engine`, which has no plan. Carrying plan: `2026-10-25-approver-program-and-the-module-spellings` for
-stage 1 (the change to the program is an owner step, since the agent cannot write the user level); the engine's own plan for stage 2. Owner step:
-stage 1 adds and removes nothing; stage 2 replaces the global rule files once the engine runs.
+stage 2 is blocked on `action-review-engine`, which has no plan. Carrying plan: `2026-10-25-approver-patch-for-the-module-spellings` for
+stage 1 (the baseline and the decision come from `2026-10-25-approver-program-and-the-module-spellings`; applying the patch is an
+owner step, since the agent cannot write the user level); the engine's own plan for stage 2. Owner step:
+stage 1 removes nothing and adds four rule files, the patch to the program, per-spelling hook entries and four global `ask`
+entries (the ordered steps are in the Result of the carrying plan); stage 2 replaces the global rule files once the engine runs.
 
 *M1 stage 1, option 1a: the required behavior of the patched approver* (a specification written on 2026-10-25 by the plan
 `2026-10-25-approver-patch-for-the-module-spellings`, Increment A; the patch was written and tested on a scratch copy in its
