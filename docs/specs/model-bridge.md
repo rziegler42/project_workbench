@@ -145,7 +145,7 @@ way that program supports. Then:
    `XDG_CONFIG_HOME`, `USER`, `LOGNAME`, `LANG`, `TZ`, `TERM`, `TMPDIR` and any `LC_*`; and a `PATH` of the
    trusted entries. The bridge adds no other variable. No `GIT_*` variable, token, `LD_*` or `DYLD_*` variable
    and no variable that selects a program or a configuration file is passed.
-3. **The program is found outside the repository.** `PATH` is searched only in entries that are absolute and
+3. **The program is found outside the repository.** `PATH` is searched only in entries that are absolute, are existing directories and are
    outside the outermost repository that holds the project (the outermost ancestor with a `.git` entry, or the
    project root when there is none); a relative entry, an empty entry or an entry inside that repository is
    skipped, however a link or a letter case spells it; the found file is an executable regular file or a link to

@@ -8,7 +8,7 @@
     {
       "declaration_hash": "56198469236c21632edd088a610737b27597365ad5b608fd7a2a8d7e0bd6c877",
       "name": "ask-codex",
-      "tree_hash": "3eefc84558819409b78783129dd1ee547534b7ecb49339a086d3dc2e0aae1b82"
+      "tree_hash": "34d0cc7b223ccbe75a188c5d457eda95dea309a6052393f26d1de40b28316391"
     },
     {
       "declaration_hash": "037e8bf8c7818b53e3b610c1b48e436cf745b35feff93526a77618b323434493",
@@ -28,12 +28,12 @@
     {
       "declaration_hash": "184b1eaf0af1a0482a00da156e33ef42e6da16f6a14a2f71c30d77a9418368f9",
       "name": "mempalace",
-      "tree_hash": "a5c7a7a475942361b3d641644b6c3f976ac47b59886f105740385b149eaf15c2"
+      "tree_hash": "9c32611c4b2d28d31021fa5552dd50b111a1ccd66d6c01166d3b33b26960caa2"
     },
     {
       "declaration_hash": "4b8f7c515c504354e5a6691c8ba1f14616926becffd1e249170a3cf44a861b38",
       "name": "remote-runner",
-      "tree_hash": "a0767923e79030b771f5be4c3130b8156a31c58f799f13a2140254c602458a8a"
+      "tree_hash": "537cdf6ee084c5c020ec3797a211d584bbfdb9c8430af25851824058efc6dc6d"
     },
     {
       "declaration_hash": "c3d8035f7971b1509cfb90a1b709cafabb914b96b99fda50d64ad6c6eb7630d1",
@@ -43,7 +43,7 @@
     {
       "declaration_hash": "021e910c7d733949b50a496fc46ac1ba91b5ec312f7a74642da6b7aea772c059",
       "name": "safe-git",
-      "tree_hash": "6e735bb5e08732fd47c12c2a97fe271dd5089e07c541b36b2eb289697281905c"
+      "tree_hash": "26c246c7b98fa88170e3aeb7f14309e45f74590e3e467d5490538249f36d0bc1"
     },
     {
       "declaration_hash": "699b15cbb3637244800be23192d3085186fd448a6aab41a4c60c08586229d324",
@@ -53,6 +53,6 @@
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "66374cfc23b79cc0311866860f6043ab2349b6ac5fcac4c61baf158ffcec703f",
+  "tree_hash": "1ce9a5497459d7efae0d601b0d3c79f97113163c18ab9436f35ed82af76ae93b",
   "workbench_version": "0.1.0"
 }

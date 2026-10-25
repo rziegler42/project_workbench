@@ -224,7 +224,7 @@ these refuses and runs nothing: a command no installed module declares, a module
 capability asked for, a pin that is absent or names another helper, a helper or declaration that changed
 since it was pinned, and a first argument the declaration does not list. What the kit does:
 
-- It finds `wb` only in an absolute `PATH` entry outside the outermost repository that holds the project (the
+- It finds `wb` only in an absolute `PATH` entry that is an existing directory and is outside the outermost repository that holds the project (the
   outermost ancestor with a `.git` entry, or the project root when there is none), compared by file identity so
   that a link or another case spelling does not pass, and rejects a file that resolves into it. If there is
   none it raises and runs nothing.

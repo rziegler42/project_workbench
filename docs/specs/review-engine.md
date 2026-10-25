@@ -436,9 +436,12 @@ Limits found while building:
 - The document is hashed before the bridge call, which can last 11 minutes, and the vendor reads the path itself, so a
   swap of the file in between can show the reviewer other content than the hash names.
 - A process that the bridge starts in a session of its own survives a timeout, because the engine ends the process
-  group. `wbkit.call` and the helpers treat a `PATH` entry that does not exist yet as inside the project when an
-  existing ancestor of it is the project or below it, and a part of the path that cannot be examined as inside, so a
-  program put there later is never run.
+  group. `wbkit.call` and the helpers keep a `PATH` entry only when it is an existing directory (a link to one
+  counts) that is absolute and outside the project; a missing entry or one that cannot be examined is dropped, so a
+  program put there later is never run, and a missing entry that goes up through `..` cannot come to name a place
+  inside the project when a part of it later becomes a link. The containment test itself still treats a missing part
+  of a path as inside when an existing ancestor of it is the project or below it, and a part that cannot be examined
+  as inside. The five programs that build a `PATH` keep their own copy of this rule.
 - The module is named `review-engine`, not `review`: the installer's boundary test refuses any module, command or helper
   name as a substring in `workbench/` and `tests/`, and `review` is an ordinary word there.
 - A review's directory is inside the module's namespace, `.workbench/workbench/review-engine/`, beside the installed

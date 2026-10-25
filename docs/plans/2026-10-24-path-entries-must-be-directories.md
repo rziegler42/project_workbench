@@ -1,6 +1,6 @@
 # Trust only a PATH entry that is an existing directory
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-24
 Candidate: none (closes the first two items of the Deferred work in plan `2026-10-24-containment-of-missing-paths`; no roadmap candidate names it)
 Specs: review-engine
@@ -209,3 +209,20 @@ and without a second round.
   with the `isdir` test replaced by `True`, both fail, the child's `PATH` then holding the attack string and the
   missing entries; the tree was not touched for this. The modules' 146 and 106 tests pass; `git diff --check` prints
   nothing. Both modules' shipped approvals are stale until E. Next: E.
+- Increment E: the specs now state the rule. `review-engine.md` (the limit that described a missing entry as inside) says
+  an entry is kept only when it is an existing directory, that the containment test is unchanged, and that the five
+  programs keep their own copy; `module-boundary.md` and `model-bridge.md` say the entry must be an existing directory. At the
+  owner's "Run it for me", `release-approvals` wrote 10 approvals (5 new) and named 5 stale records, which were
+  previewed and removed at the owner's "remove them". The full suite passes: 4,127 tests in 10 roots, OK, with 3
+  skips (1 in `tests`, 2 in `code-work` for filesystem reasons on this machine; the reason of the one in `tests` was not
+  looked up), none a stale-approval skip by name or by count. `doccheck`, `refcheck` and `git diff --check` print nothing.
+
+## Outcome against the completion criteria
+
+1. Met for the kit, `ask-codex` and `safe-git` (tests A to C).
+2. Met for `mempalace` and `remote-runner` (tests D), each in its own form.
+3. Met: each new test for criterion 1 failed on the old function (A to C) or on a scratch copy without the filter (D).
+4. Met: three specs state the rule.
+5. Met: the full suite is green after the owner's `release-approvals`.
+
+Not done, by design: a security review, a push, a round-2 plan review, and the two Deferred items.
