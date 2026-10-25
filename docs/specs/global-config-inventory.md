@@ -1,7 +1,8 @@
 # global-config-inventory
 
-Status: Draft. Written by plan `2026-10-25-global-config-migration` (increment A). Parts B to D are not written yet; this
-text covers the owner's user-level agents, hooks, skills and helper programs only. It is a record of what was read and
+Status: Draft. Written by plan `2026-10-25-global-config-migration` (increment A). Increment B added the user-level settings
+file. Parts C and D are not written yet; this text covers the owner's user-level agents, hooks, skills, helper programs and
+settings file only. It is a record of what was read and
 what is proposed, and it settles nothing.
 
 Terms are defined in `terms.md`. The direction it serves is the roadmap candidate `workbench-v1#global-config-migration`;
@@ -10,9 +11,9 @@ the decision that frames it is `2026-10-24-project-guarantees-a-floor`.
 ## Scope
 
 A line-by-line comparison of the owner's global Claude configuration against the specs and shipped modules, so that every
-item has a recorded disposition and the later moves can be planned one item at a time. This part holds the
-user-level agent definitions, hook programs, the approver's data files, skills and helper programs. The settings file and
-the instruction file come in later parts of this spec.
+item has a recorded disposition and the later moves can be planned one item at a time. This text holds the
+user-level agent definitions, hook programs, the approver's data files, skills and helper programs (increment A) and the
+user-level settings file (increment B). The instruction file comes in a later part of this spec.
 
 Each item has one disposition:
 
@@ -32,7 +33,7 @@ choice among alternatives becomes a decision record only when the owner asks for
   in a terminal.
 - Moving any item, or changing the installer or a shipped module. A defect found here is recorded as a finding and planned
   separately.
-- The settings file and the instruction file (later parts), and the owner's `allow` rules, which the workbench never writes.
+- The instruction file (a later part), and the owner's `allow` rules, which the workbench never writes.
 
 ## Provenance and what was not inspected
 
@@ -44,7 +45,7 @@ Read on 2026-10-25 against this repository at `58a1903`, with the hashes taken a
 are in "Hashes at the end".
 
 **Read in full:** the five agent definitions, both hook programs (about 3,600 lines together), the four authored skills and their three
-reference files, and the head of `opencode-workflow` (the first 60 lines).
+reference files, the settings file (634 lines), and the head of `opencode-workflow` (the first 60 lines).
 
 **Read in part, with the reason:**
 
@@ -128,6 +129,157 @@ Each is a Markdown file with a frontmatter block. Source: owner-local, no URL; r
 The numpy command-line tools and the harness binary also sit on the owner's `PATH`. They are not configuration and not
 Claude-related; they are out of scope and not recorded further.
 
+## The user-level settings file
+
+Identified by role: the owner's user-level settings file, owner-local, no URL, 34,228 bytes, SHA-256
+`ec038970a30093e74dddbf690643a617b43e5eddf1bf59ad862f604085e9f315`, read in full on 2026-10-25 (the same
+hash was taken at the start and at the end of increment B). It holds no credential, host name or token. The comparison is
+with the project's rendered permission file for this repository (a per-clone, untracked file written by attach; read on the
+same day), the specs `harness-modules.md`, `code-work.md` and `remote-runner.md`, and the decision
+`2026-10-19-restrictive-only-permissions`.
+
+The project's render has 58 `ask` entries and 281 `deny` entries (counted from the file read on 2026-10-25; the 2026-10-24
+trial's 122 `deny` and 58 `ask` were a smaller throwaway project, and this one has more modules attached). It has no `allow` entry, one `PreToolUse` hook (the
+edit gate) and no other setting.
+
+### Top-level keys
+
+| key | what it holds | disposition and reason |
+|---|---|---|
+| `permissions` | `allow` (46), `ask` (84), `deny` (18) and `defaultMode` | split: each entry has its own disposition below |
+| `permissions.defaultMode` | `auto` | `keep global`: a machine-level choice. The 2026-10-24 trial found project `deny` and `ask` rules held under `auto` (`harness-modules.md`, "Evidence"), which is the floor. |
+| `hooks` | three events, all running the approver (see "Hooks in the settings file") | `keep global`, with the approver |
+| `enabledPlugins` | four plugins | split: each plugin has its own disposition under "Plugins" |
+| `advisorModel`, `model`, `modelSettings` | model choice and effort | `keep global`: personal and machine-level; the workbench does not choose a model (`2026-10-24-project-guarantees-a-floor`) |
+| `theme`, `agentPushNotifEnabled` | display and notification | `keep global`: personal |
+
+### Permission entries
+
+#### `allow` (46 entries)
+
+Every `allow` entry is `keep global`: the workbench never writes `allow` (`2026-10-19-restrictive-only-permissions`), and what it allows is the owner's machine-level choice. Entries sharing a row have the same disposition and reason; each entry is listed.
+
+| group | entries | disposition and reason |
+|---|---|---|
+| read of the user-level skills directory (1) | (one entry, named by the group) | `keep global`: read-only access the owner granted |
+| read-only git (13) | `Bash(git status:*)`, `Bash(git diff:*)`, `Bash(git log:*)`, `Bash(git show:*)`, `Bash(git rev-parse:*)`, `Bash(git check-ignore:*)`, `Bash(git ls-files:*)`, `Bash(git blame:*)`, `Bash(git describe:*)`, `Bash(git remote -v:*)`, `Bash(git for-each-ref:*)`, `Bash(git worktree list:*)`, `Bash(git branch --list:*)` | `keep global`: read-only git queries |
+| raw `git add` and `git mv` (2) | `Bash(git add:*)`, `Bash(git mv:*)` | `keep global`: staging commands; the owner allows them, and the commit helper refuses a staged index |
+| search (1) | `Bash(rg:*)` | `keep global`: read-only search |
+| project check runners (14) | `Bash(make test:*)`, `Bash(make check:*)`, `Bash(make lint:*)`, `Bash(make build:*)`, `Bash(pytest:*)`, `Bash(python3 -m pytest:*)`, `Bash(npm test:*)`, `Bash(npm run test:*)`, `Bash(npm run lint:*)`, `Bash(npm run check:*)`, `Bash(npm run build:*)`, `Bash(cargo test:*)`, `Bash(cargo check:*)`, `Bash(go test:*)` | `keep global`: test and build runners the owner trusts |
+| `claude-workflow` read subcommands (2) | `Bash(claude-workflow context:*)`, `Bash(claude-workflow project-id:*)` | `keep global`: read-only subcommands of a global helper |
+| `ask-codex` review and status subcommands (8) | `Bash(ask-codex review-plan:*)`, `Bash(ask-codex review-spec:*)`, `Bash(ask-codex review-roadmap:*)`, `Bash(ask-codex review-adr:*)`, `Bash(ask-codex decide:*)`, `Bash(ask-codex status:*)`, `Bash(ask-codex models:*)`, `Bash(ask-codex init:*)` | `keep global`: subcommands of a global helper the agent may run |
+| `remote-runner` read subcommands (5) | `Bash(remote-runner remotes:*)`, `Bash(remote-runner recommend:*)`, `Bash(remote-runner status:*)`, `Bash(remote-runner log:*)`, `Bash(remote-runner artifacts:*)` | `keep global`: read-only subcommands of a global helper |
+
+#### `ask` (84 entries)
+
+Each helper command below is listed in five spellings (bare name, the user bin path, the local bin path, `python3` + the user bin path, `python3 -B` + the user bin path); the five entries of a row have the same disposition and reason. The approver hook sees only a prompt that an `ask` rule raises (`codex_approver.py` header), so these entries are also what makes the approver look (F-B1).
+
+| rule | entries | project supplies | disposition and reason |
+|---|---|---|---|
+| `ask-codex extend` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | a `deny` on the module's `review-engine` command of that name (owner-run) | `move`: gates the global program; the project's deny holds for the module, so the entry goes when the program does |
+| `ask-codex reset` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | a `deny` on the module's `review-engine` command of that name (owner-run) | `move`: gates the global program; the project's deny holds for the module, so the entry goes when the program does |
+| `ask-codex prune` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | a `deny` on the module's `review-engine` command of that name (owner-run) | `move`: gates the global program; the project's deny holds for the module, so the entry goes when the program does |
+| `ask-codex archive` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | a `deny` on the module's `review-engine` command of that name (owner-run) | `move`: gates the global program; the project's deny holds for the module, so the entry goes when the program does |
+| `claude-workflow commit` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: `wb run safe-git commit` and `remove` render none (F-B2) | `keep global`: gates the global helper and triggers the approver; stays until the module's commands are asked or the owner accepts the loss |
+| `claude-workflow remove` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: `wb run safe-git commit` and `remove` render none (F-B2) | `keep global`: gates the global helper and triggers the approver; stays until the module's commands are asked or the owner accepts the loss |
+| `claude-workflow amend-message` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: `wb run safe-git commit` and `remove` render none (F-B2) | `keep global`: gates the global helper and triggers the approver; stays until the module's commands are asked or the owner accepts the loss |
+| `remote-runner submit` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: the module renders none for these (`remote-runner.md`, "The checkpoints"); only a `deny` on `fetch-overwrite` | `keep global`: gates the global program and triggers the approver; stays until the program reads the project file and the commands are asked |
+| `remote-runner cancel` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: the module renders none for these (`remote-runner.md`, "The checkpoints"); only a `deny` on `fetch-overwrite` | `keep global`: gates the global program and triggers the approver; stays until the program reads the project file and the commands are asked |
+| `remote-runner prune` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: the module renders none for these (`remote-runner.md`, "The checkpoints"); only a `deny` on `fetch-overwrite` | `keep global`: gates the global program and triggers the approver; stays until the program reads the project file and the commands are asked |
+| `remote-runner fetch` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: the module renders none for these (`remote-runner.md`, "The checkpoints"); only a `deny` on `fetch-overwrite` | `keep global`: gates the global program and triggers the approver; stays until the program reads the project file and the commands are asked |
+| `Bash(git commit:*)` | 1 | only `git commit --amend*` | `keep global`: the project does not ask for a plain raw commit; the owner's rule keeps raw commits prompted |
+| `Bash(git push:*)` | 1 | `ask` on every `git push` and each force form | `move`: the floor renders it (`code-work.md`, "Push"); that the global approver hook also fires on the project's prompt is an inference (F-B1) |
+| `Bash(git tag:*)` | 1 | none | `keep global`: no project rule for tags |
+| `Bash(git switch:*)` | 1 | none | `keep global`: no project rule for switching |
+| `Bash(git stash:*)` | 1 | only `git stash drop*` | `keep global`: the project asks for the destructive form only |
+| `Bash(git branch -d:*)` | 1 | none | `keep global`: no project rule for branch deletion |
+| `Bash(git branch -D:*)` | 1 | none | `keep global`: no project rule for branch deletion |
+| `Bash(git branch --delete:*)` | 1 | none | `keep global`: no project rule for branch deletion |
+| `Bash(gh:*)` | 1 | only `gh release create*` | `keep global`: broader than the project's rule |
+| `Bash(ssh:*)` | 1 | none | `keep global`: remote access is machine-level; no project rule |
+| `Bash(scp:*)` | 1 | none | `keep global`: remote access is machine-level; no project rule |
+| `Bash(rsync:*)` | 1 | none | `keep global`: remote access is machine-level; no project rule |
+| `Bash(pip install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
+| `Bash(pip3 install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
+| `Bash(python3 -m pip install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
+| `Bash(npm install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
+| `Bash(npm ci:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
+| `Bash(cargo install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
+| `Bash(cargo add:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
+| `Bash(brew install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
+| `Bash(apt install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
+| `Bash(apt-get install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
+| `Bash(go install:*)` | 1 | `go get*` only | `keep global`: the project's install list has no `go install` |
+| `Bash(uv pip install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
+| `Bash(uv add:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
+| `Bash(pipx install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
+| an `Edit` rule on the approver's data directory | 1 | none (it guards a global file) | `keep global`: the workbench never writes or guards the user level |
+| an `Edit` rule on the approver hook program | 1 | none (it guards a global file) | `keep global`: the workbench never writes or guards the user level |
+| an `Edit` rule on the commit helper program | 1 | none (it guards a global file) | `keep global`: the workbench never writes or guards the user level |
+
+A `move` of an `ask` entry that the project's render also supplies (`git push` and the thirteen installs) changes nothing
+for a project with the workbench attached. It does remove the prompt in a project without it, because the floor covers only
+attached projects (`2026-10-24-project-guarantees-a-floor`); the owner decides whether those entries are wanted there.
+
+#### `deny` (18 entries)
+
+| entry | project supplies | disposition and reason |
+|---|---|---|
+| `Read(./.env)` | an `ask` on `.env` reads, weaker than a `deny` | `keep global`: the project's `ask` is weaker; the global `deny` is the stronger floor and stays |
+| `Read(./.env.*)` | an `ask` on `.env.*` reads, weaker than a `deny` | `keep global`: the project's `ask` is weaker; the global `deny` is the stronger floor and stays |
+| `Read(**/.env)` | an `ask` on `**/.env`, weaker than a `deny` | `keep global`: the project's `ask` is weaker; the global `deny` is the stronger floor and stays |
+| `Read(**/.env.*)` | an `ask` on `**/.env.*`, weaker than a `deny` | `keep global`: the project's `ask` is weaker; the global `deny` is the stronger floor and stays |
+| a read of the owner's SSH key directory | an `ask` on the same reads, weaker than a `deny` | `keep global`: the project's `ask` is weaker; the global `deny` is the stronger floor and stays |
+| a read of the owner's cloud-credentials directory | an `ask` on the same reads, weaker than a `deny` | `keep global`: the project's `ask` is weaker; the global `deny` is the stronger floor and stays |
+| a read of the owner's GitHub command-line configuration | none | `keep global`: no project `deny` or `ask` covers it |
+| a read of the Codex sign-in file | none | `keep global`: no project `deny` or `ask` covers it |
+| `Bash(git reset:*)` | an `ask` on `git reset --hard*` only | `keep global`: the project covers one form only; the rest stays denied here |
+| `Bash(git clean:*)` | an `ask` on `git clean*`, weaker than a `deny` | `keep global`: the project's `ask` is weaker; the global `deny` is the stronger floor and stays |
+| `Bash(git checkout:*)` | an `ask` on `git checkout --` and `git checkout .` only | `keep global`: the project covers one form only; the rest stays denied here |
+| `Bash(git restore:*)` | an `ask` on `git restore*`, weaker than a `deny` | `keep global`: the project's `ask` is weaker; the global `deny` is the stronger floor and stays |
+| `Bash(git merge:*)` | none | `keep global`: no project `deny` or `ask` covers it |
+| `Bash(git rebase:*)` | an `ask` on `git rebase*`, weaker than a `deny` | `keep global`: the project's `ask` is weaker; the global `deny` is the stronger floor and stays |
+| `Bash(rm:*)` | an `ask` on `rm`, weaker than a `deny` | `keep global`: the project's `ask` is weaker; the global `deny` is the stronger floor and stays |
+| `Bash(rmdir:*)` | none | `keep global`: no project `deny` or `ask` covers it |
+| `Bash(unlink:*)` | none | `keep global`: no project `deny` or `ask` covers it |
+| `Bash(shred:*)` | none | `keep global`: no project `deny` or `ask` covers it |
+
+### Hooks in the settings file
+
+| event | matcher | entries | what each runs | disposition and reason |
+|---|---|---|---|---|
+| `PermissionRequest` | `Bash` | 1 | the approver program, timeout 25 s, for every Bash prompt | `keep global`: part of the approver (F-A1, F-B1); goes with `action-review-engine`, not before |
+| `PostToolUse` | `Bash` | 36 | the approver program records whether the command ran, timeout 10 s, for each of: `ask-codex archive` (5), `claude-workflow commit` (5), `claude-workflow remove` (5), `git push` (1), `remote-runner cancel` (5), `remote-runner fetch` (5), `remote-runner prune` (5), `remote-runner submit` (5) | `keep global`: part of the approver (F-A1, F-B1); goes with `action-review-engine`, not before |
+| `PostToolUseFailure` | `Bash` | 36 | the approver program records whether the command ran, timeout 10 s, for each of: `ask-codex archive` (5), `claude-workflow commit` (5), `claude-workflow remove` (5), `git push` (1), `remote-runner cancel` (5), `remote-runner fetch` (5), `remote-runner prune` (5), `remote-runner submit` (5) | `keep global`: part of the approver (F-A1, F-B1); goes with `action-review-engine`, not before |
+
+The project renders one hook of its own, a `PreToolUse` edit gate on file-writing tools. The global file has no `PreToolUse` hook; the agents' per-agent hooks are in their own definitions (increment A).
+
+
+### Plugins
+
+| plugin | state | disposition and reason |
+|---|---|---|
+| `superpowers` (official marketplace) | enabled | `redesign`: it is the source of the skills the workbench ported (`superpowers-ports.md`). What stops working when it goes is increment C's proposal; this part records only that it is enabled. |
+| `design` (synced) | disabled | `keep global`: harness-synced, off |
+| `pdf-viewer` (synced) | disabled | `keep global`: harness-synced, off |
+| `clangd-lsp` (official marketplace) | enabled | `keep global`: a language-server tool for C and C++; no workbench module supplies one (`cad-modules` is unbuilt) |
+
+### The question whether the settings file's own path is denied for edits
+
+`harness-modules.md` ("As built, and its limits") records that the project's render denies edits to the project's own
+settings file and to the exclude file, from any directory, and notes the deny covers file tools and not a shell. The
+question for the user level is whether the owner's own settings file is protected in the same way.
+
+**Answer from the file, read on 2026-10-25:** it is not. No `deny` entry names it, and the only `Edit` rules are three
+`ask` entries: the approver's data directory, the approver hook program and the commit helper program. So an edit to the
+user-level settings file, to the other hook program (`review_agent_guard.py`), to the agent definitions or to the other
+helper programs is not raised as a prompt by these rules (F-B3). The workbench cannot add such a rule: it never writes the
+user level. **Proposal, not a decision:** the owner adds an `Edit` rule on the settings file and on the hook programs.
+**Test for the move list:** the 2026-10-24 method (`harness-modules.md`, "Evidence"): `claude -p` with a scratch
+configuration directory holding a copy of the proposed rule and an edit aimed at a copy of the file, expecting the refusal
+message the project's own deny gives. It must run on a copy, never on the real file. It was not run here, because running
+the edit against the real file would be a write to the user level.
+
 ## What the building plans said they would let this work retire
 
 Four earlier plans list the global items they replace. Quoted from the plans:
@@ -164,12 +316,41 @@ Findings are for the owner to plan or dismiss. None changes a shipped module her
   against the current files: `implementer` three, `workflow-reviewer` two, `security-reviewer` one).
 - **F-A7: the commit agent names the global helper.** `safe-committer` and the guard's `committer` mode accept only
   `claude-workflow commit`, never `wb run safe-git commit`.
+- **F-B1: the approver looks only where an `ask` rule prompts.** Its hook sees a prompt only when an `ask` rule raised it
+  (`codex_approver.py`, header). Removing a global `ask` entry for a helper (commit, remove, the four `remote-runner`
+  commands, `ask-codex archive`, `git push`) ends the approver's review of that command whether or not the hook stays. The
+  one exception is `git push`: the project renders its own `ask` for every push, and the 2026-10-24 trial showed a global
+  hook runs for commands a project asks on (`harness-modules.md`, "Evidence"), so the approver probably still looks. That trial ran a `PreToolUse` hook under `-p`, where an `ask` is denied and not
+  prompted, so a `PermissionRequest` hook firing on a project `ask` in an interactive session is an inference and untested.
+- **F-B2: the module commands that replace the gated ones render no `ask`.** `wb run safe-git commit`, `remove`, and the
+  four `wb run remote-runner` commands raise no prompt from the project's render (read on 2026-10-25), and
+  `remote-runner.md` says the same of its commands. The owner's `allow` rules and `auto` mode decide whether they prompt.
+  Moving `claude-workflow` or `remote-runner` into a project therefore removes a prompt, and with F-B1 the approver's review,
+  unless the workbench renders an `ask` for them or the owner accepts the loss. Which of those is for the owner; this spec
+  proposes neither.
+- **F-B3: edit protection of the user level is thin.** The only `Edit` rules are three `ask` entries (the approver's data
+  directory, the approver hook, the commit helper). The settings file, the other hook program, the agent definitions and
+  the `ask-codex` and `remote-runner` programs have no `Edit` rule (see "The question whether the settings file's own path is
+  denied for edits").
+- **F-B4: the outcome hooks cover fewer commands than the `ask` list.** `claude-workflow amend-message` and
+  `ask-codex extend`, `reset` and `prune` are asked on and have no outcome hook, so the approver's agreement report sees
+  prompts for them without outcomes. Minor; recorded for the approver's redesign.
+- **F-B5: the global `deny` is the stronger floor for 12 of its 18 entries, and the only floor for the other 6.** For the `.env`, `.ssh` and `.aws` reads and
+  for `git clean`, `restore`, `rebase`, `rm`, `reset` and `checkout`, the project renders an `ask`, and for `git merge`,
+  `rmdir`, `unlink`, `shred`, `gh` and `codex` credentials nothing. A project without these global rules is left with
+  prompts where the owner has hard stops. Whether the workbench should render a `deny` for any of them is a spec choice for
+  the owner and not made here (`2026-10-19-restrictive-only-permissions` permits `deny`).
 
 ## Hashes at the end
 
 Re-hashed on 2026-10-25 when increment A finished: all 30 files listed in "Items" have the hash recorded there, so none
 changed while the work ran, and this work wrote nothing at the user level. The harness-synced bundle's other 227 files
 were not hashed.
+
+Increment B, the same day: the settings file had the hash recorded in "The user-level settings file" at the start and at
+the end, and the 30 files above were re-hashed again and matched. Nothing changed at the user level, and this work wrote
+nothing there. Reading the settings file and the project's render was the only access; the one script that ran only read the
+settings file and wrote the spec.
 
 ## Acceptance criteria
 

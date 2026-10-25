@@ -212,4 +212,30 @@ medium, bound 3 rounds). Findings are advice and were judged by the author; the 
   dispositions reduced to one; the security-reviewer blocker reworded; the other plans' retire lists quoted. Not blocking,
   accepted as disclosed: partial reads and the synced bundle as a group. The reviewer could not check the global files; the
   claims about them (including F-A1 to F-A5 and F-A7) rest on this author's reading and are unreviewed.
-- Next: increment B (`settings.json`), on the owner's word.
+- Committed as `0bc3f94`.
+
+### Increment B (done, uncommitted until the owner says commit)
+
+- Extended `docs/specs/global-config-inventory.md` with the user-level settings file (34,228 bytes, read in full): every
+  top-level key; all 46 `allow`, 84 `ask` and 18 `deny` entries, each with a disposition against the project's render (58
+  `ask`, 281 `deny`, one `PreToolUse` hook, read on 2026-10-25); the 73 hook entries (all the approver); four plugins; and the
+  settings-path question. Dispositions: all 46 `allow`, all 18 `deny` and all 73 hook entries `keep global`; of the 84 `ask`
+  entries, 34 `move` (20 `ask-codex` spellings tied to the program, `git push`, 13 installs) and 50 `keep global` (35
+  helper spellings, 12 plain entries, 3 `Edit`); of the plugins, `superpowers` is `redesign` and the rest `keep global`. The spec is the source for the exact rows.
+- Answer to the settings-path question: the user-level settings file is neither denied nor asked for edits; the only `Edit`
+  rules are three `ask` entries on approver and helper files (F-B3). Proposal only: the owner adds a rule. The named test
+  runs on a copy under a scratch configuration directory and was not run here, because running it on the real file would
+  write the user level.
+- Findings F-B1 to F-B5. The ones that shape the move list: the approver looks only where an `ask` prompts (F-B1), and the
+  module commands that replace the gated helpers render no `ask` (F-B2), so moving `claude-workflow` or `remote-runner` into
+  a project removes a prompt and the approver's review unless that is addressed first.
+- Verification as run: `doccheck`, `refcheck`, `git diff --check` exit 0. A script classified every `allow`, `ask`, `deny`
+  and hook entry (it asserts none is left over); the settings file hash is the same at start and end and the 30 files of
+  increment A still match, so this work wrote nothing at the user level. A search of the spec for global paths finds none.
+- Review: one round with the `reviewer` agent, no blocking findings. Applied: the claim that the approver "still looks" at a
+  project `ask` is now an untested inference (the trial ran a different hook type under `-p`); a note that a `move` of an
+  `ask` removes the prompt in a project without the workbench; four rows that named credential-file patterns are described by
+  role; two top-level key rows now say they are split; F-B5 says the other six denies are the only floor; a stale non-goal
+  line. The reviewer could not read the settings file or the approver, so the counts and the approver claims rest on this
+  author and the generating script.
+- Not done: the settings-path test, and any interactive check of how `ask` and the approver behave.
