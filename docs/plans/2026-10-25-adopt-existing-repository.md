@@ -1,6 +1,6 @@
 # Adopt an existing repository: install the workbench into a directory that has content
 
-Status: Approved
+Status: Completed
 Created: 2026-10-25
 Candidate: workbench-v1#adopt-existing-repository
 Specs: installer-interface, repository-boundary, trust-and-approval, harness-modules
