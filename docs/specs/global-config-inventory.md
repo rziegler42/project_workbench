@@ -200,20 +200,20 @@ Each helper command below is listed in five spellings (bare name, the user bin p
 | `Bash(ssh:*)` | 1 | none | `keep global`: remote access is machine-level; no project rule |
 | `Bash(scp:*)` | 1 | none | `keep global`: remote access is machine-level; no project rule |
 | `Bash(rsync:*)` | 1 | none | `keep global`: remote access is machine-level; no project rule |
-| `Bash(pip install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
-| `Bash(pip3 install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
-| `Bash(python3 -m pip install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
-| `Bash(npm install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
-| `Bash(npm ci:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
-| `Bash(cargo install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
-| `Bash(cargo add:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
-| `Bash(brew install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
-| `Bash(apt install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
-| `Bash(apt-get install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
+| `Bash(pip install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the owner removed the entry, and `pip install` prompted from the floor's pattern in an attached project (plan `2026-10-25-retire-global-asks`, B) |
+| `Bash(pip3 install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the owner removed the entry; this form was not run live, and is pinned by a test of the floor's rendering (plan `2026-10-25-retire-global-asks`, A and B) |
+| `Bash(python3 -m pip install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the owner removed the entry; this form was not run live, and is pinned by a test of the floor's rendering (plan `2026-10-25-retire-global-asks`, A and B) |
+| `Bash(npm install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the owner removed the entry; this form was not run live, and is pinned by a test of the floor's rendering (plan `2026-10-25-retire-global-asks`, A and B) |
+| `Bash(npm ci:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the owner removed the entry; this form was not run live, and is pinned by a test of the floor's rendering (plan `2026-10-25-retire-global-asks`, A and B) |
+| `Bash(cargo install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the owner removed the entry; this form was not run live, and is pinned by a test of the floor's rendering (plan `2026-10-25-retire-global-asks`, A and B) |
+| `Bash(cargo add:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the owner removed the entry; this form was not run live, and is pinned by a test of the floor's rendering (plan `2026-10-25-retire-global-asks`, A and B) |
+| `Bash(brew install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the owner removed the entry; this form was not run live, and is pinned by a test of the floor's rendering (plan `2026-10-25-retire-global-asks`, A and B) |
+| `Bash(apt install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the owner removed the entry; this form was not run live, and is pinned by a test of the floor's rendering (plan `2026-10-25-retire-global-asks`, A and B) |
+| `Bash(apt-get install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the owner removed the entry; this form was not run live, and is pinned by a test of the floor's rendering (plan `2026-10-25-retire-global-asks`, A and B) |
 | `Bash(go install:*)` | 1 | `go get*` only | `keep global`: the project's install list has no `go install` |
-| `Bash(uv pip install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
-| `Bash(uv add:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
-| `Bash(pipx install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the rendered rule was read, not run interactively |
+| `Bash(uv pip install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the owner removed the entry; this form was not run live, and is pinned by a test of the floor's rendering (plan `2026-10-25-retire-global-asks`, A and B) |
+| `Bash(uv add:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the owner removed the entry; this form was not run live, and is pinned by a test of the floor's rendering (plan `2026-10-25-retire-global-asks`, A and B) |
+| `Bash(pipx install:*)` | 1 | an `ask` on the same install form | `move`: the floor renders an `ask` for package installs; the owner removed the entry; this form was not run live, and is pinned by a test of the floor's rendering (plan `2026-10-25-retire-global-asks`, A and B) |
 | an `Edit` rule on the approver's data directory | 1 | none (it guards a global file) | `keep global`: the workbench never writes or guards the user level |
 | an `Edit` rule on the approver hook program | 1 | none (it guards a global file) | `keep global`: the workbench never writes or guards the user level |
 | an `Edit` rule on the commit helper program | 1 | none (it guards a global file) | `keep global`: the workbench never writes or guards the user level |
@@ -622,8 +622,11 @@ Carrying plan: `retire-carried-instructions`. Owner step: remove the three parag
 **M8: the install prompts.** Items: the thirteen `ask` entries for package installs (`pip install`, `pip3 install`,
 `python3 -m pip install`, `npm install`, `npm ci`, `cargo install`, `cargo add`, `brew install`, `apt install`, `apt-get
 install`, `uv pip install`, `uv add`, `pipx install`). Gate: a recorded interactive run in an attached project showing the
-prompt for an install (the rendered rule was read, not run). Blocker: none. A project without the workbench loses the prompt.
-Carrying plan: `retire-global-asks`. Owner step: remove the thirteen entries.
+prompt for an install. Blocker: none. A project without the workbench loses the prompt. Carrying plan: `retire-global-asks`.
+Done 2026-10-25 by the owner: the thirteen entries were removed from the user-level settings file and its mirror (each diff
+showed exactly those thirteen lines gone, and `Bash(go install:*)` stays). In an attached project at commit `a333708`, Claude
+Code 2.1.310, `pip install --dry-run requests` prompted with "Ask rule Bash(pip install*) overrides auto mode", and the owner
+declined it. Only that one form was run; the other twelve are pinned by a test of the floor's rendering.
 
 **M9: the `git push` prompt.** Items: the `ask` entry `Bash(git push:*)`. Gate: the F-B1 test of M1 passed, and a recorded run
 in an attached project where a push prompts and the approver logs a verdict with the global entry removed. Blocker: M1 stage 1.

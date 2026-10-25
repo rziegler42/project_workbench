@@ -7,7 +7,7 @@ Specs: global-config-inventory
 
 ## Goal
 
-Let the project's own rendered rules supply the prompts that the owner's user-level settings also carry, and record that
+Let the project's own rendered rules supply the prompts that the owner's user-level settings also carry, and record tha
 they do. Two moves in the move list name this plan as their carrier (`retire-global-asks`):
 
 - **M8:** the thirteen user-level `ask` entries for package installs (`pip install`, `pip3 install`, `python3 -m pip install`,
@@ -35,7 +35,7 @@ themselves are the owner's, in a terminal; the agent does not write the user lev
 - Any `deny` entry, hook, the approver program, its `git-push` rule, its outcome hooks, or any `allow` rule. All stay
   (rule 1 of the order, and the M9 paragraph).
 - `Bash(go install:*)`, which the inventory marks `keep global` because the project's install list has no `go install`.
-- Changing what the installer or the harness module renders. If the pinning test fails, that is a finding to stop on, not
+- Changing what the installer or the harness module renders. If the pinning test fails, that is a finding to stop on, no
   a rule change to make inside this plan.
 - M1 stage 2, M14, M16 and the other moves.
 
@@ -47,7 +47,7 @@ themselves are the owner's, in a terminal; the agent does not write the user lev
   (`2026-10-24-project-guarantees-a-floor`; rule 4 of the order). The owner decides in this plan whether that is wanted. By
   approving this plan the owner states that it is; if it is not, the move is dropped from the plan before approval.
 - **The prompt, not the entry, reaches the approver.** The approver is a `PermissionRequest` hook with matcher `Bash`
-  (inventory, M1 stage 1). It runs whenever a prompt appears, whichever rule caused it. M9's gate checks this and does not
+  (inventory, M1 stage 1). It runs whenever a prompt appears, whichever rule caused it. M9's gate checks this and does no
   assume it.
 - **The agent only reads the user level.** The owner makes every change there, and to its mirror, and pastes the output.
 - **A gate test must be harmless.** The commands used to trigger a prompt are declined at the prompt, so nothing installs
@@ -64,10 +64,10 @@ themselves are the owner's, in a terminal; the agent does not write the user lev
 
 1. A test in `tests/` fails if any of the thirteen install forms or `git push` stops being rendered as an `ask` by the
    floor, and it passes at the committed head. (Increment A)
-2. For M8: a recorded interactive run in an attached project with the thirteen user-level entries removed shows a prompt
+2. For M8: a recorded interactive run in an attached project with the thirteen user-level entries removed shows a promp
    for at least one install form, declined, with nothing installed; the Result gives the command, the tool versions, the
    commit and the conclusion. (Increment B)
-3. For M9: a recorded interactive run in an attached project with the user-level `git push` entry removed shows a prompt
+3. For M9: a recorded interactive run in an attached project with the user-level `git push` entry removed shows a promp
    for a push, declined, and one new approver verdict row for it (rule `git-push`); the Result gives the same provenance.
    (Increment C)
 4. The M8 and M9 paragraphs and `move` rows of `global-config-inventory` say what was run, and `wb check`, `doccheck`,
@@ -150,9 +150,9 @@ showing the fourteen entries are gone and the others, `go install` included, are
   edit to the user-level settings file could break the owner's sessions; the removal script refuses unless the file
   round-trips and the diff is read before the next step.
 - **A project without the workbench loses the prompts** (Assumptions). Approving this plan records the owner's choice.
-- **The push gate must not push.** The owner declines the prompt, and the test runs in a throwaway project. If the prompt
+- **The push gate must not push.** The owner declines the prompt, and the test runs in a throwaway project. If the promp
   does not appear, the owner stops and nothing proceeds, because a missing prompt would be a finding about the floor.
-- **The approver may not log a verdict for a prompt that a project rule caused.** That is what M9's gate measures. If it
+- **The approver may not log a verdict for a prompt that a project rule caused.** That is what M9's gate measures. If i
   does not, the entry is restored by the owner and the finding is reported; this plan does not change the approver.
 - **Reviewers read files.** None of the text above or of the gate output contains a secret, host name or token.
 
@@ -167,7 +167,7 @@ One round of the review engine on 2026-10-25, asked for by the owner (round 1 of
 - **R1-F2 (minor), the whole-suite command:** applied. The plan now uses `python3 -B -W error tests/run_all.py`, the
   full-test command in `docs/development.md`.
 
-The reviewer found nothing else and said the plan matches the gates of M8 and M9 in the inventory. A second round was not
+The reviewer found nothing else and said the plan matches the gates of M8 and M9 in the inventory. A second round was no
 asked for; whether to have one is the owner's call.
 
 ## Deferred work
@@ -176,9 +176,9 @@ asked for; whether to have one is the owner's call.
 - The question of an `ask` for `go install` in the project's install list is the owner's, for a separate change to the
   floor.
 
-## Result
+## Resul
 
-### Increment A (done, reviewed, not yet committed)
+### Increment A (done, reviewed, committed as `a333708`)
 
 Run 2026-10-25 at commit `68a09a1`, Python 3.15.0, Darwin 25.6.0. The plan's approval was recorded by the owner (`wb plan-status`
 printed `approved`). One path changed: `tests/test_permissions.py`. One test was added to class `Floor`, after
@@ -191,7 +191,7 @@ deviation is only of place. `workbench/rules.py` is untouched.
   `cargo install`, `cargo add`, `brew install`, `apt install`, `apt-get install`, `uv pip install`, `uv add`, `pipx install`),
   `git push` and `git push origin main`. The matcher is `fnmatch.fnmatchcase` over the pattern with `[` and `?` escaped, so
   `*` is the only wildcard. It also asserts that a command with no rule is not matched (`pip uninstall`, `npm run build`,
-  `uv run pytest`, `git pull`, and `go install`, which the plan leaves global), and that `npm ci` is not matched by a list
+  `uv run pytest`, `git pull`, and `go install`, which the plan leaves global), and that `npm ci` is not matched by a lis
   holding only `npm install*`.
 - **Fails first, shown without editing `rules.py`:** a scratch script (not tracked) removed one floor entry in memory and ran
   the test. Without `uv add*` it failed at `uv add requests`; without `git push` it failed at `git push`; a removal of an entry
@@ -209,4 +209,100 @@ deviation is only of place. `workbench/rules.py` is untouched.
   pattern in a live session, which is what the gates of Increments B and C measure. The reviewer could run nothing and read
   only. The fixes after the review were checked by rerunning the test, the scratch removals and the full suite, not by a second
   review.
-- **Next:** the commit is the owner's word. Increments B and C stop for the owner's removals.
+- **Next:** Increments B and C stop for the owner's removals.
+
+### Increment B (done, reviewed, not yet committed)
+
+Started 2026-10-25 at commit `a333708`. The plan's approval is the owner's record (`wb plan-status` printed `approved`).
+At the start nothing was removed and no gate had run; the owner then made the removals and the gate run, recorded below. The agent read the user-level settings file once, read-only, and found it holds all
+thirteen M8 entries in `permissions.ask` (88 entries in all), each in the form `Bash(<form>:*)`, and `Bash(go install:*)`
+beside them.
+
+**Owner steps.** Every step is the owner's, in a terminal. Tracked text names no path to the user level, so `USER` below is
+the user-level settings file and `MIRROR` is its copy in the mirror repository; the owner supplies both paths. The mirror half
+ends when that repository is archived (Assumptions and constraints).
+
+1. Back up both files, each next to itself, and keep the backups out of any repository: copy `USER` to `USER.bak-m8` and
+   `MIRROR` to `MIRROR.bak-m8`.
+2. Save the script below as `remove_m8.py` in your own work folder, which this repository does not track. It removes exactly
+   the thirteen entries, refuses unless the file reads back byte for byte as the JSON it parses to, and does nothing unless
+   given `--apply`.
+
+   ```python
+   import json, os, sys, tempfile
+
+   FORMS = ("pip install", "pip3 install", "python3 -m pip install", "npm install", "npm ci", "cargo install",
+            "cargo add", "brew install", "apt install", "apt-get install", "uv pip install", "uv add", "pipx install")
+   ENTRIES = ["Bash(%s:*)" % form for form in FORMS]
+   KEPT = "Bash(go install:*)"
+
+   path = sys.argv[1]
+   apply = "--apply" in sys.argv[2:]
+   with open(path, encoding="utf-8") as handle:
+       text = handle.read()
+   data = json.loads(text)
+   for indent in (2, 4, 1, 3, 8):
+       for tail in ("\n", ""):
+           if json.dumps(data, indent=indent, ensure_ascii=False) + tail == text:
+               break
+       else:
+           continue
+       break
+   else:
+       sys.exit("refused: the file does not round-trip, so a rewrite would change more than the entries")
+   ask = data["permissions"]["ask"]
+   removed = [entry for entry in ask if entry in ENTRIES]
+   print("removed (%d):" % len(removed))
+   for entry in removed:
+       print("  " + entry)
+   print("not present:", [entry for entry in ENTRIES if entry not in ask] or "none")
+   data["permissions"]["ask"] = [entry for entry in ask if entry not in ENTRIES]
+   print("ask entries remaining: %d (was %d); go install kept: %s"
+         % (len(data["permissions"]["ask"]), len(ask), KEPT in data["permissions"]["ask"]))
+   if not apply:
+       sys.exit("dry run: nothing written; rerun with --apply")
+   out = json.dumps(data, indent=indent, ensure_ascii=False) + tail
+   descriptor, name = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)))
+   with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+       handle.write(out)
+   os.chmod(name, os.stat(path).st_mode & 0o7777)
+   os.replace(name, path)
+   print("written")
+   ```
+3. Dry run on `USER`: `python3 -I -B remove_m8.py USER`. Read the list. Then `python3 -I -B remove_m8.py USER --apply`.
+4. Diff: `diff USER.bak-m8 USER`. Only thirteen lines should be gone, each an `ask` entry.
+5. Repeat steps 3 and 4 on `MIRROR` with `MIRROR.bak-m8`.
+6. Paste the script's output and each diff here. The agent then reads `USER` read-only to confirm the thirteen are gone and
+   `Bash(go install:*)` and the other entries remain, and stops if they are not.
+
+**Gate run, after step 6.** In a new Claude Code session in an attached project (`wb check` reports no drift there), ask the
+agent to run `pip install --dry-run requests`. A prompt should appear. Decline it. Paste the prompt text, say whether i
+names a rule, and say whether the command ran (it must not have). Give `claude --version` and the project's `git rev-parse
+HEAD`. If no prompt appears, restore `USER` from `USER.bak-m8` and stop; that is a finding about the floor, and the plan does
+not change it.
+
+**Script check, run by the agent on a scratch copy of the user-level file** (the real file was only read): the dry run listed
+all thirteen and left the file alone; `--apply` on the copy removed thirteen lines and added none (`diff`), left 75 of 88
+entries with `Bash(go install:*)` kept, and a second run found none to remove. The copy was not the mirror, whose formatting
+the script's round-trip check will judge.
+
+**Removals, made by the owner 2026-10-25.** On both files the dry run listed the thirteen entries with `go install kept: True`,
+`--apply` wrote, and `diff` against the backup showed exactly thirteen `ask` lines gone and nothing added (75 entries left of
+88). The agent then read the user-level file read-only: 75 `ask` entries, and among the install and push forms only
+`Bash(git push:*)` and `Bash(go install:*)` remain. The agent wrote nothing at the user level or the mirror.
+
+**Gate run, made by the owner.** Commit `a333708`, Claude Code 2.1.310, in this repository (attached). Asked to run
+`pip install --dry-run requests`, the session showed a permission prompt reading "Ask rule Bash(pip install*) overrides auto
+mode for this command". That is the pattern the floor renders (Increment A); the prompt names the pattern and not its
+source, and the user-level entry, which had the form `pip install:*`, was gone. The owner chose No, and the command did not run. Conclusion: with
+the user-level `pip install` entry gone, the project's own rule still prompts. Only the `pip install` form was run live; the
+other twelve rest on the Increment A test, which pins the rendering and not Claude Code's live matching. Backups of both files
+(`.bak-m8`) remain with the owner.
+
+**Verification as run:** `git diff --check`, `wb check`, `doccheck`, `refcheck`, `wb run code-work check` (46 plans), all clean.
+**Not done:** a push, and Increment C.
+**Review:** the `reviewer` agent, one exchange (of a cap of 6), no blocking finding, four not blocking, all applied. (1) The
+Result heading and opening paragraph still said nothing was done: corrected. (2) A placeholder sentence about the review:
+replaced by this paragraph. (3) The twelve non-pip inventory rows could be read as live evidence: they now say "not run live"
+and cite Increments A and B. (4) Attributing the prompt to the floor was an inference: softened above. The reviewer read only
+the two changed regions and could not run commands or read the user level. The review is not an approval.
