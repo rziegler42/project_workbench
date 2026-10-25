@@ -1,6 +1,6 @@
 # Adopt an existing repository without editing it
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-25
 Date: 2026-10-25
 
 ## Context
