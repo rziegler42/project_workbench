@@ -492,8 +492,9 @@ terminal, after the gate has been recorded. The agent does not write the user le
 `redesign` (all but `git-push`). *Stage 1, before M9, M14 and M16:* the owner adds the spellings `wb run safe-git commit`,
 `wb run safe-git remove` and the module's `wb run remote-runner submit` and `fetch` to the existing rules and rubric sections
 (the module wraps neither `cancel` nor `prune`, and its `fetch-overwrite` and the review-engine `archive` are owner-run and
-denied, so they raise no prompt for the approver to review), and decides F-B2 (render an `ask` for the module commands, or
-accept that they prompt only by the owner's `allow` rules and `auto` mode). *Stage 2, when `action-review-engine` exists:* redesign the rules and rubric into the
+denied, so they raise no prompt for the approver to review), and decides F-B2 (render an `ask` for the module commands; or the owner adds global `ask` entries for the four spellings, an
+alternative the plan `2026-10-25-approver-coverage-for-module-spellings` adds; or accept that they prompt only by the owner's
+`allow` rules and `auto` mode; the `Proposed` decision `2026-10-25-module-commands-and-the-approver` sets them out). *Stage 2, when `action-review-engine` exists:* redesign the rules and rubric into the
 engine. Gate for stage 1: a recorded interactive run in which a `wb run safe-git commit` raises a prompt, the approver logs a
 verdict for it, and (the F-B1 test) a project `ask` reaches a global `PermissionRequest` hook. Blocker: the F-B2 choice;
 stage 2 is blocked on `action-review-engine`, which has no plan. Carrying plan: `approver-coverage-for-module-spellings` for
@@ -725,8 +726,10 @@ Findings are for the owner to plan or dismiss. None changes a shipped module her
   `remote-runner.md` says the same of its commands. The owner's `allow` rules and `auto` mode decide whether they prompt.
   Replacing `claude-workflow` by the module, or using the module's `submit` and `fetch` in place of the program's, therefore
   removes a prompt, and with F-B1 the approver's review, unless the workbench renders an `ask` for them or the owner accepts
-  the loss. Which of those is for the owner; this spec
-  proposes neither.
+  the loss. A third alternative, added by the plan `2026-10-25-approver-coverage-for-module-spellings` and not named in the
+  first pass: the owner adds global `ask` entries for the four module spellings at the user level, which prompts and
+  reaches the approver on the owner's machine only. Which of the three is for the owner; this spec proposes none. The choice is
+  set out in the `Proposed` decision `2026-10-25-module-commands-and-the-approver`.
 - **F-B3: edit protection of the user level is thin.** The only `Edit` rules are three `ask` entries (the approver's data
   directory, the approver hook, the commit helper). The settings file, the other hook program, the agent definitions and
   the `ask-codex` and `remote-runner` programs have no `Edit` rule (see "The question whether the settings file's own path is

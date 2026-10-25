@@ -203,4 +203,22 @@ three rounds are used. A review with no findings is not an approval; the plan st
 
 ## Result
 
-Empty until work starts.
+### Increment A (done, uncommitted until the owner says commit)
+
+- Wrote the `Proposed` decision `docs/decisions/2026-10-25-module-commands-and-the-approver.md`: Question 1 (what prompts for
+  the module commands) with three options, Question 2 (whether the module commit spelling is delegated), the alternatives
+  rejected, the consequences of each option and the evidence. It recommends nothing and accepts nothing. Added its row to
+  `docs/decisions/README.md` as `Proposed`. Edited F-B2 and the M1 paragraph of `docs/specs/global-config-inventory.md` to list
+  the owner's global `ask` entries as a third alternative, credited to this plan, and to cite the record as `Proposed`.
+- Verification as run: `doccheck`, `refcheck` and `git diff --check` exit 0. `wb check` reported one problem, the README row
+  pointing at the decision file, which git did not yet track (the tracked-pointer rule); it clears when the file is committed
+  and was not re-run after the review fixes. The decision's status line reads `Proposed` and a search found no global path in it.
+- Review: one round with the `reviewer` agent, one exchange, no blocking findings, three not blocking, all applied: option 3 now
+  says what a project without the owner's settings gets and that the approver sees nothing; option 1 cites
+  `2026-10-19-restrictive-only-permissions`; the evidence line no longer implies the spec was unedited at `9116d9a`. The
+  reviewer ran no command, did not read the diff, and read the accepted decisions only through the citations. The fixes were
+  not re-reviewed.
+- Not done: no test of a prompt or of the approver was run; the F-B1 behavior is untested (Increment C). Nothing at the user
+  level was read or written in this increment.
+- Next: **stop for the owner.** The owner accepts Question 1 and Question 2 (the accept-decision checkpoint). Under option 2,
+  Increment B follows; under option 1 or 3 the plan ends after A, as the plan says.
