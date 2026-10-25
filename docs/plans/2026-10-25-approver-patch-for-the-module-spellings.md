@@ -195,4 +195,47 @@ used of three. The author did not run a second round; the edits are small. A rev
 
 ## Result
 
-Empty until work starts.
+### Increment A (done, reviewed, not yet committed)
+
+Ran 2026-10-25 at commit `3457d02`, Python 3.15.0, Darwin 25.6.0.
+
+Baseline: the approver program's SHA-256 is `94ac5e8cd05473081ff0004130592cdb94e0bbd19199777574c599a23cca2b0b`, and the
+configuration, rubric, schema and eight rule files hashed the same as in the baseline plan; they were the same again at the end
+of the increment. A fresh scratch copy hashed identical to the originals.
+
+Spec: the required behavior is written in the inventory spec, after the M1 paragraph (a table of the four spellings with tool,
+rule, subcommand, flags, positionals and required flags, then what must stay unmatched and unchanged). Findings made while
+reading, now in that text:
+- The flags of the module's `commit` and `remove` equal those of the global rules (`safe-git.md`); no difference was found. The
+  module's `submit` requires exactly one of `--remote` and `--best`, which a rule cannot say; it does not need to.
+- The fetch collector reads `args["--force"]`, so the module's fetch rule must declare `--force` although the module's `fetch`
+  never passes it. A command carrying it matches and then fails the existing check `no_fetch_force`. A rule that omitted the flag
+  would make the collector fail with a missing key.
+- By reading, `split_command` should need no change, because a multi-word spelling is a raw-text prefix like the others; the
+  plan's Increment B step 1 lists it, and B confirms or corrects this and leaves it alone if it holds. The unpatched run cannot
+  show it either way.
+- `wb` is a shell-script launcher outside the repository. The installed-helper check treats it like plain `git` (no installed copy
+  to compare with) plus the shebang and interpreter test that the global helpers get.
+- By reading (grep of the program), tool names are used only by the matching and by `resolve_invocation`, so the new names
+  `safe-git` and `wb-remote-runner` should need entries in the spelling map and the supported-tools list and, if the new branch
+  precedes the lookup, not in `INSTALLED_TOOLS`; B confirms this, and the plan's list stands until then.
+
+Tests (scratch, untracked; script SHA-256 `8e2303be46941047377edbf016843ff1796c6b8b34b242e0fb445f88f521ee20`): 83 tests run
+with `python3 -I -B` against the unpatched copy, calling `split_command`, `match_event`, `load_rules`, `CHECKS` and
+`resolve_invocation` only (no model call, no `process`, `evaluate`, `main` or `load_helper`). The script refuses a copy root
+that is, or contains, the user level (this replaces the tautological guard of the earlier experiment). Result: 59 passed and 24
+failed, and each failure has the stated reason: 12 because `split_command` returns no spelling for a `wb run ...` line (so no
+rule is read), 1 because the rules directory holds 8 rules and not the expected 12 ids, and 11 because `resolve_invocation`
+raises `KeyError` for a spelling it does not know. The 8 controls pass (five existing spellings, the `python3 -B` spelling,
+`DELEGABLE` and plain `git`). The 51 "must stay unmatched" tests also pass, but they pass vacuously before the patch (no spelling
+matches at all), so they have value only as regression tests after it; they are not evidence that the patch is safe.
+Not run: anything that reaches a model or the hook's entry point, the collectors, and the interactive session.
+
+Verification as run: `doccheck`, `refcheck`, `git diff --check`, `wb run code-work check` and `wb check` (see the report).
+Review: the `reviewer` agent (one exchange): no blocking finding. Applied: the reading-only claims (`split_command`, the constants,
+the `--force` inference, the tokenizer) are marked as by reading and to be confirmed in B; the missing sentence that only a
+prompted command is reviewed; the module's own bounds on `submit` and `fetch`, and the paths after `--`. Noted: 11 of the 24
+failures are `KeyError` from an unknown spelling, not "no spelling matches", a deviation from the wording of step 5 that this
+Result already states. A review with no blocking finding is not an approval.
+
+Not done: the commit, Increments B and C.

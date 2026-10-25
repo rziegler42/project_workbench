@@ -513,6 +513,50 @@ stage 2 is blocked on `action-review-engine`, which has no plan. Carrying plan: 
 stage 1 (the change to the program is an owner step, since the agent cannot write the user level); the engine's own plan for stage 2. Owner step:
 stage 1 adds and removes nothing; stage 2 replaces the global rule files once the engine runs.
 
+*M1 stage 1, option 1a: the required behavior of the patched approver* (a specification written on 2026-10-25 by the plan
+`2026-10-25-approver-patch-for-the-module-spellings`, Increment A; the patch is not yet written, and nothing is applied). The
+accepted decision `2026-10-25-approver-coverage-for-the-module-commands` chose option 1a: a narrow change, with the collectors still
+calling the global `claude-workflow` program and `DELEGABLE` unchanged, so a module commit is never allowed by the approver on its
+own. The baseline is the approver program with SHA-256 `94ac5e8cd05473081ff0004130592cdb94e0bbd19199777574c599a23cca2b0b`.
+
+| spelling (raw text must start with it, then one space) | tool | rule (new file) | subcommand | flags the rule declares | positionals | required |
+|---|---|---|---|---|---|---|
+| `wb run safe-git` | `safe-git` | `safe-git-commit` | `commit` | `--expected-head`, `--subject`, `--body` (value); `--trailer` (multi); `--leave-other-staged` (bool) | paths | `--expected-head`, `--subject` |
+| `wb run safe-git` | `safe-git` | `safe-git-remove` | `remove` | `--confirm`, `--recursive` (bool) | paths | `--confirm` |
+| `wb run remote-runner` | `wb-remote-runner` | `wb-remote-runner-submit` | `submit` | `--remote`, `--profile`, `--ref` (value); `--best`, `--snapshot` (bool) | none | `--profile` |
+| `wb run remote-runner` | `wb-remote-runner` | `wb-remote-runner-fetch` | `fetch` | `--dest`, `--as` (value); `--force` (bool) | two or more | none |
+
+- **The rules reuse the collectors, checks and rubric sections of the global rules of the same action** (`commit`, `remove`,
+  `submit`, `fetch`); a rule's flags must include every flag its collector reads, or the collector fails with a missing key. The
+  module's `fetch` never passes `--force` (`remote-runner.md`), but the collector reads `args["--force"]` and the check
+  `no_fetch_force` refuses a force, so the fetch rule declares `--force` and, by reading, a command that carries it fails that check and is
+  not approved (a design inference from the collector and the check, to be exercised when the patch is written). The module's `submit` requires exactly one of `--remote` and `--best`, allows at most one of `--ref` and `--snapshot`, and
+  its `fetch` takes one job and one to sixteen paths (`remote-runner.md`); a rule cannot say so, the global rules do not
+  either, and the module refuses otherwise, so the new rules keep the global rules' bounds. The paths of `commit` and `remove`
+  follow `--` or plain words; the matcher's argument parser handles both (by reading). The flags of the module's `commit` and `remove` equal those of the global rules
+  (`safe-git.md`); no difference was found.
+- **`split_command` should need no change** (by reading, to be confirmed when the patch is written): it matches a raw-text
+  prefix, and a multi-word spelling is such a prefix. By reading, the patch adds the two spellings to the map from spelling to
+  tool, the two tool names to the supported-tools list, and a branch in the installed-helper check; the plan's Increment B
+  confirms or corrects this list. It adds no spelling with a `python3` prefix or a path, since the module is run as `wb run ...`
+  only.
+- **The installed-helper check treats `wb` as it treats plain `git` plus an interpreter check.** It looks up `wb` the way the
+  shell would and refuses a relative or empty path entry that holds one, and an absolute entry inside the repository; it
+  compares with no installed copy; the launcher is a shell script, so its `#!` line must name an interpreter outside the
+  repository. A `wb` that fails the check makes the command unreviewed and the invocation untrusted, as for the global helpers.
+- **Must stay unmatched:** `wb run safe-git push-check`; `wb run remote-runner cancel`, `prune`, `status`, `fetch-overwrite` (owner-only)
+  and any other subcommand; `wb run safe-git` or `wb run remote-runner` with no subcommand; `wb` alone; a leading space or tab; an
+  environment prefix; any operator, redirection or substitution after the spelling (by reading, the tokenizer already refuses them; the tests that check it pass vacuously before the patch); a flag
+  the rule does not declare.
+- **Must be unchanged:** every existing spelling, rule and control (`claude-workflow` commit and remove, `remote-runner` submit and
+  fetch, `git push`, `ask-codex archive`); `DELEGABLE`; the collectors; the rubric (the new rules name the existing sections); the
+  rule directory must still load, since one refused file silences the review of every listed spelling (F-A1).
+- **Only a prompted command is reviewed.** The approver sees a command only when an `ask` rule raised a prompt for it, so each
+  new spelling is reviewed only while the owner's global `ask` entry for it exists (the accepted decision
+  `2026-10-25-module-commands-and-the-approver`); the patch does not make the module commands prompt.
+- **Outside the program:** the global `ask` entries for the four spellings and the per-spelling hook entries in the settings file
+  are edits for the owner (Increment C of the plan).
+
 **M2: the `security-review` skill.** Items: the personal skill `security-review`. Gate: a recorded run showing the project skill
 loads once the global one is out of the way (a personal skill shadows a project skill of the same name). Blocker: none.
 Carrying plan: `retire-global-security-review` (with M3). Owner step: remove the personal skill.
