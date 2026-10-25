@@ -825,4 +825,5 @@ read the results back).** Files are named by role and SHA-256, never by path.
 **What the gate did not show.** Only `safe-git-commit` went through a live prompt. `safe-git-remove`, `wb-remote-runner-submit`
 and `wb-remote-runner-fetch` rest on the scratch tests and the self-check; the two remote commands were deliberately not run
 (they reach a remote). The review is still advice: no module rule can be allowed without the owner. The mirror's changes (the
-patched program, four rule files, four `ask` entries) are in the owner's mirror repository, uncommitted.
+patched program, four rule files, four `ask` entries) were committed by the owner in the mirror repository as `6ae0566` (local,
+not pushed at the time of writing).
