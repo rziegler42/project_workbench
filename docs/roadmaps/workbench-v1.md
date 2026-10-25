@@ -46,8 +46,9 @@ meet here and the order matters.
   approval check is already in place. Plan approval and the delegation helper are
   built with `code-work-plans` and plan `2026-10-22-plan-approval-records`, because the plan format names the
   sections they depend on.
-- **The installer is not run on its own repository** until `self-hosting` has shown,
-  by a test, that its output agrees with the hand-maintained files.
+- **The installer is not run on its own repository** until `self-hosting` has recorded,
+  by a test, how its output relates to the hand-maintained files, and `adopt-existing-repository` gives it a way in. The
+  installer only installs into a new or empty directory, so this repository cannot become an installed project before then.
 - **The commit helper does not exist while it is being built.** Until `code-work-commit`
   ships it, commits are made with the owner's own tooling.
 
@@ -55,8 +56,9 @@ meet here and the order matters.
 
 - The old template created this repository. `adopt-conventions` is done (2026-10-19):
   the repository's own documents follow the new conventions, and harness files and the
-  old template manifest are excluded from git. The old template is retired at
-  `self-hosting`.
+  old template manifest are excluded from git. The old template is retired as a source at
+  `self-hosting`: nothing tracked here depends on it. What remains is the owner's, outside this repository: archiving the
+  old repository and removing its mentions from `~/.claude` (`global-config-migration`).
 - Seven specifications are approved by the owner (2026-10-19) and read `Current`:
   `terms`, `module-contract`, `repository-boundary`, `trust-and-approval`,
   `groundwork`, `code-work` and `harness-modules`.
@@ -223,7 +225,8 @@ meet here and the order matters.
 `remote-runner-module`, `review-engine`, `delegated-approval`, `action-review-engine`,
 `mempalace-module`, `graphify-module`, `knowledge-base-package`, `port-superpowers`,
 `architecture-decisions-merge`, `agent-confinement`, `security-review-module`, `verilog-module`, `cad-modules`,
-`global-settings-check`, `mempalace-scoping`, `global-config-migration`, `self-hosting`, `remaining-modules-rename`.
+`global-settings-check`, `mempalace-scoping`, `global-config-migration`, `self-hosting`, `adopt-existing-repository`,
+`remaining-modules-rename`.
 
 ## Candidates
 
@@ -715,19 +718,29 @@ candidate starts from that list.
 
 ### self-hosting — Self-hosting
 
-**Outcome:** this repository's own files are checked against what the installer would
-generate, and the old template is retired. The document conventions were already
-adopted by `adopt-conventions`, so this candidate is only the proof of agreement and the
-retirement.
+**Outcome:** a test records how this repository's seeded files relate to what the installer
+would seed, and the old template is retired as a source. The document conventions were already
+adopted by `adopt-conventions`, so this candidate is only that record and the retirement.
 **Dependencies:** `ownership-and-upgrade`, `claude-harness`, `groundwork-module`,
 `checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint`, `compaction-guidance`, and the
 candidates from the inventory of the global configuration that change a shipped module: `architecture-decisions-merge`,
 `mempalace-scoping` and `security-review-module`.
-**Boundary:** agreement between hand-maintained files and generated output, and the
-retirement of the old template, and approving this repository's own plans with `wb approve-plan`. The installer
-does not rewrite its own repository until that agreement is tested.
+**Boundary:** the recorded relation between hand-maintained files and generated output, and the
+retirement of the old template as a source. The installer cannot be run on a directory with content, so installing it
+here and approving this repository's own plans with `wb approve-plan` moved to `adopt-existing-repository`. The installer
+does not rewrite its own repository in this candidate.
 **Promotion trigger:** `checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint` and
 `compaction-guidance` complete.
+
+### adopt-existing-repository — Install the workbench into a repository that has content
+
+**Outcome:** this repository becomes an installed project, so its own edits are gated and its own plans are approved
+with `wb approve-plan`.
+**Dependencies:** `self-hosting`.
+**Boundary:** a way to install into a repository that already has content, with its own spec change, decision record and
+security review. It must not overwrite an existing file, and it must treat the files already there as the owner's. The
+disposition of each `diverged` seeded file recorded by `self-hosting` is decided here.
+**Promotion trigger:** `self-hosting` completes and the owner chooses to begin.
 
 ### remaining-modules-rename — Remaining modules and the rename pass
 

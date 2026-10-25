@@ -214,6 +214,11 @@ recorded in the manifest.
   filled block is a `slot block`. The declaration has no field to choose the class, and
   `ownership-and-upgrade` defers one: the fixed mapping stands, and a field can be added later
   without breaking it *(owner)*.
+- **This repository's own seeded files may differ from the installer's.** The installer cannot be run on a directory
+  that has content, and a seeded file is the project's afterwards, so equal bytes are not the test of agreement.
+  `tests/test_self_hosting.py` installs the first-party modules into a scratch directory, and
+  `tests/fixtures/self_hosting_dispositions.json` records for each seeded path whether this repository's file is
+  identical to the seed, diverged from it or absent; the test fails when a seeded path or slot has no record.
 - **Classification on upgrade** *(built by `ownership-and-upgrade`)*. Each path of
   the desired state is compared with its manifest entry and the disk:
   no entry and absent is **create**; no entry and present is **conflict**; module-owned with

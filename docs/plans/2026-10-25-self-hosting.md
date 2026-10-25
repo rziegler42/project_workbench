@@ -1,6 +1,6 @@
 # Self-hosting: agreement with installer output, and retiring the old template
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-25
 Candidate: workbench-v1#self-hosting
 Specs: repository-boundary
@@ -208,3 +208,26 @@ not archived. The owner approved the plan on 2026-10-25 after round 1 and withou
   skips while the shipped approvals are stale, so it does not run in that window. `test_boundary`,
   `test_module_test_imports` and `test_maintainer_dirs` pass; `doccheck` and `git diff --check` print nothing. The full
   suite has not been run yet (B). Next: B.
+- Increment B: the roadmap's `self-hosting` entry now has the two jobs done here, the new candidate
+  `adopt-existing-repository` holds installing into this repository, the edit gate and `wb approve-plan` for its own plans
+  (and the disposition of each `diverged` seeded file), and "Current state", the constraint about the installer and the
+  suggested order say the same. `docs/specs/repository-boundary.md` ("Owner classes") has one new bullet naming the test
+  and its data file. Full suite: 4,143 tests in 10 roots, all OK; the 3 skips are unchanged (1 in `tests`, 2 in
+  `code-work`) and none is a stale-approval skip. `doccheck`, `refcheck` and `git diff --check` print nothing. The plan's
+  check of tracked mentions of the old template found one, in the roadmap's text on lessons learned; the two decisions I
+  expected to list name `.template-manifest` and `install.py`, not the repository, so my wording in the plan was
+  imprecise and the result is the narrower one.
+
+## Outcome against the completion criteria
+
+1. Met: the test installs the nine modules into a scratch directory and checks each of the seven seeded paths and the
+   slots of two files against one record.
+2. Met: it failed on a removed record, a `diverged` file marked `identical` and an invented path (a scratch script on the
+   real data), and passes on the real data.
+3. Met: the roadmap matches what the installer can do and has `adopt-existing-repository`; "Current state" says the old
+   template is retired as a source and names what remains.
+4. Met: one bullet in `repository-boundary`.
+5. Met: the full suite is green in all roots with no new skip; the document checks print nothing.
+
+Not done, by design: installing into this repository, any installer change, a security review, a push, a second review
+round, archiving the old repository and editing `~/.claude` (the owner's), and a live check of the `mempalace` rules.
