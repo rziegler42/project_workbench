@@ -43,3 +43,4 @@ or an evidence note.
 | [`security-review.md`](security-review.md) | The module that gives a project a security review: one skill and one confined agent, provided as the capability `security-review` |
 | [`harness-modules.md`](harness-modules.md) | How a harness module describes one AI runtime |
 | [`superpowers-ports.md`](superpowers-ports.md) | The superpowers skills the owner uses, and what became of each |
+| [`global-config-inventory.md`](global-config-inventory.md) | A disposition for each item of the owner's global Claude configuration, with what was and was not inspected |

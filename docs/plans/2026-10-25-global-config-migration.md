@@ -191,4 +191,25 @@ medium, bound 3 rounds). Findings are advice and were judged by the author; the 
 
 ## Result
 
-Empty until work starts.
+### Increment A (done, uncommitted until the owner says commit)
+
+- Wrote `docs/specs/global-config-inventory.md` (Draft) and its index row in `docs/specs/README.md`. It lists 30 global
+  files with their SHA-256 hashes: 5 agents, 2 hook programs, 11 approver data files, 4 authored skills with 3 reference
+  files, the synced bundle's manifest and 4 helper programs, each with one disposition and a reason. Counts of dispositions
+  are given with the move list in increment D.
+- Seven findings (F-A1 to F-A7). The one that shapes the move order: the approver matches only the global helpers' spellings,
+  so a helper moved into a project is no longer reviewed unless the approver's rules change first.
+- Verification as run: `doccheck`, `refcheck` and `git diff --check` exit 0. `wb check` reports one problem, the README row
+  pointing at the not yet tracked spec; it clears once the spec is committed. The 30 hashes were re-taken at the end and all
+  match the start values, so nothing changed at the user level and this work wrote nothing there. A search of the spec found
+  no global path, host name, token or credential.
+- Step 1 was met only in part, as the spec states: the three large helper programs (`ask-codex`, `claude-workflow`,
+  `remote-runner`) were hashed and compared with the shipped helpers by role and size, not read line by line;
+  `opencode-workflow` was read for 60 lines and the approver rubric by headings; the synced bundle is recorded as a group
+  (manifest hash only, 227 other files not hashed).
+- Review: one round with the `reviewer` agent (read and search only). Blocking: the skill count (five named, four authored)
+  was wrong; fixed. Not blocking, applied: the rubric count (four remote-runner sections, not three); three compound
+  dispositions reduced to one; the security-reviewer blocker reworded; the other plans' retire lists quoted. Not blocking,
+  accepted as disclosed: partial reads and the synced bundle as a group. The reviewer could not check the global files; the
+  claims about them (including F-A1 to F-A5 and F-A7) rest on this author's reading and are unreviewed.
+- Next: increment B (`settings.json`), on the owner's word.
