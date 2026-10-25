@@ -1,6 +1,6 @@
 # The approver program and the module spellings (move M1, stage 1, second attempt)
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-25
 Candidate: none (this is move M1 of the move list in `global-config-inventory`, a follow-on to `workbench-v1#global-config-migration`; whether the roadmap gains a candidate for it is the owner's call and a roadmap edit stops for the owner)
 Specs: global-config-inventory
