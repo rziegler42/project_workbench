@@ -1,8 +1,9 @@
 # global-config-inventory
 
 Status: Draft. Written by plan `2026-10-25-global-config-migration` (increment A). Increment B added the user-level settings
-file and increment C the user-level instruction file and the superpowers dependencies. Part D (the move list) is not
-written yet. It is a record of what was read and what is proposed, and it settles nothing.
+file and increment C the user-level instruction file and the superpowers dependencies. Increment D added the move list, the
+coverage of every item and the findings that need their own plan. It is a record of what was read and what is proposed,
+and it settles nothing.
 
 Terms are defined in `terms.md`. The direction it serves is the roadmap candidate `workbench-v1#global-config-migration`;
 the decision that frames it is `2026-10-24-project-guarantees-a-floor`.
@@ -12,7 +13,8 @@ the decision that frames it is `2026-10-24-project-guarantees-a-floor`.
 A line-by-line comparison of the owner's global Claude configuration against the specs and shipped modules, so that every
 item has a recorded disposition and the later moves can be planned one item at a time. This text holds the
 user-level agent definitions, hook programs, the approver's data files, skills and helper programs (increment A) and the
-user-level settings file (increment B), and the user-level instruction file with the superpowers dependencies (increment C).
+user-level settings file (increment B), the user-level instruction file with the superpowers dependencies (increment C), and
+the ordered move list with the coverage of every item (increment D, which reads no global file).
 
 Each item has one disposition:
 
@@ -40,7 +42,7 @@ The global files are owner-local, untracked and have no source URL. They are ide
 they were read and their SHA-256 content hash. This spec writes no path to a global file (`AGENTS.md`: nothing tracked points
 to anything untracked). Items inside a file are named by their own name.
 
-Read on 2026-10-25 against this repository at `58a1903` (increment A; B and C ran at later commits of the same day), with the hashes taken at the start of the increment. The end hashes
+Read on 2026-10-25 against this repository at `58a1903` (increment A; B, C and D ran at later commits of the same day), with the hashes taken at the start of the increment. The end hashes
 are in "Hashes at the end".
 
 **Read in full:** the five agent definitions, both hook programs (about 3,600 lines together), the four authored skills and their three
@@ -119,7 +121,7 @@ Each is a Markdown file with a frontmatter block. Source: owner-local, no URL; r
 |---|---|---|---|---|
 | `claude-workflow` | `7add9cfd6d6b0473c8084d69b9384ea0ed29c5234943a8a2a4fb56e26cdf5464` | the commit and removal helper (633 lines) | `safe-git` (`commit`, `remove`, `push-check`) | `move`. Gate: a recorded run of commit and an approved removal through `wb run safe-git` with the approver still reviewing them (F-A1). Blocker: the approver must match the new spelling first. |
 | `ask-codex` | `68936f4723f228ab8108a980d3a65242365f34a1e93c809d44d08832a822d454` | the owner's Codex bridge and review runner (1,697 lines) | `ask-codex` bridge module and `review-engine` (plan `2026-10-23-review-engine`: "the owner's `ask-codex` once a recorded run shows a project gets the same review from the module") | `move`. Gate: that recorded run. The module is about a quarter of the size and covers a read-only question; the global program also runs the archive action the approver delegates. |
-| `remote-runner` | `dc2d8485aafd140c66a6e883f3bd2d0b0b476c7ba38eb618e704771d14b4c209` | the remote job program (1,916 lines) | `remote-runner` module, which pins a helper and reads `.workbench/remote-runner.toml` | `move`, blocked: the program must read the new project-file path first (`remote-runner.md`, "What the program must change"; plan `2026-10-24-remote-runner-module`). The owner's `allow` rules and remote list are not moved. |
+| `remote-runner` | `dc2d8485aafd140c66a6e883f3bd2d0b0b476c7ba38eb618e704771d14b4c209` | the remote job program (1,916 lines) | `remote-runner` module, which pins a helper and reads `.workbench/remote-runner.toml` | `keep global`. The module wraps this program and does not replace it: its helper runs the program found on a trusted `PATH` entry and refuses with `program_not_found` without it, and it does not wrap `cancel`, `prune`, `log` or `remotes` (`remote-runner.md`, "What the program is", "How the helper runs the program"). The program must change to read the workbench project file (`remote-runner.md`, "What the program must change"; plan `2026-10-24-remote-runner-module`), which is a change outside this repository. Corrected in part D from `move`; the instruction paragraphs about it still move (IV5 to IV10). The owner's `allow` rules and remote list are not moved. |
 | `opencode-workflow` | `ab614146b52efc0e84429e27e4592eac17c68ae6a14d0db8bb69ee95e4120e09` | deterministic Git and Graphify operations for the opencode workflow (534 lines) | none; `opencode-harness` and `graphify-module` are unbuilt | `keep global`. Read in part (the first 60 lines). Revisit when either candidate is promoted. |
 | `graphify`, `graphify-mcp` | not hashed: third-party installs | the code graph tool and its server | `graphify-module` unbuilt (`knowledge-tools.md`) | `keep global`. Machine-level installs; the module, when built, finds the program in a trusted `PATH` entry. |
 | `mempalace`, `mempalace-mcp`, `mempalace-light-mcp` | not hashed: third-party installs | the memory search tool and its servers | `mempalace` module pins a helper that runs the owner's installed program (`mempalace.md`) | `keep global`. The module does not install or replace the program. |
@@ -182,10 +184,10 @@ Each helper command below is listed in five spellings (bare name, the user bin p
 | `claude-workflow commit` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: `wb run safe-git commit` and `remove` render none (F-B2) | `keep global`: gates the global helper and triggers the approver; stays until the module's commands are asked or the owner accepts the loss |
 | `claude-workflow remove` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: `wb run safe-git commit` and `remove` render none (F-B2) | `keep global`: gates the global helper and triggers the approver; stays until the module's commands are asked or the owner accepts the loss |
 | `claude-workflow amend-message` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: `wb run safe-git commit` and `remove` render none (F-B2) | `keep global`: gates the global helper and triggers the approver; stays until the module's commands are asked or the owner accepts the loss |
-| `remote-runner submit` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: the module renders none for these (`remote-runner.md`, "The checkpoints"); only a `deny` on `fetch-overwrite` | `keep global`: gates the global program and triggers the approver; stays until the program reads the project file and the commands are asked |
-| `remote-runner cancel` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: the module renders none for these (`remote-runner.md`, "The checkpoints"); only a `deny` on `fetch-overwrite` | `keep global`: gates the global program and triggers the approver; stays until the program reads the project file and the commands are asked |
-| `remote-runner prune` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: the module renders none for these (`remote-runner.md`, "The checkpoints"); only a `deny` on `fetch-overwrite` | `keep global`: gates the global program and triggers the approver; stays until the program reads the project file and the commands are asked |
-| `remote-runner fetch` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: the module renders none for these (`remote-runner.md`, "The checkpoints"); only a `deny` on `fetch-overwrite` | `keep global`: gates the global program and triggers the approver; stays until the program reads the project file and the commands are asked |
+| `remote-runner submit` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: the module renders none for these (`remote-runner.md`, "The checkpoints"); only a `deny` on `fetch-overwrite` | `keep global`: gates the program and triggers the approver; stays, because the module wraps the program and does not replace it (a module command for `submit` or `fetch` is a new spelling, not a replacement; `cancel` and `prune` are not wrapped) |
+| `remote-runner cancel` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: the module renders none for these (`remote-runner.md`, "The checkpoints"); only a `deny` on `fetch-overwrite` | `keep global`: gates the program and triggers the approver; stays, because the module wraps the program and does not replace it (a module command for `submit` or `fetch` is a new spelling, not a replacement; `cancel` and `prune` are not wrapped) |
+| `remote-runner prune` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: the module renders none for these (`remote-runner.md`, "The checkpoints"); only a `deny` on `fetch-overwrite` | `keep global`: gates the program and triggers the approver; stays, because the module wraps the program and does not replace it (a module command for `submit` or `fetch` is a new spelling, not a replacement; `cancel` and `prune` are not wrapped) |
+| `remote-runner fetch` | 5 (bare name, user bin path, local bin path, `python3` + user bin path, `python3 -B` + user bin path) | no `ask`: the module renders none for these (`remote-runner.md`, "The checkpoints"); only a `deny` on `fetch-overwrite` | `keep global`: gates the program and triggers the approver; stays, because the module wraps the program and does not replace it (a module command for `submit` or `fetch` is a new spelling, not a replacement; `cancel` and `prune` are not wrapped) |
 | `Bash(git commit:*)` | 1 | only `git commit --amend*` | `keep global`: the project does not ask for a plain raw commit; the owner's rule keeps raw commits prompted |
 | `Bash(git push:*)` | 1 | `ask` on every `git push` and each force form | `move`: the floor renders it (`code-work.md`, "Push"); that the global approver hook also fires on the project's prompt is an inference (F-B1) |
 | `Bash(git tag:*)` | 1 | none | `keep global`: no project rule for tags |
@@ -296,12 +298,13 @@ Headings of the file, one per line: "Personal engineering workflow" (the title);
 "Discovery and impact analysis"; "Compact instructions"; "Memory" with its subsections "Recall" and "Store"; "Repository
 boundary".
 
-### Title and Configuration sources (the title and 3 groups)
+### Title and Configuration sources (the title and 4 groups)
 
 | group | what it says | workbench copy | disposition and reason |
 |---|---|---|---|
 | title "Personal engineering workflow" | the file's name | none | `keep global`: a heading |
-| CS1: the mirror rule | the tracked global-configuration repository mirrors this configuration; change both | none; the roadmap says the owner's earlier repositories "go away when the workbench can run without them; there is no mirror to keep in step" | `keep global` until that repository is archived, then `drop` (F-C5). Two parts; D splits them. |
+| CS1a: the mirror statement | the tracked global-configuration repository is the mirror of this configuration | none; the roadmap says the owner's earlier repositories "go away when the workbench can run without them; there is no mirror to keep in step" | `keep global` until that repository is archived, then `drop` (F-C5). Split from CS1 in part D. |
+| CS1b: update both | when changing portable global policy, agents, helpers, settings or personal skills, update the repository and the user level | same | `keep global` until that repository is archived, then `drop` (F-C5). Split from CS1 in part D; this half is the one that contradicts the roadmap. |
 | CS2: the workbench is the default source for new projects; install by its installer; preview first, install is owner-run; the old template is retired | how to start a project | `docs/development.md` ("Previewing and installing a project") | `keep global`: a pointer from the machine level to a repository; no project reads it |
 | CS3: never mirror generated or private state | what the mirror leaves out | `repository-boundary.md` (ownership classes) in part | `keep global`: it describes the mirror (CS1); goes with it |
 
@@ -325,13 +328,15 @@ boundary".
 | SR1: numbered steps: read `AGENTS.md` and `CLAUDE.md`, read `git status`, read decisions and active plans, inspect only what is needed | session start | none as a policy block; `run-increment` step 1 reads the plan | `keep global`: the harness loads the project files, and nothing else carries the order |
 | SR2: for non-trivial change use Superpowers brainstorming and planning and get approval; for a narrow change proceed | when to design first | `brainstorm` and `draft-plan` (see "Superpowers dependencies") | `redesign`: it names the plugin's skills |
 
-### Roadmaps and active plans (5 groups)
+### Roadmaps and active plans (7 groups)
 
 | group | what it says | workbench copy | disposition and reason |
 |---|---|---|---|
-| RP1: follow the repository's plan convention; a workbench project keeps one file per plan, several active; use `docs/plans/next.md` only when a repository states none; do not create a parallel plan directory | plan location | `docs/plans/README.md`, `code-work.md`; `next.md` is retired inside the workbench | `redesign`: the first part is the workbench rule and moves out; the `next.md` fallback is for repositories outside the workbench and stays global (F-C1). Two parts; D splits them. |
+| RP1a: follow the repository's plan convention; a workbench project keeps one file per plan, several active; do not create a parallel plan directory | plan location | `docs/plans/README.md`, `code-work.md` | `move`. Gate: a read of those shipped texts in an attached project. Split from RP1 in part D. |
+| RP1b: use `docs/plans/next.md` only when a repository states no convention | plan-location fallback | none; `next.md` is retired inside the workbench | `keep global`: the fallback is for repositories outside the workbench (F-C1). Split from RP1 in part D. |
 | RP2: do not modify an active plan while it is in progress unless the user asks | plan edits | the plan README and `run-increment`: status, review record and result may change without new approval | `redesign`: stricter than the workbench, whose loop writes the Result (F-C2) |
-| RP3: roadmaps are tracked, non-authoritative direction; not a plan, approval or queue; plan-boundary items; promote one item at a time; do not renumber an active plan's increments (four bullets) | roadmap meaning | `groundwork.md` ("does not authorize work and does not alter a plan that is in progress"), `docs/roadmaps/README.md`, the `draft-roadmap` skill, and `code-work.md` (labels are not renumbered after approval); the groundwork policy block carries none of these | `move`. Gate: a read of those shipped texts in an attached project showing each statement. The "one active plan" clause in the fourth bullet is a fallback and stays global with RP1. Two parts; D splits them. |
+| RP3a: roadmaps are tracked, non-authoritative direction; not a plan, approval or queue; plan-boundary items; promote one item at a time; do not renumber an active plan's increments (four bullets, without the clause in RP3b) | roadmap meaning | `groundwork.md` ("does not authorize work and does not alter a plan that is in progress"), `docs/roadmaps/README.md`, the `draft-roadmap` skill, and `code-work.md` (labels are not renumbered after approval); the groundwork policy block carries none of these | `move`. Gate: a read of those shipped texts in an attached project showing each statement. Split from RP3 in part D. |
+| RP3b: where a repository allows only one active plan (the `next.md` fallback), promote an item only after the current plan is completed and archived or superseded | the single-plan clause of the fourth bullet | none: the workbench allows several active plans | `keep global`: it is the fallback of RP1b and goes with it. Split from RP3 in part D. |
 | RP4: durable decisions go in ADRs; follow the repository's convention, else `docs/decisions/` with four-digit filenames | ADR location | `draft-decision` and `groundwork.md` (dated names, `Proposed` first) | `move`. The four-digit default is the fallback for repositories outside the workbench; it differs from the workbench's dated names, which is no conflict because the first clause defers to the repository. |
 | RP5: commit roadmaps; scratch notes stay out; kebab-case names; one active roadmap per scope; archive with a `YYYY-MM-` prefix; what a roadmap states | roadmap hygiene | `docs/roadmaps/README.md` (the archive prefix) and `draft-roadmap` | `move`. Compared by topic; the field list of "what a roadmap states" was not compared line by line. |
 
@@ -358,7 +363,7 @@ boundary".
 | IV2: smallest change supported by evidence; no new dependencies or wider public behavior without approval | change size | none as a block; this repository's `AGENTS.md` states it | `keep global`, with OP1 |
 | IV3: retained local diagnostics in `/.debug/<date>-<topic>/`, excluded in `.git/info/exclude` with a README | diagnostics | no module block; this repository's `AGENTS.md` states it for itself, and `repository-boundary.md` names the path | `keep global`: nothing a module carries |
 | IV4: when a test or build fails, use Superpowers systematic debugging and an evidence loop | debugging | `diagnose-failure` | `redesign`: names the plugin skill |
-| IV5: offload long verification to a declared `remote-runner` profile when the project's remote-runner file defines one | when to offload | `remote-runner` module and `run-remote-job` | `move`, with the program. The project file moved to another path (F-C6). |
+| IV5: offload long verification to a declared `remote-runner` profile when the project's remote-runner file defines one | when to offload | `remote-runner` module and `run-remote-job` | `move`, once the program reads the project file at its new path (M16; F-C6). The program itself stays. |
 | IV6: `recommend --profile`, `submit --best --profile`, select by declared labels | remote selection | the module's `recommend` and `submit` | `move`, with IV5 |
 | IV7: only declared remotes and profiles; no ad hoc SSH; a default job runs a committed revision on the remote; no commit or push just to offload; record the job and read its status and log before reporting | remote limits | `remote-runner.md`, `run-remote-job` ("submit and fetch only on the owner's word") | `move`, with IV5 |
 | IV8: remote provenance mandatory: `dut_commit` equals the submitted commit, `dut_clean` true, snapshot `base_commit`; never run in a pre-existing remote checkout | provenance | `remote-runner.md` ("The commands": `status --expect`, evidence for the owner and not proof) | `move`, with IV5. Compare the two statements before it goes: the module's `provenance` is true only when `--expect` was given. |
@@ -367,7 +372,7 @@ boundary".
 | IV11: a temporary pushed WIP branch with `submit --ref <branch>`; do not create, amend, push, rebase, merge or delete a WIP branch without approval | WIP branch | the module accepts only a 40-hex `--ref` and refuses a branch name (`remote-runner.md`); no git helper creates or pushes a branch | `keep global`: the module deliberately has no branch form (F-C6) |
 | IV12: the `wip/claude/<task-id>` prefix; never force-push, push `main`, alter a shared branch or tag; check for secrets before pushing | WIP naming and push limits | `push-changes` and `safe-git push-check` cover the credential check on a push | `keep global`: tied to IV11 |
 | IV13: cleanup of a WIP branch only after approval, with a preview and non-force deletion | WIP cleanup | none | `keep global`: tied to IV11 |
-| IV14: preview retention cleanup with `remote-runner prune`; default retention seven and 30 days; never prune a running job; `--apply` only after review | job cleanup | none: the module does not wrap `prune` (`remote-runner.md`, "As built, and its limits") | `keep global` until the module wraps it; goes with the program |
+| IV14: preview retention cleanup with `remote-runner prune`; default retention seven and 30 days; never prune a running job; `--apply` only after review | job cleanup | none: the module does not wrap `prune` (`remote-runner.md`, "As built, and its limits") | `keep global` until the module wraps `prune` (the program stays, so the paragraph stays too) |
 | IV15: before claiming completion use Superpowers verification, inspect diffs, run `git diff --check`, report checks run and skipped and risks | completion | `verify-before-claiming` | `redesign`: names the plugin skill; `git diff --check` is not in the workbench skill |
 | IV16: never claim success from expected behavior, static inspection or a dry run when a real check is available | evidence | `verify-before-claiming`; the `code-work` policy ("verification actually run") | `move` |
 
@@ -416,8 +421,9 @@ boundary".
 | RB1: shared guidance stays tool-neutral in `AGENTS.md`, `README.md`, `CONTRIBUTING.md` and `docs/`; personal configuration stays under the user level; built-in memory stays in its storage | the boundary | `repository-boundary.md`, `harness-modules.md` (the harness file is derived, never committed) | `keep global`: it states the owner's side of the boundary |
 | RB2: follow declared platform requirements; else assume Git, POSIX `sh` and `python3` | platform default | none | `keep global` |
 
-Counts (by a script that read the tables of this section): 70 rows, of which 21 are `move`, 16 `redesign`, 33 `keep global`
-and none `drop` outright (CS1 becomes `drop` when its repository is archived). The 70 include the title row.
+Counts (by a script that read the tables of this section, after part D split CS1, RP1 and RP3 into two rows each): 73 rows,
+of which 22 are `move`, 15 `redesign`, 36 `keep global` and none `drop` outright (CS1a and CS1b become `drop` when their
+repository is archived). The 73 include the title row. Increment C counted 70 before the split.
 
 ### Superpowers dependencies: proposals
 
@@ -448,6 +454,228 @@ among them becomes a decision record only when the owner asks for one and accept
    agent's `redesign` row.
 5. **The plugin.** `superpowers` stays `redesign`. The owner can disable it only after proposals 1 to 3 are done; before that,
    disabling it silently breaks the routing text and three agents.
+
+## The move list
+
+Written by increment D. It orders the `move` and `redesign` items into moves of one item or one tightly coupled set. It is a
+proposal for the owner: no move is started, no plan below is drafted or approved, and every removal is the owner's, in a
+terminal, after the gate has been recorded. The agent does not write the user level
+(`2026-10-24-project-guarantees-a-floor`).
+
+### Rules of the order
+
+1. **No hard stop, `deny` entry or approver hook moves.** All 18 `deny` entries, the three hooks of the settings file, the
+   approver program and the guard program are `keep global`. The only part of the approver that changes is its data (M1), and
+   that change adds coverage first.
+2. **The approver learns the module spellings before a command the approver reviews is replaced** (F-A1). M1 stage 1 comes
+   before M9, M14 and M16.
+3. **A gate is a test or a recorded run.** A recorded run is written into the carrying plan's Result with the command, the tool
+   versions, the commit and the conclusion (`AGENTS.md`: provenance). A read of a shipped text shows that a statement exists,
+   not that an agent behaves the same, so it is a precondition and never the whole gate. A move that removes a paragraph,
+   skill or rule that shapes behavior (M2 to M7, M10 to M14, M16, M17) also needs a recorded run in an attached project under
+   a scratch user-level configuration without that item, giving the agent a request the item governs and showing the same
+   behavior. The row names the request where it is not obvious; the carrying plan fixes it.
+4. **A move that removes text, a skill or a rule leaves a project without the workbench without it.** The floor covers only
+   attached projects (`2026-10-24-project-guarantees-a-floor`). This holds for every removal in the list, not only where a row
+   says it, and the owner decides in each carrying plan whether that is wanted.
+5. **The carrying plan is a proposed topic.** None is drafted. A plan needs a roadmap candidate or a stated reason, and the
+   owner's approval. Adding a candidate to the roadmap stops for the owner.
+6. **A row that stays `keep global` while its program exists is re-decided when the program goes.** For example the
+   `claude-workflow` `ask` and read-only `allow` entries and its outcome hooks become dead when M14 removes the program, and the
+   approver's `ask-codex-archive` rule and the `ask-codex` `allow` entries when M15 does; the plan of that move updates this spec
+   for them and does not leave them silently. The `remote-runner` program is not removed (it is the module's dependency), so its
+   entries stay.
+
+### Moves, in order
+
+**M1: the approver covers the module spellings.** Items: the approver rubric, verdict schema and the seven rules that are
+`redesign` (all but `git-push`). *Stage 1, before M9, M14 and M16:* the owner adds the spellings `wb run safe-git commit`,
+`wb run safe-git remove` and the module's `wb run remote-runner submit` and `fetch` to the existing rules and rubric sections
+(the module wraps neither `cancel` nor `prune`, and its `fetch-overwrite` and the review-engine `archive` are owner-run and
+denied, so they raise no prompt for the approver to review), and decides F-B2 (render an `ask` for the module commands, or
+accept that they prompt only by the owner's `allow` rules and `auto` mode). *Stage 2, when `action-review-engine` exists:* redesign the rules and rubric into the
+engine. Gate for stage 1: a recorded interactive run in which a `wb run safe-git commit` raises a prompt, the approver logs a
+verdict for it, and (the F-B1 test) a project `ask` reaches a global `PermissionRequest` hook. Blocker: the F-B2 choice;
+stage 2 is blocked on `action-review-engine`, which has no plan. Carrying plan: `approver-coverage-for-module-spellings` for
+stage 1 (the edits are owner steps, since the agent cannot write the user level); the engine's own plan for stage 2. Owner step:
+stage 1 adds and removes nothing; stage 2 replaces the global rule files once the engine runs.
+
+**M2: the `security-review` skill.** Items: the personal skill `security-review`. Gate: a recorded run showing the project skill
+loads once the global one is out of the way (a personal skill shadows a project skill of the same name). Blocker: none.
+Carrying plan: `retire-global-security-review` (with M3). Owner step: remove the personal skill.
+
+**M3: the `security-reviewer` agent.** Items: the agent `security-reviewer`. Gate: a recorded run in an attached project showing
+the rendered agent loads, its hook fires and its guard refuses a write outside scratch. Blocker: none, but the module has not
+been attached in a live project (`security-review.md`), which the run supplies. The global guard's `security` mode is then
+unused, and the guard program stays for the other agents. Carrying plan: `retire-global-security-review`. Owner step: remove
+the agent definition.
+
+**M4: the decision-record rules.** Items: the personal skill `architecture-decisions`, SA7 and RP4. Gate: a recorded run in an
+attached project where the agent drafts a decision record using only `draft-decision`. Blocker: none. A project without the
+workbench loses the skill; the owner decides. Carrying plan: `retire-global-architecture-decisions`. Owner step: remove the
+skill and the two paragraphs.
+
+**M5: instruction text the `groundwork` module carries.** Items: RP1a, RP3a, RP5. Gate: a read, in an attached project, of
+`docs/plans/README.md`, `docs/roadmaps/README.md`, the `draft-roadmap` skill and `code-work.md`, showing each statement the
+three groups make (the archive prefix for RP5; the renumbering rule for RP3a), and the recorded run of rule 3, for example
+asking for a new roadmap candidate and showing it is kept at plan-boundary level without the paragraph. Blocker: none. The
+comparison was by topic, and the "what a roadmap states" field list of RP5 was not compared line by line, so the plan compares
+each statement and that list field by field. Carrying plan: `retire-carried-instructions`
+(M5 to M7). Owner step: remove the three paragraphs.
+
+**M6: instruction text the `code-work` module carries.** Items: OP4, OP8, IV1, IV16, CI3, CI4. Gates: for OP4 a recorded run in
+an attached project where the harness suggests attribution lines and the agent adds none with the paragraph absent (the
+helper refuses attribution, but a PR description does not go through it); for OP8 a read of the rendered `AGENTS.md` showing
+the three statements; for IV1 and IV16 a run showing `test-first` and `verify-before-claiming` load; for CI3 and CI4 a read of the
+policy block. Each is followed by the recorded run of rule 3 (for OP8, a request to commit followed by a check that the agent
+does not push; for CI3 and CI4, a compaction at a boundary whose summary keeps the listed items). Blocker: none. Two clauses have no workbench text and stay in the file: the graph clause of OP8 (`graphify-module`
+is unbuilt) and the remote-job clause of CI3. Carrying plan: `retire-carried-instructions`. Owner step: remove the covered
+sentences.
+
+**M7: instruction text the `mempalace` module carries.** Items: ME2, ME4, ME5. Gate: a read of the `mempalace` policy block in a
+project that installed the module, and the recorded run of rule 3 (a task whose outcome an old note contradicts: the agent
+verifies against current files). Blocker: none. A project without that module loses the three statements.
+Carrying plan: `retire-carried-instructions`. Owner step: remove the three paragraphs.
+
+**M8: the install prompts.** Items: the thirteen `ask` entries for package installs (`pip install`, `pip3 install`,
+`python3 -m pip install`, `npm install`, `npm ci`, `cargo install`, `cargo add`, `brew install`, `apt install`, `apt-get
+install`, `uv pip install`, `uv add`, `pipx install`). Gate: a recorded interactive run in an attached project showing the
+prompt for an install (the rendered rule was read, not run). Blocker: none. A project without the workbench loses the prompt.
+Carrying plan: `retire-global-asks`. Owner step: remove the thirteen entries.
+
+**M9: the `git push` prompt.** Items: the `ask` entry `Bash(git push:*)`. Gate: the F-B1 test of M1 passed, and a recorded run
+in an attached project where a push prompts and the approver logs a verdict with the global entry removed. Blocker: M1 stage 1.
+The approver's `git-push` rule, its outcome hooks and the allow rules stay. Carrying plan: `retire-global-asks`. Owner step:
+remove the entry.
+
+**M10: the agents' `skills:` lists.** Items: `implementer`, `workflow-reviewer`, SA9. Proposal 1 of "Superpowers dependencies"
+applies: repoint or drop the plugin skills; the owner chooses. Gate: a recorded run in a scratch configuration with the plugin
+off showing each agent still loads and does its slice. Blocker: the owner's choice; a repointed list loads nothing in a project
+without `code-work`. Carrying plan: `retire-superpowers-plugin` (M10 to M12). Owner step: edit the two agent definitions and the
+agent-routing paragraph.
+
+**M11: the routing paragraphs.** Items: SR2, SA1, SA2, SA3, SA4, IV4, IV15. Proposal 2 applies: name the workbench skills
+alongside the plugin names while the plugin is enabled for repositories outside the workbench. The two guards the workbench does
+not carry (no automatic worktree; no merge or cleanup without approval) stay in the text. IV15 also gains `git diff --check`,
+which `verify-before-claiming` does not name. Gate: a read showing the eight skills of the `superpowers-ports.md` table exist in
+an attached project. Blocker: M10. Carrying plan: `retire-superpowers-plugin`. Owner step: edit the paragraphs.
+
+**M12: the `superpowers` plugin.** Items: the plugin `superpowers`. Proposal 3 and 5 apply. Gate: the session-start test run once
+in an attached project with the plugin off in a scratch configuration: a request for new behavior loads `brainstorm`. Blockers:
+M10 and M11; M3, or the owner's decision to drop the plugin skill from the global `security-reviewer` (F-A6: its list also
+names one, and M10 does not touch that agent); `dispatching-parallel-agents` and `writing-skills` are accepted as gaps. Carrying plan:
+`retire-superpowers-plugin`. Owner step: disable the plugin in the settings file.
+
+**M13: instruction text that contradicts the workbench.** Items: RP2, SA8, DI2, DI3, DI4. These are `redesign`: the new text is
+not settled here. Each stays in force for a repository outside the workbench, and the carrying plan drafts wording that defers
+to the project (RP2: the plan's own status, review record and result; DI2 to DI4: the project's discovery tooling, if any; SA8:
+the project's policy on who decides a security review). Findings F-C2, F-C3 and F-C4. Gate: a read of `docs/plans/README.md`,
+`code-work.md` and the policy block showing the three project statements the new text defers to. Blocker: none. Carrying plan:
+`rewrite-global-instructions`. Owner step: edit the five paragraphs.
+
+**M14: the commit and removal helper.** Items: the program `claude-workflow`, OP5, OP7. Gate: a recorded run of a commit and of
+an approved removal through `wb run safe-git` with the approver reviewing them (F-A1), and the run of rule 3 for OP5 and OP7
+(a request to commit and a request to delete an approved file, with the global program absent). Blockers: M1 stage 1; F-A7,
+because the `safe-committer` agent and the guard's `committer` mode accept only the global spelling and stay global, so the
+agent would break; the carrying plan either repoints the agent and the mode or the owner accepts the agent's loss. The module
+has no counterpart of `claude-workflow amend-message` (`safe-git.md` lists `commit`, `remove` and `push-check`), so that
+command is lost with the program unless the owner wants it kept or planned. OP5 and OP7 are repointed in the same step, so the
+file never instructs a command that is gone. Carrying plan: `move-commit-helper`. Owner step: remove the program and repoint
+the two paragraphs; rule 6 applies to its `ask` and `allow` entries and outcome hooks.
+
+**M15: the Codex bridge and review runner.** Items: the program `ask-codex`, and the four `ask` entries `extend`, `reset`,
+`prune` and `archive`. Gate: a recorded run showing a project gets the same review from the module (plan
+`2026-10-23-review-engine`). The module wraps the vendor's own program (`codex`), not this one, so removing the owner's
+program is a replacement. Blockers: none from M1: the module's `archive`, `extend`, `reset` and `prune` are owner-run and
+denied (`review-engine.md`), so they raise no prompt for the approver, and the approver's `ask-codex-archive` rule and the
+outcome hooks for `archive` die with the program (rule 6). The carrying plan checks that the owner still has a way to archive a
+review. Carrying plan: `move-ask-codex`. Owner step: remove the program and the four `ask` entries; rule 6 applies to the
+rest.
+
+**M16: the remote job paragraphs.** Items: IV5 to IV10. The program `remote-runner` is not removed: the module needs it
+(`program_not_found` without it), wraps neither `cancel` nor `prune` nor `log` nor `remotes`, and the program stays a global
+item, so its `ask`, `allow` and approver entries stay. What moves is the instruction text that tells an agent how to use it.
+Gate: the program has been changed to read the workbench project file (an owner change outside this repository; F-C6), a
+recorded run through `wb run remote-runner` of a profile with its provenance checked (`status --expect`), and the run of rule 3
+for the six paragraphs. Blockers: that program change; M1 stage 1 and F-B2, because the paragraphs steer an agent to commands
+the module does not prompt for. IV11 to IV14 stay because the module has no branch form and does not wrap `prune`. Carrying
+plan: `move-remote-runner`, which extends plan `2026-10-24-remote-runner-module`. Owner step: remove the six paragraphs, in the
+same step in which the program reads the new path.
+
+**M17: the bare-call paragraph.** Items: OP2. It names `git push`, `remote-runner` and `claude-workflow` and asks for bare calls
+so the permission rules and the approver match. Gate: a read showing `wb run` spellings in the module texts, and a run showing
+that a compound `wb run` line is not matched. Blocker: M14 (it removes `claude-workflow`, which the paragraph names); the
+reason for the paragraph holds for `wb run` and `remote-runner`. Carrying plan: `rewrite-global-instructions`. Owner step: edit
+the paragraph.
+
+**M18: the Verilog skill and routing.** Items: `verilog-verilator-sim`, its reference, SA6. Blocker: `verilog-module`, unbuilt;
+the roadmap asks for a read of the content for accuracy before it moves. Gate: that read and a recorded run in a project that
+installed the module. Carrying plan: the plan of `verilog-module`. Owner step: remove the skill and the paragraph.
+
+`cad-modules` is unbuilt and gates nothing in this inventory: `clangd-lsp` is `keep global` and no item is blocked on it.
+
+### Findings that need their own plan
+
+| finding | what needs deciding or building | where it goes |
+|---|---|---|
+| F-A1, F-B1, F-B2 | approver coverage of module spellings; whether the module commands render an `ask` | M1 stage 1 |
+| F-A2, F-A3, F-A4, F-B4 | stale approver pointers, reviewer-facing paths, a guard mode with no agent, outcome hooks missing | the redesign into `action-review-engine` (M1 stage 2); F-A4 is a question for the owner |
+| F-A5 | the knowledge-base skill names retired things | `knowledge-base-package` |
+| F-A6 | plugin skills in agents' lists | M10 |
+| F-A7 | the commit agent and guard mode accept only the global spelling | M14 |
+| F-B3 | thin edit protection of the user level (the owner adds `Edit` rules; the test runs on a copy) | an owner step; a plan only if the owner wants the test recorded |
+| F-B5 | whether the workbench renders a `deny` for the six unprotected hard stops | a spec choice for the owner (`2026-10-19-restrictive-only-permissions` permits `deny`); a decision record only if the owner asks |
+| F-C2, F-C3, F-C4 | instruction text that contradicts the workbench | M13 |
+| F-C6 | the remote paragraphs name a file and a branch form the module lacks | M16 |
+| F-C1, F-C5, F-C7 | none: RP1b stays, the mirror paragraphs go with the archive of their repository (deferred work), CI2 stays | no plan |
+
+### What remains of the roadmap candidate
+
+This plan completes the first step of `global-config-migration`: the comparison, with a disposition for every item and the
+order above. The remaining work is the eighteen moves, which the proposed carrying plans group into twelve plans (ten named
+above, and the plans of the unbuilt candidates `action-review-engine` and `verilog-module`, which gate some of them); the
+owner promotes each. The candidate's other deferred work is the
+archive of the two earlier repositories, after which CS1a and CS1b become `drop`. Completion of a candidate is derived from
+completed plans that name it; whether later plans name this candidate, or the roadmap gains candidates for the moves, is the
+owner's decision and a roadmap edit stops for the owner.
+
+### Coverage: every item in one place
+
+Each row of the tables in parts A, B and C appears below exactly once. Items are named as the tables name them (rows of part C by their ID). `keep global` and `drop` items are placed here without a move; the reason is in the item's own row. No item is `drop` yet: CS1a and CS1b are `keep global` until their repository is archived. A script read the tables and this list and asserted that each item has one place and that a move holds only `move` and `redesign` items.
+
+- **M1: the approver covers the module spellings** (9): approver rubric; approver verdict schema; approver rule `ask-codex-archive`; approver rule `claude-workflow-commit`; approver rule `claude-workflow-remove`; approver rule `remote-runner-cancel`; approver rule `remote-runner-fetch`; approver rule `remote-runner-prune`; approver rule `remote-runner-submit`
+- **M2: the `security-review` skill** (1): `security-review`
+- **M3: the `security-reviewer` agent** (1): `security-reviewer`
+- **M4: the decision-record rules** (3): `architecture-decisions`; RP4; SA7
+- **M5: instruction text the `groundwork` module carries** (3): RP1a; RP3a; RP5
+- **M6: instruction text the `code-work` module carries** (6): OP4; OP8; IV1; IV16; CI3; CI4
+- **M7: instruction text the `mempalace` module carries** (3): ME2; ME4; ME5
+- **M8: the install prompts** (13): `Bash(pip install:*)`; `Bash(pip3 install:*)`; `Bash(python3 -m pip install:*)`; `Bash(npm install:*)`; `Bash(npm ci:*)`; `Bash(cargo install:*)`; `Bash(cargo add:*)`; `Bash(brew install:*)`; `Bash(apt install:*)`; `Bash(apt-get install:*)`; `Bash(uv pip install:*)`; `Bash(uv add:*)`; `Bash(pipx install:*)`
+- **M9: the `git push` prompt** (1): `Bash(git push:*)`
+- **M10: the agents' `skills:` lists** (3): `implementer`; `workflow-reviewer`; SA9
+- **M11: the routing paragraphs** (7): SR2; SA1; SA2; SA3; SA4; IV4; IV15
+- **M12: the `superpowers` plugin** (1): `superpowers` (official marketplace)
+- **M13: instruction text that contradicts the workbench** (5): RP2; SA8; DI2; DI3; DI4
+- **M14: the commit and removal helper** (3): `claude-workflow`; OP5; OP7
+- **M15: the Codex bridge and review runner** (5): `ask-codex`; `ask-codex extend`; `ask-codex reset`; `ask-codex prune`; `ask-codex archive`
+- **M16: the remote job paragraphs** (6): IV5; IV6; IV7; IV8; IV9; IV10
+- **M17: the bare-call paragraph** (1): OP2
+- **M18: the Verilog skill and routing** (3): `verilog-verilator-sim`; `verilog-verilator-sim` reference; SA6
+- **containers, placed by their entries** (2): `permissions`; `enabledPlugins`
+- **`keep global`, part A** (15): `safe-committer`; `technical-researcher`; `review_agent_guard.py`; `codex_approver.py`; approver configuration file; approver rule `git-push`; `knowledge-base-authoring`; `knowledge-base-authoring` reference: create and upgrade; `knowledge-base-authoring` reference: domain; harness-synced bundle: manifest; `remote-runner`; `opencode-workflow`; `graphify`, `graphify-mcp`; `mempalace`, `mempalace-mcp`, `mempalace-light-mcp`; `uv`, `uvx`
+- **`keep global`, part B** (58): `permissions.defaultMode`; `hooks`; `advisorModel`, `model`, `modelSettings`; `theme`, `agentPushNotifEnabled`; read of the user-level skills directory (1); read-only git (13); raw `git add` and `git mv` (2); search (1); project check runners (14); `claude-workflow` read subcommands (2); `ask-codex` review and status subcommands (8); `remote-runner` read subcommands (5); `claude-workflow commit`; `claude-workflow remove`; `claude-workflow amend-message`; `remote-runner submit`; `remote-runner cancel`; `remote-runner prune`; `remote-runner fetch`; `Bash(git commit:*)`; `Bash(git tag:*)`; `Bash(git switch:*)`; `Bash(git stash:*)`; `Bash(git branch -d:*)`; `Bash(git branch -D:*)`; `Bash(git branch --delete:*)`; `Bash(gh:*)`; `Bash(ssh:*)`; `Bash(scp:*)`; `Bash(rsync:*)`; `Bash(go install:*)`; an `Edit` rule on the approver's data directory; an `Edit` rule on the approver hook program; an `Edit` rule on the commit helper program; `Read(./.env)`; `Read(./.env.*)`; `Read(**/.env)`; `Read(**/.env.*)`; a read of the owner's SSH key directory; a read of the owner's cloud-credentials directory; a read of the owner's GitHub command-line configuration; a read of the Codex sign-in file; `Bash(git reset:*)`; `Bash(git clean:*)`; `Bash(git checkout:*)`; `Bash(git restore:*)`; `Bash(git merge:*)`; `Bash(git rebase:*)`; `Bash(rm:*)`; `Bash(rmdir:*)`; `Bash(unlink:*)`; `Bash(shred:*)`; `PermissionRequest`; `PostToolUse`; `PostToolUseFailure`; `design` (synced); `pdf-viewer` (synced); `clangd-lsp` (official marketplace)
+- **`keep global`, part C** (36): title; CS1a; CS1b; CS2; CS3; OP1; OP3; OP6; SR1; RP1b; RP3b; SA5; SA10; IV2; IV3; IV11; IV12; IV13; IV14; DI1; DI5; DI6; CI1; CI2; CI5; ME1; ME3; ME6; ME7; ME8; ME9; ME10; ME11; ME12; RB1; RB2
+
+Counts (script) over the 185 rows of parts A, B and C, of which 183 have a disposition: 47 `move`, 27 `redesign`, 109 `keep global`, none `drop`. The other two rows, the container keys `permissions` and `enabledPlugins`, have none of their own and are placed by their entries, so the "rows" column below counts the 183.
+
+| part | rows | `move` | `redesign` | `keep global` | `drop` |
+|---|---|---|---|---|---|
+| A: agents, hooks, skills, helpers | 33 | 7 | 11 | 15 | 0 |
+| B: the settings file | 77 | 18 | 1 | 58 | 0 |
+| C: the instruction file | 73 | 22 | 15 | 36 | 0 |
+| all | 183 | 47 | 27 | 109 | 0 |
+
+In the moves: 74 rows are in a move (47 `move`, 27 `redesign`); 109 are `keep global`. These are counts of table rows, not of entries: a row of part B can hold several entries (five spellings of one command; an `allow` group), whose counts are in part B itself (46 `allow`, 84 `ask`, 18 `deny`, 73 hook entries).
 
 ## What the building plans said they would let this work retire
 
@@ -492,10 +720,12 @@ Findings are for the owner to plan or dismiss. None changes a shipped module her
   hook runs for commands a project asks on (`harness-modules.md`, "Evidence"), so the approver probably still looks. That trial ran a `PreToolUse` hook under `-p`, where an `ask` is denied and not
   prompted, so a `PermissionRequest` hook firing on a project `ask` in an interactive session is an inference and untested.
 - **F-B2: the module commands that replace the gated ones render no `ask`.** `wb run safe-git commit`, `remove`, and the
-  four `wb run remote-runner` commands raise no prompt from the project's render (read on 2026-10-25), and
+  `wb run remote-runner` commands `submit` and `fetch` (the module wraps no other asked command) raise no prompt from the
+  project's render (read on 2026-10-25), and
   `remote-runner.md` says the same of its commands. The owner's `allow` rules and `auto` mode decide whether they prompt.
-  Moving `claude-workflow` or `remote-runner` into a project therefore removes a prompt, and with F-B1 the approver's review,
-  unless the workbench renders an `ask` for them or the owner accepts the loss. Which of those is for the owner; this spec
+  Replacing `claude-workflow` by the module, or using the module's `submit` and `fetch` in place of the program's, therefore
+  removes a prompt, and with F-B1 the approver's review, unless the workbench renders an `ask` for them or the owner accepts
+  the loss. Which of those is for the owner; this spec
   proposes neither.
 - **F-B3: edit protection of the user level is thin.** The only `Edit` rules are three `ask` entries (the approver's data
   directory, the approver hook, the commit helper). The settings file, the other hook program, the agent definitions and
@@ -513,7 +743,7 @@ Findings are for the owner to plan or dismiss. None changes a shipped module her
 - **F-C1: the instruction file still names the retired single-plan file as a fallback.** "Roadmaps and active plans" says to
   use `docs/plans/next.md` when a repository states no convention. The workbench has no such file (`docs/plans/README.md`:
   "no fixed single-plan file"). The sentence defers to the repository's own convention first, so it conflicts only for a
-  repository outside the workbench; it is the reason RP1 is split rather than moved. The old template and its `formal`
+  repository outside the workbench; it is the reason RP1 was split into RP1a (moves) and RP1b (stays). The old template and its `formal`
   module appear in the file twice and both times as retired, so no paragraph points at them as live.
 - **F-C2: the instruction file forbids editing an active plan; the workbench loop edits one.** The file says not to modify an
   active plan while it is in progress unless asked. A workbench plan allows its status, review record and result to change
@@ -557,6 +787,9 @@ Increment C, the same day: the instruction file had the hash recorded in "The us
 at the end, the settings file matched its recorded hash, and all 30 files of increment A were re-hashed and matched. Nothing
 changed at the user level, and this work wrote nothing there.
 
+Increment D, the same day: it read no global file; the only access was hashing. At its start the instruction file, the
+settings file and all 30 files of increment A had the recorded hashes. The end comparison is recorded in the plan's Result.
+
 ## Acceptance criteria
 
 1. Every file under the inspected global locations appears once in "Items", or in a named group (the synced bundle, the
@@ -566,6 +799,8 @@ changed at the user level, and this work wrote nothing there.
 4. The spec writes no path to a global file and no credential, host name or token.
 5. Nothing under the user level was written by this work: the end hashes equal the start hashes, or each difference is
    reported as a change by something else.
+6. Every `move` and `redesign` item is in a move that names its gate, its blockers, its carrying plan and the owner's removal
+   step, and every item of parts A to C is placed exactly once in "Coverage: every item in one place".
 
 ## Governing decisions and references
 

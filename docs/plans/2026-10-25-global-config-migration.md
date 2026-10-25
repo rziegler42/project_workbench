@@ -214,7 +214,7 @@ medium, bound 3 rounds). Findings are advice and were judged by the author; the 
   claims about them (including F-A1 to F-A5 and F-A7) rest on this author's reading and are unreviewed.
 - Committed as `0bc3f94`.
 
-### Increment B (done, uncommitted until the owner says commit)
+### Increment B (done)
 
 - Extended `docs/specs/global-config-inventory.md` with the user-level settings file (34,228 bytes, read in full): every
   top-level key; all 46 `allow`, 84 `ask` and 18 `deny` entries, each with a disposition against the project's render (58
@@ -241,7 +241,7 @@ medium, bound 3 rounds). Findings are advice and were judged by the author; the 
 - Not done: the settings-path test, and any interactive check of how `ask` and the approver behave.
 - Committed as `8a3080d`.
 
-### Increment C (done, uncommitted until the owner says commit)
+### Increment C (done)
 
 - Extended `docs/specs/global-config-inventory.md` with the owner's user-level instruction file (281 lines, read in full): every
   heading and 70 paragraph-group rows, each with one disposition against the module policy blocks, skills and specs: 21 `move`,
@@ -263,3 +263,35 @@ medium, bound 3 rounds). Findings are advice and were judged by the author; the 
   `code-work.md`); two citations renamed; the hashes section and a stale commit reference fixed; the conflict between the agents'
   rows ("repointed") and proposal 1 stated. Noted for D: the compound rows. The reviewer could not read the instruction file,
   so the group splits and the quoted paraphrases rest on this author; the gates for the `move` rows were not run.
+- Committed as `2e8f843`.
+
+### Increment D (done, uncommitted until the owner says commit)
+
+- Extended `docs/specs/global-config-inventory.md` with "The move list": rules of the order, eighteen moves M1 to M18 (each with
+  its items, gate, blockers, proposed carrying plan and the owner's removal step), the findings that need their own plan, and
+  what remains of the roadmap candidate; and "Coverage: every item in one place". It split the three two-part rows of C
+  (CS1a/CS1b, RP1a/RP1b, RP3a/RP3b). Nothing is moved and no plan or decision is made; the carrying plans are proposed topics.
+- Counts, in table rows (script): 185 rows in parts A to C, 183 with a disposition: **47 `move`, 27 `redesign`, 109
+  `keep global`, none `drop`** (A: 7, 11, 15; B: 18, 1, 58; C: 22, 15, 36). The other two rows are the containers `permissions`
+  and `enabledPlugins`, placed by their entries. 74 rows sit in a move; B's rows group entries (46 `allow`, 84 `ask`, 18
+  `deny`, 73 hook entries).
+- What was inspected: the owner's agents, hook programs, approver data, skills, helper programs (A, in part), the settings file
+  (B, in full) and the instruction file (C, in full). D read no global file. Not inspected: the synced bundle's 227 other
+  files, the approver's logs, the third-party tools and the bytecode, and the three large helper programs line by line.
+- Verification as run: `doccheck`, `refcheck`, `git diff --check` exit 0 and `wb check` found no problems. A script parsed every
+  table row of A to C and asserted that each is placed once in the coverage list, that a move holds only `move` and `redesign`
+  rows and that `keep global` holds only `keep global` rows; another asserted each move names a gate, a blocker, a carrying plan
+  and an owner step. A search found no global path and no credential. At D's start the instruction file, the settings file and
+  the 30 files of A had the recorded hashes, and the same set matched at the end, so this work wrote nothing at the user level.
+- Review: one round with the `reviewer` agent, two blocking findings, both applied. (1) M16 proposed removing the `remote-runner`
+  program, which the module needs and wraps; the program is now `keep global`, its `ask` rows and IV14 stay, and M16 moves only
+  the six paragraphs once the program reads the new project file. (2) Reads were the whole gate for removals of
+  behaviour-bearing text; rule 3 now requires a recorded run as well. Applied, not blocking: M1 names only the module's `submit`
+  and `fetch` (the module wraps no `cancel` or `prune`, and its owner-run commands are denied, so `archive` needs no approver
+  spelling); OP7 moves into M14 so the file never names a removed command, leaving OP2 in M17; M12 also waits on M3; M14 states
+  that `amend-message` has no module counterpart; rule 4 applies to every removal; the closing section counts twelve plans, not
+  eighteen. The reviewer could not read the global files or the diff. The fixes were not re-reviewed.
+- Not done: no gate was run; the carrying plans are not drafted; the session-start test, the F-B1 interactive test and the
+  settings-path test are named in the moves and were not run.
+- Remaining for the owner: the moves above, each its own plan; whether later plans name this roadmap candidate; and the decision
+  records the owner may ask for.
