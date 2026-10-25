@@ -465,8 +465,9 @@ terminal, after the gate has been recorded. The agent does not write the user le
 ### Rules of the order
 
 1. **No hard stop, `deny` entry or approver hook moves.** All 18 `deny` entries, the three hooks of the settings file, the
-   approver program and the guard program are `keep global`. The only part of the approver that changes is its data (M1), and
-   that change adds coverage first.
+   approver program and the guard program are `keep global`. The approver changes only in M1. What it matches (its spellings, its
+   supported tools, its installed-helper check and its delegable rules) is program code, not data, so M1 stage 1 needs a
+   change to the program or its redesign into the engine; that change adds coverage first.
 2. **The approver learns the module spellings before a command the approver reviews is replaced** (F-A1). M1 stage 1 comes
    before M9, M14 and M16.
 3. **A gate is a test or a recorded run.** A recorded run is written into the carrying plan's Result with the command, the tool
@@ -489,16 +490,23 @@ terminal, after the gate has been recorded. The agent does not write the user le
 ### Moves, in order
 
 **M1: the approver covers the module spellings.** Items: the approver rubric, verdict schema and the seven rules that are
-`redesign` (all but `git-push`). *Stage 1, before M9, M14 and M16:* the owner adds the spellings `wb run safe-git commit`,
-`wb run safe-git remove` and the module's `wb run remote-runner submit` and `fetch` to the existing rules and rubric sections
-(the module wraps neither `cancel` nor `prune`, and its `fetch-overwrite` and the review-engine `archive` are owner-run and
-denied, so they raise no prompt for the approver to review), and decides F-B2 (render an `ask` for the module commands; or the owner adds global `ask` entries for the four spellings, an
-alternative the plan `2026-10-25-approver-coverage-for-module-spellings` adds; or accept that they prompt only by the owner's
-`allow` rules and `auto` mode; the `Proposed` decision `2026-10-25-module-commands-and-the-approver` sets them out). *Stage 2, when `action-review-engine` exists:* redesign the rules and rubric into the
+`redesign` (all but `git-push`). *Stage 1, before M9, M14 and M16:* the approver recognises the spellings `wb run safe-git commit`,
+`wb run safe-git remove` and the module's `wb run remote-runner submit` and `fetch`. That is not a data edit. Read on
+2026-10-25 (the approver program, SHA-256 `94ac5e8cd05473081ff0004130592cdb94e0bbd19199777574c599a23cca2b0b`, matching the
+inventory above): the spellings, the supported tools, the installed-helper check and the delegable rules are constants of the
+program, and a rule for a tool outside its list is refused as a config error (read, not run; whether the refusal silences the other rules is untested, F-A1). So stage 1 needs a change to the program, or its
+redesign into the engine, and the owner makes either. The plan `2026-10-25-approver-coverage-for-module-spellings` ended after
+its Increment A (`Superseded`) for that reason; the carrying plan of stage 1 is now
+`2026-10-25-approver-program-and-the-module-spellings`, which tests the matching code on a scratch copy and puts the choice to
+the owner. The module wraps neither `cancel` nor `prune`, and its `fetch-overwrite` and the review-engine `archive` are
+owner-run and denied, so they raise no prompt for the approver to review. Stage 1 also needs F-B2 decided (render an `ask`
+for the module commands; or the owner adds global `ask` entries for the four spellings; or accept that they prompt only by
+the owner's `allow` rules and `auto` mode); the decision `2026-10-25-module-commands-and-the-approver` sets them out and the
+owner accepted it on 2026-10-25. *Stage 2, when `action-review-engine` exists:* redesign the rules and rubric into the
 engine. Gate for stage 1: a recorded interactive run in which a `wb run safe-git commit` raises a prompt, the approver logs a
 verdict for it, and (the F-B1 test) a project `ask` reaches a global `PermissionRequest` hook. Blocker: the F-B2 choice;
-stage 2 is blocked on `action-review-engine`, which has no plan. Carrying plan: `approver-coverage-for-module-spellings` for
-stage 1 (the edits are owner steps, since the agent cannot write the user level); the engine's own plan for stage 2. Owner step:
+stage 2 is blocked on `action-review-engine`, which has no plan. Carrying plan: `2026-10-25-approver-program-and-the-module-spellings` for
+stage 1 (the change to the program is an owner step, since the agent cannot write the user level); the engine's own plan for stage 2. Owner step:
 stage 1 adds and removes nothing; stage 2 replaces the global rule files once the engine runs.
 
 **M2: the `security-review` skill.** Items: the personal skill `security-review`. Gate: a recorded run showing the project skill
@@ -698,7 +706,11 @@ Findings are for the owner to plan or dismiss. None changes a shipped module her
 - **F-A1: the approver would not review the workbench's commands.** It matches the raw text of a command against a fixed list
   of spellings of the global helpers and plain `git`. A command written `wb run safe-git commit` or `wb run remote-runner`
   matches no rule and is logged as unmatched, so moving a helper into a project removes the approver's review of that
-  action unless the rules and the list of spellings change first. This fixes the order of the move list: the approver's
+  action unless the rules and the list of spellings change first. The list of spellings, the supported tools, the
+  installed-helper check and the delegable rules are constants of the approver program (read 2026-10-25, SHA-256
+  `94ac5e8cd05473081ff0004130592cdb94e0bbd19199777574c599a23cca2b0b`), not data, so the change is a change to the program,
+  not an edit of a rule file. That a rule file naming an unsupported tool is refused, and whether the refusal silences the
+  other rules, is read and untested; the plan `2026-10-25-approver-program-and-the-module-spellings` tests it. This fixes the order of the move list: the approver's
   coverage of a new spelling comes before the helper moves (`workbench-v1#global-config-migration`: "no hard stop,
   deny rule or approver is ever absent in between").
 - **F-A2: stale pointers in the approver.** Its header cites a specification and an active-plan file by names this repository

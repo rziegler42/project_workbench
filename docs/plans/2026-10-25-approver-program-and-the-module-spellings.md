@@ -171,4 +171,22 @@ files (A and B). A review with no findings is not an approval; the plan stays `P
 
 ## Result
 
-Empty until work starts.
+### Increment A (done, not yet committed)
+
+Edited `docs/specs/global-config-inventory.md` in place: rule 1 of "Rules of the order", the M1 paragraph (stage 1, the
+superseded plan, the carrying plan, the F-B2 decision accepted on 2026-10-25) and F-A1. F-B1 was left untouched, as step 3 says.
+The spellings, supported tools, installed-helper check and delegable rules are stated as program code. "A rejected rule file
+silences the other rules" is stated as untested in F-A1 and pointed to from M1.
+
+Provenance: read 2026-10-25 at `045438d`. The approver program's SHA-256 is
+`94ac5e8cd05473081ff0004130592cdb94e0bbd19199777574c599a23cca2b0b`, equal to the spec's inventory row, and the same at the start
+and the end of the increment. Only the program was read in this increment; no data file was read.
+
+Verification as run, after the review fixes and the Result edit: `doccheck`, `refcheck`, `git diff --check`,
+`wb run code-work check` (44 plans) and `wb check` exit clean. The edited text holds no global path or credential.
+
+Review: the `reviewer` agent, one exchange of six. No blocking finding. Applied: the full plan stem in the M1 carrying-plan line
+(finding 1), and a pointer to F-A1 for the untested claim in M1 (finding 2). Not applied: re-wrapping of two long lines
+(finding 3, cosmetic). The reviewer could not read the user level or run the checks. Its recommendation is not a verdict.
+
+Not done: Increments B and C.
