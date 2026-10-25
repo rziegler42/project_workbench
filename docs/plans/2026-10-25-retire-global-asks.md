@@ -178,4 +178,35 @@ asked for; whether to have one is the owner's call.
 
 ## Result
 
-Empty until work starts.
+### Increment A (done, reviewed, not yet committed)
+
+Run 2026-10-25 at commit `68a09a1`, Python 3.15.0, Darwin 25.6.0. The plan's approval was recorded by the owner (`wb plan-status`
+printed `approved`). One path changed: `tests/test_permissions.py`. One test was added to class `Floor`, after
+`test_the_floor_is_rendered_as_ask_rules`: `test_the_floor_asks_for_the_install_and_push_forms_the_user_level_also_asks_for`.
+The plan said "beside `test_the_install_forms_are_asked_for`", which sits in class `Hostile`; `Floor` is the better home and the
+deviation is only of place. `workbench/rules.py` is untouched.
+
+- **What the test does:** it renders the floor with `lists()` and asserts that some rendered `Bash(...)` ask pattern matches each of
+  fifteen command lines: the thirteen install forms of M8 (`pip`, `pip3`, `python3 -m pip`, `npm install`, `npm ci`,
+  `cargo install`, `cargo add`, `brew install`, `apt install`, `apt-get install`, `uv pip install`, `uv add`, `pipx install`),
+  `git push` and `git push origin main`. The matcher is `fnmatch.fnmatchcase` over the pattern with `[` and `?` escaped, so
+  `*` is the only wildcard. It also asserts that a command with no rule is not matched (`pip uninstall`, `npm run build`,
+  `uv run pytest`, `git pull`, and `go install`, which the plan leaves global), and that `npm ci` is not matched by a list
+  holding only `npm install*`.
+- **Fails first, shown without editing `rules.py`:** a scratch script (not tracked) removed one floor entry in memory and ran
+  the test. Without `uv add*` it failed at `uv add requests`; without `git push` it failed at `git push`; a removal of an entry
+  that does not exist passed. The first draft of the matcher wrongly failed bare `git push` (a pattern with no `*` must match
+  exactly); that was the test's own bug and was fixed before the runs above.
+- **Verification as run:** `python3 -B -m unittest discover -s tests -p 'test_permissions.py'`, 29 tests OK;
+  `python3 -B -W error tests/run_all.py`, 4225 tests in 10 roots, OK (run before and after the review fixes);
+  `git diff --check`, `wb check` and `wb run code-work check` (46 plans), clean.
+- **Review:** the `reviewer` agent, one exchange (of a cap of 6), no blocking finding. Finding 1 (the "not vacuous" loop was true
+  by construction, and so did not meet step 3): applied; the loop is replaced by fixed strings that must not match. Finding 2
+  (the matcher checked only the first and last pieces of a pattern): applied; `fnmatch` replaces it. Findings 3 (all thirteen
+  forms covered) and 5 (scope) raised nothing. Finding 4 (the test is in `Floor`, not beside the Hostile test): recorded above.
+  The review is not an approval.
+- **Not run, and limits:** the test pins the repository's rendering of the floor. It does not show how Claude Code matches a
+  pattern in a live session, which is what the gates of Increments B and C measure. The reviewer could run nothing and read
+  only. The fixes after the review were checked by rerunning the test, the scratch removals and the full suite, not by a second
+  review.
+- **Next:** the commit is the owner's word. Increments B and C stop for the owner's removals.

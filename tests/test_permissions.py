@@ -1,4 +1,5 @@
 import ast
+import fnmatch
 import json
 import os
 import unittest
@@ -119,6 +120,30 @@ class Floor(unittest.TestCase):
         self.assertIn("Bash(pip install*)", ask)
         self.assertIn("Read(.env)", ask)
         self.assertIn("Read(//Users/tester/.ssh/**)", ask)
+
+    def test_the_floor_asks_for_the_install_and_push_forms_the_user_level_also_asks_for(self):
+        # moves M8 and M9 of global-config-inventory: the user-level entries go only because the floor renders these
+        commands = (
+            "pip install requests", "pip3 install requests", "python3 -m pip install requests",
+            "npm install left-pad", "npm ci", "cargo install ripgrep", "cargo add serde",
+            "brew install jq", "apt install jq", "apt-get install jq", "uv pip install requests",
+            "uv add requests", "pipx install black", "git push", "git push origin main",
+        )
+
+        def asks(command, ask):
+            # a rendered pattern is literal text where `*` matches any run, so fnmatch's other symbols are escaped
+            return any(
+                fnmatch.fnmatchcase(command, entry[len("Bash("):-1].replace("[", "[[]").replace("?", "[?]"))
+                for entry in ask if entry.startswith("Bash(") and entry.endswith(")"))
+
+        _, ask = lists()
+        for command in commands:
+            self.assertTrue(asks(command, ask), command)
+        # the matcher rejects a command with no rule, and the floor does not ask for what the plan leaves alone
+        for command in ("pip uninstall requests", "npm run build", "uv run pytest", "git pull",
+                        "go install example.com/x@latest"):
+            self.assertFalse(asks(command, ask), command)
+        self.assertFalse(asks("npm ci", ["Bash(npm install*)"]))
 
     def test_the_floor_is_rendered_without_any_module_rules(self):
         _, ask = lists()
