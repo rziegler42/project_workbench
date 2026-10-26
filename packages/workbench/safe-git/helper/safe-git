@@ -261,6 +261,8 @@ _SHAPES = {
         ["--no-commit-id", "--name-only", "-r", "-z", "HEAD"],
         ["--root", "--no-commit-id", "--name-only", "-r", "-z", "HEAD"]),
     "config": lambda rest: rest in (["--list", "-z"], ["--list", "--show-scope", "-z"]),
+    "remote": lambda rest: len(rest) == 4 and rest[:3] == ["get-url", "--push", "--all"]
+    and _REMOTE_NAME.match(rest[3]) is not None,
     "status": lambda rest: rest == ["--porcelain=v1", "-z", "--untracked-files=all"],
 }
 
@@ -416,8 +418,17 @@ def git_bool_is_true(has_value, value):
         return True
 
 
-def repo_program_findings(root):
-    """The names, never the values, of repository settings and hooks that make a commit run a program."""
+def _without_subsection(key):
+    """`key` with its subsection left out (``credential.*.helper``): a subsection can be a URL that carries a
+    credential. A key with no subsection is returned as it is."""
+    section, _, rest = key.partition(".")
+    subsection, dot, variable = rest.rpartition(".")
+    return "%s.*.%s" % (section, variable) if dot else key
+
+
+def repo_program_findings(root, redact=False):
+    """The names, never the values, of repository settings and hooks that make a commit run a program. With `redact`
+    a key is named without its subsection, before it is cut to length, so no part of a URL in a subsection is kept."""
     findings = []
     quiet = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
     listing = run(["git", "config", "--list", "-z"], root, check=False, env_extra=quiet)
@@ -430,7 +441,7 @@ def repo_program_findings(root):
             continue   # off, as the runner itself sets it
         if EXEC_KEY.fullmatch(lowered) or (lowered == "commit.gpgsign"
                                            and git_bool_is_true(bool(separator), value)):
-            findings.append(display.ascii_text(key)[:80])
+            findings.append(display.ascii_text(_without_subsection(key) if redact else key)[:80])
     for flag in ("--absolute-git-dir", "--git-common-dir"):
         directory = run(["git", "rev-parse", flag], root).stdout.strip()
         hooks = os.path.join(directory if os.path.isabs(directory) else os.path.join(root, directory), "hooks")
@@ -1875,15 +1886,85 @@ def push_remote(entries, branch, given):
     return "origin"
 
 
-def _without_subsection(finding):
-    """A finding of `repo_program_findings` with the subsection of a configuration key left out
-    (``credential.*.helper``): a subsection can be a URL that carries a credential. The findings that are not
-    configuration keys (``hook:pre-push``, ``submodule:path``, ``config:unreadable``) are returned as they are."""
-    if re.match(r"(?:hook|hooks|submodule|config|index):", finding):
-        return finding
-    section, _, rest = finding.partition(".")
-    subsection, dot, variable = rest.rpartition(".")
-    return "%s.*.%s" % (section, variable) if dot else finding
+# The settings that redirect or intercept a push, or make it run a program (spec: "Resolution and the remote"). They
+# are named by `<section>.<variable>`, and a subsectioned key without its subsection (`credential.*.helper`), because a
+# subsection can be a URL that carries a credential. A key of the repository is refused; one of the owner's is named.
+_PUSH_SETTINGS = {("http", "proxy"), ("https", "proxy"), ("credential", "helper"), ("ssh", "variant"),
+                  ("core", "sshcommand"), ("core", "gitproxy"), ("core", "askpass"), ("push", "gpgsign"),
+                  ("push", "pushoption"), ("push", "recursesubmodules"), ("push", "negotiate")}
+_SUBSECTIONED = {"http", "https", "credential"}   # `http.<url>.proxy` and `credential.<url>.helper` also count
+_REMOTE_SETTINGS = {"proxy", "receivepack", "vcs", "pushoption"}
+_REPOSITORY_SCOPES = ("local", "worktree")
+
+
+def push_setting(section, subsection, variable, value):
+    """The name of a setting that redirects or intercepts a push, or None."""
+    if section == "remote" and subsection is not None and variable in _REMOTE_SETTINGS:
+        return "remote.*." + variable
+    if (section, variable) not in _PUSH_SETTINGS or (subsection is not None and section not in _SUBSECTIONED):
+        return None
+    if (section, variable) == ("push", "gpgsign") and not git_bool_is_true(value is not None, value or ""):
+        return None   # off, as `commit.gpgsign` is read
+    return "%s.%s" % (section, variable) if subsection is None else "%s.*.%s" % (section, variable)
+
+
+def push_config_findings(entries):
+    """``(findings, refused)``: ``<scope>:<name>`` of every named setting, sorted and without repeats, and those of
+    them in a scope of the repository."""
+    found = {"%s:%s" % (display.ascii_text(scope)[:20], name)
+             for scope, section, subsection, variable, value in entries
+             for name in [push_setting(section, subsection, variable, value)] if name is not None}
+    return sorted(found), sorted(item for item in found if item.partition(":")[0] in _REPOSITORY_SCOPES)
+
+
+_HELPER_URL = re.compile(r"\A[A-Za-z0-9+.-]+::")
+_URL = re.compile(r"\A([A-Za-z][A-Za-z0-9+.-]*)://([^/]*)")
+
+
+def classify_url(url):
+    """``(scheme, has_credentials)`` of a push URL, never the URL: the scheme is ``https``, ``http``, ``ssh`` (also the
+    scp-like form), ``git``, ``file`` (also a path) or ``other``. A credential is a password, any user information on
+    ``http``, ``https`` or ``ftp``, or user information that matches a pattern of `push-check`; a bare user name on
+    ``ssh`` or ``git`` is none. A lower bound: a credential in another form (a query, a path) is not seen. A transport
+    helper (``ext::...``) starts a program and is refused."""
+    if _HELPER_URL.match(url):
+        raise Refused("the push URL uses a transport helper that would start a program (remote:helper-transport)",
+                      code="repo_selects_program")
+    found = _URL.match(url)
+    if found:
+        kind = found.group(1).lower()
+        scheme = kind if kind in ("https", "http", "ssh", "git", "file") else "other"
+        authority = found.group(2)
+        userinfo = authority.rpartition("@")[0] if "@" in authority else ""
+        plain = kind in ("http", "https", "ftp")
+    else:
+        head = url.partition("/")[0]
+        scheme = "ssh" if ":" in head else "file"      # `host:path` is scp-like, anything else is a path
+        host = head.partition(":")[0]
+        userinfo = host.rpartition("@")[0] if scheme == "ssh" and "@" in host else ""
+        plain = False
+    secret = any(pattern.search(userinfo) for _, pattern in _RULES)
+    return scheme, bool(":" in userinfo or (plain and userinfo) or secret)
+
+
+def push_url(root, entries, remote):
+    """The one effective push URL of `remote` (``git remote get-url --push --all``, which applies ``pushurl`` and the
+    rewrite rules), never printed. A remote with no ``url`` or ``pushurl`` is unconfigured, whatever git would do with
+    its name; more than one URL is refused."""
+    if not any(section == "remote" and subsection == remote and variable in ("url", "pushurl")
+               for _, section, subsection, variable, _ in entries):
+        raise Refused("the remote has no URL in the configuration", code="remote_unconfigured")
+    listing = run(["git", "remote", "get-url", "--push", "--all", remote], root, check=False)
+    if listing.returncode:
+        raise Refused("git could not give the push URL of the remote", code="repository_unreadable")
+    urls = listing.stdout.split("\n")
+    if urls and urls[-1] == "":
+        urls.pop()
+    if not urls:
+        raise Refused("the remote has no URL in the configuration", code="remote_unconfigured")
+    if len(urls) > 1:
+        raise Refused("the remote has more than one push URL", code="multiple_push_urls")
+    return urls[0]
 
 
 def _blank_push_facts():
@@ -1903,10 +1984,10 @@ def describe_push(argv, cwd):
         request = parse_push(argv)
         facts.update((name, name in request.flags) for name in _PUSH_FLAG_FACTS)
         root = git_root(cwd)
-        found = repo_program_findings(root)
+        found = repo_program_findings(root, redact=True)
         if found:
-            raise Refused("this repository would make git run a program (%s)"
-                          % ", ".join(_without_subsection(item) for item in found[:10]), code="repo_selects_program")
+            raise Refused("this repository would make git run a program (%s)" % ", ".join(found[:10]),
+                          code="repo_selects_program")
         try:
             facts["head"] = tip(root)
         except Refused as exc:
@@ -1914,8 +1995,14 @@ def describe_push(argv, cwd):
         facts["branch"] = branch = current_branch(root, facts["head"])
         if any(source not in ("HEAD", branch, "refs/heads/" + branch) for source, _, _ in request.updates):
             raise _usage("the source of an update is HEAD or the current branch")
-        facts["remote"] = remote = push_remote(config_entries(root), branch, request.remote)
+        entries = config_entries(root)
+        facts["remote"] = remote = push_remote(entries, branch, request.remote)
         facts["default_branch"] = default = remote_default_branch(root, remote)
+        facts["push_config_findings"], refused = push_config_findings(entries)
+        if refused:
+            raise Refused("a setting of the repository would redirect or intercept the push (%s)" % ", ".join(refused),
+                          code="push_config_refused")
+        facts["remote_scheme"], facts["remote_url_has_credentials"] = classify_url(push_url(root, entries, remote))
         if request.deletes:
             facts["ahead"] = 0
         else:

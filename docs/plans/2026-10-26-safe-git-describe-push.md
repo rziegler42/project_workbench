@@ -445,3 +445,51 @@ Not checked: nothing was run against a real `git push` yet (D); no reflog, remot
 Open for the owner: ten shipped approval records from the previous release are tracked and no longer part of this release,
 and two untracked ones from the first `release-approvals` run of this increment are stale. Deleting them needs the owner's
 approval (`claude-workflow remove`).
+
+Committed as `974ede3` (the owner approved removing all twelve stale record directories, which were deleted in that commit).
+
+### Increment C — The remote, its transport and the push configuration
+
+Done, not yet committed at the time of writing. Changed: `packages/workbench/safe-git/helper/safe-git` (the git shape
+`remote get-url --push --all <name>`; `push_setting` and `push_config_findings`; `classify_url`; `push_url`; the wiring in
+`describe_push`; `repo_program_findings` gains a `redact` option that `describe push` alone turns on), `tests/test_safegit_describe_push.py`
+(70 tests, 38 new in C), and the shipped approval records.
+
+The facts: `remote_scheme` and `remote_url_has_credentials` come from the effective push URL (`git remote get-url --push
+--all`, which applies `pushurl` and the rewrite rules), never printed; `push_config_findings` holds `<scope>:<name>` of
+every named setting (sorted, no repeats, a subsectioned key without its subsection) in any scope. Refusals: `remote_unconfigured`
+(no `url` or `pushurl` in the configuration; a name that git would read as a path is therefore unconfigured),
+`multiple_push_urls`, `push_config_refused` (a named setting in the `local` or `worktree` scope), and `repo_selects_program` for a
+URL with a transport helper (`<name>::`), also when it comes from a rewrite. A named setting in the owner's own scope is named and
+does not decline. The order is: program settings of the repository, branch, remote, repository settings that redirect the
+push, the URL, then the base.
+
+Verification as run: the new tests failed first (the facts were null and the refusals missing), then passed. In the scratch copy
+the whole safe-git directory ran 514 tests OK. After landing and the owner's `release-approvals`: `python3 -B -W error
+tests/run_all.py` 4505 tests in 10 roots OK (4467 before, plus the 38 new), `git diff --check`, `wb check`, `wb run code-work
+check` (51 plans), `doccheck` and `refcheck` clean. The tests are hermetic against the machine's configuration only by
+filtering findings to the scopes they write: Apple Git's own system configuration names a credential helper under the scope
+`unknown`. The marker test has a positive control: the same configuration does start the program for a real `git ls-remote`,
+so the marker staying absent under `describe push` means something.
+
+Review: the `reviewer` agent, one exchange, one blocking finding, applied. A subsectioned program key longer than 80
+characters was cut to 80 before its subsection was removed, so about 54 characters of a token in the subsection could reach
+the `repo_selects_program` message. The key is now named without its subsection before the cut (`redact`), and a test with a
+120-character token pins it. `describe commit` still prints such a key as `repo_program_findings` returns it: the same exposure,
+outside this plan, for the owner. Also applied: tests for more URL forms (`@` inside a password, an IPv6 host, `file:`), two `url`
+entries with no `pushurl`, one `pushurl` over several `url` entries, a dotted remote name with only a `pushurl`, a rewrite into a
+transport helper, and the null credential fact on a refusal; the vacuous marker test got its positive control. Recorded:
+- A scope string other than `local` or `worktree` is named and never refused; the code relies on git labelling repository files
+  with those two (Apple's system scope is `unknown`). Refusing everything but `system`, `global` and `command` would decline
+  the owner's own pushes on this machine.
+- `remote_url_has_credentials` is null, not false, when the URL was not read (the spec's rule for a fact a refusal prevented).
+- An `other` scheme can start `git-remote-<scheme>` from the trusted PATH; Increment G should say so in the spec.
+- `git+ssh://` is `other`, `SSH://` is `ssh` where git would not accept it; both err toward declining.
+- A URL with a newline in it reads as several URLs and gives `multiple_push_urls`; an empty `pushurl` reads as a path (`file`).
+- `http.extraHeader`, `http.proxyAuthMethod` and similar settings are outside the spec's list and are not named.
+
+Not checked: the transport helper refusal has no positive control, because git blocks `ext::` by default; nothing was run
+against a real `git push` (D).
+
+Open for the owner: the two approval directories of the previous commit (`d5ec726b…`, `e216d264…`) are stale again and need
+the owner's approval to remove.
