@@ -134,17 +134,23 @@ the prompt cannot be answered remotely, stop and report; `ask` is then not offer
 
 ### Increment E — Rendering and the drift check
 
-**Outcome:** an attached harness holds a `deny`, an `ask` or no rule for an owner-run key as its level says, and `wb check`
-reports a table that differs from what is rendered. An effective level is `block` until the rule is shown.
+**Outcome:** an attached harness holds a `deny`, an `ask` or no rule for an owner-run key as its level says, attach records
+what it rendered in the guarded store, and `wb check` reports a harness file that differs from the record. An effective
+level is `block` unless the record shows the rule.
 **Dependencies:** D.
-**Affected areas:** `workbench/rules.py`, `workbench/harnessplan.py`, `workbench/harnessstage.py`, `workbench/check.py`, the
+**Affected areas:** `workbench/rules.py`, `workbench/harnessplan.py`, `workbench/harnessstage.py`, `workbench/attach.py` (it
+writes the rendering record), `workbench/store.py`, `workbench/check.py`, the
 Claude module's rendering, tests under `tests/` and `packages/workbench/claude/tests/`.
 **Steps:**
 1. Write the tests first, with a synthetic harness: a key at `block` renders its `deny`; at `ask` an `ask` and no `deny`; at
    `none` neither; the guarded-store deny and the floor's `ask` rules are unchanged whatever the table says; with no
-   `permissions` capability the key reads as `block`.
-2. Render from the table at attach. A neutral rule list still holds only `ask` and `deny`.
-3. Add the drift check and a function that answers a key's effective level to the commands, which read it in F and G.
+   `permissions` capability the key reads as `block`; with no rendering record, a damaged record, a table changed since
+   attach or an unattached harness every key reads as `block`.
+2. Render from the table at attach, and write the rendering record in the guarded store (the harness's identity, whether it
+   provides `permissions`, a digest of the effective table, and the rule rendered per key), as `command-permissions.md`,
+   "Rendering", specifies. A neutral rule list still holds only `ask` and `deny`.
+3. Add the drift check, which compares the harness file with the record, and a function that answers a key's effective
+   level from the record to the commands, which read it in F and G.
 **Verification:** the new tests, `python3 -B -W error tests/run_all.py`, and `python3 -m workbench check` on this repository.
 **Evidence:** the one local commit, with the trailer `Plan: 2026-10-26-command-permission-levels#E`.
 

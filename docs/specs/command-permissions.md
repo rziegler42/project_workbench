@@ -44,7 +44,7 @@ to what was previewed, the log, and how a harness renders it.
 
 | Level | Who runs it | What makes it run |
 |---|---|---|
-| `block` | the owner, in a terminal | the existing terminal test; the harness denies the agent |
+| `block` | the owner, never the agent | the harness denies the agent; the command's own terminal test applies exactly where it applies today (`wb release-approvals` has none and keeps none) |
 | `delegated` | the agent | a gate the command declares has passed |
 | `ask` | the agent | the owner confirms a harness prompt, and the command carries the digest of its preview |
 | `none` | the agent | nothing |
@@ -89,7 +89,7 @@ A default is `block` or `ask`; `delegated` is never a default (`2026-10-19-manda
 | Default | Keys |
 |---|---|
 | `block` | `acknowledge-first-tier`, `wb install`, `wb adopt`, `wb add`, `wb upgrade`, `wb attach`, `wb approve`, `wb pin`, `wb recover`, `wb release-approvals`, `wb run mempalace init`, `wb run mempalace mine`, `wb run remote-runner fetch-overwrite`, `accept-decision` |
-| `ask`, from the version that defines its preview digest; `block` until then | `approve-plan`, `wb run review-engine extend`, `reset`, `archive`, `prune`, `amend`, `acknowledge-second-tier`, `submit-remote-job`, `push-shared-branch` |
+| `ask`, from the version that defines its preview digest; `block` until then | `approve-plan`, `wb run review-engine extend`, `wb run review-engine reset`, `wb run review-engine archive`, `wb run review-engine prune`, `wb run review-engine amend`, `acknowledge-second-tier`, `submit-remote-job`, `push-shared-branch` |
 
 Every other checkpoint keeps `stop`, which reads as `block`. These defaults are the proposal's targets and are the owner's
 to accept in the decision; the first slice of the plan builds `approve-plan` and `wb run review-engine extend` only.
@@ -98,12 +98,17 @@ to accept in the decision; the first slice of the plan builds `approve-plan` and
 
 An action that offers `ask` has a read-only preview that an agent may run and that prints what the action would do.
 The digest is the first 12 lowercase hexadecimal characters of the SHA-256 of the preview's canonical text. At `ask`
-or `none` the command is accepted without the terminal test, and it:
+the command is accepted without the terminal test, and it:
 
-1. requires the digest as an argument (`ask` only), recomputes the preview in its own process, and refuses on any
-   difference, so a plan, a state or a target that changed after the owner answered is not approved;
-2. refuses unless the harness is shown to have rendered the `ask` rule for it (below); otherwise it reads as `block`;
+1. requires the digest as an argument, recomputes the preview in its own process, and refuses on any difference, so a
+   plan, a state or a target that changed after the owner answered is not approved;
+2. refuses unless the rendering record (see "Rendering") shows the `ask` rule for it; otherwise it reads as `block`;
 3. writes the log entry before it acts, and does nothing if the entry cannot be written.
+
+At `none` the command is also accepted without the terminal test, but it needs no preview and takes no digest, so a key
+that has no preview can still be set to `none`. It refuses, and reads as `block`, unless the rendering record (see
+"Rendering") shows that attach rendered no rule for it, and it writes the log entry before it acts under the same
+condition as step 3.
 
 The agent shows the preview in the conversation before it asks. No code enforces that, and the prompt shows the command
 and the digest and not the preview. An `ask` therefore proves that the owner saw the command and a digest. It does not
@@ -118,9 +123,20 @@ decisions, and the seal.
 At attach, a harness that provides `permissions` renders, for each owner-run key, a `deny` at `block` and at
 `delegated` (the delegated command is a different, agent-safe command, as `delegate-approve-plan` is today), an `ask`
 at `ask`, and nothing at `none`. The floor's `ask` rules and the deny on the guarded store are unchanged and not affected
-by the table. A key's effective level is `block` when the harness is not attached, does not provide `permissions`, or
-`wb check` finds the rendered rule differs from the table (so an `ask` or `none` cannot take effect without a rule that
-produces the prompt). Changing the table takes effect in a harness at the next attach, which is the owner's command.
+by the table. Only `ask` needs a rendered rule, the one that produces the prompt. `none` needs the absence of a `deny`, and `delegated`
+and `block` need the `deny`.
+
+**The rendering record.** At attach the installer writes, in the guarded store, a record the agent cannot write: the
+harness's identity, whether it provides `permissions`, a digest of the effective table it rendered from, and, for each
+key, the rule it rendered (`deny`, `ask` or none). A key's effective level is `block` unless all of these hold when the
+command runs: the record exists and is readable; it names the attached harness and says it provides `permissions`; its
+table digest equals the digest of the effective table now; and, for `ask`, it records an `ask` for the key and, for
+`none`, it records no rule for the key. A missing, damaged or stale record, a table changed since attach, an unattached
+harness or one without `permissions` therefore fails closed to `block`, and the owner repairs it by attaching again.
+The record attests what attach rendered, not the current bytes of the harness's own file. `wb check` additionally
+compares that file with what the record says and reports a difference, and an agent allowed edits to it remains the
+limit stated in `harness-modules.md`. Changing the table takes effect in a harness at the next attach, which is the
+owner's command.
 
 ### The log
 
@@ -135,8 +151,13 @@ keeps the existing `checkpoint <name>: stop|delegate` lines. Problems and notes 
 
 ## Acceptance criteria
 
-1. With no settings, or with a version 1 file, every key reads as before: nothing that is owner-run today becomes runnable
-   by an agent, and `wb settings` output for checkpoints is unchanged.
+1. With no settings, or with a version 1 file, every key reads at its shipped default, and the safety controls are
+   unchanged: the floor, the harness `deny` rules, the guarded store and the terminal tests. Before the keys of
+   increments F and G are built, every key reads as `block` and nothing that is owner-run today becomes runnable by an
+   agent. After they are built, the only change is that `approve-plan` and `wb run review-engine extend` have an `ask`
+   default, and an agent can run them only after the owner confirms a prompt, the digest matches and the harness has been
+   re-attached so that the `ask` rule is rendered. Until it is, they read as `block`. The `checkpoint` lines of
+   `wb settings` are unchanged.
 2. A table with an unknown key, a level that is not offered, a floor key, a duplicate key or a value of the wrong type is
    reported, and the affected key reads as `block`.
 3. `delegated` for a key with no declared gate is refused. `delegated` for `approve-plan` behaves as the existing
@@ -145,11 +166,21 @@ keeps the existing `checkpoint <name>: stop|delegate` lines. Problems and notes 
    refuses, and writes no approval, on a mismatch, a changed plan, a missing rendered rule, a missing or unwritable log.
 5. At `block`, the same command still refuses without a terminal. At no level can a table entry cause a floor action to run.
 6. `wb run review-engine extend` follows the same rules with the review state's digest.
-7. A rendered harness holds a `deny` for a key at `block`, an `ask` for a key at `ask`, and none for a key at `none`; the
-   rendered rules differ from the table only after an attach, and `wb check` reports the difference.
+7. A rendered harness holds a `deny` for a key at `block`, an `ask` for a key at `ask`, and none for a key at `none`, and the
+   rendering record says so. With no record, a damaged record, a table changed since attach, or a harness without
+   `permissions`, every key reads as `block`; `wb check` reports a harness file that differs from the record.
 8. Every run at `ask`, `delegated` or `none` leaves a log line; a run at `block` leaves none.
 9. The trial of increment A shows an interactive `ask` can be answered through the owner's remote channel. If it cannot,
    this spec is revised and no key ships `ask`.
+
+## Review record
+
+Reviewed by the review engine through the `ask-codex` bridge (model `gpt-5.6-terra`, effort medium) on 2026-10-26, at
+the owner's request: three rounds, the bound of 3, not extended. Outcome: not converged. Round 1: the digest rules named
+`none` (R1-F1), four review keys were bare names (R1-F2) and `block` assumed a terminal one command lacks (R1-F3).
+Round 2: a migration criterion contradicted the `ask` defaults (R2-F1). Round 3: nothing authoritative told a command
+that the harness was attached and rendered (R3-F1). All five were applied. The rendering record added for R3-F1 was
+not reviewed again. This is a Draft: the owner has not accepted it as a description of built behavior.
 
 ## Governing decisions and references
 
