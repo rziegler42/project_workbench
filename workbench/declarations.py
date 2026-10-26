@@ -30,7 +30,9 @@ commands    an object of at most ``MAX_COMMANDS`` entries, each a command name i
             and optionally ``"owner"`` (``module-boundary.md``, "Declaration schema"). The
             helper is an item of ``ships`` or a file below one. ``owner`` is a list of
             that command's ``arguments`` that only the owner runs; a harness that provides
-            permissions denies the agent each one (``module-contract.md``).
+            permissions denies the agent each one (``module-contract.md``). ``describes`` is a
+            list of at most ``MAX_DESCRIBES`` actions, each in the form of an argument; it needs
+            ``describe`` among the arguments, and ``describe`` is never owner-run.
 checks      a list of at most ``MAX_CHECKS`` objects ``{"helper", "kit"}``, both required. The
             helper is an item of ``ships`` or a file below one, and its last path segment, the
             check's pin name, is in the helper-name form (``module-boundary.md``).
@@ -93,6 +95,7 @@ _ARGUMENT = re.compile(r"^[a-z][a-z0-9-]*\Z")
 MAX_COMMANDS = 16
 MAX_CHECKS = 16
 MAX_ARGUMENTS = 16
+MAX_DESCRIBES = 16
 MAX_CHECKPOINTS = 16
 MAX_CAPS = 16
 MAX_CEILING = 100
@@ -105,7 +108,7 @@ Module = collections.namedtuple(
     "Module", "name version type description provides requires blocks helpers slots fills "
               "writes ships commands checks layout declaration approval checkpoints caps convergence",
     defaults=(None, (), (), None))
-Command = collections.namedtuple("Command", "name helper runtime kit arguments owner", defaults=((),))
+Command = collections.namedtuple("Command", "name helper runtime kit arguments owner describes", defaults=((), ()))
 Cap = collections.namedtuple("Cap", "name default ceiling")
 
 
@@ -283,7 +286,7 @@ def _commands(check, value, ships):
             check.fail("commands", "command name %s must be letters, digits and ._+-, starting "
                                    "with a letter or digit, at most %d characters"
                        % (_shown(name), MAX_NAME_CHARS))
-        check.exact_keys(entry, "commands", ("helper",), ("runtime", "kit", "arguments", "owner"))
+        check.exact_keys(entry, "commands", ("helper",), ("runtime", "kit", "arguments", "owner", "describes"))
         helper = check.path(entry["helper"], "commands")
         helper = "/".join(helper)
         if not any("/".join(helper.split("/")[:n]) in ships
@@ -324,7 +327,22 @@ def _commands(check, value, ships):
             if argument not in arguments:
                 check.fail("commands", "command %s: the owner-run argument %s is not one of its 'arguments'"
                            % (name, _shown(argument)))
-        commands.append(Command(name, helper, runtime, kit, tuple(arguments), tuple(owner)))
+        describes = entry.get("describes", [])
+        if not isinstance(describes, list) or len(describes) > MAX_DESCRIBES \
+                or any(not isinstance(item, str) for item in describes):
+            check.fail("commands", "command %s: 'describes' must be a list of at most %d strings"
+                       % (name, MAX_DESCRIBES))
+        check.unique(describes, "commands")
+        for action in describes:
+            if len(action) > MAX_ARGUMENT_CHARS or not _ARGUMENT.match(action):
+                check.fail("commands", "command %s: the action %s in 'describes' must be lowercase letters, "
+                                       "digits and dashes, starting with a letter, at most %d characters"
+                           % (name, _shown(action), MAX_ARGUMENT_CHARS))
+        if "describe" in owner:
+            check.fail("commands", "command %s: 'describe' may not be owner-run" % name)
+        if describes and "describe" not in arguments:
+            check.fail("commands", "command %s: 'describes' needs 'describe' among its 'arguments'" % name)
+        commands.append(Command(name, helper, runtime, kit, tuple(arguments), tuple(owner), tuple(describes)))
     return tuple(commands)
 
 

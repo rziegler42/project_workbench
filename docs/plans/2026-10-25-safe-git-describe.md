@@ -1,6 +1,6 @@
 # Build `safe-git describe` for `commit` and `remove`
 
-Status: Proposed
+Status: In Progress
 Created: 2026-10-25
 Candidate: none (plan 2 of the five in the split of `docs/specs/action-review.md` for `workbench-v1#action-review-engine`; it builds the facts side only, and the candidate is complete only when the engine is built, so the plan that builds the engine names the candidate)
 Specs: safe-git, module-boundary, module-contract, action-review
@@ -279,4 +279,23 @@ not an approval; the plan stays `Proposed` for the owner.
 
 ## Result
 
-Empty until work starts.
+### Increment A — Verifier support for `describes`
+
+Done, not yet committed at the time of writing. Changed: `workbench/declarations.py` (`Command` gains `describes` after
+`owner`, default empty; `MAX_DESCRIBES = 16`; validation in `_commands`; the module docstring) and the new
+`tests/test_describes_declaration.py` (14 tests). Refused: a non-list or non-string entry, more than 16, a duplicate, an
+action of the wrong form or over 32 characters, a non-empty list without `describe` among the `arguments`, and
+`describe` in `owner` (whatever `describes` holds); an empty list is allowed. The declaration hash changes with the field.
+
+Verification as run: the new tests failed first (7 errors, 1 failure), then passed; `python3 -B -W error
+tests/run_all.py` ran 4239 tests OK (4225 before, 14 added; one run failed first because a test docstring named a
+module, which `test_boundary` forbids, and was reworded); `git diff --check` clean.
+
+Review: the `reviewer` agent, one exchange, no blocking finding. Not blocking and left open for the owner: the
+install-time request text (`workbench/request.py`, `_command`) lists a command's name, helper, runtime and first
+arguments but not `owner` or `describes`, so the admitted actions are covered by the confirmed declaration hash but are
+not in the text the owner reads. This follows the precedent of `owner` and no spec requires it; a change would be a
+later increment. The spec wording "specified, not built" is left for Increment G, as planned. Not checked by the
+reviewer: the hashing path itself (the test shows the hash changes).
+
+Not done: B to G.
