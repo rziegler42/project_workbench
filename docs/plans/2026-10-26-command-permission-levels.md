@@ -718,3 +718,11 @@ case was not run (findings 1, 5); "eight entries for the eight runs" is softened
 trial and lists what it does not show (6, 7). Not applied: findings 2 and 3 (the verbatim hook message, what the prompt told
 the agent, and the hand check of the rewritten script are in the owner's pastes); the note attributes the script check to the
 owner. Final verification: `git diff --check` and the document checks.
+
+Committed as `9aca62c`.
+
+Step 0 outcome, 2026-10-26: the owner accepted the decision `2026-10-26-ask-level-command-gate` ("accept decision"). The owner told
+the agent in the session to record it, so the agent edited the status line and the index row as the owner's scribe and decided
+nothing. The earlier decision `2026-10-26-ask-level-spelling-limit` is not marked `Superseded`: the new record says its items 1 to
+5 stand and replaces item 6, and leaves the marking to the owner. The condition of Increment J (the decision `Accepted`) is met;
+the security checkpoint of J's step 1 is still to be asked.

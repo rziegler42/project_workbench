@@ -1,6 +1,6 @@
 # A command gate stops Bash commands that name a relaxed command unless the ask rule can fire on them
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-26
 Date: 2026-10-26
 
 ## Context
