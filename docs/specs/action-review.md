@@ -4,9 +4,9 @@ Status: Draft. A design for the engine of roadmap candidate `action-review-engin
 brainstorm in which the owner chose to skip the questions. The owner approved the design as written on 2026-10-25,
 after settling the accuracy method, the false-decline bound, the name `describe`, and the fate of `safe-committer`
 and `amend-message`. A call marked **(default)** was the author's and is approved with the design but was not
-separately chosen; the owner may still change it. The approval is of the design only: it is not a decision record
-(the `describe` interface needs a `Proposed` decision that the owner accepts), and it approves no plan. The status
-stays `Draft` because nothing in this spec is built.
+separately chosen; the owner may still change it. The approval is of the design only and approves no plan. The
+`describe` interface is a decision record of its own, accepted by the owner on 2026-10-25
+(`2026-10-25-describe-interface-for-action-review`). The status stays `Draft` because nothing in this spec is built.
 
 Terms are defined in `terms.md`. The engine sits above the bridge of `model-bridge.md` and beside the engine of
 `review-engine.md`. The decision behind it is `2026-10-22-model-calls-go-through-vendor-bridges` (decisions 3, 6, 7
@@ -67,7 +67,7 @@ commit, stages nothing, writes nothing and runs no program the repository select
   `errors` (the refusals the real command would give, as data, not as a failed run) and `facts` (a flat set of named
   values with a size cap). A module documents the names of its facts and its numeric caps in its own spec, and the
   engine's rules name them. A truncated object is incomplete and the verdict is a decline. The field rules and the
-  behaviour at the cap are fixed by the `Proposed` decision `2026-10-25-describe-interface-for-action-review`.
+  behaviour at the cap are fixed by the accepted decision `2026-10-25-describe-interface-for-action-review`.
 - A refusal is a fact: a commit the real helper would refuse is reported as `ok: false` with the reason, and the
   engine's check for it fails the verdict.
 - The engine runs `describe` only through the launcher (`wb run`), the same rule decision 4 sets for bridges, and
@@ -215,8 +215,9 @@ not measured.
 
 Each is a plan of its own, in this order. None exists, and the owner approves each.
 
-1. **The decision and the interface.** A `Proposed` decision for the `describe` interface (refining decision 7), the
-   facts documented in `safe-git.md`, and the engine's contract completed in this spec. It also holds the
+1. **The interface, documented.** The `describe` decision is accepted. This plan settles what it left open: the
+   form of a module's declaration in `module-contract.md`, the numeric caps and the fact names for `commit` and
+   `remove` in `safe-git.md`, and the engine's contract completed in this spec. It also holds the
    read-only count of the approver's declines by failed check, so the rubric is written knowing where the approver
    goes wrong.
 2. **`safe-git describe`** for `commit` and `remove`, with tests that the facts equal what the real command acts on and

@@ -1,6 +1,6 @@
 # A module that owns an action reports what the action would do through a read-only `describe` command
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-25
 Date: 2026-10-25
 
 ## Context
@@ -105,6 +105,16 @@ Read on 2026-10-25: the approver program's collectors for a commit and a removal
 `collect_commit`, `collect_remove`), which call the global `claude-workflow` program as a library; `safe-git.md`
 (`commit`, `remove`, `push-check`); `model-bridge.md`; the vendor-bridges record. Nothing was run. The interface
 and the claim that it can reuse the real command's validation are proposals; no `describe` command exists.
+
+## Review record
+
+Reviewed by the review engine through the `ask-codex` bridge (model `gpt-5.6-terra`, effort medium) on 2026-10-25, at
+the owner's request: four rounds, the bound raised from 3 to 4 by the owner. Outcome: not converged. Each round
+returned one to two major findings and all five were applied. They concerned the cap at the limit (R1-F1), the
+launcher admission rule (R1-F2), the undefined `truncated` field (R2-F1), the disagreement with the action-review
+spec over a declared provider (R3-F1) and the types of the remaining fields (R4-F1). The text added for R4-F1 was
+not reviewed again. The owner accepted the record as written on 2026-10-25, knowing both facts. The acceptance is the
+owner's, and a review is not an acceptance.
 
 ## Related files and decisions
 
