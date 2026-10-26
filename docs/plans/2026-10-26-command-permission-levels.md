@@ -310,3 +310,31 @@ Review: one round by the `reviewer` agent (cap 3), recommendation "no blocking f
 in `\Z` so a trailing newline is invalid (finding 1, with a test); a test through `planapprovals.delegating` for the unlock path
 (finding 2). Not applied: the redundant second note when a clamped entry meets a checkpoint reading (finding 3, acceptable),
 and the undeclared-key note against the spec's "refused" wording (finding 6, same effect). Finding 4 is recorded above.
+
+Committed as `498b224`.
+
+### Increment C — Keys, offered levels and shipped defaults
+
+Changed: a new `workbench/levels.py` and `tests/test_levels.py`; `workbench/settings.py`, `workbench/settingscmd.py`,
+`tests/test_settings.py`, `tests/test_settingscmd.py`. The registry is built from `rules.OWNER_RUN` (a key `wb <command>`;
+`approve-plan` is the checkpoint of that name), the process module's declared checkpoints, and the owner-run arguments of the
+installed commands (`wb run <command> <argument>`), so no module is named in the installer. A floor id is never a key; a
+`levels` entry naming one is a problem and is dropped. Each key offers `block`; only `approve-plan` also offers `delegated`;
+no key offers `ask` or `none` yet (so `accept-decision` offers `block` only); every default is `block`. A level a key does not
+offer reads as `block` with a note, and a key not in the registry is noted and ignored. `effective` takes the installed
+commands and returns a level for every key; `wb settings` prints a `level` line per key (checkpoints first, then the
+owner-run commands, then module arguments). Choices made: the drift test is that every `OWNER_RUN` command and every declared
+checkpoint has a key (by construction the registry cannot miss one; a test pins it); `wb acknowledge` is a key beside the
+`acknowledge-first-tier` and `acknowledge-second-tier` checkpoints. The shipped modules' own owner-run arguments were not
+asserted in a test, because that would name a module in the installer's tests.
+
+Verification as run: tests first and seen failing; `python3 -B -W error tests/run_all.py` (4548 tests in 10 roots, OK);
+`git diff --check` clean; `python3 -m workbench check` no problems. Not run: the plan check after the last edit.
+
+Review: one round by the `reviewer` agent (cap 3), recommendation "no blocking findings". Applied: the drift test now pins a
+hand-listed set of owner-run keys, so a new `OWNER_RUN` command fails until it is listed (finding 1; the earlier test
+recomputed the registry's own expression). `initialize` was diffed against HEAD and is identical. For Increment H (finding 2):
+the spec says `accept-decision` offers `block` and `ask` and needs the "from the version that builds it" qualifier; the
+shipped-defaults table must list `wb acknowledge`; the rule that a command reaching more than one key takes the strictest is
+not built and must not be claimed built; the installer-interface text and `development.md` must document the new `level` lines.
+Findings 3 and 4 need no change.

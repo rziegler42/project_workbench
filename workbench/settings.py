@@ -35,28 +35,27 @@ import collections
 import json
 import re
 
-from . import declarations, floor
+from . import declarations, floor, levels as keyset
 from .wbkit import safefs
 
 SETTINGS = "settings"
 VERSION = 1  # the version written at seeding
 VERSIONS = (1, 2)  # the versions the reader accepts
 STOP, DELEGATE = "stop", "delegate"
-BLOCK, ASK, DELEGATED, NONE = "block", "ask", "delegated", "none"
-LEVELS = (BLOCK, ASK, DELEGATED, NONE)  # strictest first
+BLOCK, ASK, DELEGATED, NONE = keyset.BLOCK, keyset.ASK, keyset.DELEGATED, keyset.NONE
+LEVELS = keyset.LEVELS  # strictest first
 # A key is a checkpoint name or a command in the ``wb`` spelling, for example ``wb install``.
 _KEY_RE = re.compile(r"[a-z][a-z0-9-]*( [a-z][a-z0-9-]*)*\Z")
 MAX_KEY = 96
+_FLOOR_IDS = frozenset(stop.id for stop in floor.FLOOR)
 # The one checkpoint for which ``delegate`` has an effect (``wb delegate-approve-plan``); any other name stops.
-APPROVE_PLAN = "approve-plan"
+APPROVE_PLAN = keyset.APPROVE_PLAN
 
 _Settings = collections.namedtuple("_Settings", "checkpoints problems caps levels levels_blocked")
 Effective = collections.namedtuple("Effective", "checkpoints caps notes levels")
 
 
-def strictest(*levels):
-    """The strictest of the given levels (``block`` strictest, ``none`` least strict)."""
-    return min(levels, key=LEVELS.index)
+strictest = keyset.strictest
 
 
 class Settings(_Settings):
@@ -147,6 +146,9 @@ def load(store):
             value = given[key]
             if len(key) > MAX_KEY or not _KEY_RE.match(key):
                 problems.append("settings name a level key that is not valid: %s" % declarations._shown(key))
+            elif key in _FLOOR_IDS:
+                problems.append("settings name a floor action, %s, which the table cannot set; it is refused"
+                                % declarations._shown(key))
             elif not isinstance(value, str) or value not in LEVELS:
                 problems.append("settings level for %s must be one of %s; it reads as block"
                                 % (declarations._shown(key), ", ".join(LEVELS)))
@@ -156,13 +158,18 @@ def load(store):
     return Settings(checkpoints, problems, caps, levels, levels_blocked)
 
 
-def effective(loaded, checkpoints, caps):
+def effective(loaded, checkpoints, caps, commands=()):
     """The values that apply to a process module that declares ``checkpoints`` (names) and ``caps``.
 
     A checkpoint is ``delegate`` only when declared, set to exactly that and named ``approve-plan``: delegation
     takes effect for no other checkpoint, which stops with a note. A cap is the owner's
     value when it is an integer from 1 to the ceiling, otherwise the default. Each ignored or
     replaced entry adds a note; the loader's own problems are not repeated here.
+
+    ``levels`` holds a level for every key of ``levels.registry(checkpoints, commands)``, where `commands` is a
+    sequence of ``(command name, owner-run arguments)`` of the installed commands. A key's level is the stricter of
+    its checkpoint reading and its table entry; an entry for a level the key does not offer reads as ``block`` with
+    a note, and an entry for a key that is not in the registry is noted and ignored.
     """
     notes = []
     declared = set(checkpoints)
@@ -177,12 +184,14 @@ def effective(loaded, checkpoints, caps):
             values[name] = STOP
             notes.append("settings set the checkpoint %s to delegate; delegation has no effect for it, so it stops"
                          % declarations._shown(name))
+    keys = keyset.registry(checkpoints, commands)
     levels = {}
-    for name in checkpoints:
-        levels[name] = _level(loaded, name, values, notes)
-        values[name] = DELEGATE if levels[name] == DELEGATED else STOP
+    for name, key in keys.items():
+        levels[name] = _level(loaded, key, values, notes)
+        if name in values:
+            values[name] = DELEGATE if levels[name] == DELEGATED else STOP
     for name in sorted(loaded.levels):
-        if name not in declared:
+        if name not in keys:
             notes.append("settings set a level for a key this version does not know: %s; it is ignored"
                          % declarations._shown(name))
     known = {cap.name for cap in caps}
@@ -204,23 +213,20 @@ def effective(loaded, checkpoints, caps):
     return Effective(values, numbers, notes, levels)
 
 
-def _level(loaded, name, checkpoint_values, notes):
-    """The level of the declared checkpoint ``name``: the stricter of its checkpoint reading and its table entry.
+def _level(loaded, key, checkpoint_values, notes):
+    """The level of the registry `key`: the stricter of its checkpoint reading and its table entry.
 
     A checkpoint set in the file reads ``stop`` as block and ``delegate`` as delegated; the table entry is the
-    owner's level. Only block, and delegated for ``approve-plan``, are offered here; any other level reads as
-    block with a note. With neither set the key reads as block.
+    owner's level. A level the key does not offer reads as block with a note. With neither set the key reads as
+    its default.
     """
+    name = key.name
     given = []
-    if name in loaded.checkpoints:
+    if name in loaded.checkpoints and name in checkpoint_values:
         given.append(DELEGATED if checkpoint_values[name] == DELEGATE else BLOCK)
     entry = BLOCK if loaded.levels_blocked else loaded.levels.get(name)
     if entry is not None:
-        if entry == DELEGATED and name != APPROVE_PLAN:
-            entry = BLOCK
-            notes.append("settings set the level of %s to delegated; delegation has no effect for it, so it reads as block"
-                         % declarations._shown(name))
-        elif entry in (ASK, NONE):
+        if entry not in key.offers:
             notes.append("settings set the level of %s to %s; that level is not offered for it in this version, "
                          "so it reads as block" % (declarations._shown(name), entry))
             entry = BLOCK
@@ -228,7 +234,7 @@ def _level(loaded, name, checkpoint_values, notes):
             notes.append("settings give %s the checkpoint reading %s and the level %s; the stricter applies"
                          % (declarations._shown(name), given[0], entry))
         given.append(entry)
-    return strictest(*given) if given else BLOCK
+    return strictest(*given) if given else key.default
 
 
 def initialize(store):

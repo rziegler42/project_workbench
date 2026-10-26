@@ -267,16 +267,27 @@ class LevelsTest(SettingsBase):
         loaded = settings.load(self.store)
         return loaded, settings.effective(loaded, checkpoints, ())
 
+    def declared(self, got):
+        """The levels of the two checkpoints these tests declare."""
+        return {name: got.levels[name] for name in ("approve-plan", "beta")}
+
+    def test_every_known_key_reads_as_block_with_no_file_or_a_version_1_file(self):
+        for document in (None, {"version": 1}):
+            with self.subTest(document=document):
+                _, got = self.effective(document)
+                self.assertEqual({"block"}, set(got.levels.values()))
+                self.assertIn("wb install", got.levels)
+
     def test_with_no_file_or_a_version_1_file_every_key_reads_as_block(self):
         for document in (None, {"version": 1}, {"version": 1, "checkpoints": {"approve-plan": "stop"}}):
             with self.subTest(document=document):
                 loaded, got = self.effective(document)
-                self.assertEqual({"approve-plan": "block", "beta": "block"}, got.levels)
+                self.assertEqual({"approve-plan": "block", "beta": "block"}, self.declared(got))
                 self.assertEqual([], loaded.problems + got.notes)
 
     def test_a_version_1_checkpoint_of_delegate_reads_as_delegated_for_approve_plan_only(self):
         _, got = self.effective({"version": 1, "checkpoints": {"approve-plan": "delegate", "beta": "delegate"}})
-        self.assertEqual({"approve-plan": "delegated", "beta": "block"}, got.levels)
+        self.assertEqual({"approve-plan": "delegated", "beta": "block"}, self.declared(got))
         self.assertEqual({"approve-plan": "delegate", "beta": "stop"}, got.checkpoints)
 
     def test_a_version_2_file_without_levels_loads(self):
@@ -286,7 +297,7 @@ class LevelsTest(SettingsBase):
 
     def test_block_is_read_in_a_version_2_table(self):
         loaded, got = self.effective({"version": 2, "levels": {"approve-plan": "block", "beta": "block"}})
-        self.assertEqual(({"approve-plan": "block", "beta": "block"}, []), (got.levels, loaded.problems + got.notes))
+        self.assertEqual(({"approve-plan": "block", "beta": "block"}, []), (self.declared(got), loaded.problems + got.notes))
 
     def test_delegated_in_the_table_is_read_for_approve_plan_and_makes_it_delegate(self):
         loaded, got = self.effective({"version": 2, "levels": {"approve-plan": "delegated"}})
@@ -327,7 +338,7 @@ class LevelsTest(SettingsBase):
             with self.subTest(value=value):
                 loaded, got = self.effective({"version": 2, "checkpoints": {"approve-plan": "delegate"},
                                               "levels": value})
-                self.assertEqual({"approve-plan": "block", "beta": "block"}, got.levels)
+                self.assertEqual({"approve-plan": "block", "beta": "block"}, self.declared(got))
                 self.assertEqual("stop", got.checkpoints["approve-plan"])
                 self.assertEqual(1, len(loaded.problems))
 
@@ -336,7 +347,7 @@ class LevelsTest(SettingsBase):
                      b'{"version": 2, "checkpoints": {"approve-plan": "delegate"}, "levels": {}, "levels": {}}'):
             with self.subTest(data=data):
                 loaded, got = self.effective(data)
-                self.assertEqual({"approve-plan": "block", "beta": "block"}, got.levels)
+                self.assertEqual({"approve-plan": "block", "beta": "block"}, self.declared(got))
                 self.assertEqual("stop", got.checkpoints["approve-plan"])
                 self.assertIn("damaged", loaded.problems[0])
 
@@ -345,7 +356,7 @@ class LevelsTest(SettingsBase):
                      {"version": True, "levels": {"approve-plan": "delegated"}}):
             with self.subTest(data=data):
                 loaded, got = self.effective(data)
-                self.assertEqual({"approve-plan": "block", "beta": "block"}, got.levels)
+                self.assertEqual({"approve-plan": "block", "beta": "block"}, self.declared(got))
                 self.assertEqual("stop", got.checkpoints["approve-plan"])
                 self.assertTrue(loaded.problems)
 
@@ -368,10 +379,39 @@ class LevelsTest(SettingsBase):
                 differs = {"delegate": "delegated", "stop": "block"}[checkpoint] != level
                 self.assertEqual(1 if differs else 0, len(got.notes), got.notes)
 
-    def test_a_key_the_module_does_not_declare_is_noted_and_ignored(self):
-        loaded, got = self.effective({"version": 2, "levels": {"wb install": "block", "nope": "block"}})
-        self.assertEqual({"approve-plan": "block", "beta": "block"}, got.levels)
+    def test_a_key_that_is_not_known_is_noted_and_ignored(self):
+        loaded, got = self.effective({"version": 2, "levels": {"nope": "block", "wb run tool nothing": "block"}})
+        self.assertNotIn("nope", got.levels)
         self.assertEqual(2, len(got.notes))
+
+    def test_a_known_key_that_no_checkpoint_declares_has_a_level(self):
+        loaded, got = self.effective({"version": 2, "levels": {"wb install": "block"}})
+        self.assertEqual("block", got.levels["wb install"])
+        self.assertEqual([], loaded.problems + got.notes)
+
+    def test_an_owner_run_argument_of_an_installed_command_is_a_key(self):
+        self.put({"version": 2, "levels": {"wb run tool go": "block", "wb run tool other": "block"}})
+        loaded = settings.load(self.store)
+        got = settings.effective(loaded, ("approve-plan",), (), commands=(("tool", ("go",)),))
+        self.assertEqual("block", got.levels["wb run tool go"])
+        self.assertEqual(1, len(got.notes))
+        self.assertIn("wb run tool other", got.notes[0])
+
+    def test_a_floor_action_cannot_be_named(self):
+        for stop in floor.FLOOR:
+            with self.subTest(stop=stop.id):
+                loaded, got = self.effective({"version": 2, "levels": {stop.id: "none"}})
+                self.assertEqual(1, len(loaded.problems))
+                self.assertIn("floor", loaded.problems[0])
+                self.assertNotIn(stop.id, got.levels)
+
+    def test_a_level_a_key_does_not_offer_reads_as_block_with_a_note(self):
+        for level in ("ask", "none", "delegated"):
+            with self.subTest(level=level):
+                loaded, got = self.effective({"version": 2, "levels": {"wb install": level}})
+                self.assertEqual("block", got.levels["wb install"])
+                self.assertEqual(1, len(got.notes))
+                self.assertIn("wb install", got.notes[0])
 
     def test_an_invalid_key_is_reported_escaped_and_ignored(self):
         loaded, got = self.effective({"version": 2, "levels": {"Bad Key\x1b[31m": "block", "x" * 200: "block"}})

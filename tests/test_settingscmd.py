@@ -17,7 +17,21 @@ from workbench import approvalcmd, cli, commands, manifest, rules, settingscmd
 CHECKPOINTS = ["approve-plan", "beta"]
 CAPS = [{"name": "rounds", "default": 3, "ceiling": 5}, {"name": "tries", "default": 1, "ceiling": 2}]
 CHECKPOINT_LINES = "checkpoint approve-plan: stop\ncheckpoint beta: stop\n"
-DEFAULTS = CHECKPOINT_LINES + "cap rounds: 3\ncap tries: 1\nlevel approve-plan: block\nlevel beta: block\n"
+
+
+def level_lines(declared, **levels):
+    """The `level` lines: the declared checkpoints, then each owner-run command of the installer, all `block` unless
+    `levels` (keyed with underscores for spaces and dashes) says otherwise."""
+    names = list(declared)
+    for command in rules.OWNER_RUN:
+        name = "approve-plan" if command == "approve-plan" else "wb " + command
+        if name not in names:
+            names.append(name)
+    return "".join("level %s: %s\n" % (name, levels.get(name.replace(" ", "_").replace("-", "_"), "block"))
+                   for name in names)
+
+
+DEFAULTS = CHECKPOINT_LINES + "cap rounds: 3\ncap tries: 1\n" + level_lines(CHECKPOINTS)
 
 
 def process_module(**fields):
@@ -81,7 +95,7 @@ class Printed(Settings):
     def test_the_owners_values_apply(self):
         self.owner({"version": 1, "checkpoints": {"approve-plan": "delegate"}, "caps": {"rounds": 5, "tries": 2}})
         self.assertEqual((0, "checkpoint approve-plan: delegate\ncheckpoint beta: stop\ncap rounds: 5\ncap tries: 2\n"
-                                "level approve-plan: delegated\nlevel beta: block\n", ""),
+                                + level_lines(CHECKPOINTS, approve_plan="delegated"), ""),
                          self.settings())
 
     def test_delegate_takes_effect_for_approve_plan_only(self):
@@ -136,7 +150,7 @@ class Printed(Settings):
     def test_a_level_line_is_printed_for_every_declared_key_after_the_caps(self):
         self.owner({"version": 2, "levels": {"approve-plan": "delegated"}})
         self.assertEqual((0, "checkpoint approve-plan: delegate\ncheckpoint beta: stop\ncap rounds: 3\ncap tries: 1\n"
-                             "level approve-plan: delegated\nlevel beta: block\n", ""), self.settings())
+                             + level_lines(CHECKPOINTS, approve_plan="delegated"), ""), self.settings())
 
     def test_the_checkpoint_lines_are_the_same_with_and_without_a_table(self):
         _, plain, _ = self.settings()
@@ -176,15 +190,23 @@ class Printed(Settings):
 class OtherModules(Settings):
     INSTALL = False
 
+    def test_an_owner_run_argument_of_an_installed_command_prints_as_a_key(self):
+        commands = {"tool": {"helper": support_project.HELPER_PATH, "arguments": ["go", "look"], "owner": ["go"]}}
+        self.use(commands=commands)
+        code, out, err = self.settings()
+        self.assertEqual((0, ""), (code, err))
+        self.assertIn("level wb run tool go: block\n", out)
+        self.assertNotIn("wb run tool look", out)
+
     def test_the_declaration_order_is_kept(self):
         self.use(checkpoints=["zed", "ant"], caps=CAPS[::-1])
         self.assertEqual((0, "checkpoint zed: stop\ncheckpoint ant: stop\ncap tries: 1\ncap rounds: 3\n"
-                          "level zed: block\nlevel ant: block\n", ""),
+                          + level_lines(["zed", "ant"]), ""),
                          self.settings())
 
-    def test_a_module_that_declares_none_prints_nothing(self):
+    def test_a_module_that_declares_none_prints_only_the_owner_run_commands_as_levels(self):
         self.use(checkpoints=[], caps=[])
-        self.assertEqual((0, "", ""), self.settings())
+        self.assertEqual((0, level_lines([]), ""), self.settings())
 
     def test_no_process_module(self):
         self.ready()

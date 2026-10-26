@@ -6,7 +6,7 @@ the same reading ``approve-plan`` uses), the owner's personal settings from the 
 
     checkpoint <name>: stop|delegate     one per declared checkpoint, in declaration order
     cap <name>: <n>                      one per declared cap, in declaration order
-    level <key>: <level>                 one per declared checkpoint, in declaration order
+    level <key>: <level>                 one per key the installer knows: the checkpoints, then the owner-run commands
     settings: <text>                     one per problem in the owner's settings
 
 Nothing is started, written or approved here; the owner's settings are data. Exit 0 printed, 1 refused (a
@@ -46,13 +46,14 @@ def run(guarded, tokens, out, err, *, cwd=None):
                        % ", ".join(sorted("%s/%s" % (item.package, item.module.name) for item in process)))
     module = process[0].module
     loaded = settings.load(guarded)
-    effective = settings.effective(loaded, module.checkpoints, module.caps)
+    owner_commands = [(command.name, command.owner) for item in found for command in item.module.commands]
+    effective = settings.effective(loaded, module.checkpoints, module.caps, owner_commands)
     for name in module.checkpoints:
         out.write("checkpoint %s: %s\n" % (name, effective.checkpoints[name]))
     for cap in module.caps:
         out.write("cap %s: %d\n" % (cap.name, effective.caps[cap.name]))
-    for name in module.checkpoints:
-        out.write("level %s: %s\n" % (name, effective.levels[name]))
+    for name, level in effective.levels.items():
+        out.write("level %s: %s\n" % (name, level))
     for text in list(loaded.problems) + list(effective.notes):
         out.write("settings: %s\n" % display.clean(text))
     return 0
