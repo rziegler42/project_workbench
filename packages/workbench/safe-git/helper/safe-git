@@ -64,6 +64,7 @@ MAX_CHANGED = 500
 _KEPT = ("HOME", "XDG_CONFIG_HOME", "USER", "LOGNAME", "LANG", "TZ", "TERM", "TMPDIR")
 _BRANCH = re.compile(r"\Arefs/heads/[A-Za-z0-9._][A-Za-z0-9._/-]*\Z")
 _TRACKING = re.compile(r"\Arefs/remotes/[A-Za-z0-9_][A-Za-z0-9._-]{0,63}/[A-Za-z0-9._][A-Za-z0-9._/-]*\Z")
+_TAG = re.compile(r"\Arefs/tags/[A-Za-z0-9._][A-Za-z0-9._/-]*\Z")
 _REMOTE_HEAD = re.compile(r"\Arefs/remotes/[A-Za-z0-9_][A-Za-z0-9._-]{0,63}/HEAD\Z")
 _REMOTE_NAME = re.compile(r"\A[A-Za-z0-9_][A-Za-z0-9._-]{0,63}\Z")
 _RANGE = re.compile(r"\A[0-9a-f]{40}\.\.HEAD\Z")
@@ -177,6 +178,11 @@ def _scan_ref(ref):
     return _plain_ref(ref, _BRANCH) or _plain_ref(ref, _TRACKING)
 
 
+def _readable_ref(ref):
+    """What `show-ref` may be asked for: `_scan_ref`, or a tag."""
+    return _scan_ref(ref) or _plain_ref(ref, _TAG)
+
+
 def _paths_ok(paths):
     """True for one or more repository-relative paths: none empty, absolute or naming a `..` component, so
     a path cannot leave the repository (git treats two paths outside the work tree as ``--no-index``)."""
@@ -239,7 +245,7 @@ _SHAPES = {
                                        ["HEAD"], ["--verify", "HEAD"], ["HEAD^@"])
     or (len(rest) == 3 and rest[:2] == ["--verify", "-q"] and _branch_ref(rest[2])),
     "diff": _diff_shape,
-    "show-ref": lambda rest: len(rest) == 3 and rest[:2] == ["--verify", "--hash"] and _scan_ref(rest[2]),
+    "show-ref": lambda rest: len(rest) == 3 and rest[:2] == ["--verify", "--hash"] and _readable_ref(rest[2]),
     "symbolic-ref": lambda rest: rest == ["-q", "HEAD"] or (
         len(rest) == 3 and rest[:2] == ["-q", "--short"] and _plain_ref(rest[2], _REMOTE_HEAD)),
     "log": lambda rest: bool(rest) and _RANGE.match(rest[-1]) is not None and len(set(rest[:-1])) == len(rest) - 1
@@ -1820,27 +1826,34 @@ def parse_push(argv):
     request.remote = rest[0]
     deleting = "delete" in spelled
     for text in rest[1:]:
-        if text.startswith(("-", "^")) or text in ("", "+"):
-            raise _usage("a refspec that is not accepted")
-        forced = text.startswith("+")
-        body = text[1:] if forced else text
-        if "*" in body:
-            raise Refused("a wildcard refspec sends what the remote's refs decide, so it cannot be described "
-                          "from local data", code="remote_state_required")
-        source, colon, destination = body.partition(":")
-        if ":" in destination or (deleting and (colon or forced)):
-            raise _usage("a refspec that is not accepted")
-        if deleting or (colon and not source):
-            if (colon and forced) or not _push_destination(destination if colon else source):
-                raise _usage("a refspec that is not accepted")
-            request.deletes.append(destination if colon else source)
-        else:
-            if not _push_ref(source) or (colon and not _push_destination(destination)):
-                raise _usage("a refspec that is not accepted")
-            request.updates.append((source, destination if colon else source, forced))
+        kind, item = _refspec(text, deleting)
+        (request.deletes if kind == "delete" else request.updates).append(item)
     if len(request.updates) > 1 or (request.updates and request.deletes) or (deleting and not request.deletes):
         raise _usage("a push is one update, or deletions only")
     return request
+
+
+def _refspec(text, deleting):
+    """``("update", (source, destination, forced))`` or ``("delete", destination)`` for one refspec of a push, as
+    written; the destination of an update with no ``:`` is its source. Refuses with ``usage`` a form outside the
+    grammar and with ``remote_state_required`` a wildcard."""
+    if text.startswith(("-", "^")) or text in ("", "+"):
+        raise _usage("a refspec that is not accepted")
+    forced = text.startswith("+")
+    body = text[1:] if forced else text
+    if "*" in body:
+        raise Refused("a wildcard refspec sends what the remote's refs decide, so it cannot be described "
+                      "from local data", code="remote_state_required")
+    source, colon, destination = body.partition(":")
+    if ":" in destination or (deleting and (colon or forced)):
+        raise _usage("a refspec that is not accepted")
+    if deleting or (colon and not source):
+        if (colon and forced) or not _push_destination(destination if colon else source):
+            raise _usage("a refspec that is not accepted")
+        return "delete", destination if colon else source
+    if not _push_ref(source) or (colon and not _push_destination(destination)):
+        raise _usage("a refspec that is not accepted")
+    return "update", (source, destination if colon else source, forced)
 
 
 def _push_destination(text):
@@ -1967,6 +1980,103 @@ def push_url(root, entries, remote):
     return urls[0]
 
 
+def config_values(entries, section, subsection, variable):
+    """Every value, in the order git read them, of one key (None for a key with no value)."""
+    return [value for _, name, sub, var, value in entries if (name, sub, var) == (section, subsection, variable)]
+
+
+def remote_state_setting(entries, remote):
+    """The name of a setting that makes a push send what the remote's refs decide (``push.followTags``,
+    ``remote.<name>.mirror``), whatever its scope, or None. The last value of a key is the one that counts."""
+    for name, key in (("push.followTags", ("push", None, "followtags")),
+                      ("remote.*.mirror", ("remote", remote, "mirror"))):
+        values = config_values(entries, *key)
+        if values and git_bool_is_true(values[-1] is not None, values[-1] or ""):
+            return name
+    return None
+
+
+def _unresolved(what):
+    return Refused("the target of the push cannot be told from local data: %s" % what, code="target_unresolved")
+
+
+def configured_targets(entries, branch, remote):
+    """``(updates, deletes)`` of a push with no refspec, in the form `_refspec` gives, from ``remote.<name>.push`` and
+    else ``push.default``. Where git would refuse or the answer needs the remote's refs it refuses with
+    ``target_unresolved`` (or ``remote_state_required``). The behaviour of each case was checked against git itself."""
+    current = "refs/heads/" + branch
+    pushes = config_values(entries, "remote", remote, "push")
+    if pushes:
+        if len(pushes) > 1 or not pushes[0]:
+            raise _unresolved("remote.*.push is empty or holds more than one refspec")
+        try:
+            kind, item = _refspec(pushes[0], False)
+        except Refused as exc:
+            if exc.code != "usage":
+                raise
+            raise _unresolved("remote.*.push holds a refspec this version does not read") from None
+        if kind == "delete":
+            return [], [item]
+        if item[0] not in ("HEAD", branch, current):
+            raise _unresolved("remote.*.push names a source other than the current branch")
+        return [item], []
+    given = config_values(entries, "push", None, "default")
+    mode = given[-1] if given else "simple"
+    if mode == "matching":
+        raise Refused("push.default is matching, which sends what the remote's refs decide",
+                      code="remote_state_required")
+    if mode == "current":
+        return [(current, current, False)], []
+    if mode not in ("simple", "upstream", "tracking"):
+        raise _unresolved("push.default is nothing or a value git refuses")
+    fetched = config_values(entries, "branch", branch, "remote")
+    fetch = fetched[-1] if fetched else "origin"      # where the branch's upstream is, or git's default remote
+    if fetch is None or _REMOTE_NAME.match(fetch) is None:
+        raise _unresolved("the remote of the branch is not a remote name")
+    if fetch != remote:                                # a triangular workflow: simple is current, upstream is refused
+        if mode == "simple":
+            return [(current, current, False)], []
+        raise _unresolved("push.default is upstream and the push does not go to the upstream's remote")
+    merges = config_values(entries, "branch", branch, "merge")
+    if not fetched or len(merges) != 1 or merges[0] is None or not merges[0].startswith(("refs/heads/", "refs/tags/")) \
+            or not _push_destination(merges[0]) or (mode == "simple" and merges[0] != current):
+        raise _unresolved("the branch has no usable upstream for push.default")
+    return [(current, merges[0], False)], []
+
+
+def _qualified_update(root, branch, update):
+    """``(source, destination, forced)`` of an update with the source shown as ``git push --porcelain`` shows it and
+    the destination a full ref. A bare destination is qualified from the source, a branch; the remote could read it as
+    another ref (a recorded limit), and one it could read as ``heads/...`` is refused."""
+    source, destination, forced = update
+    if source == branch:
+        if _resolved(root, "refs/tags/" + branch):
+            raise _unresolved("the source names both the branch and a tag")
+        source = "refs/heads/" + branch
+    if destination == "HEAD":                          # `git push <remote> HEAD`: the current branch
+        destination = "refs/heads/" + branch
+    elif not destination.startswith(("refs/heads/", "refs/tags/")):
+        if destination.partition("/")[0] in ("heads", "tags", "remotes"):
+            raise _unresolved("a destination the remote could read as another ref")
+        destination = "refs/heads/" + destination
+    return source, destination, forced
+
+
+def _qualified_delete(destination):
+    if not destination.startswith(("refs/heads/", "refs/tags/")):
+        raise _unresolved("a deletion by a bare name could mean a branch or a tag there")
+    return destination
+
+
+def push_targets(root, entries, request, branch, remote):
+    """``(updates, deletes)`` the push asks for: updates as ``(source, destination, forced)`` and deletions as full
+    refs, from the refspecs of the command, else the configuration. Reads local configuration and refs only."""
+    updates, deletes = request.updates, request.deletes
+    if not updates and not deletes:
+        updates, deletes = configured_targets(entries, branch, remote)
+    return [_qualified_update(root, branch, item) for item in updates], [_qualified_delete(item) for item in deletes]
+
+
 def _blank_push_facts():
     facts = {name: None for name in _PUSH_FACTS}
     facts.update((name, False) for name in _PUSH_FLAG_FACTS)
@@ -1977,8 +2087,9 @@ def _blank_push_facts():
 
 
 def describe_push(argv, cwd):
-    """``(errors, facts)`` of ``push <argv>``: the flags, the branch, the remote, the base and the commits ahead of
-    it. Nothing is contacted and nothing is written. The facts of the later increments are empty or null."""
+    """``(errors, facts)`` of ``push <argv>``: the flags, the branch, the remote, the refs the push updates or
+    deletes, the base and the commits ahead of it. Nothing is contacted and nothing is written. The facts of the later
+    increments are empty or null."""
     facts, errors = _blank_push_facts(), []
     try:
         request = parse_push(argv)
@@ -2003,10 +2114,22 @@ def describe_push(argv, cwd):
             raise Refused("a setting of the repository would redirect or intercept the push (%s)" % ", ".join(refused),
                           code="push_config_refused")
         facts["remote_scheme"], facts["remote_url_has_credentials"] = classify_url(push_url(root, entries, remote))
-        if request.deletes:
+        state = remote_state_setting(entries, remote)
+        if state:
+            raise Refused("%s makes the push send what the remote's refs decide, so it cannot be described from "
+                          "local data" % state, code="remote_state_required")
+        updates, deletes = push_targets(root, entries, request, branch, remote)
+        forcing = "force" in request.flags
+        facts["push_updates"] = ["%s:%s" % (source, destination) for source, destination, _ in updates]
+        facts["push_deletes"] = list(deletes)
+        facts["push_forced"] = [destination for _, destination, forced in updates if forced or forcing]
+        facts["push_forced"] += list(deletes) if forcing else []
+        if deletes:
             facts["ahead"] = 0
         else:
-            facts["base"] = base = push_base(root, remote, branch, default)
+            destination = updates[0][1]
+            named = destination[len("refs/heads/"):] if destination.startswith("refs/heads/") else None
+            facts["base"] = base = push_base(root, remote, named, default)
             facts["ahead"] = int(run(["git", "rev-list", "--count", base + "..HEAD"], root).stdout.strip())
     except Refused as exc:
         if exc.code is None:
@@ -2170,14 +2293,17 @@ def remote_default_branch(root, remote):
 
 
 def push_base(root, remote, branch, default, explicit=None):
-    """The commit a push of `branch` to `remote` is compared with: `explicit` when given, else the remote-tracking
-    ref of the branch, else that of the remote's default branch. Refuses when none of them exists."""
-    candidates = [explicit] if explicit else ["refs/remotes/%s/%s" % (remote, branch)]
-    if not explicit and default is not None:
-        candidates.append("refs/remotes/%s/%s" % (remote, default))
+    """The commit a push of `branch` (None for a tag) to `remote` is compared with: `explicit` when given, else the
+    remote-tracking ref of the branch, else that of the remote's default branch. Refuses when none of them exists."""
+    if explicit:
+        candidates = [explicit]
+    else:
+        candidates = ["refs/remotes/%s/%s" % (remote, name) for name in (branch, default) if name is not None]
+        candidates = [ref for ref in candidates if _scan_ref(ref)]   # a name too long to be read has no tracking ref here
     base = next((value for value in (_resolved(root, ref) for ref in candidates) if value), None)
     if base is None:
-        raise Refused("no base to compare with; tried %s" % ", ".join(candidates), code="base_unresolved")
+        raise Refused("no base to compare with; tried %s" % (", ".join(candidates) or "no tracking ref"),
+                      code="base_unresolved")
     return base
 
 

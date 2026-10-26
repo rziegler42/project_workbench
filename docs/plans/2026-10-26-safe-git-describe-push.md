@@ -493,3 +493,51 @@ against a real `git push` (D).
 
 Open for the owner: the two approval directories of the previous commit (`d5ec726b…`, `e216d264…`) are stale again and need
 the owner's approval to remove.
+
+### Increment D — The push target
+
+Done, not yet committed at the time of writing. Changed: `packages/workbench/safe-git/helper/safe-git` (`_refspec`, split out
+of `parse_push`; `config_values`; `remote_state_setting`; `configured_targets`; `_qualified_update`, `_qualified_delete`;
+`push_targets`; the wiring in `describe_push`; `push_base` takes the destination branch and skips a tracking ref too long to
+read; the `show-ref` shape also reads `refs/tags/<name>`), the new `tests/test_safegit_describe_push_target.py` (69 tests),
+`tests/test_safegit_describe_push.py` (the fixture sets `push.default current`; the pins of the three target facts are gone;
+the delete tests use full refs; the no-quote test checks error messages for a destination, which is now a fact),
+`tests/test_safegit_pushcheck.py` (the pinned refusal of `refs/tags/v1` for `show-ref` is now `refs/notes/v1`) and the shipped
+approval records.
+
+The facts: `push_updates` is `<source>:<destination>` with the source as `git push --porcelain` shows it (`HEAD`, or the
+branch as `refs/heads/<name>`) and the destination a full ref; `push_deletes` are full refs; `push_forced` are the
+destinations of a force flag (also on a deletion) or a `+`. The target comes from the refspecs of the command, else from the
+one `remote.<name>.push`, else from `push.default`. `current` pushes the branch to its own name. `simple` and `upstream`
+(also `tracking`) need the upstream on the push remote: when the push remote is not the branch's own remote (its
+`branch.<name>.remote`, else `origin`), `simple` acts as `current` and `upstream` is `target_unresolved`. `matching` and
+`push.followTags` and `remote.<name>.mirror` (any scope, last value) are `remote_state_required`. `base` follows the destination branch;
+a tag destination is compared with the default branch.
+
+Verification as run: the new tests failed first (85 failures), then passed. Each of them that names a real push was checked
+against `git push --porcelain` to a bare repository in a temporary directory (git 2.54.0, Apple Git-157). In the scratch copy
+the whole safe-git directory ran 583 tests OK. After landing and the owner's `release-approvals`: `python3 -B -W error
+tests/run_all.py` 4574 tests in 10 roots OK (4505 before, plus the 69 new), `git diff --check`, `wb check`, `wb run code-work
+check` (51 plans), `doccheck` and `refcheck` clean.
+
+Review: the `reviewer` agent, one exchange, no blocking finding (it read and ran nothing). Applied: none to the code. Recorded:
+- The spec's `push.default` paragraph says "as planned, to be fixed by Increment D's tests" and that `simple` pushes only when
+  the upstream is on this remote under the same name. Git also pushes under `simple` when the push remote is another than the
+  branch's own (a triangular workflow), as the current branch to its own name; the tests show it. Increment G should write this.
+- A bare name in a deletion (`--delete x`, `:x`, or `remote.<name>.push = :x`) is `target_unresolved`: the remote could mean a
+  branch or a tag, and the helper has no source to qualify it from. A bare destination of an update is qualified from its source
+  (a branch) as the spec says; one beginning with `heads/`, `tags/` or `remotes/` is `target_unresolved`, because a remote could read it as
+  another ref.
+- A malformed `push.default` or `remote.<name>.push` (an unknown value, an empty one, none) makes git itself fail to read the
+  repository, so the code is `repository_unreadable`, not `target_unresolved`. The `target_unresolved` branch for an unknown
+  `push.default` is therefore unreachable and kept as a guard. Git's own message, up to 300 characters, is in that error
+  message and can quote the config value; this was so before D and is for the security pass (F).
+- The plan's D step 1 lists `--tags` and `--all`; the spec makes both `usage` (covered in B's tests).
+- A `show-ref` of a tag is now allowed for `push-check` too; its own `--base` still refuses a tag.
+- A bare destination that the remote would resolve to another ref, and the `push.default` behaviour on other git versions, are
+  not covered.
+- A comment on the unreachable `push.default` branch was not added: editing the landed helper would change the bytes the
+  owner's `release-approvals` covered. Add it with the next change to the helper.
+
+Open for the owner: the two approval directories of the previous commit (`1ce32890…`, `546f7ada…`) are stale again and need
+the owner's approval to remove.

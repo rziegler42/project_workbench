@@ -25,8 +25,7 @@ FACTS = ("head", "branch", "remote", "default_branch", "force", "delete", "set_u
          "push_deletes", "push_forced", "base", "ahead", "tracking_ref_reflog_looks_git_written", "commit_hashes",
          "commit_messages", "changed_paths", "binary_paths", "submodule_paths", "findings", "diff")
 FLAGS = ("force", "delete", "set_upstream", "no_verify", "dry_run", "atomic")
-LATER = {"push_updates": [],
-         "push_deletes": [], "push_forced": [], "tracking_ref_reflog_looks_git_written": None, "commit_hashes": [],
+LATER = {"tracking_ref_reflog_looks_git_written": None, "commit_hashes": [],
          "commit_messages": [], "changed_paths": [], "binary_paths": [], "submodule_paths": [], "findings": [],
          "diff": None}
 CREDENTIAL = "hunter2-not-a-real-password"
@@ -68,6 +67,7 @@ class Push(support_git.Repo):
         git(self.repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/" + self.main)
         git(self.repo, "switch", "-q", "-c", "feature")
         self.remote("origin", "https://example.invalid/repo.git")
+        self.config("push.default", "current")     # a push with no refspec then has a target (increment D)
 
     @staticmethod
     def own(findings):
@@ -126,6 +126,8 @@ class Facts(Push):
         self.assertEqual((self.first, 1), (facts["base"], facts["ahead"]))
         self.assertEqual(("https", False, []), (facts["remote_scheme"], facts["remote_url_has_credentials"],
                                                 self.own(facts["push_config_findings"])))
+        self.assertEqual((["refs/heads/feature:refs/heads/feature"], [], []),
+                         (facts["push_updates"], facts["push_deletes"], facts["push_forced"]))
         for name, value in LATER.items():
             self.assertEqual(value, facts[name], name)
         built = self.describe()
@@ -154,12 +156,12 @@ class Facts(Push):
 
     def test_delete_is_a_fact_and_gives_no_range(self):
         self.commit("b.txt", "two\n")
-        for args in (["--delete", "origin", "other"], ["-d", "origin", "other"], ["origin", ":other"],
-                     ["origin", ":other", ":another"]):
+        for args in (["--delete", "origin", "refs/heads/other"], ["-d", "origin", "refs/heads/other"],
+                     ["origin", ":refs/heads/other"], ["origin", ":refs/heads/other", ":refs/heads/another"]):
             facts = self.describe(*args)["facts"]
             self.assertEqual((None, 0), (facts["base"], facts["ahead"]), args)
-        self.assertTrue(self.describe("-d", "origin", "other")["facts"]["delete"])
-        self.assertFalse(self.describe("origin", ":other")["facts"]["delete"])
+        self.assertTrue(self.describe("-d", "origin", "refs/heads/other")["facts"]["delete"])
+        self.assertFalse(self.describe("origin", ":refs/heads/other")["facts"]["delete"])
 
     def test_quiet_and_verbose_are_accepted(self):
         for args in (["-q"], ["--quiet"], ["-v"], ["--verbose"], ["-q", "-v"]):
@@ -263,7 +265,10 @@ class Usage(Push):
             self.assertNotIn(CREDENTIAL, text + err)
         for refspec in ("%s:feature" % CREDENTIAL, "feature:%s" % CREDENTIAL, "+%s" % CREDENTIAL):
             code, text, err = self.call("origin", refspec)
-            self.assertNotIn(CREDENTIAL, text + err)
+            self.assertEqual("", err)
+            self.assertNotIn(CREDENTIAL, json.dumps(json.loads(text)["errors"]))   # a destination is a fact (increment D)
+        for refspec in ("%s:feature" % CREDENTIAL, "+%s" % CREDENTIAL):
+            self.assertNotIn(CREDENTIAL, self.call("origin", refspec)[1])         # refused: no fact at all
 
     def test_an_unknown_action_is_still_refused_with_no_object(self):
         out, err = io.StringIO(), io.StringIO()
