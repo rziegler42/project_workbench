@@ -14,7 +14,7 @@ from tests import test_upgrade_preview as base_tests
 from tests import support_harness
 from tests.support_harness import AGENT, COMMAND, SKILL
 from workbench import (acknowledgement, attach, cli, harnessplan, installplan, levellog, localmanifest, manifest,
-                       neutral, projectfs, rules, snapshot, sources)
+                       neutral, projectfs, rendering, rules, snapshot, sources)
 from workbench.wbkit import safefs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -195,7 +195,10 @@ class Attached(Base):
                                                  ".git/info", ".git/info/exclude", ".workbench/local",
                                                  LOCAL]),
                          added)
-        self.assertEqual(store, self.content(self.store_root))
+        # The one addition to the guarded store is the record of what the levels table rendered (rendering.py).
+        grown = {path for path in self.content(self.store_root) if path not in store}
+        self.assertEqual({"projects/%s/rendering" % self.project_id}, grown)
+        self.assertEqual(store, {path: data for path, data in self.content(self.store_root).items() if path in store})
         self.assertEqual(b"index", self.read(".git/index"))
 
     def test_the_exclude_lines_come_first_and_the_local_manifest_last(self):
@@ -322,6 +325,8 @@ class Overrides(Base):
         document = self.planned()
         self.assertEqual(("hq", []), (document["harness"], document["files"]))
         self.assertNotIn("changes what the agent may do", err)
+        # Nothing was rendered, so there is no rendering record, which reads as block (rendering.py).
+        self.assertIsNone(rendering.read(self.guarded, self.project_id))
 
     def test_an_override_with_no_neutral_item_is_refused(self):
         self.pkg = self.version(notes=self.override_notes(

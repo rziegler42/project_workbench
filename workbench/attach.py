@@ -32,7 +32,7 @@ import os
 import shutil
 
 from . import (__version__, acknowledgement, declarations, firstparty, gate, harnessstage, installed,
-               localmanifest, manifest, preview, projectfs, refusal, snapshot, sources, target, upgrade,
+               localmanifest, manifest, preview, projectfs, refusal, rendering, snapshot, sources, target, upgrade,
                verify)
 from .wbkit import display, safefs
 
@@ -45,9 +45,11 @@ Refused = refusal.Refused
 Command = collections.namedtuple("Command", "target harness packages")
 # `create` and `kept` are lists of ``harnessplan.Planned``; `exclude` the layout's entries;
 # `document` the local manifest to write; `reports` the translation's; `warnings` and `notes` text.
+# `rendering` is the record of what the levels table rendered and `project_id` the project it belongs to; attach
+# writes it to the guarded store before the files (``rendering.py``).
 Prepared = collections.namedtuple(
     "Prepared", "path harness version create kept exclude document reports warnings notes "
-                "settings")
+                "settings rendering project_id", defaults=(None, None))
 
 
 def parse(tokens):
@@ -253,10 +255,18 @@ def prepare(guarded, held, command, distribution=None, version=None, which=shuti
     warnings.extend(staged.warnings)
     create, kept = preflight(writer, staged.files, staged.exclude, staged.settings)
     return Prepared(held.path, token, harness.version, create, kept, staged.exclude,
-                    staged.document, staged.reports, warnings, staged.notes, staged.settings)
+                    staged.document, staged.reports, warnings, staged.notes, staged.settings,
+                    staged.rendering, project)
 
 
 # --- the write ---------------------------------------------------------------------------------
+
+
+def record_rendering(guarded, prepared):
+    """Write the rendering record to the guarded store. It comes before the files: if a file is then not written, the
+    record names a hash the file does not have and ``ask`` and ``none`` read as ``block``."""
+    if prepared.rendering is not None and prepared.project_id is not None:
+        rendering.write(guarded, prepared.project_id, prepared.rendering)
 
 
 def apply(writer, prepared):
@@ -354,6 +364,7 @@ def run(guarded, command, out, err, distribution=None, version=None, which=shuti
                 err.write("warning: %s\n" % display.clean(warning))
             try:
                 writer = projectfs.Writer(held)
+                record_rendering(guarded, prepared)
                 added = apply(writer, prepared)
             except (Exception, KeyboardInterrupt) as exc:
                 cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)

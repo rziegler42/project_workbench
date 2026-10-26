@@ -169,6 +169,22 @@ class Attached(Base):
         self.assertIn("attached synthetic/fixture", out)
         self.assertIn("added 2 lines to .git/info/exclude: FIXTURE.md, .fixture/", out)
 
+    def test_install_keeps_the_record_of_what_the_levels_table_rendered(self):
+        import glob
+        import hashlib
+        path = self.notes()
+        place = self.place()
+        code, out, err = self.install(place, path)
+        self.assertEqual(0, code, (out, err))
+        found = glob.glob(os.path.join(self.store_root, "projects", "*", "rendering"))
+        self.assertEqual(1, len(found))
+        with open(found[0], "rb") as handle:
+            record = json.loads(handle.read())
+        self.assertEqual(".fixture/settings.local.json", record["file"])
+        self.assertEqual(hashlib.sha256(self.read(place, ".fixture", "settings.local.json")).hexdigest(),
+                         record["file_hash"])
+        self.assertEqual("deny", record["keys"]["wb install"])
+
     def test_the_files_are_those_attach_would_write_and_nothing_is_tracked_by_git(self):
         path = self.notes()
         place = self.place()

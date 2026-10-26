@@ -140,7 +140,9 @@ and `block` need the `deny`.
 **The rendering record.** At attach the installer writes, in the guarded store, a record the agent cannot write: the
 harness's identity, whether it provides `permissions`, a digest of the effective table it rendered from, a hash of the
 harness file it wrote, and, for every key of the registry without exception, the rule it rendered (`deny`, `ask` or
-`none`). A key the record does not list reads as `block`: "no rule" is written, never implied by absence. A key's effective level is `block` unless all of these hold when the
+`none`, or `unruled` for a key with no command to match, such as a checkpoint that is not a command; `unruled` is never
+read as `none`). A key the record does not list reads as `block`: "no rule" is written, never implied by absence. A
+harness that provides no `permissions` renders nothing and leaves no record, which reads as `block`. A key's effective level is `block` unless all of these hold when the
 command runs: the record exists and is readable; it names the attached harness and says it provides `permissions`; its
 table digest equals the digest of the effective table now; for `ask` and `none`, the harness file read now hashes to the
 record's hash; and, for `ask`, it records an `ask` for the key and, for `none`, it records `none` for the key. A missing, damaged or stale record, a table changed since attach, an unattached

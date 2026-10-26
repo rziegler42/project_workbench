@@ -466,3 +466,41 @@ test name fixed (finding 7). Not applied: the harness-deny check stays structura
 seen failing before the implementation. No `packages/` mirror of `safefs` exists (searched). Exit 3 is not yet in a spec or
 `docs/development.md`; Increment H must add it. Final verification: `python3 -B -W error tests/run_all.py` (4590 tests in 10
 roots, OK), `git diff --check`, `python3 -m workbench check` and the plan check, all clean.
+
+Committed as `85b1514`.
+
+### Increment E — Rendering and the drift check
+
+Changed: a new `workbench/rendering.py` (the key-to-pattern map, the plan of rules per level, the table digest, the
+record's form, its reader and `effective_level`); `workbench/rules.py` (`owner_run_command_patterns`);
+`workbench/harnessplan.py` (`render_permissions` takes `ask_patterns` and `open_patterns`: an open pattern is not denied, an
+ask pattern is asked, and also through the store's own `bin/wb`); `workbench/harnessstage.py` (`stage` builds the effective
+table from the owner's settings, the process modules' checkpoints and the installed commands, renders from it, and returns
+the record as `Staged.rendering`); `workbench/attach.py` and `workbench/install.py` (the record is written to the guarded
+store before the files, on both the attach and the install paths); `workbench/check.py` (a permissions file that differs
+from the record is a problem); `docs/specs/command-permissions.md` (`unruled`, and no record for a harness without
+`permissions`); tests `tests/test_rendering.py` (new, 23 tests), `tests/test_attach.py` (the store gains the record),
+`tests/test_install_attach.py`. Nothing yet calls `effective_level`: Increments F and G do.
+
+Choices made: the record is written before the files, so a file that was not written leaves a hash that does not match and
+`ask` and `none` read as `block`; a harness without `permissions` writes no record (absence reads as `block`); `unruled`
+is a fourth value for a key with no command to match; `delegated` and `block` do not depend on the record; the `bin/wb`
+pattern is added for `wb`-spelled ask patterns only; the harness identity is compared with the local manifest's `harness`
+(the module name). The test seam is `levels._OFFERS`, because no key offers `ask` or `none` before F and G. `wb check` says
+nothing when the file is missing (already reported) or when there is no record.
+
+Verification as run: the tests were written first and failed on import; `python3 -B -W error tests/run_all.py` (4614
+tests in 10 roots, OK, after two existing tests were updated for the new record and one check duplicate was removed);
+`git diff --check` clean; `python3 -m workbench check` no problems on this repository. Not run: the plan check after the
+last edit; a live harness (the synthetic harness only).
+
+Review: one round by the `reviewer` agent (cap 3), recommendation "no blocking findings"; it ran nothing. Applied: tests for a
+harness that provides no permissions (no record), a record with no local manifest, a symbolic link in place of the harness
+file, a failure after the record is written (the keys stay at `block`), and the rules with no levels table (the old rules);
+the module docstring now says the record names the module and not the package (finding 2). Open, for the owner (finding 3):
+the spec says a stale record is repaired by attaching again, but `wb attach` refuses a clone that already records a harness,
+so after a table or module change in an attached clone the owner has no command that restores `ask` or `none`; they read
+`block`, which is safe. A fix (re-render, or a command to rewrite the record) is not in this plan and needs the owner's
+decision. Increments F and G must build the table exactly as `harnessstage.stage` does or they always get `block`.
+`wb check` can report a false difference in a clone that did not write the last record. Final verification: `python3 -B -W
+error tests/run_all.py`, `git diff --check`, `python3 -m workbench check` and the plan check (below).

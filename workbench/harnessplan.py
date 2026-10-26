@@ -496,7 +496,8 @@ def _plain_root(root):
     return root
 
 
-def render_permissions(rules, harness_layout, store_root, home, hook_for=None, root=None, protect=()):
+def render_permissions(rules, harness_layout, store_root, home, hook_for=None, root=None, protect=(),
+                       ask_patterns=(), open_patterns=()):
     """Return the bytes of the local settings file for ``rules`` plus what is always rendered.
 
     Always rendered: a deny for writes to the guarded store at ``store_root``, a deny for every
@@ -512,6 +513,10 @@ def render_permissions(rules, harness_layout, store_root, home, hook_for=None, r
 
     ``protect`` are paths below the project, of files that carry a hook of their own (a confined agent's); each
     gets the same deny in the same three spellings, with or without the edit gate's hook, and needs `root` too.
+
+    ``ask_patterns`` and ``open_patterns`` are shell patterns of owner-run commands whose level is not ``block``
+    (``rendering.py``): an open pattern is not denied, and an ask pattern is asked instead, also through the guarded
+    store's own ``bin/wb`` (a path-qualified spelling no other pattern names). Nothing here builds an ``allow``.
     """
     found = layout.problems(harness_layout)
     if found:
@@ -548,13 +553,21 @@ def render_permissions(rules, harness_layout, store_root, home, hook_for=None, r
     store = store_root.rstrip("/")
     for pattern in (store, store + "/**"):
         wanted["deny"].add(render("write", pattern))
+    opened = set(open_patterns)
     for pattern in rules_module.owner_run_patterns():
-        wanted["deny"].add(render("shell", pattern))
+        if pattern not in opened:
+            wanted["deny"].add(render("shell", pattern))
+    for pattern in ask_patterns:
+        wanted["ask"].add(render("shell", pattern))
+        if pattern.startswith("wb "):
+            wanted["ask"].add(render("shell", store + "/bin/wb" + pattern[2:]))
     floor_ids = {stop.id for stop in floor.FLOOR}
     for stop_id in sorted(floor_ids):
         for action, tool, pattern in rules_module.FLOOR_RULES[stop_id]:
             wanted[action].add(render(tool, pattern))
     for rule in rules:
+        if rule.action == "deny" and rule.tool == "shell" and rule.pattern in opened:
+            continue
         wanted[rule.action].add(render(rule.tool, rule.pattern))
     hook = render_hook(harness_layout, hook_for) if hook_for is not None else None
     if hook:

@@ -118,11 +118,18 @@ def command_owner_patterns(command, arguments):
     return out
 
 
+def owner_run_command_patterns(command):
+    """The shell patterns that deny one owner-run `command`, bare and with arguments, in each spelling."""
+    out = []
+    for spelling in SPELLINGS:
+        out.append("%s %s" % (spelling, command))
+        out.append("%s %s *" % (spelling, command))
+    return out
+
+
 def owner_run_patterns():
     """The shell patterns that deny each owner-run command, bare and with arguments."""
     out = []
-    for spelling in SPELLINGS:
-        for command in OWNER_RUN:
-            out.append("%s %s" % (spelling, command))
-            out.append("%s %s *" % (spelling, command))
+    for command in OWNER_RUN:
+        out.extend(owner_run_command_patterns(command))
     return out

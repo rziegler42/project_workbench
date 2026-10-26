@@ -19,9 +19,10 @@ safe, and the report says so. Git is never run: what it tracks is read from ``.g
 """
 
 import collections
+import hashlib
 
-from . import (__version__, checks, gitindex, harnesses, installed, localmanifest, pointers, projectfs,
-               sources, target)
+from . import (__version__, checks, gitindex, harnesses, installed, localmanifest, manifest, pointers, projectfs,
+               rendering, sources, target)
 from .wbkit import display, safefs
 
 # Top-level paths that are scratch, not content: nothing tracked may live there.
@@ -352,6 +353,26 @@ def _listed(err, prefix, items):
         err.write("%s: and %d more\n" % (prefix, len(items) - LISTED))
 
 
+def _rendering_drift(guarded, writer):
+    """Problems for the harness's permissions file when it differs from the record attach kept in the guarded store
+    (``rendering.py``). No record, or a project that cannot be read here, gives none: the other checks say so."""
+    try:
+        project = manifest.project_id(installed.read(writer, __version__).document["seed"])
+    except (installed.InstalledError, manifest.ManifestError, KeyError):
+        return []
+    record = rendering.read(guarded, project)
+    if record is None or record["file"] is None:
+        return []
+    try:
+        state = writer.read_file(record["file"])
+    except safefs.SafeFsError:
+        return []  # the manifest check already says the file cannot be read
+    if state is None or hashlib.sha256(state.data).hexdigest() == record["file_hash"]:
+        return []  # a missing file is already reported as missing
+    return ["%s: differs from the rendering record attach kept in the guarded store, so a key at ask or none reads "
+            "as block" % _shown(record["file"])]
+
+
 def run(guarded, command, out, err, distribution=None):
     """Report and return the exit code: 0 for no problem, 1 for a problem or a refusal."""
     try:
@@ -359,7 +380,9 @@ def run(guarded, command, out, err, distribution=None):
             if held.state != "existing":
                 err.write("refused: the target is not an existing project\n")
                 return 1
-            report = examine(projectfs.Writer(held), distribution)
+            writer = projectfs.Writer(held)
+            report = examine(writer, distribution)
+            report = report._replace(problems=list(report.problems) + _rendering_drift(guarded, writer))
             path = held.path
         report = report._replace(modules=checks.run_all(guarded, path))
     except target.TargetError as exc:

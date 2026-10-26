@@ -11,7 +11,8 @@ import collections
 import hashlib
 import os
 
-from . import declarations, harnessplan, installplan, localmanifest, manifest, neutral, rules, target
+from . import (declarations, harnessplan, installplan, levels, localmanifest, manifest, neutral, rendering, rules,
+               store as guarded_store, target)
 from .wbkit import display, safefs
 from .refusal import Refused
 
@@ -22,9 +23,10 @@ _RESERVED = (".git", ".workbench")
 
 # `token` is ``<package>/<module>``; `files` are ``harnessplan.Planned`` sorted by path; `exclude`
 # the layout's entries; `document` the local manifest to write; `settings` the path of the
-# permissions file or None; `reports` the translation's; `warnings` and `notes` are text.
+# permissions file or None; `reports` the translation's; `warnings` and `notes` are text; `rendering` the record of
+# what the levels table rendered (``rendering.py``), which attach writes to the guarded store.
 Staged = collections.namedtuple(
-    "Staged", "token version files settings exclude document reports warnings notes")
+    "Staged", "token version files settings exclude document reports warnings notes rendering", defaults=(None,))
 
 
 def default_home():
@@ -193,19 +195,27 @@ def stage(store_root, harness, modules, snaps, source, version, home, root):
             if not home:
                 raise harnessplan.PlanError("the home directory is not known, so the rules that "
                                             "name it cannot be written")
+            table = rendering.table_of(
+                guarded_store.Store(store_root),
+                tuple(name for item in modules if item.type == "process" for name in item.module.checkpoints),
+                [(command.name, command.owner) for item in modules for command in item.module.commands])
+            built = rendering.plan(table)
             data = harnessplan.render_permissions(
                 owner_rules(modules), layout, os.path.realpath(store_root), os.path.realpath(home),
-                hook_for=harness.name if hook else None, root=os.path.realpath(root), protect=done.confined)
+                hook_for=harness.name if hook else None, root=os.path.realpath(root), protect=done.confined,
+                ask_patterns=built.ask, open_patterns=built.open)
             settings = harnessplan.Planned(local["path"], data, harnessplan.FILE_MODE,
                                            hashlib.sha256(data).hexdigest(), "permissions")
             files.append(settings)
+            record = rendering.record_of(harness.name, True, table, built, local["path"], settings.sha256)
         else:
+            record = None  # nothing was rendered, and no record reads as block
             warnings.append("this harness provides no permissions, so the hard stops and the "
                             "guarded store are enforced only by instruction")
             if hook:
                 warnings.append("this harness renders no edit gate hook, because the hook is written into the "
                                 "permissions file it does not provide")
-    except (neutral.NeutralError, harnessplan.PlanError) as exc:
+    except (neutral.NeutralError, harnessplan.PlanError, levels.RegistryError) as exc:
         raise Refused([str(exc)])
     files.sort(key=lambda planned: planned.path.encode("utf-8"))
     check_paths(files)
@@ -221,4 +231,4 @@ def stage(store_root, harness, modules, snaps, source, version, home, root):
         raise Refused(["the local manifest cannot be written: %s" % exc])
     return Staged("%s/%s" % (harness.package, harness.name), harness.version, files,
                   settings.path if settings else None, list(layout.get("exclude", ())), document,
-                  done.reports, warnings, list(layout.get("notes", ())) + confinement_notes(done))
+                  done.reports, warnings, list(layout.get("notes", ())) + confinement_notes(done), record)

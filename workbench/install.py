@@ -167,17 +167,18 @@ AGAIN = ("run `wb attach --harness %s` in the project to finish it (give the har
          "the local manifest is written last\n")
 
 
-def _attach(held, progress, plan, out, err):
+def _attach(guarded, held, progress, plan, out, err):
     """Attach the harness the plan named, now that the install itself is complete (its marker is
     gone). The files, exclude lines and local manifest are those the digest covered. A failure
     leaves a finished install and says how to finish the attach; it returns 3."""
     staged = plan.harness
     prepared = attach.Prepared(held.path, staged.token, staged.version, list(staged.files), [],
                                staged.exclude, staged.document, staged.reports, [], staged.notes,
-                               staged.settings)
+                               staged.settings, staged.rendering, plan.project_id)
     writer = progress.writer
     before = len(writer.written)
     try:
+        attach.record_rendering(guarded, prepared)
         added = attach.apply(writer, prepared)
     except (Exception, KeyboardInterrupt) as exc:
         cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
@@ -264,7 +265,7 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
                 pass  # the install is complete; the attach below still runs
             if adopt:
                 return 0
-            return _attach(held, progress, plan, out, err)
+            return _attach(guarded, held, progress, plan, out, err)
     except target.TargetError as exc:
         return target.write_refusal(err, exc)
     except preview.Refused as exc:
