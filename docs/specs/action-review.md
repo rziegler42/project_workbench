@@ -63,9 +63,11 @@ the facts that the real command would act on, running the same validation code t
 commit, stages nothing, writes nothing and runs no program the repository selects. `describe remove` does the same for
 `remove`, extending the `remove` preview it has. `push-check` already has this shape for a push.
 
-- The object has `contract` (a whole number), `action` (`commit`), `ok`, `errors` (the refusals the real command
-  would give, as data, not as a failed run) and `facts` (a flat set of named values with a size cap). A module
-  documents the names of its facts in its own spec, and the engine's rules name them.
+- The object has `contract` (a whole number), `action` (`commit`), `ok`, `truncated` (always present, a boolean),
+  `errors` (the refusals the real command would give, as data, not as a failed run) and `facts` (a flat set of named
+  values with a size cap). A module documents the names of its facts and its numeric caps in its own spec, and the
+  engine's rules name them. A truncated object is incomplete and the verdict is a decline. The field rules and the
+  behaviour at the cap are fixed by the `Proposed` decision `2026-10-25-describe-interface-for-action-review`.
 - A refusal is a fact: a commit the real helper would refuse is reported as `ok: false` with the reason, and the
   engine's check for it fails the verdict.
 - The engine runs `describe` only through the launcher (`wb run`), the same rule decision 4 sets for bridges, and
@@ -83,15 +85,72 @@ rule, runs the module's `describe`, applies the rule's checks, and only if the c
 verdict against the rubric. It prints one verdict object: `verdict` (`approve` or `decline`), `failed_checks` and
 `reason`, the shape of today's verdict schema. It keeps a log of verdicts as hashes, not command text.
 
-- **Rules are data** (a JSON file per rule: the command spelling, the `describe` command, the checks, the rubric
-  section, the review questions). **The checks are code in the module** and are fixed: a pure function of the facts.
+- **Rule properties fixed here; the schema is the first deliverable of the engine's plan.** A rule file has a
+  `format` number, and a rule is keyed by one spelling and one subcommand, matched on whole tokens (never a text
+  prefix). Two rules with the same key are both refused, and neither reviews anything. A rule that does not load, or
+  is ambiguous, refuses only the commands of its own key. Each flag it declares has a type (value, multi, boolean),
+  and positionals are declared as exactly one named group. The versioned JSON schema, its field types and bounds, the
+  precedence rule and the tests for malformed and overlapping rules are written by the plan that builds the engine,
+  before the engine, and reviewed with it.
+- **Rules are data** (a JSON file per rule: the command spelling, the module and the action that `describe`
+  reports on, the checks, the rubric section, the review questions). The module and the action are identifiers
+  only: a rule holds no command text and no verb. The engine builds the launcher argument list itself, `wb run
+  <module> describe <action> <the parsed arguments>`, with the fixed word `describe`. A rule format that can carry
+  command text, an extra verb or a path to run is rejected, and a rule that names such a field does not load. **The checks are code in the module** and are fixed: a pure function of the facts.
   A rule can only name a check that exists. This keeps the owner's finding that a rule file is not a place to put
   logic.
 - **Fail closed, and loudly.** A rule file that does not load makes `review` refuse that rule with a message the
   hook can show. It never disables the review of other commands. This is a change from the approver.
-- **The model reads the facts, not the repository.** The prompt holds the facts and the rubric. Content from a
-  hostile repository (a diff, a message) is quoted as data and the rubric keeps the check that refuses text
-  addressed to the reviewer (`no_reviewer_directed_text`).
+- **The prompt holds the facts and the rubric; the vendor can still read the project.** Content from a hostile
+  repository (a diff, a message) is quoted as data and the rubric keeps the check that refuses text addressed to the
+  reviewer (`no_reviewer_directed_text`). That is not an isolation boundary. The bridge starts the vendor program in
+  the project, and `model-bridge.md` ("What the vendor program can read") says it can open any file there, including
+  untracked scratch and the repository's own instruction files, so repository text can reach the model by that
+  route as well. The spec therefore claims only this: the engine puts nothing sensitive in the project for the
+  vendor to find (the labelled set is stored outside any project, see below), and it does not rely on the model
+  ignoring what it reads. A bridge option for a scratch root with no project content would be a change to
+  `model-bridge.md`, which the engine's plan may propose; none exists today.
+
+### The reviewed command is the command that runs (default)
+
+A review is useless if it examines something other than what executes. The engine takes the prompted command as the
+raw text the harness is about to run, and as one canonical form from the hook to `describe`:
+
+- **Accepted grammar (a restricted subset, so that every shell reads it alike).** The text is a sequence of words
+  separated by exactly one space each, with no leading or trailing space. A word is either a bare word made only of
+  `A-Z a-z 0-9 . _ / : = @ % + , -` (not beginning with `-` unless it is a flag the rule declares), or a single-quoted
+  string: `'`, any characters except `'` and newline, `'`. Nothing else is accepted: no double quote, backslash,
+  `$`, backtick, `*`, `?`, `[`, `~`, `{`, `#`, `;`, `&`, `|`, `<`, `>`, `(`, `)`, newline or tab outside a
+  single-quoted string, and no environment prefix. Inside single quotes every character is literal in POSIX shells
+  and in zsh, so the word means the same to all of them. A command that does not fit is unreviewable and approves
+  nothing; the owner then sees the normal prompt. A commit message that needs a single quote is written without one
+  or in a body file the helper takes, which the plan of `describe` may add.
+- **The corpus is a test of a stated grammar.** The grammar above is exact, so the equivalence test is a property
+  test over generated command text and not a sample: every accepted text parses to the same argument list in the
+  engine and in `sh` and `zsh`, and every other text is refused.
+- **One parse.** The rule's declared flags parse the arguments once. The result is an argument list, never a shell
+  string, and `describe` receives that list through the launcher, with the fixed verb `describe`, so the facts are of
+  the arguments the real command will receive.
+- **Unknown means unreviewed.** A flag the rule does not declare, a repeated single-valued flag and a missing
+  required flag refuse the review.
+- **Tested.** A corpus of quoting, spacing, wrapper and shell-metacharacter forms shows that the argument list the
+  engine reviews equals the argument list the real command parses from the same text, or that the review is refused.
+
+### Settings and the bridge (default)
+
+Decision 5 of `2026-10-22-model-calls-go-through-vendor-bridges` applies unchanged. The engine reads its own project
+file, `.workbench/action-review.json`: a format number and the bridge, the model and the effort the project would
+like. It is a request and never an authorization.
+
+- The bridge must be an installed, pinned module that provides `model-bridge`. A name that is not is refused and no
+  other vendor is tried.
+- The owner's personal setting is authoritative: it may choose among the installed bridges and lower the effort, and
+  where it and the project disagree the personal setting is used. A teammate with none gets the project's bridge if
+  it is installed and approved, and otherwise a refusal.
+- A pulled change to the file is a difference `wb acknowledge` lists, and at run time the file is accepted only if it
+  names a bridge the owner already approved by installing it.
+- The timeout the engine passes to the bridge is shorter than its own limit, as `model-bridge.md` requires.
+- A missing or unreadable setting, or a bridge failure of any class, yields no approval.
 
 ### The enforcement point (default)
 
@@ -110,8 +169,10 @@ labelled set, not against the approver.
    no new data and is read-only. Plan 1 does it first, so that the engine is not built to repeat those checks.
 2. **Build a labelled set.** A collector records, for each prompted command from now on, the `describe` output (the
    command text, the facts, the engine's verdict) in a local, untracked file, and the owner marks each one right
-   or wrong. A new file is needed because the old log has no text to label. The facts can contain diffs, so the
-   file stays local, is never tracked, and is kept out of any review a vendor reads.
+   or wrong. A new file is needed because the old log has no text to label. The facts can contain diffs, and a
+   vendor program can open any file inside the project, so the file lives outside every project, in the owner's
+   own data directory beside the verdict log, and is never tracked. The owner-side collector writes it; the agent
+   does not. A project path for it would be readable by the vendor and is not allowed.
 3. **Shadow.** The thin hook runs the engine beside the approver. The approver's answer still decides; the
    engine's is logged. Nothing the engine says takes effect.
 4. **Measure.** The report gives false declines and false approves of both programs against the owner's labels. A
@@ -204,11 +265,23 @@ Each is a plan of its own, in this order. None exists, and the owner approves ea
 
 ## Acceptance criteria
 
-- For each action in the table above, a module `describe` command prints an object that obeys the rules above, runs
-  the real command's validation, and changes nothing (a test compares the repository before and after).
+- For each action that stays a reviewable module action (commit, remove, a push through `push-check`, and later the
+  remote actions), a module `describe` command prints an object that obeys the rules above, runs the real command's
+  validation, and changes nothing (a test compares the repository before and after).
+- The retired actions have no `describe` provider and no rule: `ask-codex archive`, `safe-committer` and
+  `amend-message`. A test shows the engine refuses a command line that names one.
+- A rule that carries command text, an extra verb or a path does not load, and the engine builds only `wb run <module>
+  describe <action> ...`.
 - A synthetic action with a fake module and a fake bridge gets a verdict only through `wb run`; a `describe` command or a
   bridge that is not installed, pinned and declared is refused and nothing runs.
 - A missing, malformed, oversize or unavailable bridge reply, facts object or rule file yields no approval.
+- Over generated command text, every text the stated grammar accepts parses to the same argument list in the engine
+  and in `sh` and `zsh`, and every other text is refused.
+- Two rules with one key, a malformed rule and a rule with an unknown field each refuse only their own key; other
+  commands are still reviewed.
+- Bridge selection: an absent setting, a bridge that is not installed, one that is not pinned, and a project request
+  that the owner's setting overrides each behave as the settings section says, and no other vendor is tried.
+- No file holding labelled data or command text lies inside a project tree.
 - A corrupt rule file does not stop the review of any other command.
 - Every check of today's approver for commit, remove and push has a named counterpart or a recorded reason it does
   not (the plan of the engine lists them).

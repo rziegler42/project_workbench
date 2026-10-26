@@ -86,3 +86,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-25-adopt-an-existing-repository-without-editing-it](2026-10-25-adopt-an-existing-repository-without-editing-it.md) | Adopt an existing repository without editing it | Accepted by the owner on 2026-10-25 |
 | [2026-10-25-module-commands-and-the-approver](2026-10-25-module-commands-and-the-approver.md) | What prompts for the module commands, so the owner's approver can review them | Accepted by the owner on 2026-10-25 |
 | [2026-10-25-approver-coverage-for-the-module-commands](2026-10-25-approver-coverage-for-the-module-commands.md) | How the approver comes to review the module commands | Accepted by the owner on 2026-10-25 (option 1a) |
+| [2026-10-25-describe-interface-for-action-review](2026-10-25-describe-interface-for-action-review.md) | A module that owns an action reports what it would do through a read-only `describe` command | Proposed |
