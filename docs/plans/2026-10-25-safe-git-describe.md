@@ -319,7 +319,7 @@ launches there; `describes` is a filter there, as the spec says. Left for Increm
 
 ### Increment C — The output builder and `describe remove`
 
-Done, not yet committed at the time of writing. Changed, all in `packages/workbench/safe-git/`: `helper/safe-git`
+Committed as `8c64008`. Changed, all in `packages/workbench/safe-git/`: `helper/safe-git`
 (`Refused` takes an optional `code`, and every refusal on the removal path carries one, by class and never read from the
 message; `Target` gains `size` and `_scan` counts bytes; the shapes `ls-files -z -- <paths>` and `check-ignore -q -- <path>`;
 a "describe" section with `build_description`, `render_description`, `describe_remove` and `command_describe`),
@@ -354,4 +354,37 @@ line now lists `describe`, which no test pins; the marker test covers some confi
 `.gitattributes` filter or `diff.external`, and the two new calls start no program by reading. Not checked by the reviewer:
 it ran nothing and did not read the builder tests.
 
-Not done: D to G.
+### Increment D — Share the commit validation and give the commit refusals and scalar facts
+
+Done, not yet committed at the time of writing. Changed, in `packages/workbench/safe-git/`: `helper/safe-git` (every
+refusal on the commit path through `git diff --check` carries a code by class; `command_commit` is split into `Checked`
+and `check_commit(argv, cwd, note=None)`, which the real command calls with no `note` and continues from unchanged;
+`describe_commit` calls it with a `note` that records each fact as it becomes known, so a refusal still reports what was
+found before it; `_given_commit` reads a refused command line as `parse_commit` reads it; `DESCRIBERS["commit"]`) and the
+new `tests/test_safegit_describe_commit.py` (43 tests). `commit` is not yet in `describes`, as the plan says. The same
+landing procedure as C was used (scratch copy, one `cp`, the owner's `release-approvals`), so
+`workbench/shipped_approvals/packages/` holds the new records, which the commit includes.
+
+Verification as run: the 93 commit tests passed before the change and pass after, with the same count (the guard); the new
+tests failed first (`describe commit` unknown), then passed; `python3 -B -W error tests/run_all.py` ran 4357 tests OK
+(4314 before, 43 added); `git diff --check`, `doccheck`, `refcheck` and `wb check` clean. The marker test (a repository with
+hooks, filters and many program-selecting settings) finds no marker for `describe commit`.
+
+Choices where the spec is open, for the owner: `expected_head` is the string as given once it is valid, so the string `none`
+for `none` (and `head` is null on a branch with no commit), and null before it is valid; after a usage refusal `subject`,
+`body`, `trailers` and `expected_head` stay null or empty even when given, and only `leave_other_staged`, `path_count` and
+`requested_paths` are copies (the spec names those); `diff --check` runs with `GIT_OPTIONAL_LOCKS=0`, in the shared
+function, so the real `commit` runs it that way too, which cannot matter because `git add` follows and takes its own lock.
+
+Review: the `reviewer` agent, two exchanges. The first found one blocking problem and three smaller ones, all applied: the
+facts `path_count` and `leave_other_staged` were read by splitting at the first `--`, but a value such as `--subject --`
+is legal, so an `ok: true` object could disagree with the request (now taken from the parsed request, and from a scan that
+mirrors the parser only for a usage refusal); a failure to open the root was coded `setting_invalid` (now
+`repository_unreadable`); any nonzero exit of `git diff --check` was coded `whitespace_errors` (now only exit 1 or 2);
+`git diff` could refresh the index (now `GIT_OPTIONAL_LOCKS=0`). The second found no blocking finding and confirmed each
+fix. Left open, not blocking: the message of the whitespace refusal still says "whitespace errors" for a git failure (the
+real command's text, kept unchanged); `_given_commit` is a second copy of the `parse_commit` loop and could drift (a test
+guards it; a comment in `parse_commit` would help); the test for the index checks the variable is set and not that git
+leaves the file alone (the snapshot test covers the file). Not checked by the reviewer: it ran nothing.
+
+Not done: E to G.

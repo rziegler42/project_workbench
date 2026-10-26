@@ -512,16 +512,16 @@ def parse_commit(argv):
     while index < len(argv) and argv[index] != "--":
         option = argv[index]
         if option not in _COMMIT_OPTIONS:
-            raise Refused("unknown option: %s" % shown(option, 40))
+            raise Refused("unknown option: %s" % shown(option, 40), code="usage")
         if option != "--trailer" and option in seen:
-            raise Refused("%s was given more than once" % option)
+            raise Refused("%s was given more than once" % option, code="usage")
         seen.add(option)
         if option == "--leave-other-staged":
             request.leave_other_staged = True
             index += 1
             continue
         if index + 1 >= len(argv):
-            raise Refused("%s needs a value" % option)
+            raise Refused("%s needs a value" % option, code="usage")
         value = argv[index + 1]
         index += 2
         if option == "--expected-head":
@@ -534,15 +534,15 @@ def parse_commit(argv):
             request.trailers.append(value)
     if index >= len(argv):
         raise Refused("usage: safe-git commit --expected-head <hash> --subject <text> [--body <text>] "
-                      "[--trailer 'Key: value']... [--leave-other-staged] -- <path>...")
+                      "[--trailer 'Key: value']... [--leave-other-staged] -- <path>...", code="usage")
     request.paths = argv[index + 1:]
     for required, label in ((request.expected, "--expected-head"), (request.subject, "--subject")):
         if required is None:
-            raise Refused("%s is required" % label)
+            raise Refused("%s is required" % label, code="usage")
     if not request.paths:
-        raise Refused("name at least one path after --")
+        raise Refused("name at least one path after --", code="usage")
     if len(request.paths) > MAX_PATHS:
-        raise Refused("more than %d paths" % MAX_PATHS)
+        raise Refused("more than %d paths" % MAX_PATHS, code="usage")
     return request
 
 
@@ -552,7 +552,8 @@ def validate_expected(value):
     if value == "none":
         return None
     if _HEX40.match(value) is None:
-        raise Refused("--expected-head must be the full 40-digit lower-case hash of HEAD, or none")
+        raise Refused("--expected-head must be the full 40-digit lower-case hash of HEAD, or none",
+                      code="expected_head_invalid")
     return value
 
 
@@ -560,15 +561,17 @@ def validate_message(request):
     """Refuse a subject, body or trailer that git or a reader would read differently from what was given."""
     subject = request.subject
     if not subject.strip() or len(subject) > MAX_SUBJECT or any(c in subject for c in "\0\r\n"):
-        raise Refused("the subject must be one non-empty line of at most %d characters" % MAX_SUBJECT)
+        raise Refused("the subject must be one non-empty line of at most %d characters" % MAX_SUBJECT,
+                      code="subject_invalid")
     if request.body is not None:
         if "\0" in request.body or len(request.body) > MAX_BODY or not request.body.strip():
-            raise Refused("the body must be non-empty text without NUL, at most %d characters" % MAX_BODY)
+            raise Refused("the body must be non-empty text without NUL, at most %d characters" % MAX_BODY,
+                          code="body_invalid")
     if len(request.trailers) > MAX_TRAILERS:
-        raise Refused("more than %d trailers" % MAX_TRAILERS)
+        raise Refused("more than %d trailers" % MAX_TRAILERS, code="trailer_invalid")
     for trailer in request.trailers:
         if len(trailer) > MAX_TRAILER or _TRAILER.match(trailer) is None:
-            raise Refused("a trailer must be one 'Key: value' line: %s" % shown(trailer, 60))
+            raise Refused("a trailer must be one 'Key: value' line: %s" % shown(trailer, 60), code="trailer_invalid")
 
 
 def _folded(text):
@@ -580,16 +583,17 @@ def _folded(text):
     if any(unicodedata.category(c) in ("Mn", "Me", "Co", "Cn") or c in _BLANKS
            or (unicodedata.category(c) == "Cc" and c not in "\n\t") for c in text):
         raise Refused("the message has a control, combining, private-use or invisible character; "
-                      "write it with plain letters")
+                      "write it with plain letters", code="message_character_refused")
     text = "".join(c for c in text if unicodedata.category(c) != "Cf" and c not in _FILLERS)
     text = text.casefold().replace("\u00b7", "")   # NFKC reads a letter with a middle dot as the letter and a dot
     for c in text:
         if c.isalpha() and ord(c) not in _CONFUSABLE and any(low <= ord(c) <= high for low, high in _PHONETIC):
-            raise Refused("a letter in the message looks like another letter: %s" % shown(c, 10))
+            raise Refused("a letter in the message looks like another letter: %s" % shown(c, 10),
+                          code="message_character_refused")
     for word in re.findall(r"\w+", text.replace("\u03bc", "u")):      # a micro sign is not a look-alike
         scripts = {_script(c) for c in word if c.isalpha()}
         if "LATIN" in scripts and scripts & _LOOKALIKE_SCRIPTS:
-            raise Refused("a word in the message mixes scripts: %s" % shown(word, 40))
+            raise Refused("a word in the message mixes scripts: %s" % shown(word, 40), code="message_character_refused")
     text = "".join(_base_letter(c) for c in text.translate(_CONFUSABLE))
     text = "".join("-" if unicodedata.category(c) == "Pd" or c == "\u2212" else c for c in text)
     text = "".join(c for c in unicodedata.normalize("NFKD", text) if unicodedata.category(c) != "Mn")
@@ -597,7 +601,8 @@ def _folded(text):
         scripts = {"LATIN" if c.isascii() else _script(c) for c in token
                    if (c.isascii() and c.isalpha()) or (not c.isascii() and (c.isalpha() or unicodedata.category(c)[0] == "N"))}
         if len(scripts - {"CJK"}) > 1:
-            raise Refused("a word in the message mixes scripts: %s" % shown(token, 40))
+            raise Refused("a word in the message mixes scripts: %s" % shown(token, 40),
+                          code="message_character_refused")
     text = re.sub(r"[^\S\n]+", " ", text)
     return re.sub(r":[ \t]*\n[ \t]*", ": ", re.sub(r"\n[ \t]+", " ", text))
 
@@ -608,7 +613,8 @@ def refuse_attribution(request):
     for text in fields + ["\n".join(fields)]:
         folded = _folded(text)
         if any(pattern.search(folded) for pattern in _ATTRIBUTION):
-            raise Refused("the message carries tool attribution; this project does not allow it")
+            raise Refused("the message carries tool attribution; this project does not allow it",
+                          code="attribution_refused")
 
 
 def message_paragraphs(request):
@@ -640,7 +646,8 @@ def validate_paths(root, paths, entries):
     try:
         tree = safefs.Root(root, "repository")
     except safefs.SafeFsError as exc:
-        raise Refused("the repository cannot be read safely: %s" % display.ascii_text(str(exc))[:200])
+        raise Refused("the repository cannot be read safely: %s" % display.ascii_text(str(exc))[:200],
+                      code="repository_unreadable")
     with tree:
         def listing(directory):
             if directory not in cache:
@@ -654,25 +661,27 @@ def validate_paths(root, paths, entries):
                 if path.startswith("-") or any(c in path for c in "*?[]"):
                     raise Refused("path refused (a glob or an option): %s" % label, code="path_refused")
                 if path.casefold() in seen:
-                    raise Refused("path named twice (or two spellings of one file): %s" % label)
+                    raise Refused("path named twice (or two spellings of one file): %s" % label, code="path_duplicate")
                 seen.add(path.casefold())
                 if entries.get(path, ("", "0"))[1] != "0":
-                    raise Refused("path has an unresolved merge state: %s" % label)
+                    raise Refused("path has an unresolved merge state: %s" % label, code="path_unmerged")
                 present = False
                 for depth in range(len(parts)):
                     found = listing("/".join(parts[:depth]))
                     if found is None:
                         break
                     if depth and any(name.casefold().rstrip(" .") == ".git" for name, _ in found):
-                        raise Refused("path lies inside a nested repository: %s" % label)
+                        raise Refused("path lies inside a nested repository: %s" % label,
+                                      code="path_in_nested_repository")
                     kind = dict(found).get(parts[depth])
                     if kind is None:
                         break
                     if kind != ("dir" if depth < len(parts) - 1 else "file"):
-                        raise Refused("path goes through, or is, a %s and not a file: %s" % (kind, label))
+                        raise Refused("path goes through, or is, a %s and not a file: %s" % (kind, label),
+                                      code="path_not_a_file")
                     present = depth == len(parts) - 1
                 if not present and path not in entries:
-                    raise Refused("path does not exist and is not tracked: %s" % label)
+                    raise Refused("path does not exist and is not tracked: %s" % label, code="path_unknown")
                 if not present:
                     # A tracked name the listing did not show may still be there under another spelling
                     # of the same name (Unicode normalisation): it must be a plain file or nothing.
@@ -681,11 +690,13 @@ def validate_paths(root, paths, entries):
                     except FileNotFoundError:
                         continue
                     except OSError as exc:
-                        raise Refused("path refused: %s" % display.ascii_text(exc.strerror or "error"))
+                        raise Refused("path refused: %s" % display.ascii_text(exc.strerror or "error"),
+                                      code="path_refused")
                     if not stat.S_ISREG(mode):
-                        raise Refused("path is a link or not a file under another spelling: %s" % label)
+                        raise Refused("path is a link or not a file under another spelling: %s" % label,
+                                      code="path_not_a_file")
             except safefs.SafeFsError as exc:
-                raise Refused("path refused: %s" % display.ascii_text(str(exc))[:200])
+                raise Refused("path refused: %s" % display.ascii_text(str(exc))[:200], code="path_refused")
     return paths
 
 
@@ -699,7 +710,7 @@ def indexed(root):
         meta, _, path = entry.partition("\t")
         fields = meta.split(" ")
         if len(fields) != 3:
-            raise Refused("git listed the index in a form this helper does not read")
+            raise Refused("git listed the index in a form this helper does not read", code="index_unreadable")
         found[path] = (fields[0], fields[2])
     return found, listing
 
@@ -711,7 +722,7 @@ def refuse_operation_in_progress(root):
     for name in ("MERGE_HEAD", "REVERT_HEAD", "CHERRY_PICK_HEAD", "rebase-merge", "rebase-apply", "sequencer"):
         if os.path.lexists(os.path.join(directory, name)):
             raise Refused("a %s is in progress in this repository; finish or abort it by hand"
-                          % name.replace("_HEAD", "").replace("-", " ").lower())
+                          % name.replace("_HEAD", "").replace("-", " ").lower(), code="operation_in_progress")
 
 
 def _short(commit):
@@ -749,14 +760,17 @@ def tip(root):
         return found.stdout.strip()
     if _unborn_branch(root) is None:
         raise Refused("HEAD names neither a commit nor a branch without commits whose name this helper reads "
-                      "(ASCII letters, digits and . _ - /); refusing to act")
+                      "(ASCII letters, digits and . _ - /); refusing to act", code="head_unreadable")
     return None
 
 
-def _expect_head(root, expected, when):
+def _expect_head(root, expected, when, note=None):
     now = tip(root)
+    if note is not None:
+        note("head", now)
     if now != expected:
-        raise Refused("HEAD moved %s: expected %s, found %s" % (when, _short(expected), _short(now)))
+        raise Refused("HEAD moved %s: expected %s, found %s" % (when, _short(expected), _short(now)),
+                      code="head_mismatch")
 
 
 def _unstage(root, paths, expected):
@@ -775,50 +789,95 @@ def attribution_allowed(root):
     ``{"format": 1, "attribution": "refuse" | "allow"}``, and a link or other non-file at that path, stop
     the commit rather than read as either."""
     try:
-        with safefs.Root(root, "repository") as tree:
+        tree = safefs.Root(root, "repository")
+    except safefs.SafeFsError as exc:
+        raise Refused("%s cannot be read: %s" % (SETTING, display.ascii_text(str(exc))[:200]),
+                      code="repository_unreadable")
+    try:
+        with tree:
             data = tree.read_if_present(SETTING, MAX_SETTING)
     except safefs.SafeFsError as exc:
-        raise Refused("%s cannot be read: %s" % (SETTING, display.ascii_text(str(exc))[:200]))
+        raise Refused("%s cannot be read: %s" % (SETTING, display.ascii_text(str(exc))[:200]), code="setting_invalid")
     if data is None:
         return False
     try:
         value = jsonstrict.parse_object(data, MAX_SETTING)
     except ValueError as exc:
-        raise Refused("%s is not valid: %s" % (SETTING, display.ascii_text(str(exc))[:100]))
+        raise Refused("%s is not valid: %s" % (SETTING, display.ascii_text(str(exc))[:100]), code="setting_invalid")
     if set(value) != {"format", "attribution"} or type(value["format"]) is not int or value["format"] != 1 \
             or value["attribution"] not in ("refuse", "allow"):
-        raise Refused('%s must be {"format": 1, "attribution": "refuse" or "allow"}' % SETTING)
+        raise Refused('%s must be {"format": 1, "attribution": "refuse" or "allow"}' % SETTING, code="setting_invalid")
     return value["attribution"] == "allow"
 
 
-def command_commit(argv, cwd, out, err):
+class Checked:
+    """What the checks of `commit` established: the request, the repository root, the staged paths and the index
+    listing the commit will be compared with."""
+
+    def __init__(self, request, root, staged, before):
+        self.request, self.root, self.staged, self.before = request, root, staged, before
+
+
+def check_commit(argv, cwd, note=None):
+    """Every check `commit` makes before it changes anything, through `git diff --check` of the named paths, in order.
+    Returns a ``Checked`` or raises ``Refused``. `describe commit` calls it too, with `note(name, value)`, which is told
+    each fact the moment it is known, so a refusal still reports what was found before it."""
+    def told(name, value):
+        if note is not None:
+            note(name, value)
+
     request = parse_commit(argv)
-    request.expected = validate_expected(request.expected)
+    told("leave_other_staged", request.leave_other_staged)
+    told("path_count", len(request.paths))
+    told("requested_paths", list(request.paths))
+    told("subject", request.subject)
+    told("trailers", list(request.trailers))
+    told("body", request.body)
+    given = request.expected
+    request.expected = validate_expected(given)
+    told("expected_head", given)
     validate_message(request)
     root = git_root(cwd)
-    if not attribution_allowed(root):
+    allowed = attribution_allowed(root)
+    told("attribution_allowed", allowed)
+    if not allowed:
         refuse_attribution(request)
     found = repo_program_findings(root)
+    told("program_findings", list(found))
     if found:
         raise Refused("this repository would make git run a program (%s); commit by hand"
-                      % ", ".join(found[:10]))
+                      % ", ".join(found[:10]), code="repo_selects_program")
     refuse_operation_in_progress(root)
     paths = request.paths
     named = set(paths)
-    _expect_head(root, request.expected, "before the commit was started")
+    _expect_head(root, request.expected, "before the commit was started", note)
     entries, before = indexed(root)
     validate_paths(root, paths, entries)
+    told("paths", list(paths))
     staged = names(root, cached=True)
+    told("staged_paths", sorted(staged))
     if staged and not request.leave_other_staged:
         raise Refused("the index already holds staged changes (%d path(s)); use --leave-other-staged to keep "
-                      "them out of this commit" % len(staged))
+                      "them out of this commit" % len(staged), code="index_has_staged_changes")
     if staged & named:
-        raise Refused("a named path is already staged: %s" % shown(sorted(staged & named)[0], 80))
+        raise Refused("a named path is already staged: %s" % shown(sorted(staged & named)[0], 80),
+                      code="path_already_staged")
+    # Optional locks are off so that comparing the work tree with the index does not refresh the index file.
     problems = run(["git", "diff", "--check", "--no-ext-diff", "--no-textconv", "--"] + paths, root,
-                   check=False)
+                   check=False, env_extra={"GIT_OPTIONAL_LOCKS": "0"})
     if problems.returncode:
+        # Git exits 2 (older versions 1) when it finds whitespace errors, and 128 when it fails.
         raise Refused("git diff --check finds whitespace errors in the named paths: %s"
-                      % display.ascii_text(problems.stdout.strip())[:300])
+                      % display.ascii_text(problems.stdout.strip())[:300],
+                      code="whitespace_errors" if problems.returncode in (1, 2) else "repository_unreadable")
+    return Checked(request, root, staged, before)
+
+
+def command_commit(argv, cwd, out, err):
+    checked = check_commit(argv, cwd)
+    request, root, staged, before = checked.request, checked.root, checked.staged, checked.before
+    paths = request.paths
+    named = set(paths)
     try:
         _expect_head(root, request.expected, "before staging")
         run(["git", "add", "--"] + paths, root)
@@ -997,7 +1056,8 @@ def _parent_of(root_fd, parts, device, seen):
             os.close(fd)
             fd = step
             if _device(os.fstat(fd)) != device:
-                raise Refused("the path crosses into another filesystem at %s" % shown(part, 60), code="other_filesystem")
+                raise Refused("the path crosses into another filesystem at %s" % shown(part, 60),
+                              code="other_filesystem")
             info = os.fstat(fd)
             if (info.st_dev, info.st_ino) not in seen:
                 if _holds_repository(_entries(fd)):
@@ -1088,7 +1148,8 @@ def plan_removal(root_fd, paths, recursive):
                     raise Refused("the directory changed while it was being checked: %s" % label, code="target_changed")
                 try:
                     if not _same(os.fstat(child), info):
-                        raise Refused("the directory changed while it was being checked: %s" % label, code="target_changed")
+                        raise Refused("the directory changed while it was being checked: %s" % label,
+                                      code="target_changed")
                     counter = [0, 0]
                     try:
                         _scan(child, device, 1, counter)
@@ -1171,7 +1232,8 @@ def command_remove(argv, cwd, out, err):
     try:
         root_fd = safefs.open_root(root, "repository")
     except safefs.SafeFsError as exc:
-        raise Refused("the repository cannot be read safely: %s" % display.ascii_text(str(exc))[:200])
+        raise Refused("the repository cannot be read safely: %s" % display.ascii_text(str(exc))[:200],
+                      code="repository_unreadable")
     try:
         targets = plan_removal(root_fd, paths, recursive)
         listed = [{"path": t.path, "kind": t.kind} for t in targets]
@@ -1360,7 +1422,44 @@ def describe_remove(argv, cwd):
     return errors, [(name, facts[name]) for name in _REMOVE_FACTS]
 
 
-DESCRIBERS = {"remove": describe_remove}
+_COMMIT_FACTS = ("head", "expected_head", "leave_other_staged", "path_count", "subject", "trailers", "body",
+                 "attribution_allowed", "program_findings", "staged_paths", "requested_paths", "paths")
+
+
+def _given_commit(argv):
+    """``(leave_other_staged, paths)`` of a command line that `parse_commit` refused, read as it reads them: an option
+    that takes a value takes the next word whatever it is, so that word may be ``--`` or another option. A command
+    line it accepts is reported from its request instead."""
+    leave, index = False, 0
+    while index < len(argv) and argv[index] != "--":
+        if argv[index] == "--leave-other-staged":
+            leave, index = True, index + 1
+        elif argv[index] in _COMMIT_OPTIONS and index + 1 < len(argv):
+            index += 2
+        else:
+            index += 1
+    return leave, ([] if index >= len(argv) else argv[index + 1:])
+
+
+def describe_commit(argv, cwd):
+    """``(errors, facts)`` of `commit <argv>`: the checks the real command makes through `git diff --check`, and the
+    scalar and list facts they establish. Nothing is staged and nothing is committed."""
+    leave, given = _given_commit(argv)
+    facts = {"head": None, "expected_head": None, "leave_other_staged": leave,
+             "path_count": len(given), "subject": None, "trailers": [], "body": None,
+             "attribution_allowed": None, "program_findings": [], "staged_paths": [],
+             "requested_paths": given, "paths": []}
+    errors = []
+    try:
+        check_commit(argv, cwd, note=facts.__setitem__)
+    except Refused as exc:
+        if exc.code is None:
+            raise      # a refusal with no code has no place in the tables: stop with no object, as a decline
+        errors.append((exc.code, str(exc)))
+    return errors, [(name, facts[name]) for name in _COMMIT_FACTS]
+
+
+DESCRIBERS = {"commit": describe_commit, "remove": describe_remove}
 
 
 def command_describe(argv, cwd, out, err):
