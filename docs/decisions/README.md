@@ -78,7 +78,7 @@ List every record, including rejected and superseded ones.
 | [2026-10-22-model-calls-go-through-vendor-bridges](2026-10-22-model-calls-go-through-vendor-bridges.md) | Model calls go through thin vendor bridges; review and action review are separate engines | Accepted |
 | [2026-10-22-installer-records-plan-approval-module-computes-region](2026-10-22-installer-records-plan-approval-module-computes-region.md) | The installer records and gates plan approval; the process module's pinned helper computes the hashed region | Accepted |
 | [2026-10-22-installer-owns-the-edit-gate](2026-10-22-installer-owns-the-edit-gate.md) | The installer owns the edit gate and its hook; the process module names what is under way | Accepted by the owner on 2026-10-23 |
-| [2026-10-23-delegated-plan-approval](2026-10-23-delegated-plan-approval.md) | Delegated plan approval is written by the installer, from a sealed review of the same bytes | Accepted by the owner on 2026-10-23 |
+| [2026-10-23-delegated-plan-approval](2026-10-23-delegated-plan-approval.md) | Delegated plan approval is written by the installer, from a sealed review of the same bytes | Accepted by the owner on 2026-10-23; decision 6 superseded by 2026-10-26-per-command-permission-levels |
 | [2026-10-23-one-owner-per-skill-name](2026-10-23-one-owner-per-skill-name.md) | A skill name has one owner module; a practice that spans modules is split into skills | Accepted |
 | [2026-10-24-project-guarantees-a-floor](2026-10-24-project-guarantees-a-floor.md) | A project guarantees a floor under any global setup, not identical behavior | Accepted |
 | [2026-10-24-declared-agent-confinement](2026-10-24-declared-agent-confinement.md) | An agent's limits are declared as data and enforced by the installer | Accepted |
@@ -87,3 +87,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-25-module-commands-and-the-approver](2026-10-25-module-commands-and-the-approver.md) | What prompts for the module commands, so the owner's approver can review them | Accepted by the owner on 2026-10-25 |
 | [2026-10-25-approver-coverage-for-the-module-commands](2026-10-25-approver-coverage-for-the-module-commands.md) | How the approver comes to review the module commands | Accepted by the owner on 2026-10-25 (option 1a) |
 | [2026-10-25-describe-interface-for-action-review](2026-10-25-describe-interface-for-action-review.md) | A module that owns an action reports what it would do through a read-only `describe` command | Accepted by the owner on 2026-10-25 |
+| [2026-10-26-per-command-permission-levels](2026-10-26-per-command-permission-levels.md) | Each owner-run and checkpointed command gets one permission level in the owner's personal settings | Accepted by the owner on 2026-10-26 |

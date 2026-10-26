@@ -1,6 +1,6 @@
 # Delegated plan approval is written by the installer, from a sealed review of the same bytes
 
-Status: Accepted by the owner on 2026-10-23
+Status: Accepted by the owner on 2026-10-23; decision 6 superseded by 2026-10-26-per-command-permission-levels
 Date: 2026-10-23
 
 ## Context
