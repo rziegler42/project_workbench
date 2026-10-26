@@ -166,7 +166,8 @@ labelled set, not against the approver.
 
 1. **Find where the approver goes wrong.** Its verdict log holds the rule, the verdict, the failed checks and a
    command hash, never command text. Counting declines by failed check shows which checks cause them. This needs
-   no new data and is read-only. Plan 1 does it first, so that the engine is not built to repeat those checks.
+   no new data and is read-only. Plan 1 does it first, so that the engine is not built to repeat those checks. The
+   count is in the Evidence section ("The approver's declines by failed check").
 2. **Build a labelled set.** A collector records, for each prompted command from now on, the `describe` output (the
    command text, the facts, the engine's verdict) in a local, untracked file, and the owner marks each one right
    or wrong. A new file is needed because the old log has no text to label. The facts can contain diffs, and a
@@ -299,3 +300,52 @@ Each is a plan of its own, in this order. None exists, and the owner approves ea
   `collect_remove` call the global `claude-workflow` program as a library. Read, not run.
 - The module sides were read in `safe-git.md` (`commit`, `remove`, `push-check`) and `model-bridge.md`.
 - Not run: any `describe` command, any engine, any hook. The proposals are the author's.
+
+### The approver's declines by failed check
+
+Provenance: role USER, item the approver's verdict log (`verdicts.jsonl`), retrieved 2026-10-25, 668,545 bytes, SHA-256
+`2a8e8ce7988de449be738a46b876436f8b9343955f953574364cd4a67dd3e095`, recomputed after the read and equal. A scratch
+script ran with Python 3.15.0 (`-I -B`), read the file in binary mode and printed counts only; no command digest and no
+free text was printed or copied. Plan `2026-10-25-describe-interface-documented`, Increment A.
+
+The log has 1,019 rows (none unparsed), first dated 2026-10-16 and last 2026-10-26 (timestamps as logged; their timezone was not checked). By verdict:
+662 approve, 336 decline, 21 no verdict (20 Codex timeouts, 1 collector error). Every decline carries a non-empty list
+of failed checks. A decline has one of two reasons: 146 failed a deterministic check before Codex was asked, and 190
+were Codex declines.
+
+| Rule | Approve | Decline | No verdict |
+|---|---|---|---|
+| `claude-workflow-commit` | 420 | 194 | 12 |
+| `git-push` | 107 | 58 | 6 |
+| `claude-workflow-remove` | 27 | 49 | 1 |
+| `ask-codex-archive` (retired) | 72 | 10 | 2 |
+| `remote-runner-submit` | 24 | 8 | 0 |
+| `safe-git-commit` | 7 | 9 | 0 |
+| `remote-runner-fetch` | 3 | 8 | 0 |
+| `remote-runner-cancel` | 2 | 0 | 0 |
+
+Failed checks over all declines (a decline can fail several, so the counts add up to more than 336):
+`no_secret_lines` 102, `no_reviewer_directed_text` 102, `targets_look_disposable` 48, `change_is_safe_in_itself` 44,
+`facts_complete` 26, `message_matches_change` 10, `status_ok` 9, `paths_valid` 9, `fetch_targets_safe` 8,
+`head_matches` 7, `profile_command_is_expected` 5, and 11 more checks with 3 or fewer each.
+
+By the actions this design keeps:
+
+- Commit (`claude-workflow-commit` and `safe-git-commit`): `no_reviewer_directed_text` 99, `no_secret_lines` 52,
+  `change_is_safe_in_itself` 42, `facts_complete` 11, `message_matches_change` 10, `paths_valid` 9, `head_matches` 7,
+  `scope_is_coherent` 3, `staging_state_ok` 2.
+- Remove (`claude-workflow-remove`): `targets_look_disposable` 48, `scope_is_narrow` 3,
+  `preview_matches_arguments` 1.
+- Push (`git-push`): `no_secret_lines` 47, `facts_complete` 15, `no_reviewer_directed_text` 3, `outgoing_trusted` 3,
+  `change_is_safe_in_itself` 2, and `outgoing_known`, `push_target_known`, `remote_is_configured`,
+  `remote_transport_safe` 2 each, `destination_is_appropriate` 1.
+
+Limits. A decline in the log is not a false decline: no label exists, so the count says which checks cause declines
+and not which were wrong. The log grows, so these figures hold as of the retrieval date. The `ask-codex-archive` rows
+belong to an action this design retires. A command whose rule does not load is not reviewed at all, so the log cannot
+show it (see "Non-goals and anti-goals"). The `reason_text` field was not read.
+
+What it shows: `no_reviewer_directed_text` (99) and `no_secret_lines` (52) lead the commit declines;
+`no_secret_lines` (47) leads the push declines, with `facts_complete` (15) second; and `targets_look_disposable` (48)
+is nearly all of the removal declines. They are the first to label in the shadow period. It does not bear on the provisional 10% bound, because the bound concerns false declines, which only the
+owner's labels measure; the bound is unchanged and remains the owner's to tighten.

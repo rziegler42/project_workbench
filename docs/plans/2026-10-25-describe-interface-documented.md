@@ -242,4 +242,19 @@ Round 3 was run after these edits, so the final text was reviewed. A review is n
 
 ## Result
 
-Empty until work starts.
+### Increment A — done, not committed
+
+Read the approver's program to find its verdict log, recorded its size and SHA-256, and ran a scratchpad script
+(`python3 -I -B`, binary read, counts only). The log has the failed checks, so the plan did not stop. The spec's
+Evidence section now holds "The approver's declines by failed check": 1,019 rows, 662 approve, 336 decline, 21 no
+verdict; declines by rule and by failed check, for commit, remove and push; provenance and limits. The log's SHA-256
+was equal after the read. One sentence in "Accuracy and cutover" now points to the count. The 10% bound is unchanged.
+Changed path: `docs/specs/action-review.md`.
+
+Verification as run: `git diff --check`, `wb check`, `wb run code-work check` (47 plans), `doccheck` and `refcheck`
+were all clean before the review fixes; they are rerun before the commit. Not run: the test suite (no code changed).
+
+Review: the `reviewer` agent, one round, no blocking finding. Three non-blocking: the summary sentence overstated
+`no_reviewer_directed_text` for push (applied: the sentence now gives the per-action leaders); the log's last date
+is a day after the retrieval date (applied: the spec says the timezone was not checked); the Python version
+(checked: it is the printed output of `python3 -I -B -V`, 3.15.0). Nothing remains open.
