@@ -692,3 +692,29 @@ plan stops here and is revised, and `ask` does not ship for `approve-plan` until
 `block`; nothing was flipped. The probe also shows two things that are not defects: the level log recorded the run correctly,
 and the same spelling is stopped when `approve-plan` is at `block` (the command still needs a terminal there). The finding is
 the one the decision named as HIGH-1, now demonstrated rather than read. Increment G is not started.
+
+Committed as `174d62f` (Revision 2).
+
+### Increment I — Trial: does a Bash hook stop a wrapped command, in auto mode (step 0 done; stopped for the owner)
+
+Step 0, 2026-10-26: the decision `docs/decisions/2026-10-26-ask-level-command-gate.md` was drafted as `Proposed` with the
+`draft-decision` skill and listed in `docs/decisions/README.md`. It states the demonstrated bypass, the command gate, what stays
+a limit (run-time constructed words, false blocks, a hook is not a boundary), the alternatives and the costs (including that
+the Claude module's layout changes and an existing clone cannot be re-attached). Only the owner accepts it. The trial (step 1)
+is described to the owner next and is not run by the agent. Nothing else was changed.
+
+Step 1 and 2, 2026-10-26: the trial was run by the owner in `/tmp/gate-trial` with Claude Code 2.1.311, repository head `174d62f`
+(the agent ran none of it, and read the hook log afterwards). The evidence note is in `docs/specs/harness-modules.md`, "A Bash
+hook in auto and default mode". Observed, in auto mode unless stated: a hook that exits 0 left the `ask` rule in force
+(prompted, in auto and in default mode); a hook that exits 2 stopped `sh -c`, `bash -c` and `env` with no prompt (and `bash -c`
+in default mode); `echo probe""word`, whose word the hook cannot see, ran with no prompt; `echo hello` ran. The log shows the
+hook saw all eight commands that ran. A first attempt with a broken script blocked everything and is not counted. Both
+assumptions of the command gate held, so the stop condition did not trigger and the plan continues. The run that passed
+unchecked is exactly the stated limit of the decision `2026-10-26-ask-level-command-gate`. Not tested: a missing script or
+`wb` (exit 127), a JSON answer, the workbench-rendered hook, a subagent's call. The decision is still `Proposed`; Increment J
+needs it `Accepted`. Review: one round by the `reviewer` agent (cap 3), recommendation "no blocking findings"; it saw a summary and not the owner's pastes.
+Applied: the note's title and "Not tested" list now say that default mode got two of the six cases and that the missing-script
+case was not run (findings 1, 5); "eight entries for the eight runs" is softened (4); the decision's Evidence now records the
+trial and lists what it does not show (6, 7). Not applied: findings 2 and 3 (the verbatim hook message, what the prompt told
+the agent, and the hand check of the rewritten script are in the owner's pastes); the note attributes the script check to the
+owner. Final verification: `git diff --check` and the document checks.

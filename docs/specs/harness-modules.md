@@ -341,6 +341,41 @@ workbench repository head was `1a731fa`. One run of each case, so each result is
   prompt with the remote channel closed or unattended, a rule rendered by the workbench's attach, and any command other than
   `echo`.
 
+### A Bash hook with an exit code and an `ask` rule (Claude Code 2.1.311, 2026-10-26)
+
+Recorded by increment I of plan `2026-10-26-command-permission-levels`. Method, run by the owner and reported by the owner: a
+throwaway git folder (`/tmp/gate-trial`) whose local settings held a `PreToolUse` hook for the `Bash` tool, `python3
+/tmp/gate-trial/hook.py || exit 2`, and the rule `ask: ["Bash(echo probeword-ok)"]`. The script appended each command it
+received to a log and exited 2 when the command contained the word `probeword`, unless it was exactly `echo probeword-ok`; it
+exited 0 otherwise. Repository head `174d62f`. The prompt told the agent that the owner was testing a hook on purpose, so that it
+would run the command it was given. One run of each case, so each result is a single observation.
+
+- **A hook that exits 0 leaves the `ask` rule in force.** `echo probeword-ok` was allowed by the hook and still prompted, in auto
+  mode ("Ask rule Bash(echo probeword-ok) overrides auto mode for this command") and in default mode ("Permission rule
+  Bash(echo probeword-ok) requires confirmation").
+- **A hook that exits 2 stopped the command before it ran, with no prompt, in auto mode and in default mode.** In auto mode:
+  `sh -c 'echo probeword'`, `bash -c 'echo probeword'` and `env echo probeword`. In default mode: `bash -c 'echo probeword'`. The
+  agent saw the hook's own message ("PreToolUse:Bash hook error: [python3 /tmp/gate-trial/hook.py || exit 2]: blocked by the
+  trial hook: ..."). The submitted text of the default-mode command held a newline from the terminal's line wrap, and it was
+  blocked all the same.
+- **A word the hook could not see got through.** `echo probe""word` (the shell joins it to `probeword`) was allowed by the hook,
+  ran and printed `probeword`, with no prompt, in auto mode. This is the case a text match cannot stop.
+- **A command with no word ran** (`echo hello`, auto mode), with no prompt.
+- **The log held eight entries for the eight runs reported**, so every command the agent ran reached the hook; the entries
+  were read afterwards by the agent and not compared run by run with the owner's sessions.
+- **Earlier runs with a broken script.** A first attempt had a stray leading space in `hook.py`, so the script failed with
+  `IndentationError` on every call; with `|| exit 2` every Bash command, `echo hello` included, was blocked. The owner did not
+  confirm the mode of those runs, so they are not counted as auto-mode evidence, and the missing-script case of the plan was not
+  run (a crash that `|| exit 2` turns into 2 is a nearby observation, not exit 127). The owner then rewrote the script and
+  pasted its compile and its two exit codes (0 for `echo hello`, 2 for a command with the word), checked by hand, before the
+  runs above.
+- **Not tested:** default mode got two of the six cases (`echo probeword-ok` and `bash -c`); `sh -c`, `env echo probeword`,
+  `echo probe""word` and `echo hello` were not run in default mode. A hook script that is missing or a `wb` that is not on
+  `PATH` (exit 127). A hook that answers with JSON (`permissionDecision`) and not an exit code. The hook rendered by the
+  workbench, and `wb gate-command`. A subagent's Bash call. A hook in a project that is not trusted. The rendered wildcard
+  rule `Bash(wb approve-plan *)` after a hook allows (the trial's rule was the exact string `Bash(echo probeword-ok)`). Any
+  command other than `echo` and the three wrappers; `wb` was not used.
+
 ### As built, and its limits
 
 Recorded by `claude-harness` (`docs/plans/2026-10-20-claude-harness.md`), each limit found in
