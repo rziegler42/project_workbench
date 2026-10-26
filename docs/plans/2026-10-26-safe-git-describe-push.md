@@ -589,3 +589,70 @@ pass one; `describe commit`'s `cat-file` calls do not).
 
 Open for the owner: the two approval directories of the previous commit (`1a1768c0…`, `45bf7993…`) are stale and need the
 owner's approval to remove.
+
+### Increment F — Security pass and its fixes
+
+Done, not yet committed at the time of writing. The owner was asked whether to run a security review (approval of the plan
+was not taken as the answer) and said yes. Changed: `packages/workbench/safe-git/helper/safe-git`, the new
+`tests/test_safegit_describe_push_security.py` (17 tests), `tests/test_safegit_describe_push.py` and
+`tests/test_safegit_describe_push_target.py` (see below) and the shipped approval records.
+
+The pass: the `security-reviewer` agent, one run, on a copy in a scratch directory with a tracing `git` and fake programs.
+About 65 hostile argument lists, repository configuration that names programs, a repository-hosted nested repository, about 70
+runs with a byte-for-byte snapshot of the repository, the caps, and forged paths and messages. Found sound by test: no hostile
+argument reaches a message; no program a configuration names started (fsmonitor, hooks, external diff, text conversion, ssh
+command, credential helper, `ext::` URLs, included files) and no network command was run; the repository (`.git` included) was
+identical after every run and left no lock; no secret from a URL, a subsection or an included file was printed; a path or message
+cannot forge a patch header, a finding or a record; `.gitattributes` `-diff`/`binary` do not hide content; the caps leave the
+right fact out whole; replace refs, grafts and a shallow file are followed the way `git pack-objects` follows them.
+
+Findings and what was done (each fix has a test that failed first, then passed; the reviewer's experiments are the evidence):
+- **H1 (high)**: a key of the repository's own configuration that redirects, intercepts or routes the owner's credentials
+  (`http.*`, `protocol.*`, `credential.*`, `transfer.*`, `url.*.insteadOf`, `url.*.pushInsteadOf`, `remote.*.pushurl`) gave
+  `ok: true`. Fixed on the owner's choice of a named deny-list: at repository scope each is `push_config_refused`, named by
+  section and variable only (the subsection, value and host are never printed); at the owner's scope it is named in
+  `push_config_findings`. Tests that put a push URL or a rewrite in the repository's configuration now put it in the owner's
+  global configuration, and one stopped treating `http.sslVerify` as unnamed.
+- **M1 (medium)**: `diff.interHunkContext` made the scan for credentials stop at the first context line of a hunk, so a secret
+  added and taken out again inside the range was missed (still in the pushed history). Fixed: `--inter-hunk-context=0` in the
+  patch shape and the allow-lists. This also fixes `push-check`, which shares the scan.
+- **M2 (medium)**: bytes after a NUL in a commit message were neither shown nor scanned, yet pushed (git's own output stops at the
+  NUL and still ends the record, so the count did not catch it). Fixed: a new shape `cat-file commit <40 hex>`, one call for each
+  commit, and `commit_hashes` and `commit_messages` are left out when any commit object holds a NUL or a record is malformed.
+- **M3 (medium-low)**: the `jwt-shaped` pattern took quadratic time (24 s for one 180 KB line). Fixed with `{20,4096}`. A token
+  segment over 4096 characters is no longer seen (recorded).
+- **L1**: `run_capped` with no `timeout` raised `TypeError` at its deadline (reachable in `push-check` with a `diff.orderFile` that
+  is a FIFO). Fixed.
+- **L2**: git's stderr (300 characters) was repeated in `repository_unreadable` messages and could quote a repository value.
+  Fixed: only the command and exit code are given.
+- **L3**: a remote name such as `a..b` or `x.lock` passed the name test and ended as a refusal with no object. Fixed in the name
+  pattern.
+- **L5 (reviewer's second pass)**: `GIT_OPTIONAL_LOCKS=0` is now set for every git run (one line), so the spec's claim is true
+  for the new reads.
+- **L4 (not changed)**: scope `unknown` is treated as trusted. Apple Git's system configuration (with `osxkeychain`) shows as
+  `unknown` on this machine, so refusing it would refuse every push here. The reviewer found no way for a repository to produce
+  that scope (an include takes the scope of its including file). Recorded as a limit.
+
+Verification as run: the new tests failed first against the earlier helper (every one of the 13 H1 keys, the NUL cases, the
+timing, the echo, the names, the shapes and the timeout), then passed. `python3 -B -W error tests/run_all.py`, `wb check`,
+`wb run code-work check`, `doccheck`, `refcheck` and `git diff --check`: 4637 tests in 10 roots OK (4620 before, plus 17), `wb check`, the plan check (51 plans), `doccheck`, `refcheck` and
+`git diff --check` clean, before the owner's `release-approvals`. Git 2.54.0 (Apple Git-157).
+
+Review: the `reviewer` agent, one exchange, no blocking finding (it ran nothing). Applied: records are validated before any
+commit object is read (a malformed record is a left-out fact, not a decline of the action) and `GIT_OPTIONAL_LOCKS=0`
+(above). Not applied: none.
+
+Recorded for Increment G (spec drift and limits): the deny-list is wider than the spec's list (whole sections `http`,
+`protocol`, `credential`, `transfer`, the rewrites and `remote.*.pushurl`), and it refuses a repository that sets a benign key
+such as `http.postBuffer` or `transfer.fsckObjects` locally, with the keys named; a remote that only the owner's configuration
+defines is not one git can read (`get-url` needs the remote in the repository), so a push URL for it needs a repository key too;
+`remote.*.proxyAuthMethod` is not named; `diff.orderFile` naming a FIFO stalls a read for the time limit and is not refused
+(`-O` would override it); no overall deadline spans the calls (up to 200 `cat-file` calls); scope `unknown` is trusted (L4);
+the tracking-ref reflog is forgeable by whoever writes the repository, which the fact already says; a raw escape character in a
+path or message is JSON-escaped, not removed (a channel for prompt injection only); describe sees a scrubbed environment while a
+real push runs in the agent's own (an exported `GIT_DIR`, `GIT_SSH_COMMAND` or `GIT_CONFIG_*` makes them differ); not checked: a
+`safe.directory` repository of another owner, a hostile commit-graph or pack index, a case-folding file system, the engine's own
+deadline, and the real credential flow of a push.
+
+Open for the owner: run `! python3 -m workbench release-approvals` (it writes the approval records for the changed package),
+then approve the removal of the two stale approval directories it names.

@@ -66,15 +66,16 @@ _BRANCH = re.compile(r"\Arefs/heads/[A-Za-z0-9._][A-Za-z0-9._/-]*\Z")
 _TRACKING = re.compile(r"\Arefs/remotes/[A-Za-z0-9_][A-Za-z0-9._-]{0,63}/[A-Za-z0-9._][A-Za-z0-9._/-]*\Z")
 _TAG = re.compile(r"\Arefs/tags/[A-Za-z0-9._][A-Za-z0-9._/-]*\Z")
 _REMOTE_HEAD = re.compile(r"\Arefs/remotes/[A-Za-z0-9_][A-Za-z0-9._-]{0,63}/HEAD\Z")
-_REMOTE_NAME = re.compile(r"\A[A-Za-z0-9_][A-Za-z0-9._-]{0,63}\Z")
+_REMOTE_NAME = re.compile(r"\A(?!.*\.\.)(?!.*\.(?:lock)?\Z)[A-Za-z0-9_][A-Za-z0-9._-]{0,63}\Z")
 _RANGE = re.compile(r"\A[0-9a-f]{40}\.\.HEAD\Z")
 _DIFF_FLAGS = ("--cached", "--name-only", "-z", "--check", "--no-ext-diff", "--no-textconv", "--no-renames",
                "--no-color", "-U0", "-U3", "--diff-filter=d", "--src-prefix=a/", "--dst-prefix=b/", "--text",
-               "--ignore-submodules=all", "--ignore-submodules=none", "--raw")
+               "--ignore-submodules=all", "--ignore-submodules=none", "--raw", "--inter-hunk-context=0")
 # A log of patches for `push-check`: these flags, and every one of the first group.
 _LOG_REQUIRED = {"--no-merges", "-p", "--format=", "--no-show-signature", "--no-ext-diff", "--no-textconv",
                  "--ignore-submodules=all"}
-_LOG_FLAGS = _LOG_REQUIRED | {"--no-renames", "--no-color", "-U0", "--src-prefix=a/", "--dst-prefix=b/", "--text"}
+_LOG_FLAGS = _LOG_REQUIRED | {"--no-renames", "--no-color", "-U0", "--src-prefix=a/", "--dst-prefix=b/", "--text",
+                              "--inter-hunk-context=0"}
 # A log of the messages of a range for `describe push`: these flags in this order, and the range. `-z` ends each commit
 # with a NUL, `--topo-order` with `--reverse` puts a parent before its children, and the encoding is fixed so that
 # `i18n.logOutputEncoding` cannot change the bytes.
@@ -154,12 +155,13 @@ def git_environment(entries, extra=None):
     """The environment git runs in: a short list of the caller's variables, the trusted PATH and the
     few Git variables set here. No variable of the caller that starts with GIT_ is passed. A repository's
     file system monitor is switched off, a missing object is never fetched and no maintenance runs after a
-    commit, because each could run a program the repository names."""
+    commit, because each could run a program the repository names. Nothing is written for the sake of a read (an index
+    refreshed by a diff), whatever is run."""
     env = {name: os.environ[name] for name in _KEPT if name in os.environ}
     env.update({name: value for name, value in os.environ.items() if name.startswith("LC_")})
     env["PATH"] = os.pathsep.join(entries)
     env.update({"GIT_NO_REPLACE_OBJECTS": "1", "GIT_TERMINAL_PROMPT": "0", "GIT_EDITOR": "true",
-                "GIT_PAGER": "cat", "GIT_LITERAL_PATHSPECS": "1", "GIT_NO_LAZY_FETCH": "1",
+                "GIT_PAGER": "cat", "GIT_LITERAL_PATHSPECS": "1", "GIT_NO_LAZY_FETCH": "1", "GIT_OPTIONAL_LOCKS": "0",
                 "GIT_CONFIG_COUNT": "3", "GIT_CONFIG_KEY_0": "core.fsmonitor", "GIT_CONFIG_VALUE_0": "false",
                 "GIT_CONFIG_KEY_1": "maintenance.auto", "GIT_CONFIG_VALUE_1": "false",
                 "GIT_CONFIG_KEY_2": "gc.auto", "GIT_CONFIG_VALUE_2": "0"})
@@ -267,7 +269,8 @@ _SHAPES = {
     "ls-files": lambda rest: (rest[:2] == ["--error-unmatch", "--"] and _paths_ok(rest[2:]))
     or rest == ["-s", "-z"] or (rest[:3] == ["-s", "-z", "--"] and _paths_ok(rest[3:]))
     or (rest[:2] == ["-z", "--"] and _paths_ok(rest[2:])),
-    "cat-file": lambda rest: len(rest) == 2 and rest[0] in ("-s", "blob") and _head_blob(rest[1]),
+    "cat-file": lambda rest: len(rest) == 2 and ((rest[0] in ("-s", "blob") and _head_blob(rest[1]))
+                                                 or (rest[0] == "commit" and _HEX40.match(rest[1]) is not None)),
     "check-attr": lambda rest: rest[:1 + len(_CONVERTING)] == ["-z"] + list(_CONVERTING)
     and _after_dashes(rest, 1 + len(_CONVERTING)),
     "check-ignore": lambda rest: len(rest) == 3 and rest[:2] == ["-q", "--"] and _paths_ok(rest[2:])
@@ -326,9 +329,7 @@ def run(argv, cwd, check=True, timeout=GIT_TIMEOUT, env_extra=None):
         raise Refused("git %s could not be started (%s)" % (argv[1], display.ascii_text(exc.strerror or "error")),
                       code="repository_unreadable")
     if check and result.returncode:
-        detail = (result.stderr or result.stdout or "no message").strip()[-300:]
-        raise Refused("git %s failed (%d): %s" % (argv[1], result.returncode, display.ascii_text(detail)),
-                      code="repository_unreadable")
+        raise Refused("git %s failed (%d)" % (argv[1], result.returncode), code="repository_unreadable")
     return result
 
 
@@ -354,7 +355,7 @@ def run_capped(argv, cwd, limit, timeout=None, separator="\n"):
         while True:
             left = deadline - time.monotonic()
             if left <= 0:
-                raise Refused("git %s did not finish within %d seconds" % (argv[1], timeout))
+                raise Refused("git %s did not finish within %d seconds" % (argv[1], GIT_TIMEOUT if timeout is None else timeout))
             if not select.select([fd], [], [], min(left, 1.0))[0]:
                 continue
             data = os.read(fd, 65536)
@@ -1919,7 +1920,11 @@ _PUSH_SETTINGS = {("http", "proxy"), ("https", "proxy"), ("credential", "helper"
                   ("core", "sshcommand"), ("core", "gitproxy"), ("core", "askpass"), ("push", "gpgsign"),
                   ("push", "pushoption"), ("push", "recursesubmodules"), ("push", "negotiate")}
 _SUBSECTIONED = {"http", "https", "credential"}   # `http.<url>.proxy` and `credential.<url>.helper` also count
-_REMOTE_SETTINGS = {"proxy", "receivepack", "vcs", "pushoption"}
+_REMOTE_SETTINGS = {"proxy", "receivepack", "vcs", "pushoption", "pushurl"}
+# Every key of these sections can send the push, or the credentials of the owner's helper, somewhere else: a header,
+# a cookie file, a certificate, a resolver, a redirect, a user name, a transport allowed. And the rewrites of a URL.
+_PUSH_SECTIONS = {"http", "protocol", "credential", "transfer"}
+_REWRITES = {"insteadof", "pushinsteadof"}
 _REPOSITORY_SCOPES = ("local", "worktree")
 
 
@@ -1927,6 +1932,9 @@ def push_setting(section, subsection, variable, value):
     """The name of a setting that redirects or intercepts a push, or None."""
     if section == "remote" and subsection is not None and variable in _REMOTE_SETTINGS:
         return "remote.*." + variable
+    if section in _PUSH_SECTIONS or (section == "url" and variable in _REWRITES):
+        name = display.ascii_text(variable)[:40]
+        return "%s.%s" % (section, name) if subsection is None else "%s.*.%s" % (section, name)
     if (section, variable) not in _PUSH_SETTINGS or (subsection is not None and section not in _SUBSECTIONED):
         return None
     if (section, variable) == ("push", "gpgsign") and not git_bool_is_true(value is not None, value or ""):
@@ -2189,7 +2197,7 @@ _RULES = (
     ("github-token", re.compile(r"ghp_[A-Za-z0-9]{20}|github" "_pat_[A-Za-z0-9_]{20}")),
     ("sk-key", re.compile(r"sk-[A-Za-z0-9]{20}")),
     ("slack-token", re.compile(r"xox[bp]-[0-9A-Za-z-]{10}")),
-    ("jwt-shaped", re.compile(r"eyJ[A-Za-z0-9_-]{20,}\.")),
+    ("jwt-shaped", re.compile(r"eyJ[A-Za-z0-9_-]{20,4096}\.")),
 )
 _HUNK = re.compile(r"@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 _ESCAPES = {"a": 7, "b": 8, "f": 12, "n": 10, "r": 13, "t": 9, "v": 11, '"': 34, "\\": 92}
@@ -2344,7 +2352,7 @@ def push_base(root, remote, branch, default, explicit=None):
 
 # The flags of a patch made with no context, which is what the scan for credentials reads.
 _PATCH_SHAPE = ["--no-ext-diff", "--no-textconv", "--no-renames", "--no-color", "-U0", "--text",
-                "--ignore-submodules=all", "--src-prefix=a/", "--dst-prefix=b/"]
+                "--ignore-submodules=all", "--inter-hunk-context=0", "--src-prefix=a/", "--dst-prefix=b/"]
 
 
 def range_findings(root, span):
@@ -2402,14 +2410,22 @@ def reflog_looks_git_written(root, ref):
 
 def range_commits(root, span, count):
     """``(hashes, messages)`` of the `count` commits of `span`, oldest first, merges included, each message as git keeps
-    it. Both are OMIT for more than `MAX_ARRAY` commits, a read that was cut, and output that is not `count` records of
-    a hash and a message (a message with a NUL in it ends early in git's own output, so the records stop adding up)."""
+    it. Both are OMIT for more than `MAX_ARRAY` commits, a read that was cut, a commit object with a NUL in it, and output
+    that is not `count` records of a hash and a message."""
     if count > MAX_ARRAY:
         return OMIT, OMIT
     text, cut = run_capped(["git", "log"] + _LOG_MESSAGES + [span], root, MAX_SCAN, timeout=GIT_TIMEOUT,
                            separator="\0")
     if cut or (text and not text.endswith("\0")):
         return OMIT, OMIT
+    # git's own output stops at a NUL in a message and still ends the record, so the count above cannot tell; the bytes
+    # after it would be pushed, and neither shown nor scanned.
+    for record in text.split("\0")[:-1]:
+        if _HEX40.match(record[:40]) is None or record[40:41] != "\n":
+            return OMIT, OMIT
+        raw, cut_raw = run_capped(["git", "cat-file", "commit", record[:40]], root, MAX_SCAN, timeout=GIT_TIMEOUT)
+        if cut_raw or "\0" in raw:
+            return OMIT, OMIT
     records = text.split("\0")[:-1]
     hashes, messages = [], []
     for record in records:

@@ -413,20 +413,21 @@ class Transport(Push):
 
     def test_the_facts_follow_the_push_url(self):
         self.url("https://user:%s@example.invalid/x.git" % CREDENTIAL)
-        git(self.repo, "config", "remote.origin.pushurl", "ssh://git@example.invalid/x.git")
+        self.global_config('[remote "origin"]\n\tpushurl = ssh://git@example.invalid/x.git\n')
         facts = self.facts()
         self.assertEqual(("ssh", False), (facts["remote_scheme"], facts["remote_url_has_credentials"]))
         self.url("ssh://git@example.invalid/x.git")
-        git(self.repo, "config", "remote.origin.pushurl", "https://user:%s@example.invalid/x.git" % CREDENTIAL)
+        self.global_config('[remote "origin"]\n\tpushurl = https://user:%s@example.invalid/x.git\n' % CREDENTIAL)
         facts = self.facts()
         self.assertEqual(("https", True), (facts["remote_scheme"], facts["remote_url_has_credentials"]))
 
     def test_a_push_instead_of_rewrite_is_followed(self):
         self.url("http://example.invalid/x.git")
         self.assertEqual("http", self.facts()["remote_scheme"])
-        self.config("url.ssh://git@example.invalid/.pushInsteadOf", "http://example.invalid/")
+        pushing = '[url "ssh://git@example.invalid/"]\n\tpushInsteadOf = http://example.invalid/\n'
+        self.global_config(pushing)
         self.assertEqual("ssh", self.facts()["remote_scheme"])
-        self.config("url.git://example.invalid/.insteadOf", "http://example.invalid/")
+        self.global_config(pushing + '[url "git://example.invalid/"]\n\tinsteadOf = http://example.invalid/\n')
         self.assertEqual("ssh", self.facts()["remote_scheme"])
 
     def test_two_urls_and_no_push_url_are_more_than_one(self):
@@ -435,17 +436,18 @@ class Transport(Push):
 
     def test_one_push_url_governs_several_urls(self):
         git(self.repo, "config", "--add", "remote.origin.url", "https://example.invalid/other.git")
-        git(self.repo, "config", "remote.origin.pushurl", "ssh://git@example.invalid/x.git")
+        self.global_config('[remote "origin"]\n\tpushurl = ssh://git@example.invalid/x.git\n')
         self.assertEqual("ssh", self.facts()["remote_scheme"])
 
     def test_a_remote_with_a_dotted_name_and_only_a_push_url(self):
-        git(self.repo, "config", "remote.my.fork.pushurl", "ssh://git@example.invalid/x.git")
+        self.config("remote.my.fork.fetch", "+refs/heads/*:refs/remotes/my.fork/*")   # git reads a remote the repository names
+        self.global_config('[remote "my.fork"]\n\tpushurl = ssh://git@example.invalid/x.git\n')
         git(self.repo, "update-ref", "refs/remotes/my.fork/feature", self.first)
         self.assertEqual("ssh", self.facts("my.fork")["remote_scheme"])
 
     def test_a_rewrite_into_a_transport_helper_is_refused(self):
         self.url("https://example.invalid/x.git")
-        self.config("url.ext::sh -c true %.pushInsteadOf", "https://example.invalid/")
+        self.global_config('[url "ext::sh -c true %"]\n\tpushInsteadOf = https://example.invalid/\n')
         built = self.refused("repo_selects_program")
         self.assertIn("remote:helper-transport", built["errors"][0]["message"])
 
@@ -453,8 +455,8 @@ class Transport(Push):
         for args, code in ((["nosuch"], "remote_unconfigured"),):
             built = self.refused(code, *args)
             self.assertIsNone(built["facts"]["remote_url_has_credentials"])
-        git(self.repo, "config", "--add", "remote.origin.pushurl", "https://example.invalid/a.git")
-        git(self.repo, "config", "--add", "remote.origin.pushurl", "https://example.invalid/b.git")
+        self.global_config('[remote "origin"]\n\tpushurl = https://example.invalid/a.git\n'
+                           '\tpushurl = https://example.invalid/b.git\n')
         self.assertIsNone(self.refused("multiple_push_urls")["facts"]["remote_url_has_credentials"])
 
     def test_a_remote_with_no_url_is_unconfigured(self):
@@ -470,8 +472,8 @@ class Transport(Push):
         self.refused("remote_unconfigured")
 
     def test_more_than_one_push_url(self):
-        git(self.repo, "config", "--add", "remote.origin.pushurl", "https://example.invalid/a.git")
-        git(self.repo, "config", "--add", "remote.origin.pushurl", "https://example.invalid/b.git")
+        self.global_config('[remote "origin"]\n\tpushurl = https://example.invalid/a.git\n'
+                           '\tpushurl = https://example.invalid/b.git\n')
         built = self.refused("multiple_push_urls")
         self.assertNotIn("example.invalid", json.dumps(built))
 
@@ -549,7 +551,7 @@ class Configuration(Transport):
         self.assertEqual(["global:credential.*.helper", "global:credential.helper", "global:http.proxy"], findings)
 
     def test_a_setting_that_is_not_named_is_not_a_finding(self):
-        self.global_config("[user]\n\tname = t\n[http]\n\tsslVerify = true\n[push]\n\tdefault = current\n")
+        self.global_config("[user]\n\tname = t\n[core]\n\teditor = vi\n[push]\n\tdefault = current\n")
         self.assertEqual([], self.own(self.describe()["facts"]["push_config_findings"]))
 
     def test_no_program_a_setting_names_is_started(self):

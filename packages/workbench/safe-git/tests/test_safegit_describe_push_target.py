@@ -446,8 +446,7 @@ class RemoteState(Target):
         self.assertTrue(self.describe("local", "feature")["ok"])
 
     def test_two_push_urls_are_refused(self):
-        self.config("remote.local.pushurl", self.bare)
-        self.add("remote.local.pushurl", self.bare + "-other")
+        self.global_config('[remote "local"]\n\tpushurl = %s\n\tpushurl = %s-other\n' % (self.bare, self.bare))
         self.unresolved("local", "feature", code="multiple_push_urls")
 
 
