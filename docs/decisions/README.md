@@ -89,3 +89,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-25-describe-interface-for-action-review](2026-10-25-describe-interface-for-action-review.md) | A module that owns an action reports what it would do through a read-only `describe` command | Accepted by the owner on 2026-10-25 |
 | [2026-10-26-per-command-permission-levels](2026-10-26-per-command-permission-levels.md) | Each owner-run and checkpointed command gets one permission level in the owner's personal settings | Accepted by the owner on 2026-10-26 |
 | [2026-10-26-describe-push-takes-the-push-arguments](2026-10-26-describe-push-takes-the-push-arguments.md) | A push is described by `safe-git describe push`, which takes the arguments of `git push` and validates them itself | Accepted |
+| [2026-10-26-ask-level-spelling-limit](2026-10-26-ask-level-spelling-limit.md) | At the ask and none levels the harness's rule is the only barrier, and its limit is accepted | Proposed |

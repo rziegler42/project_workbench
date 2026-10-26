@@ -504,3 +504,20 @@ so after a table or module change in an attached clone the owner has no command 
 decision. Increments F and G must build the table exactly as `harnessstage.stage` does or they always get `block`.
 `wb check` can report a false difference in a clone that did not write the last record. Final verification: `python3 -B -W
 error tests/run_all.py`, `git diff --check`, `python3 -m workbench check` and the plan check (below).
+
+Committed as `2f12a6a`.
+
+### Increment F — `approve-plan` at `ask` and `none` (stopped at step 0, the owner checkpoint; no code written)
+
+Step 0, 2026-10-26: the decision `docs/decisions/2026-10-26-ask-level-spelling-limit.md` was drafted as `Proposed` with the
+`draft-decision` skill and listed in `docs/decisions/README.md`. It states the HIGH-1 limit, the mitigations built in D and E,
+the probe required after F, the alternatives rejected and the consequences, including the open gap that no command restores
+`ask` or `none` in an attached clone after a table or module change. Only the owner accepts it. F stops here until the
+owner has accepted it and says so; the Result will then record the acceptance and its date. Until the file is committed,
+`python3 -m workbench check` reports one problem (the index row points to a file git does not track), which commit clears.
+Nothing else was changed.
+
+The owner asked for the order of F's code and its probe to be explicit: the decision now says F's code is committed first and
+the probe is its last step, with `ask` not offered as a default to anyone else until the probe is recorded. The plan's text
+is unchanged, because changing it would need a new approval. On 2026-10-26 the owner asked the agent to approve the decision;
+the agent did not, because only the owner accepts a decision, and committed it as `Proposed`.
