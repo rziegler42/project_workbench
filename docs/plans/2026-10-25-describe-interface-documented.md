@@ -274,7 +274,7 @@ installer made (a hand pin records no hash, so `describes` is a filter there, li
 stated to be allowed. Not applied: a blank line before the `approval` bullet, which was already there. Nothing
 remains open.
 
-### Increment C — done, not committed
+### Increment C — done, committed as `7f2400a`
 
 Added a "Describe" section to `docs/specs/safe-git.md`, marked specified, not built, and a note in the Declaration
 table and in "Non-goals". It holds: the error codes for the refusals of the real `commit` and `remove` (read from the
@@ -296,3 +296,28 @@ Review: the `reviewer` agent, two rounds (cap 3). Round 1 found two blocking fin
 code; an exit-status contradiction) and nine non-blocking; all were applied. Round 2 found no blocking finding and five
 non-blocking points, all applied (the `no_git_metadata` row, the non-goals line, facts on a refusal, the file system
 monitor in the program-selection test, a criterion for `entry_total`). Nothing remains open.
+
+### Increment D — done, not committed
+
+Added to `docs/specs/action-review.md`: the section "The verdict, the output and the log" (the verdict object with
+types and bounds, the output and exit table with 0, 1 and 2, the log fields and their residual exposure, and how the
+engine learns that a command is pinned and declared); the split updated (plan 1 done, the plan 2 first increment, the
+push gap); three open questions for the owner; and two acceptance bullets. Added the dated note, with the text fixed in
+the plan, after the unchanged body of `docs/decisions/2026-10-25-describe-interface-for-action-review.md`; `git diff`
+shows only that appended note. No code changed.
+
+Not decided by the author, and left to the owner: how the engine knows a command is declared for an action (the
+launcher enforces the pin but not `describes`; option (a) a launcher rule, option (b) a read-only listing, with the
+author's lean to (a) and the cost of it stated); who writes the log, and whether a failed write may withhold an approve;
+and the timeout (no figure was stated). The step-4 answer for "pinned" was found in `module-boundary.md`; the answer for
+"declared" was not, so it is a named open question.
+
+Verification as run: `git diff --check`, `wb check`, `wb run code-work check` (47 plans), `doccheck` and `refcheck`
+were clean before the review fixes; they are rerun before the commit. Not run: the test suite (no code changed). For
+the plan as a whole, the four specs and the note were read together by the reviewer for contradiction.
+
+Review: the `reviewer` agent, one round, no blocking finding and eight non-blocking. Applied: the refusal row no longer
+covers a `truncated` object; the hook validates the object and a decline's exit 0 is addressed; the sibling bridge
+contract difference is noted; the log's residual exposures and the acceptance bullet are corrected; the pin claim is
+qualified for a hand pin and the command-name mapping is noted; the cost of option (a) is recorded; the split's counts
+and cross-reference are corrected; C's line above is corrected. Nothing remains open in this increment.

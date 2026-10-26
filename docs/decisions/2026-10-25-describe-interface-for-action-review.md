@@ -122,3 +122,5 @@ owner's, and a review is not an acceptance.
 - [2026-10-22-model-calls-go-through-vendor-bridges](2026-10-22-model-calls-go-through-vendor-bridges.md)
 - [2026-10-25-approver-coverage-for-the-module-commands](2026-10-25-approver-coverage-for-the-module-commands.md)
 - [2026-10-24-project-guarantees-a-floor](2026-10-24-project-guarantees-a-floor.md)
+
+2026-10-25 (clarification): the form of the declaration is settled in `module-contract.md`, by plan `2026-10-25-describe-interface-documented`.

@@ -136,6 +136,64 @@ raw text the harness is about to run, and as one canonical form from the hook to
 - **Tested.** A corpus of quoting, spacing, wrapper and shell-metacharacter forms shows that the argument list the
   engine reviews equals the argument list the real command parses from the same text, or that the review is refused.
 
+### The verdict, the output and the log (default)
+
+These are the author's proposals, settled by plan `2026-10-25-describe-interface-documented` for the plan that
+builds the engine. The rule schema is not here: it is that plan's first deliverable.
+
+**The verdict object.** `wb run action-review review` prints exactly these fields and no other:
+
+- `verdict`: the string `approve` or `decline`.
+- `failed_checks`: an array of distinct strings, each a check name (`^[a-z][a-z0-9_]*$`, at most 64 characters) from the
+  rule's checks, whether code checks or rubric questions. It is empty when the verdict is `approve` and not empty when
+  it is `decline`; any other combination is malformed. At most 32 entries.
+- `reason`: a string of at most 300 characters, display-cleaned (no control character, ASCII only). The bound is the
+  length the approver already logs (`LOGGED_REASON`, read 2026-10-25).
+
+A response from the bridge that does not fit this, once the engine has applied it, is not passed on: the engine's own
+verdict is a decline or a failure, never a malformed object.
+
+**Output and exit status.** One JSON object and a final newline on standard output, or nothing on standard output.
+
+| Outcome | Standard output | Exit |
+|---|---|---|
+| a verdict, approve or decline | the verdict object | 0 |
+| a refusal: a rule that does not load or is ambiguous, an unpinned or undeclared module or bridge, an unreviewable command, a `describe` object that is malformed (a `truncated: true` object is well formed and is a decline, not a refusal) | nothing; `refused: <reason>` on standard error | 1 |
+| an engine failure: the bridge fails, times out or returns something unusable; an internal error | nothing; `failed: <reason>` on standard error | 2 |
+
+The reason is at most 500 characters and is display-cleaned, for the hook to show. A decline caused by `truncated:
+true` or by `ok: false` is a verdict (exit 0, `decline`), because the review ran and the checks said no. Only an
+object on standard output, with exit 0 and `verdict` equal to `approve`, can lead the hook to allow anything; every
+other outcome leaves the owner at the normal prompt. The hook reads the object, never the exit status alone, and
+applies the same field rules to it (an approve with a non-empty `failed_checks`, an extra field or a wrong type allows
+nothing). A decline also exits 0, so a hook that tested the status alone would read a decline as an approval; the
+spec rules that out and the hook's tests show it. This contract differs from the bridge's (`model-bridge.md`), where
+exit 1 with a valid object is a failure; the engine's exit 1 and 2 print no object.
+
+**The log.** One JSON line per review, append-only, with these fields and no others: `ts`; `rule` (the rule's key);
+`verdict`; `failed_checks`; `reason` (as above); `command_sha256` (of the canonical argument list the engine built,
+not of the raw text); `facts_sha256` (of the canonical serialization of the `describe` object as received);
+`rubric_sha256` (of the rubric text sent); `bridge`, `model` and `effort` (as used); and `format` (the engine's log
+format number). It holds no command text, no fact and no diff, with two residual exposures: `reason` is bounded,
+display-cleaned model output that could quote a path or a line it was shown, and a hash of a short argument list can be
+guessed by dictionary, so "hashes, never text" is not secrecy. It lives outside every project, in the owner's own data
+directory beside the approver's verdict log, so a vendor program that opens files in the project cannot find it. Who
+writes it, and whether a failed write may withhold an approve, are open questions for the owner (below).
+
+**How the engine learns that a command is pinned and declared.** Only part of this is settled today:
+
+- *Pinned: settled.* The engine does not look pins up. It starts the command with `wb run`, and the launcher refuses a
+  command that no installed module declares, whose pin is absent or names another helper, or whose helper changed since the owner pinned it, and, for a pin the installer made, whose declaration changed
+  (`module-boundary.md`, "A helper that runs another module's command"; a hand pin records no declaration hash). The
+  engine treats any refusal as a refusal of its own (exit 1) and approves nothing. `wb run` takes a command name, not
+  a module name, so a rule's module and action must map to a command name; the engine's plan fixes that mapping.
+- *Declared: not settled.* The launcher checks the first argument against `arguments`, and has no knowledge of
+  `describes` (`module-boundary.md`, "Declaration schema"). Nothing today lets a helper learn which action a command
+  answers, and the engine reading `module.json` itself would be a second check of a declaration the launcher already
+  hash-checks, with a different trust. This is a named open question for the owner. The author does not choose.
+
+**The timeout.** Still open (see "Constraints and assumptions"). No figure has been stated; the author chooses none.
+
 ### Settings and the bridge (default)
 
 Decision 5 of `2026-10-22-model-calls-go-through-vendor-bridges` applies unchanged. The engine reads its own project
@@ -216,13 +274,17 @@ not measured.
 
 Each is a plan of its own, in this order. None exists, and the owner approves each.
 
-1. **The interface, documented.** The `describe` decision is accepted. This plan settles what it left open: the
-   form of a module's declaration in `module-contract.md`, the numeric caps and the fact names for `commit` and
-   `remove` in `safe-git.md`, and the engine's contract completed in this spec. It also holds the
+1. **The interface, documented. Done by plan `2026-10-25-describe-interface-documented`.** The `describe` decision
+   is accepted. The plan settled what it left open: the form of a module's declaration in `module-contract.md` and
+   `module-boundary.md`, the numeric caps and the fact names for `commit` and `remove` in `safe-git.md`, and the
+   engine's contract in this spec, with three questions left to the owner (how the engine knows a command is declared, who writes the log, the timeout; see "Open questions"). It also holds the
    read-only count of the approver's declines by failed check, so the rubric is written knowing where the approver
    goes wrong.
 2. **`safe-git describe`** for `commit` and `remove`, with tests that the facts equal what the real command acts on and
-   that the call changes nothing.
+   that the call changes nothing. Its first increment is the verifier support for the `describes` field (and the
+   launcher rule, if the owner chooses option (a) under "Open questions"); its security pass covers the new git shapes.
+   Between 2 and 3, or alongside 3: **the push gap**, extending `push-check` or adding `describe push` for the checks
+   listed in `safe-git.md` ("The push gap"). Until it is done a push stays with the approver.
 3. **The engine** with its checks, rules, rubric, log and bridge call, tested with a fake bridge. No hook.
 4. **The shadow hook, the labelled set, the test set and the report**, prepared on a scratch copy; the owner installs
    the hook, labels the commands and reviews the test set. The test set is written in plan 3 with the checks.
@@ -259,6 +321,19 @@ Each is a plan of its own, in this order. None exists, and the owner approves ea
 
 ## Open questions for the owner
 
+- **How does the engine know a command is declared for an action?** The launcher enforces the pin but not `describes`.
+  Options: (a) the launcher refuses `describe <action>` unless the action is in the command's `describes`, so the
+  engine needs no knowledge and the check is enforced where the pin is; this adds a small rule to `wb run` and its
+  plan; (b) a read-only `wb` command lists the declared (module, command, action) triples and the engine checks them
+  first. The author leans to (a): one enforcement point, nothing for the engine to get wrong. The cost of (a) is that the
+  launcher would know a verb and an argument position, though `module-boundary.md` says the installer knows no command
+  by name and the decision rejected a launcher `describe` as module content; (b) keeps the launcher generic. Plan 2's first
+  increment (the verifier support for `describes`) is the same under both; (a) adds the launcher rule to it.
+- **Who writes the engine's log, and may a failed write withhold an approve?** The engine runs as an agent-reachable pinned command, and the floor decision
+  (`2026-10-24-project-guarantees-a-floor`) says the agent writes nothing at the user level. Options: the owner's thin
+  hook writes the row from fields the engine prints (the author's lean, so that the engine writes nothing outside the
+  project); or the engine writes it as the owner's process when the hook runs it. The location is fixed above.
+- **The timeout** the hook gives a review is still open.
 - Is a separate `describe` subcommand the right shape, or should the interface be something else?
 - Decided: you label real commands and review a test set, with the bound above. Open: whether 10% stays after
   plan 1's count.
@@ -291,6 +366,11 @@ Each is a plan of its own, in this order. None exists, and the owner approves ea
   the engine has no false approve; on the labelled set its false-decline count is below the owner's bound; and the
   report shows the approver's counts on the same sets for comparison.
 - The count of the approver's declines by failed check exists before the engine's rubric is written.
+- `review` prints only the verdict object described above and exits 0, 1 or 2 as the table says; an approve with a
+  non-empty `failed_checks`, a decline with an empty one, an extra field or a `reason` over 300 characters is never
+  printed; and a test shows that every refusal and failure prints nothing on standard output.
+- The log line holds exactly the fields listed, and a test shows that no command text, fact or diff reaches any field
+  other than the bounded `reason`; the residual exposure of `reason` is recorded above.
 
 ## Evidence
 
