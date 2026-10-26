@@ -461,7 +461,8 @@ class GitShapes(unittest.TestCase):
         self.assertFalse(SHAPES.git_shape_ok(["git", "-c", "core.fsmonitor=x", "check-ignore", "-q", "--", "a"]))
         self.assertFalse(SHAPES.git_shape_ok(["git", "--no-pager", "ls-files", "-z", "--", "a"]))
         self.assertFalse(self.ok("check-attr", "-q", "--", "a"))
-        self.assertFalse(self.ok("cat-file", "-s", "HEAD:a"))
+        self.assertFalse(self.ok("cat-file", "-p", "HEAD:a"))   # `cat-file` is allowed in two forms only
+        self.assertFalse(self.ok("hash-object", "a"))
 
 
 if __name__ == "__main__":

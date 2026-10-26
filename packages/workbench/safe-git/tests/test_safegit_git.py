@@ -226,6 +226,29 @@ class Shapes(unittest.TestCase):
     def test_the_index_listing_without_paths_is_a_shape(self):
         self.assertTrue(H.git_shape_ok(["git", "ls-files", "-s", "-z"]))
 
+    def test_the_head_blob_is_read_in_two_fixed_shapes(self):
+        for argv in (["cat-file", "-s", "HEAD:a.txt"], ["cat-file", "blob", "HEAD:a.txt"],
+                     ["cat-file", "blob", "HEAD:dir/sub/b.txt"], ["cat-file", "-s", "HEAD:a b.txt"],
+                     ["cat-file", "-s", "HEAD:-dash.txt"], ["cat-file", "blob", "HEAD:dot..name"]):
+            self.assertTrue(H.git_shape_ok(["git", *argv]), argv)
+
+    def test_nothing_else_of_cat_file_is_a_shape(self):
+        for argv in (["cat-file"], ["cat-file", "-s"], ["cat-file", "-p", "HEAD:a.txt"],
+                     ["cat-file", "-t", "HEAD:a.txt"],
+                     ["cat-file", "-e", "HEAD:a.txt"], ["cat-file", "tree", "HEAD:a.txt"],
+                     ["cat-file", "--batch"], ["cat-file", "--batch-check"], ["cat-file", "--textconv", "HEAD:a.txt"],
+                     ["cat-file", "--filters", "HEAD:a.txt"], ["cat-file", "blob", "--filters", "HEAD:a.txt"],
+                     ["cat-file", "-s", "HEAD:a.txt", "HEAD:b.txt"], ["cat-file", "blob", "HEAD:a.txt", "--"],
+                     ["cat-file", "blob", "HEAD"], ["cat-file", "blob", "HEAD:"], ["cat-file", "blob", "HEAD^:a.txt"],
+                     ["cat-file", "blob", "HEAD~1:a.txt"], ["cat-file", "blob", "main:a.txt"],
+                     ["cat-file", "blob", ":a.txt"], ["cat-file", "blob", "a" * 40],
+                     ["cat-file", "blob", "HEAD:/etc/passwd"], ["cat-file", "blob", "HEAD:../x"],
+                     ["cat-file", "blob", "HEAD:a/../x"], ["cat-file", "blob", "HEAD:./a.txt"],
+                     ["cat-file", "blob", "HEAD:a//b"], ["cat-file", "blob", "HEAD:a/"],
+                     ["cat-file", "blob", "HEAD:.."], ["cat-file", "blob", "HEAD:."],
+                     ["cat-file", "blob", "--batch"], ["cat-file", "-s", "-p"]):
+            self.assertFalse(H.git_shape_ok(["git", *argv]), argv)
+
     def test_the_refusal_names_a_command_in_a_bounded_message(self):
         with self.assertRaises(H.Refused) as caught:
             H.run(["git", "push", "x" * 5000000], os.getcwd())

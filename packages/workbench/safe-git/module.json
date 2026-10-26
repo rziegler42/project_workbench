@@ -21,7 +21,8 @@
         "describe"
       ],
       "describes": [
-        "remove"
+        "remove",
+        "commit"
       ]
     }
   }

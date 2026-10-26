@@ -356,7 +356,7 @@ it ran nothing and did not read the builder tests.
 
 ### Increment D — Share the commit validation and give the commit refusals and scalar facts
 
-Done, not yet committed at the time of writing. Changed, in `packages/workbench/safe-git/`: `helper/safe-git` (every
+Done and committed as `35052ec`. Changed, in `packages/workbench/safe-git/`: `helper/safe-git` (every
 refusal on the commit path through `git diff --check` carries a code by class; `command_commit` is split into `Checked`
 and `check_commit(argv, cwd, note=None)`, which the real command calls with no `note` and continues from unchanged;
 `describe_commit` calls it with a `note` that records each fact as it becomes known, so a refusal still reports what was
@@ -387,4 +387,43 @@ real command's text, kept unchanged); `_given_commit` is a second copy of the `p
 guards it; a comment in `parse_commit` would help); the test for the index checks the variable is set and not that git
 leaves the file alone (the snapshot test covers the file). Not checked by the reviewer: it ran nothing.
 
-Not done: E to G.
+### Increment E — The change lists, the diff and the cap, and the commit declaration
+
+Done, not yet committed at the time of writing. Changed, in `packages/workbench/safe-git/`: `helper/safe-git` (the
+`cat-file` shape, only `-s` or `blob` of `HEAD:<path>` with a path that has no empty, `.` or `..` segment; `Checked`
+gains `entries`; `_read_work` opens the work-tree path from the root descriptor with no link followed and reads at most
+`MAX_SIDE` (262,144 bytes, the approver's whole-diff bound); `_head_side` asks `cat-file -s` first and reads the blob
+through `run_capped` only below the bound; `_text_diff` is `difflib` over lines split on the line feed only, named
+`HEAD/<path>` and `work/<path>`; `_change_facts` sets the six lists and `diff` only when all of them are found),
+`module.json` (`describes` is `["remove", "commit"]`, the order of the plan; the spec text has the other order), the new
+`tests/test_safegit_describe_changes.py` (46 tests), and small edits to four existing test files (the facts list, the
+omitted names for 201 paths, the allowed git commands, the `cat-file` shape, the declaration). The landing procedure was
+that of C and D, twice (the review fix needed a second landing), so `workbench/shipped_approvals/packages/` holds the new
+records.
+
+Verification as run: the new tests failed first (the facts and the attribute did not exist), then passed; the 414 tests
+of the `safe-git` root pass (366 before, 48 added); `python3 -B -W error tests/run_all.py` ran 4405 tests OK in 10
+roots; `git diff --check`, `wb check`, `wb run code-work check` (48 plans), `doccheck` and `refcheck` clean. Tests cover
+each change kind, binary content in the old or new side, five kinds of path swapped after the last check (a link to a
+file, a link on the way, a FIFO, a directory, a file where a directory was), an attribute-driven filter, text conversion
+and external diff (no marker), the diff at 98,304 bytes and one byte over, a blob and a work file over the read bound
+(never read), and the before and after snapshot for every kind.
+
+Choices where the spec is open, for the owner: contents are compared byte for byte, so a repository that converts line
+endings (`eol=crlf`) or sets `core.fileMode=false` can have a path `describe` calls modified that the real `git add` would
+not stage (the real command then refuses at staging); a change of the executable bit is a modification, with a line
+`mode HEAD/<path> <old|none> -> work/<path> <new|none>` in the diff (none for a plain new or deleted 100644 file); a side
+over `MAX_SIDE` is not read, the path is listed new, deleted or modified (not compared), and the whole diff is omitted;
+a byte that is not UTF-8 is shown as its escape (`\xe9`); a path in the index for which `cat-file -s HEAD:<path>` fails is
+taken as absent from HEAD (an intent-to-add entry), which would also hide a corrupt object as a new file; a read error
+after the checks gives `repository_unreadable` or `path_refused` and sets no list.
+
+Review: the `reviewer` agent, one exchange, no blocking finding. Applied: non-UTF-8 text was decoded with replacement
+characters, so two different bytes could leave a path modified with an empty diff (now escapes, with a test); a comment on
+the character count. Left open: the two choices above that the reviewer also named (the byte-for-byte comparison and the
+failed `cat-file -s`); `binary_paths` is not complete for a file over the bound (`truncated` is true then). Found while
+answering one of its questions, for F: `git diff --check` of a tracked path with a `filter=` attribute starts the owner's
+clean filter if it is defined in the global configuration (a repository's own filter is refused earlier). That is the real
+`commit`'s existing check, shared by `describe`; the contents read for the lists and the diff never start a program.
+
+Not done: F and G.

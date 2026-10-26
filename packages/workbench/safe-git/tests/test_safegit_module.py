@@ -69,13 +69,13 @@ class Declaration(unittest.TestCase):
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
         self.assertEqual(["safe-git"], list(declaration()["commands"]))
 
-    def test_describe_is_declared_for_the_removal_and_is_not_owner_run(self):
+    def test_describe_is_declared_for_the_removal_and_the_commit_and_is_not_owner_run(self):
         command = declaration()["commands"]["safe-git"]
-        self.assertEqual(["remove"], command["describes"])
+        self.assertEqual(["remove", "commit"], command["describes"])
         self.assertNotIn("owner", command)
         loaded = declarations.load_package(PACKAGE, first_party=True)
         declared = [c for m in loaded.modules if m.name == "safe-git" for c in m.commands][0]
-        self.assertEqual(("remove",), declared.describes)
+        self.assertEqual(("remove", "commit"), declared.describes)
         self.assertEqual((), declared.owner)
 
     def test_every_file_is_the_declaration_the_helper_or_the_skill(self):

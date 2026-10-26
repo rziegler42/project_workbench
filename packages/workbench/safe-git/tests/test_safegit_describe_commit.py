@@ -310,7 +310,10 @@ class Facts(Describe):
         self.assertEqual([], facts["omitted"])
         self.assertEqual(["head", "expected_head", "leave_other_staged", "path_count", "subject", "trailers", "body",
                           "attribution_allowed", "program_findings", "staged_paths", "requested_paths", "paths",
-                          "omitted"], list(facts))
+                          "new_paths", "modified_paths", "deleted_paths", "unchanged_paths", "binary_paths",
+                          "not_regular_paths", "diff", "omitted"], list(facts))
+        self.assertEqual((["a.txt"], "--- HEAD/a.txt\n+++ work/a.txt\n@@ -1 +1 @@\n-one\n+two\n"),
+                         (facts["modified_paths"], facts["diff"]))
         self.assertEqual(0, self.commit(*self.argv("Change a", "a.txt", body="Why.\n\nMore.",
                                                     trailers=["Plan: x#A"]))[0])
 
@@ -348,6 +351,7 @@ class Facts(Describe):
         self.assertEqual([], facts["paths"])
         self.assertEqual([], facts["staged_paths"])
         self.assertEqual(["K: v"], facts["trailers"])
+        self.assertIsNone(facts["diff"])
 
     def test_a_refused_command_line_keeps_what_was_given_and_has_nothing_else(self):
         built = self.describe(["--leave-other-staged", "--force", "--", "a.txt", "b.txt"])
@@ -410,7 +414,7 @@ class Facts(Describe):
             self.write("many/f%d" % number, "x\n")
         built = self.describe(self.argv("S", *["many/f%d" % number for number in range(201)]))
         self.assertTrue(built["truncated"])
-        self.assertEqual(["requested_paths", "paths"], built["facts"]["omitted"])
+        self.assertEqual(["requested_paths", "paths", "new_paths"], built["facts"]["omitted"])
         self.assertEqual(201, built["facts"]["path_count"])
 
 
@@ -435,7 +439,7 @@ class Inert(Describe):
         self.assertTrue(built["ok"], built)
         commands = {arguments[0] for arguments, _ in self.runs()}
         self.assertTrue(commands)
-        self.assertLessEqual(commands, {"rev-parse", "ls-files", "diff", "config"})
+        self.assertLessEqual(commands, {"rev-parse", "ls-files", "diff", "config", "cat-file"})
         self.assertTrue(all(H.git_shape_ok(["git"] + arguments) for arguments, _ in self.runs()))
 
     def test_the_whitespace_check_does_not_refresh_the_index(self):

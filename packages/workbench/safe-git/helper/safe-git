@@ -15,6 +15,8 @@ anything that would make git run a program, and a commit is refused when there i
 global and system Git configuration is trusted. It never reads or writes the guarded store.
 """
 
+import difflib
+import errno
 import json
 import os
 import re
@@ -206,6 +208,12 @@ def _diff_shape(rest):
     return _flags_ok(flags) and bool(flags)
 
 
+def _head_blob(argument):
+    """``HEAD:<path>`` for a path that stays in the repository and has no empty or ``.`` segment."""
+    path = argument[5:] if isinstance(argument, str) and argument.startswith("HEAD:") else None
+    return path is not None and _paths_ok([path]) and all(part not in ("", ".") for part in path.split("/"))
+
+
 def _commit_shape(rest):
     start = 1 if rest[:1] == ["--cleanup=whitespace"] else 0
     index = start
@@ -231,6 +239,7 @@ _SHAPES = {
     "ls-files": lambda rest: (rest[:2] == ["--error-unmatch", "--"] and _paths_ok(rest[2:]))
     or rest == ["-s", "-z"] or (rest[:3] == ["-s", "-z", "--"] and _paths_ok(rest[3:]))
     or (rest[:2] == ["-z", "--"] and _paths_ok(rest[2:])),
+    "cat-file": lambda rest: len(rest) == 2 and rest[0] in ("-s", "blob") and _head_blob(rest[1]),
     "check-ignore": lambda rest: len(rest) == 3 and rest[:2] == ["-q", "--"] and _paths_ok(rest[2:]),
     "add": lambda rest: _after_dashes(rest, 0),
     "commit": _commit_shape,
@@ -811,11 +820,11 @@ def attribution_allowed(root):
 
 
 class Checked:
-    """What the checks of `commit` established: the request, the repository root, the staged paths and the index
-    listing the commit will be compared with."""
+    """What the checks of `commit` established: the request, the repository root, the staged paths, the index listing
+    the commit will be compared with and the index as ``{path: (mode, stage)}``."""
 
-    def __init__(self, request, root, staged, before):
-        self.request, self.root, self.staged, self.before = request, root, staged, before
+    def __init__(self, request, root, staged, before, entries):
+        self.request, self.root, self.staged, self.before, self.entries = request, root, staged, before, entries
 
 
 def check_commit(argv, cwd, note=None):
@@ -870,7 +879,7 @@ def check_commit(argv, cwd, note=None):
         raise Refused("git diff --check finds whitespace errors in the named paths: %s"
                       % display.ascii_text(problems.stdout.strip())[:300],
                       code="whitespace_errors" if problems.returncode in (1, 2) else "repository_unreadable")
-    return Checked(request, root, staged, before)
+    return Checked(request, root, staged, before, entries)
 
 
 def command_commit(argv, cwd, out, err):
@@ -1422,8 +1431,170 @@ def describe_remove(argv, cwd):
     return errors, [(name, facts[name]) for name in _REMOVE_FACTS]
 
 
+MAX_SIDE = 262144         # bytes of one side of a diff that are read (the approver's whole-diff bound); more is not read
+_CHANGE_LISTS = ("new_paths", "modified_paths", "deleted_paths", "unchanged_paths", "binary_paths", "not_regular_paths")
 _COMMIT_FACTS = ("head", "expected_head", "leave_other_staged", "path_count", "subject", "trailers", "body",
-                 "attribution_allowed", "program_findings", "staged_paths", "requested_paths", "paths")
+                 "attribution_allowed", "program_findings", "staged_paths", "requested_paths", "paths") \
+    + _CHANGE_LISTS + ("diff",)
+
+
+def _read_work(root_fd, parts):
+    """What the work-tree path `parts` holds, reached from the open root without following a link: ``("absent",)``;
+    ``("irregular",)`` for a link, a directory, a pipe or anything else that is not a regular file, and for a path
+    that goes through a link or a file; ``("large", size, mode)`` for a regular file over `MAX_SIDE`, which is not read;
+    else ``("file", data, mode)``. The mode is the one git would record: 100755 when the owner may execute the file,
+    else 100644."""
+    opened = []
+    try:
+        current = root_fd
+        for part in parts[:-1]:
+            try:
+                current = os.open(part, _DIR, dir_fd=current)
+            except FileNotFoundError:
+                return ("absent",)
+            except OSError as exc:
+                if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+                    return ("irregular",)
+                raise
+            opened.append(current)
+        try:
+            info = os.stat(parts[-1], dir_fd=current, follow_symlinks=False)
+        except FileNotFoundError:
+            return ("absent",)
+        except NotADirectoryError:
+            return ("irregular",)
+        if not stat.S_ISREG(info.st_mode):
+            return ("irregular",)
+        try:
+            fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0),
+                         dir_fd=current)
+        except FileNotFoundError:
+            return ("absent",)
+        except OSError as exc:
+            if exc.errno in (errno.ELOOP, errno.ENXIO):
+                return ("irregular",)
+            raise
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode):
+                return ("irregular",)
+            mode = "100755" if info.st_mode & stat.S_IXUSR else "100644"
+            if info.st_size > MAX_SIDE:
+                return ("large", info.st_size, mode)
+            chunks, total = [], 0
+            while total <= MAX_SIDE:
+                chunk = os.read(fd, min(65536, MAX_SIDE + 1 - total))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                total += len(chunk)
+            if total > MAX_SIDE:
+                return ("large", total, mode)
+            return ("file", b"".join(chunks), mode)
+        finally:
+            os.close(fd)
+    finally:
+        for fd in opened:
+            os.close(fd)
+
+
+def _head_side(root, path):
+    """What HEAD holds at `path`: ``("absent",)``, ``("large", size)`` for a blob over `MAX_SIDE`, whose size is
+    asked first so that it is never read, or ``("blob", data)``. Git is asked only for the size and then the content."""
+    probe = run(["git", "cat-file", "-s", "HEAD:" + path], root, check=False)
+    if probe.returncode:
+        return ("absent",)
+    if not re.fullmatch(r"[0-9]{1,15}", probe.stdout.strip()):
+        raise Refused("git cat-file gave a size this helper does not read", code="repository_unreadable")
+    size = int(probe.stdout)
+    if size > MAX_SIDE:
+        return ("large", size)
+    try:
+        text, cut = run_capped(["git", "cat-file", "blob", "HEAD:" + path], root, size + 1)
+    except Refused as exc:
+        raise Refused(str(exc), code="repository_unreadable")
+    data = text.encode("utf-8", "surrogateescape")
+    if cut or len(data) != size:
+        raise Refused("git cat-file gave a blob that is not the size it reported", code="repository_unreadable")
+    return ("blob", data)
+
+
+def _lines(data):
+    """The lines of `data` as git splits them, on the line feed only; a last line with none is marked. A byte that is
+    not UTF-8 is shown as its escape, so two different bytes never read alike."""
+    pieces = data.decode("utf-8", "backslashreplace").split("\n")
+    lines = [piece + "\n" for piece in pieces[:-1]]
+    if pieces[-1]:
+        lines.append(pieces[-1] + "\n\\ No newline at end of file\n")
+    return lines
+
+
+def _text_diff(path, old, new):
+    """The unified diff of `old` against `new`, named ``HEAD/<path>`` and ``work/<path>``; empty when they are equal."""
+    return "".join(difflib.unified_diff(_lines(old), _lines(new), "HEAD/" + path, "work/" + path))
+
+
+def _mode_line(path, old, new):
+    """A line for a change of mode, with ``none`` for a side that is not there; none for a plain new or deleted file."""
+    if old == new or (old is None and new == "100644") or (new is None and old == "100644"):
+        return ""
+    return "mode HEAD/%s %s -> work/%s %s\n" % (path, old or "none", path, new or "none")
+
+
+def _change_facts(checked, facts):
+    """Fill the change lists and the diff of the checked paths, HEAD against the work tree, byte for byte: no git
+    filter, text conversion or external diff, and no link followed. Nothing is set unless all of it is found."""
+    root, paths, entries = checked.root, checked.request.paths, checked.entries
+    in_head = checked.request.expected is not None
+    lists = {name: [] for name in _CHANGE_LISTS}
+    pieces, length, left_out = [], 0, False
+    try:
+        root_fd = safefs.open_root(root, "repository")
+    except safefs.SafeFsError as exc:
+        raise Refused("the repository cannot be read safely: %s" % display.ascii_text(str(exc))[:200],
+                      code="repository_unreadable")
+    try:
+        for path in paths:
+            try:
+                old = _head_side(root, path) if in_head and path in entries else ("absent",)
+                new = _read_work(root_fd, path.split("/"))
+            except Refused as exc:
+                raise Refused(str(exc), code=exc.code or "repository_unreadable")
+            except OSError as exc:
+                raise Refused("path refused: %s" % display.ascii_text(exc.strerror or "error"), code="path_refused")
+            if new[0] == "irregular":
+                lists["not_regular_paths"].append(path)
+                continue
+            if old[0] == "absent" and new[0] == "absent":
+                continue      # gone from both sides since the checks: there is nothing to say of it
+            old_mode = entries[path][0] if old[0] != "absent" else None
+            new_mode = new[2] if new[0] != "absent" else None
+            if new[0] == "absent":
+                kind = "deleted_paths"
+            elif old[0] == "absent":
+                kind = "new_paths"
+            elif "large" in (old[0], new[0]):
+                kind = "modified_paths"      # not read, so not compared: the cautious reading
+            elif old[1] == new[1] and old_mode == new_mode:
+                kind = "unchanged_paths"
+            else:
+                kind = "modified_paths"
+            lists[kind].append(path)
+            if "large" in (old[0], new[0]):
+                left_out = True
+                continue
+            before = old[1] if old[0] == "blob" else b""
+            after = new[1] if new[0] == "file" else b""
+            if b"\0" in before or b"\0" in after:
+                lists["binary_paths"].append(path)
+            elif length <= MAX_DIFF:     # counted in characters, never more than bytes; past the cap the diff is left out whole, so the rest is not worked out
+                piece = _mode_line(path, old_mode, new_mode) + _text_diff(path, before, after)
+                pieces.append(piece)
+                length += len(piece)
+    finally:
+        os.close(root_fd)
+    facts.update(lists)
+    facts["diff"] = OMIT if left_out else "".join(pieces)
 
 
 def _given_commit(argv):
@@ -1442,16 +1613,17 @@ def _given_commit(argv):
 
 
 def describe_commit(argv, cwd):
-    """``(errors, facts)`` of `commit <argv>`: the checks the real command makes through `git diff --check`, and the
-    scalar and list facts they establish. Nothing is staged and nothing is committed."""
+    """``(errors, facts)`` of `commit <argv>`: the checks the real command makes through `git diff --check`, the facts
+    they establish, and the change lists and the diff of the named paths. Nothing is staged and nothing is committed."""
     leave, given = _given_commit(argv)
     facts = {"head": None, "expected_head": None, "leave_other_staged": leave,
              "path_count": len(given), "subject": None, "trailers": [], "body": None,
              "attribution_allowed": None, "program_findings": [], "staged_paths": [],
-             "requested_paths": given, "paths": []}
+             "requested_paths": given, "paths": [], "diff": None}
+    facts.update((name, []) for name in _CHANGE_LISTS)
     errors = []
     try:
-        check_commit(argv, cwd, note=facts.__setitem__)
+        _change_facts(check_commit(argv, cwd, note=facts.__setitem__), facts)
     except Refused as exc:
         if exc.code is None:
             raise      # a refusal with no code has no place in the tables: stop with no object, as a decline
