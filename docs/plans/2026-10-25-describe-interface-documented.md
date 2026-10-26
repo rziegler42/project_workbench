@@ -1,6 +1,6 @@
 # Document the describe interface and complete the action-review contract
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-25
 Candidate: none (plan 1 of the five in the split of `docs/specs/action-review.md` for `workbench-v1#action-review-engine`; it builds nothing, and the candidate is complete only when the engine is built, so the plan that builds it names the candidate)
 Specs: action-review, module-contract, module-boundary, safe-git
@@ -297,7 +297,7 @@ code; an exit-status contradiction) and nine non-blocking; all were applied. Rou
 non-blocking points, all applied (the `no_git_metadata` row, the non-goals line, facts on a refusal, the file system
 monitor in the program-selection test, a criterion for `entry_total`). Nothing remains open.
 
-### Increment D — done, not committed
+### Increment D — done, committed as `da44f74`
 
 Added to `docs/specs/action-review.md`: the section "The verdict, the output and the log" (the verdict object with
 types and bounds, the output and exit table with 0, 1 and 2, the log fields and their residual exposure, and how the
@@ -321,3 +321,18 @@ covers a `truncated` object; the hook validates the object and a decline's exit 
 contract difference is noted; the log's residual exposures and the acceptance bullet are corrected; the pin claim is
 qualified for a hand pin and the command-name mapping is noted; the cost of option (a) is recorded; the split's counts
 and cross-reference are corrected; C's line above is corrected. Nothing remains open in this increment.
+
+### Plan closed
+
+All four increments are committed (A `1f009c7`, B `d3c94e4`, C `7f2400a`, D `da44f74`) and pushed to `origin/main`.
+Completion criteria, checked against the last increment's commit: 1 the count and its provenance are in
+`action-review.md` (Evidence); 2 the declaration form is in `module-contract.md` and `module-boundary.md`, marked
+specified, not built; 3 the "Describe" section is in `safe-git.md`; 4 the verdict object, the exit contract, the log
+and the pinned-and-declared question are in `action-review.md`, the last as a named open question; 5 the dated note
+follows the unchanged body of the decision; 6 `git diff --check`, `wb check`, `wb run code-work check` (47 plans),
+`doccheck` and `refcheck` were run clean on a clean tree at `da44f74`.
+
+Open, for the owner and for the plans that follow: how the engine knows a command is declared for an action (a launcher
+rule or a read-only listing), who writes the engine's log, the timeout, and the rubric size estimate, which the engine's
+plan measures. The `Candidate:` is `none`: the candidate `action-review-engine` is complete only when the engine is
+built. Plans 2 to 5 of the split still need their own drafts and the owner's approval.
