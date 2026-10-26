@@ -313,6 +313,34 @@ otherwise. One run each, so each result is a single observation.
 - **Not tested:** interactive mode; a hook timeout; `MultiEdit` and `NotebookEdit` in an agent's hook; an agent's hook against
   a session-level hook of the same tool; and a hook in a project that is trusted by its parent but whose agent file is edited.
 
+### An `ask` prompt answered from the remote channel (Claude Code 2.1.310, 2026-10-26)
+
+Recorded by increment A of plan `2026-10-26-command-permission-levels`. Method, run by the owner and reported by the owner: an
+interactive `claude --remote-control ask-trial` session in a throwaway git folder (`/tmp/ask-trial`) whose only project setting
+was `permissions.ask: ["Bash(echo ask-trial*)"]`. The harness was not attached by the workbench; the rule was written by hand,
+so this shows the harness's behavior and not the workbench's rendering. The prompt text named auto mode. Requests were typed from
+the remote connection; the owner reported tapping Yes or No on the remote side only, for every prompt. The
+workbench repository head was `1a731fa`. One run of each case, so each result is a single observation.
+
+- **The `ask` rule beat auto mode.** The terminal prompt said "Ask rule Bash(echo ask-trial*) overrides auto mode for this
+  command" and offered "1. Yes, 2. No".
+- **The prompt reached the remote side** for a request typed there. The terminal showed the same prompt while it was pending.
+- **Yes was reported to have run the command** (`echo ask-trial-1` printed). The owner reported tapping on the remote side
+  only, so this Yes was given there.
+- **A repeated Yes ran the command** (reported by the owner: the prompt appeared, the owner accepted it, and it "ran fine").
+  The owner later reported tapping on the remote side only. The command text, its output, and whether the terminal prompt
+  closed on its own were not reported. An earlier attempt of this repeat was made from the wrong directory and prompted nothing; it is not an
+  observation of this session.
+- **No answered on the remote side refused the command.** The session said it did not run the command because it was denied,
+  and the terminal prompt closed without a keypress there.
+- **No `PermissionRequest` hook was found** by `grep -rn PermissionRequest ~/.claude/settings.json ~/.claude/plugins` (no output),
+  so whether the owner's global hook fires on an `ask` prompt was not tested. Hooks elsewhere were not searched.
+- **A first rule, `Bash(echo ask-trial:*)`, did not prompt** for `echo ask-trial-1`: the command ran with no prompt noticed. The
+  likely cause is that the `:*` form matches whole words; that cause was not confirmed.
+- **Not tested:** answering at the terminal first, a
+  prompt with the remote channel closed or unattended, a rule rendered by the workbench's attach, and any command other than
+  `echo`.
+
 ### As built, and its limits
 
 Recorded by `claude-harness` (`docs/plans/2026-10-20-claude-harness.md`), each limit found in

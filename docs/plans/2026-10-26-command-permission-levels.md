@@ -266,4 +266,25 @@ reviewed again.
 
 ## Result
 
-Empty until work starts.
+### Increment A — Trial: can an `ask` prompt be answered remotely
+
+Done by the owner and reported to the agent on 2026-10-26; the agent ran no trial step. Claude Code 2.1.310, repo head
+`1a731fa`. The evidence note is in `docs/specs/harness-modules.md`, "An `ask` prompt answered from the remote channel". Observations: the prompt reached the remote side, a No given there refused the command and closed the terminal prompt, and the
+`ask` rule beat auto mode. After review round 1 (finding: the remote Yes was unobserved), the owner repeated it: a Yes ran the
+command. Round 2 found the side of the answers unstated; the owner then reported tapping Yes or No on the remote side only.
+The stop condition did not trigger and the plan continues.
+
+Not done, or different from the plan: the harness was not attached by the workbench (a hand-written `ask` rule was used in a
+plain throwaway folder, so the rendering is not tested); the owner's global
+`PermissionRequest` hook was not tested (none found in `~/.claude/settings.json` or `~/.claude/plugins`); a first rule that
+did not match was replaced.
+
+Security checkpoint: not reached (it is Increment D, step 1).
+
+Review: two rounds by the `reviewer` agent (cap 3), both recommending "blocking findings". Round 1: the note overclaimed
+the side of the answers (reworded), the remote Yes was unobserved (the owner repeated it), a process remark was removed;
+details the reviewer could not see in the owner's pastes (command text, the "1. Yes / 2. No" numbering, the session's
+"because you denied it") were kept, as they are in the pastes. Round 2: the side of the repeated Yes was unstated (the owner
+then reported tapping on the remote side only), the unreported `ask-trial-3` text and "ran" were removed, and the repository
+head and "auto mode" wording were corrected. A third round was not run on the text changed after round 2, which only records
+the owner's statement; that is for the owner to ask for.
