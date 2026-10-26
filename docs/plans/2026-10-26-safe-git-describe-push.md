@@ -1,6 +1,6 @@
 # Build `safe-git describe push` and close the push gap
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-26
 Candidate: none (the push gap between plans 2 and 3 of the split of `docs/specs/action-review.md` for `workbench-v1#action-review-engine`; it builds the facts side for a push only, and the candidate is complete only when the engine is built, so the plan that builds the engine names the candidate)
 Specs: safe-git, action-review
@@ -656,3 +656,35 @@ deadline, and the real credential flow of a push.
 
 Open for the owner: run `! python3 -m workbench release-approvals` (it writes the approval records for the changed package),
 then approve the removal of the two stale approval directories it names.
+
+### Increment G — The specs say what is built
+
+Done, not yet committed at the time of writing. Changed (documents only; nothing under `packages/` changed):
+`docs/specs/safe-git.md`, `docs/specs/action-review.md`, `docs/development.md`.
+
+`safe-git.md`: the `describe` declaration is `remove`, `commit`, `push`; `describe push` is no longer marked specified, not
+built, and the accepted decision record is named as accepted; the grammar notes the remote-name exclusions and `-f` with
+`--force-with-lease`; the `push.default` paragraph gives the cases as built and checked against `git push --porcelain`
+(triangular `simple` acts as `current`, a bare deletion is `target_unresolved`); the repository settings that are refused are
+the deny-list of increment F by section, with the scope rules, the `unknown` scope and the harmless-key price; the git shapes
+are the ones in the helper, with `GIT_OPTIONAL_LOCKS=0` for every run and the `--ignore-submodules=none` restriction; the fact
+table says what each fact is as built; and "As built, and its limits" has a bullet for the plan with the drift from the first
+text and the limits found by increments B to F and by the pass. `action-review.md` names `describe push` as the collector
+and the accepted record. `development.md` lists `describe push` beside the other two actions.
+
+Verification as run: `git diff --check`, `wb check`, `wb run code-work check` (51 plans), `doccheck` and `refcheck` clean; a
+search of the specs, `docs/development.md` and the README for "not built", "specified, not built", "once `describe push` is
+built" and "Proposed" for this action finds only the engine, which is not built. The full suite was not rerun: no code or
+test changed since the run of increment F (4637 tests in 10 roots OK).
+
+Review: the `reviewer` agent, one exchange, no blocking finding (it ran nothing and could not see the diff). Applied: the
+scrubbed environment sets three command-scope keys; the claim about the `unknown` scope is worded as what the pass found; "fixed
+and tested, or recorded below"; the `findings` wording; `push.gpgSign` counts when true; two places in `action-review.md` and
+the heading of "Describe" that still named only `push-check` or the first plan; the stale reason for `GIT_OPTIONAL_LOCKS=0` in
+`commit`; the order of the checks, the flags that give no fact, the empty `pushurl`, the malformed `push.default`, the Git 2.26
+need, the cut names, the left-out facts and the tag read of `show-ref` were added to the as-built bullet. Not applied: the
+inventory spec `global-config-inventory.md` still names only `push-check` (inventory and history).
+
+The plan is complete once this increment is committed. Owner's remaining steps: `wb acknowledge` (the package changed and
+the review-engine records are untracked), then `wb upgrade --package packages/workbench`; the plan's `Status:` is set to
+`Completed` in the same commit. A push is the owner's word (`main` is 3 commits ahead of `origin/main` before this commit).
