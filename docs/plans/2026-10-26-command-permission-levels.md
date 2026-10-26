@@ -2,7 +2,7 @@
 
 Status: Proposed
 Created: 2026-10-26
-Candidate: none (an owner request that follows the Proposed decision `2026-10-26-per-command-permission-levels`; no roadmap candidate names it yet)
+Candidate: none (an owner request that implements the accepted decision `2026-10-26-per-command-permission-levels`; no roadmap candidate names it yet)
 Specs: command-permissions, trust-and-approval, code-work, installer-interface, harness-modules, review-engine
 
 ## Goal
@@ -16,8 +16,9 @@ every run at a level other than `block` is logged, and the specs say so.
 
 - The `levels` table in the personal settings, its keys, its offered levels and its shipped defaults, built as in
   `docs/specs/command-permissions.md`.
-- `approve-plan` at `ask` and `none`, with its digest, and `delegated` as it already works.
-- `wb run review-engine extend` at `ask` and `none`, with a digest of the review's `status`.
+- `approve-plan` at `ask`, with its digest, and at `none`, with no digest and no preview; and `delegated` as it already
+  works, now logged.
+- `wb run review-engine extend` at `ask`, with a digest of the review's `status`, and at `none`, with no digest.
 - Rendering of `ask` and no rule in a harness that provides `permissions`, and the check that reports a table that differs
   from the rendered rules.
 - The append-only log.
@@ -30,7 +31,10 @@ every run at a level other than `block` is logged, and the specs say so.
   `submit-remote-job`, `push-shared-branch`. Each needs its own preview digest defined in its spec, so each is its own plan.
   Until then they keep their present behavior, which is `block` (`stop`).
 - Any trust-changing command (`install`, `adopt`, `add`, `upgrade`, `attach`, `approve`, `pin`). They stay `block` by
-  default and offer only `block` until each has a preview digest, and they are not changed here.
+  default and offer only `block` in this plan. A key offers another level only from the version that builds it
+  (`command-permissions.md`, "Which levels a key offers"), and each of these keys is for a later plan. The owner wants every
+  command to offer every sensible level; this plan builds that for the two keys of F and G and for the table, the log and
+  the rendering that the rest will use.
 - Anything on the compiled floor, `safe-git commit` and `remove`, and push.
 - A command that edits the table. The owner edits it by hand, as for checkpoints today.
 - Accepting the decision. That is the owner's act and is not part of any increment.
@@ -59,9 +63,11 @@ every run at a level other than `block` is logged, and the specs say so.
 1. `command-permissions.md` is `Current`, matches the code, and the edits to the other specs listed in Increment H exist.
 2. With no settings or a version 1 file, no action that an agent cannot run today becomes runnable, and `wb settings`
    prints the same checkpoint lines as before; a test shows this.
-3. At `ask`, `wb approve-plan <plan> --digest <12>` and `wb run review-engine extend <document> --digest <12>` run without a
+3. At `ask`, `wb approve-plan <plan> --digest <12>` and `wb run review-engine extend <document> <n> --digest <12>` run without a
    terminal only when the digest matches, the rendered `ask` rule is present and the log entry is written; each is refused
-   otherwise, with nothing written.
+   otherwise, with nothing written. At `none` each runs without a terminal and without a digest only when the rendering
+   record shows no rule for it and the log entry is written, and is refused otherwise. A delegated plan approval writes its
+   log entry first and is refused when it cannot.
 4. At `block` both still refuse without a terminal.
 5. A table entry cannot name a floor action, cannot set a level a key does not offer, and a damaged table reads as `block`.
 6. The trial of Increment A is recorded with its result, and the plan was stopped and revised if it failed.
@@ -110,7 +116,8 @@ the prompt cannot be answered remotely, stop and report; `ask` is then not offer
 `OWNER_RUN` command and every declared checkpoint has a registry entry), `tests/test_levels.py`.
 **Steps:**
 1. Write the tests first: an unknown key and a floor key are refused; `delegated` is offered only to `approve-plan`;
-   `accept-decision` offers `block` and `ask` only; no key offers `ask` until Increment F or G enables it; the default of
+   `accept-decision` offers `block` only in this plan, because no agent-run acceptance command or preview exists and its
+   `ask` is for a later plan; no key offers `ask` until Increment F or G enables it; the default of
    every key is `block` in this increment.
 2. Build the registry from `rules.OWNER_RUN`, the process module's checkpoints and a module's declared owner arguments,
    with the floor excluded by id. A test fails when a new owner-run command has no entry, as `rules.py` already does for
@@ -122,14 +129,22 @@ the prompt cannot be answered remotely, stop and report; `ask` is then not offer
 ### Increment D — The log
 
 **Outcome:** a run at a level other than `block` writes an entry first, and does nothing when it cannot.
-**Dependencies:** C.
+**Dependencies:** C, and the owner's recorded answer at the security checkpoint (step 1).
 **Affected areas:** a new `workbench/levellog.py`, `workbench/store.py` only if a new store file kind is needed,
-`tests/test_levellog.py`.
+`workbench/delegation.py` (the delegated approval writes its entry first), `tests/test_levellog.py`, the delegation tests.
 **Steps:**
-1. Write the tests first: an entry is appended, not rewritten; a damaged log is reported and refuses the action; the agent's
-   harness deny covers the file; a `block` run writes nothing.
-2. Build the append, with a bound on entry size, and a reader for the owner.
-**Verification:** the new tests, the harness deny test, then the full suite.
+1. **Security checkpoint (owner).** This is the first increment that writes the guarded store, and the work changes who may
+   approve a plan and extend a review. Stop and ask the owner whether to run a security review of the design now, and record
+   the answer, the reviewer and the outcome in the Result. A review runs only when the owner asks. Ask again before H, on
+   the built code. An answer of no is recorded and the increment continues.
+2. Write the tests first: an attempt line and an outcome line share an operation identifier and neither is rewritten; each
+   line is within 1,024 bytes; a damaged log is reported and refuses the action; the agent's harness deny covers the file; a
+   `block` run writes nothing; `delegate-approve-plan` writes its attempt before the approval and refuses, writing no
+   approval, when it cannot; a refusal after the attempt, and a success, each write an outcome; an attempt with no outcome
+   is listed as unfinished; an outcome that cannot be written after the action is reported and exits non-zero.
+3. Build the two-line append (attempt before, outcome after on every path), a reader for the owner, and call it from
+   `delegation.py`. Increments F and G call it for `ask` and `none`, and test the same two lines for both.
+**Verification:** the new tests, the harness deny test, the delegation tests, then the full suite.
 **Evidence:** the one local commit, with the trailer `Plan: 2026-10-26-command-permission-levels#D`.
 
 ### Increment E — Rendering and the drift check
@@ -163,9 +178,12 @@ the digest (`plan-status` or a sibling), `workbench/levels.py` (offer `ask` and 
 **Steps:**
 1. Write the tests first: at `ask`, the command with a matching digest approves and writes the same record as the owner's
    terminal command; a mismatch, a plan edited after the preview, a missing rendered rule, an unwritable log and a missing
-   digest each refuse and write no approval; at `block` it still refuses without a terminal; the terminal path is unchanged.
+   digest each refuse and write no approval; at `block` it still refuses without a terminal; the terminal path is unchanged; at `none` it runs with no digest only when
+   the record shows no rule and the log is written, and a digest given at `none` is refused as an unknown argument.
 2. Print the digest in the read-only preview, and have the command recompute it in its own process.
 3. Write the log entry before the approval, and the approval from the bytes already held.
+4. Change the registry default of `approve-plan` to `ask`, and test that with no settings or a version 1 file it reads `ask`
+   only when the rendering record shows the `ask` rule after an attach, and `block` otherwise.
 **Verification:** the new tests, the plan-approval and delegation tests, then the full suite.
 **Evidence:** the one local commit, with the trailer `Plan: 2026-10-26-command-permission-levels#F`.
 
@@ -177,22 +195,29 @@ the digest (`plan-status` or a sibling), `workbench/levels.py` (offer `ask` and 
 **Steps:**
 1. Read the module's code and `docs/specs/review-engine.md`; if it disagrees with this plan, stop and revise the plan.
 2. Write the tests first: a matching digest of the `status` extends within the ceiling; a changed review, a missing rendered
-   rule and an unwritable log refuse; the ceiling of 5 still holds at every level; at `block` the terminal test is unchanged.
-3. Make `owner_refusal` read the effective level, and let `extend` print and require the digest.
+   rule and an unwritable log refuse; the ceiling of 5 still holds at every level; at `block` the terminal test is unchanged; at `none` it extends with no digest
+   only when the record shows no rule and the log is written, still within the ceiling.
+3. Keep the grammar `extend <document> <n>` (`n` from 1 to 5, as `review-engine.md` defines) and add `--digest <12>` at
+   `ask`. The digest covers the review's `status` and `n`, so a different increase is not approved by an earlier answer.
+   Make `owner_refusal` read the effective level, and let `extend` print and require the digest.
+4. Change the registry default of `wb run review-engine extend` to `ask`, with the same no-settings and version 1 test as
+   in F.
 **Verification:** the module's tests, the `commands` tests, then the full suite.
 **Evidence:** the one local commit, with the trailer `Plan: 2026-10-26-command-permission-levels#G`.
 
 ### Increment H — Specs and documentation
 
 **Outcome:** the specs say what is built.
-**Dependencies:** G, and the decision is Accepted.
+**Dependencies:** G, and the owner's recorded answer to the second security question, asked before this increment on the
+built code (the decision is already Accepted).
 **Affected areas:** `docs/specs/command-permissions.md` (`Current`), `trust-and-approval.md`, `code-work.md` (the checkpoint
 table, and `accept-decision` no longer listed as delegable), `installer-interface.md` (the `approve-plan` grammar and
 `wb settings`), `harness-modules.md`, `review-engine.md`, `docs/specs/README.md`, `docs/development.md`.
 **Steps:**
 1. Edit each spec in place to match the code, and record in `command-permissions.md` which keys are built.
 2. Update the command table in `development.md` for `approve-plan`, `extend` and `settings`.
-3. Ask the owner to run the document checks and to change the status line of `2026-10-23-delegated-plan-approval`.
+3. Ask the owner to run the document checks. (The status line of `2026-10-23-delegated-plan-approval` was changed on
+   2026-10-26 at the owner's request, in the commit that recorded the decision; nothing more is edited there.)
 **Verification:** the owner runs the document checks; a search for the old wording finds none in a living document.
 **Evidence:** the one local commit, with the trailer `Plan: 2026-10-26-command-permission-levels#H`.
 
@@ -206,8 +231,8 @@ see each refuse with a wrong digest.
 ## Risks and sensitive actions
 
 - **Authorization and the guarded store.** The work changes who can approve a plan and extend a review, and adds a file to
-  the guarded store. The owner decides whether to run a security review, which this plan treats as owed before H and does
-  not run itself.
+  the guarded store. The owner decides whether to run a security review. The plan stops to ask at Increment D, step 1,
+  and again before H, records each answer in the Result, and runs no review itself.
 - **`ask` approves a command and a digest.** A hurried answer becomes an approval. The residual risk is accepted in the
   decision, and the preview must be shown in the conversation first.
 - **The prompt may not work remotely.** If A fails, the plan stops.
@@ -220,7 +245,16 @@ see each refuse with a wrong digest.
 
 ## Review record
 
-Empty until a review is asked for.
+Reviewed by the review engine through the `ask-codex` bridge (model `gpt-5.6-terra`, effort medium) on 2026-10-26, at
+the owner's request: three rounds, the bound of 3, not extended. Outcome: not converged. Round 1 found that the plan
+implied a digest at `none` (R1-F1), left the delegated approval out of the log (R1-F2) and had no security-review
+checkpoint (R1-F3). Round 2 found that `extend` had lost its increase argument (R2-F1), that no step moved the two
+shipped defaults to `ask` (R2-F2), that the plan and spec disagreed about `none` for deferred keys (R2-F3) and that a step
+was stale (R2-F4). Round 3 found that an append-only log written before the action cannot hold an outcome (R3-F1) and that
+`accept-decision` was given an `ask` that nothing can serve (R3-F2). All nine were applied. R2-F4 was applied by removing
+a stale step, and its claim that the status-line change breaks policy was not accepted; that stays with the owner. The
+text added for R3-F1 and R3-F2, and the spec edits made for R2-F3 and R3-F1, were not reviewed again. The owner has not
+approved the plan.
 
 ## Deferred work
 

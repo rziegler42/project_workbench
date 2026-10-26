@@ -2,6 +2,10 @@
 
 Status: Draft
 
+Design approved by the owner on 2026-10-26, knowing that its review did not converge and that the text added for the last
+two findings was not reviewed again (see "Review record"). The approval is a record for readers and is not a mechanism; it
+does not approve the plan, and the spec stays `Draft` until the built behavior matches it.
+
 This spec states the design of `docs/decisions/2026-10-26-per-command-permission-levels.md`, which the owner accepted on
 2026-10-26. It describes behavior that does not exist yet. Nothing in it is true of the code until the plan
 `2026-10-26-command-permission-levels` is approved and complete. It becomes `Current` only then, and the existing specs
@@ -80,6 +84,9 @@ refused with a note and ignored. A command that reaches more than one key takes 
 - `ask`: a key whose command has a read-only preview and takes its digest (below). Until a command's spec defines both,
   the key does not offer `ask`.
 - `none`: every key that is not on the floor.
+- A level counts as offered by a key only from the version that builds it for that command. Until then the key offers
+  `block` only and a table entry for another level reads as `block` with a note. The plan names which keys are built by
+  which increment, and the intent is that every key comes to offer every level that makes sense.
 - `accept-decision` offers `block` and `ask` only: only the owner accepts a decision (`AGENTS.md`).
 
 ### Shipped defaults
@@ -115,8 +122,8 @@ and the digest and not the preview. An `ask` therefore proves that the owner saw
 prove that they read the plan or the state.
 
 For `approve-plan` the preview is the plan's path and hashed region, which the command already computes. For
-`wb run review-engine extend` it is the review's `status` for the document: rounds used, the bound and ceiling, the
-decisions, and the seal.
+`wb run review-engine extend <document> <n>` it is the review's `status` for the document (rounds used, the bound and
+ceiling, the decisions and the seal) together with the requested increase `n`, from 1 to 5.
 
 ### Rendering
 
@@ -140,9 +147,14 @@ owner's command.
 
 ### The log
 
-Every run at a level other than `block` appends one line to `level-log` in the guarded store: the key, the level, the
-gate or the digest, the time, and the outcome. The agent cannot write the store. The log is for the owner to read, is
-not consulted to decide anything, and is not pruned by any command here.
+Every run at a level other than `block` appends two lines to `level-log` in the guarded store, never rewriting one. The
+first, the attempt, is written before the command acts: a random operation identifier, the key, the level, the gate or
+the digest, and the time. The second, the outcome, is written on every path after it: the same identifier, the time and
+`done` or `refused` with a reason of at most 200 printable characters. If the attempt cannot be written the command does
+nothing. If the outcome cannot be written after the action ran, the command reports that on standard error and exits
+non-zero, and the owner's reader lists an attempt with no outcome as unfinished. Each line is at most 1,024 bytes. The
+agent cannot write the store. The log is for the owner to read, is not consulted to decide anything, and is not pruned by
+any command here.
 
 ### `wb settings`
 
@@ -169,7 +181,9 @@ keeps the existing `checkpoint <name>: stop|delegate` lines. Problems and notes 
 7. A rendered harness holds a `deny` for a key at `block`, an `ask` for a key at `ask`, and none for a key at `none`, and the
    rendering record says so. With no record, a damaged record, a table changed since attach, or a harness without
    `permissions`, every key reads as `block`; `wb check` reports a harness file that differs from the record.
-8. Every run at `ask`, `delegated` or `none` leaves a log line; a run at `block` leaves none.
+8. Every run at `ask`, `delegated` or `none` leaves an attempt line and, on every path, an outcome line with the same
+   identifier, including a refusal after the attempt; a run at `block` leaves none. An attempt with no outcome is listed as
+   unfinished.
 9. The trial of increment A shows an interactive `ask` can be answered through the owner's remote channel. If it cannot,
    this spec is revised and no key ships `ask`.
 
