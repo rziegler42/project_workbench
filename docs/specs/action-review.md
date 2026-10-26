@@ -275,7 +275,7 @@ not measured.
 |---|---|
 | collectors for commit and remove, via the global program | `safe-git describe commit`, `safe-git describe remove` |
 | collector for a remote job | `remote-runner describe submit`, `describe fetch` of the module, which wraps the owner's global program (M16 and F-C6 apply) |
-| collector for a push | `safe-git push-check`, plus facts of the outgoing commits that it does not yet give |
+| collector for a push | `safe-git describe push` (specified in `safe-git.md`, built by plan `2026-10-26-safe-git-describe-push`); `push-check` stays for the `push-changes` skill |
 | the rubric, schema and rule files | ported into the engine as data, section by section |
 | `ask-codex-archive` rule | none: the module's `archive` is owner-run and denied (M15) |
 | `safe-committer` agent and the guard's `committer` mode | go with the program (decided by the owner, 2026-10-25): the agent and the mode are removed in the owner's step that removes `claude-workflow`; the guard program stays for its other modes. No module counterpart. |
@@ -296,8 +296,10 @@ Each is a plan of its own, in this order. Plans 3 to 5 do not exist yet, and the
    that the call changes nothing. Its first increment is the verifier support for the `describes` field; the launcher rule that refuses
    `describe <action>` for an action not in `describes` follows it; its security pass covers the new git shapes and
    that rule.
-   Between 2 and 3, or alongside 3: **the push gap**, extending `push-check` or adding `describe push` for the checks
-   listed in `safe-git.md` ("The push gap"). Until it is done a push stays with the approver.
+   Between 2 and 3, or alongside 3: **the push gap**, closed by adding `safe-git describe push` (the owner chose this over
+   extending `push-check` on 2026-10-26; plan `2026-10-26-safe-git-describe-push`; the design is in `safe-git.md`,
+   "`describe push`", and the narrowing of the accepted `describe` decision is the Proposed record
+   `2026-10-26-describe-push-takes-the-push-arguments`). Until it is built a push stays with the approver.
 3. **The engine** with its checks, rules, rubric, log and bridge call, tested with a fake bridge. No hook.
 4. **The shadow hook, the labelled set, the test set and the report**, prepared on a scratch copy; the owner installs
    the hook, labels the commands and reviews the test set. The test set is written in plan 3 with the checks.

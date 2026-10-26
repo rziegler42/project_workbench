@@ -1,6 +1,6 @@
 # Build `safe-git describe push` and close the push gap
 
-Status: Proposed
+Status: In Progress
 Created: 2026-10-26
 Candidate: none (the push gap between plans 2 and 3 of the split of `docs/specs/action-review.md` for `workbench-v1#action-review-engine`; it builds the facts side for a push only, and the candidate is complete only when the engine is built, so the plan that builds the engine names the candidate)
 Specs: safe-git, action-review
@@ -359,4 +359,38 @@ reads. The review is not an approval; the plan stays `Proposed` for the owner.
 
 ## Result
 
-Empty until work starts.
+### Increment A — Specify `describe push`
+
+Done, not yet committed at the time of writing. Documents only; nothing under `packages/workbench/` changed. Changed:
+`docs/specs/safe-git.md` (a new section "`describe push`": the grammar, the range, the remote and configuration rules, the
+git shapes it adds, the facts, nine new error codes, the caps, what stays with the approver, and the 14 `git-push` checks
+of the approver each mapped to a fact), `docs/specs/action-review.md` (the push rows and the split), the new Proposed
+record `docs/decisions/2026-10-26-describe-push-takes-the-push-arguments.md` and its row in `docs/decisions/README.md`.
+It narrows items 1, 2, 3 and 6 of the accepted `describe` decision for a push only. The agent has not accepted it and
+cannot. B does not start before the owner has read the spec and accepted the record.
+
+Verification as run: `wb run code-work check` (51 plans), `doccheck`, `refcheck` and `git diff --check` clean. `wb check`
+reports one problem until the commit: the decisions README points at the new record, which git does not track yet.
+Nothing was built or run against Git; two attempts to probe Git behaviour in a scratch repository (`git remote get-url
+--push --all`, `git config --list --show-scope -z`) were not run, because the one command was denied as a compound line.
+Those behaviours are unverified and are settled by the tests of B to D against a real push to a local bare repository.
+
+Review: the `reviewer` agent, two exchanges. The first found four blocking problems, all applied: B1, the range, `base` and
+`ahead` described a different push whenever the source was not the current branch (the grammar now allows one update from
+the current branch, or deletions only; `--all`, `--tags` and other sources are `usage`); B2, the diff could omit binary,
+submodule and deleted content with `truncated` false (new facts `binary_paths` and `submodule_paths`, deleted paths in
+`changed_paths`, and `facts_complete` requires both lists empty); B3, the record and the spec disagreed on wildcard
+refspecs (now `remote_state_required` in both); B4, a configuration key with a subsection can carry a URL (named without
+its subsection). Ten smaller points were applied or recorded as limits. The second found no blocking problem; its points
+were applied: the raw shapes behind `submodule_paths` must not use `--ignore-submodules`, no `usage` message quotes an
+argument, a non-empty `findings` declines (a secret added and removed inside the range), and several small
+inconsistencies. Not checked by the reviewer: it ran nothing and could not read the approver.
+
+Departures from the plan's wording, for the owner (the approved plan is not edited): the plan's criteria 2 and 4 and
+Increments B to E still mention `--tags`, `--all`, the facts `tags` and `all_branches`, and `remote_configured`; the spec
+drops them (`--tags` and `--all` are `usage`, and `remote_unconfigured` is an error, not a fact). Increment E also needs a
+test with a changed gitlink and Increment C one with a URL passed as a remote argument. If the owner wants the plan to say
+so, that is an edit beyond status, review record and result, and needs a new approval.
+
+Open for the owner: the facts print the scheme of the push URL but not its host, so `destination_is_appropriate` sees only
+the remote name; a host fact is deferred. Accepting the decision record is the owner's act.
