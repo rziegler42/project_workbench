@@ -17,7 +17,11 @@
       "arguments": [
         "commit",
         "remove",
-        "push-check"
+        "push-check",
+        "describe"
+      ],
+      "describes": [
+        "remove"
       ]
     }
   }

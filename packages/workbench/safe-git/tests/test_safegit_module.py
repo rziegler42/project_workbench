@@ -14,7 +14,7 @@ import tempfile
 import unittest
 
 from tests import support_install
-from workbench import commands, firstparty, harnessplan, neutral, pins, verify
+from workbench import commands, declarations, firstparty, harnessplan, neutral, pins, verify
 from workbench.wbkit import project
 
 import support_git
@@ -65,9 +65,18 @@ class Declaration(unittest.TestCase):
 
     def test_the_command_takes_the_two_changes_as_its_first_argument(self):
         command = declaration()["commands"]["safe-git"]
-        self.assertEqual(["commit", "remove", "push-check"], command["arguments"])
+        self.assertEqual(["commit", "remove", "push-check", "describe"], command["arguments"])
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
         self.assertEqual(["safe-git"], list(declaration()["commands"]))
+
+    def test_describe_is_declared_for_the_removal_and_is_not_owner_run(self):
+        command = declaration()["commands"]["safe-git"]
+        self.assertEqual(["remove"], command["describes"])
+        self.assertNotIn("owner", command)
+        loaded = declarations.load_package(PACKAGE, first_party=True)
+        declared = [c for m in loaded.modules if m.name == "safe-git" for c in m.commands][0]
+        self.assertEqual(("remove",), declared.describes)
+        self.assertEqual((), declared.owner)
 
     def test_every_file_is_the_declaration_the_helper_or_the_skill(self):
         found = []

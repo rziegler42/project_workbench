@@ -28,7 +28,12 @@ _DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0
 
 
 class Refused(Exception):
-    """Nothing was done; the message says why."""
+    """Nothing was done; the message says why. `code` names the class of refusal for `describe`, which reports
+    it as data; the real commands print the message only."""
+
+    def __init__(self, message="", code=None):
+        super().__init__(message)
+        self.code = code
 
 
 def shown(text, limit=120):
@@ -224,7 +229,9 @@ _SHAPES = {
     and set(rest[:-1]) <= _LOG_FLAGS and _LOG_REQUIRED <= set(rest[:-1]),
     "rev-list": lambda rest: len(rest) == 2 and rest[0] == "--count" and _RANGE.match(rest[1]) is not None,
     "ls-files": lambda rest: (rest[:2] == ["--error-unmatch", "--"] and _paths_ok(rest[2:]))
-    or rest == ["-s", "-z"] or (rest[:3] == ["-s", "-z", "--"] and _paths_ok(rest[3:])),
+    or rest == ["-s", "-z"] or (rest[:3] == ["-s", "-z", "--"] and _paths_ok(rest[3:]))
+    or (rest[:2] == ["-z", "--"] and _paths_ok(rest[2:])),
+    "check-ignore": lambda rest: len(rest) == 3 and rest[:2] == ["-q", "--"] and _paths_ok(rest[2:]),
     "add": lambda rest: _after_dashes(rest, 0),
     "commit": _commit_shape,
     "reset": lambda rest: rest[:1] == ["-q"] and _after_dashes(rest, 1),
@@ -256,7 +263,8 @@ def _resolve_git(argv, cwd):
     entries = trusted_path_entries(boundary) or FALLBACK_PATH
     found = trusted_which("git", boundary, entries)
     if found is None:
-        raise Refused("git was not found in an absolute PATH entry outside the repository")
+        raise Refused("git was not found in an absolute PATH entry outside the repository",
+                      code="repository_unreadable")
     return found, entries
 
 
@@ -271,12 +279,14 @@ def run(argv, cwd, check=True, timeout=GIT_TIMEOUT, env_extra=None):
                                 encoding="utf-8", errors="surrogateescape", check=False,
                                 env=git_environment(entries, env_extra), timeout=timeout)
     except subprocess.TimeoutExpired:
-        raise Refused("git %s did not finish within %d seconds" % (argv[1], timeout))
+        raise Refused("git %s did not finish within %d seconds" % (argv[1], timeout), code="repository_unreadable")
     except OSError as exc:
-        raise Refused("git %s could not be started (%s)" % (argv[1], display.ascii_text(exc.strerror or "error")))
+        raise Refused("git %s could not be started (%s)" % (argv[1], display.ascii_text(exc.strerror or "error")),
+                      code="repository_unreadable")
     if check and result.returncode:
         detail = (result.stderr or result.stdout or "no message").strip()[-300:]
-        raise Refused("git %s failed (%d): %s" % (argv[1], result.returncode, display.ascii_text(detail)))
+        raise Refused("git %s failed (%d): %s" % (argv[1], result.returncode, display.ascii_text(detail)),
+                      code="repository_unreadable")
     return result
 
 
@@ -342,20 +352,21 @@ def git_root(path):
         same = False
     if not same:
         raise Refused("git reports a work tree that is not the repository holding its metadata "
-                      "(a core.worktree redirect?); refusing to act")
+                      "(a core.worktree redirect?); refusing to act", code="repository_unreadable")
     marker = os.path.join(top, ".git")
     if os.path.islink(marker):
-        raise Refused("the repository's .git is a link; refusing to act")
+        raise Refused("the repository's .git is a link; refusing to act", code="repository_unreadable")
     if os.path.isdir(marker):
         gitdir = run(["git", "rev-parse", "--absolute-git-dir"], path).stdout.strip()
         if os.path.realpath(gitdir) != os.path.realpath(marker):
             raise Refused("git is using a git directory that is not the repository's own .git "
-                          "(an embedded or bare repository?); refusing to act")
+                          "(an embedded or bare repository?); refusing to act", code="repository_unreadable")
     else:
         raise Refused("the repository's .git is not a directory (a separate git directory or a work tree "
-                      "of another repository?); refusing to act")
+                      "of another repository?); refusing to act", code="repository_unreadable")
     if os.path.commonpath([path, top]) != top:
-        raise Refused("the working directory is outside the repository root git reports; refusing to act")
+        raise Refused("the working directory is outside the repository root git reports; refusing to act",
+                      code="repository_unreadable")
     return top
 
 
@@ -641,7 +652,7 @@ def validate_paths(root, paths, entries):
             try:
                 parts = safefs.validate_relpath(path)
                 if path.startswith("-") or any(c in path for c in "*?[]"):
-                    raise Refused("path refused (a glob or an option): %s" % label)
+                    raise Refused("path refused (a glob or an option): %s" % label, code="path_refused")
                 if path.casefold() in seen:
                     raise Refused("path named twice (or two spellings of one file): %s" % label)
                 seen.add(path.casefold())
@@ -888,10 +899,12 @@ class Stopped(Exception):
 
 
 class Target:
-    """One validated path to remove: its parts, its kind and what was seen of it."""
+    """One validated path to remove: its parts, its kind and what was seen of it. `size` is the bytes of the
+    regular files at or below it (read by `describe` only)."""
 
-    def __init__(self, path, parts, kind, info, entries):
+    def __init__(self, path, parts, kind, info, entries, size=0):
         self.path, self.parts, self.kind, self.info, self.entries = path, parts, kind, info, entries
+        self.size = size
 
 
 def _event(stage, path):
@@ -926,7 +939,7 @@ def _entries(fd):
     with os.scandir(fd) as scanning:
         for entry in scanning:
             if len(found) >= MAX_REMOVE_ENTRIES:
-                raise Refused("a directory holds more than %d entries" % MAX_REMOVE_ENTRIES)
+                raise Refused("a directory holds more than %d entries" % MAX_REMOVE_ENTRIES, code="tree_too_large")
             found.append((entry.name, entry.stat(follow_symlinks=False)))
     return sorted(found, key=lambda item: item[0])
 
@@ -951,18 +964,18 @@ def parse_remove(argv):
     while index < len(argv) and argv[index] != "--":
         option = argv[index]
         if option not in _REMOVE_OPTIONS:
-            raise Refused("unknown option: %s" % shown(option, 40))
+            raise Refused("unknown option: %s" % shown(option, 40), code="usage")
         if (recursive if option == "--recursive" else confirm):
-            raise Refused("%s was given more than once" % option)
+            raise Refused("%s was given more than once" % option, code="usage")
         recursive, confirm = recursive or option == "--recursive", confirm or option == "--confirm"
         index += 1
     if index >= len(argv):
-        raise Refused("usage: safe-git remove [--recursive] [--confirm] -- <path>...")
+        raise Refused("usage: safe-git remove [--recursive] [--confirm] -- <path>...", code="usage")
     paths = argv[index + 1:]
     if not paths:
-        raise Refused("name at least one path after --")
+        raise Refused("name at least one path after --", code="usage")
     if len(paths) > MAX_PATHS:
-        raise Refused("more than %d paths" % MAX_PATHS)
+        raise Refused("more than %d paths" % MAX_PATHS, code="usage")
     return recursive, confirm, paths
 
 
@@ -977,18 +990,19 @@ def _parent_of(root_fd, parts, device, seen):
             try:
                 step = os.open(part, _DIR, dir_fd=fd)
             except FileNotFoundError:
-                raise Refused("a directory on the way does not exist: %s" % shown(part, 60))
+                raise Refused("a directory on the way does not exist: %s" % shown(part, 60), code="target_missing")
             except OSError:
                 raise Refused("the path goes through a link or something that is not a directory: %s"
-                              % shown(part, 60))
+                              % shown(part, 60), code="path_refused")
             os.close(fd)
             fd = step
             if _device(os.fstat(fd)) != device:
-                raise Refused("the path crosses into another filesystem at %s" % shown(part, 60))
+                raise Refused("the path crosses into another filesystem at %s" % shown(part, 60), code="other_filesystem")
             info = os.fstat(fd)
             if (info.st_dev, info.st_ino) not in seen:
                 if _holds_repository(_entries(fd)):
-                    raise Refused("the path lies inside a nested Git repository (%s)" % shown(part, 60))
+                    raise Refused("the path lies inside a nested Git repository (%s)" % shown(part, 60),
+                                  code="nested_repository")
                 seen.add((info.st_dev, info.st_ino))
         taken, fd = fd, -1
         return taken
@@ -998,29 +1012,33 @@ def _parent_of(root_fd, parts, device, seen):
 
 
 def _scan(fd, device, depth, counter):
-    """Check a directory tree before it is deleted: no nested repository, no other filesystem, bounded."""
+    """Check a directory tree before it is deleted: no nested repository, no other filesystem, bounded.
+    `counter` is ``[entries, bytes of regular files]`` of everything listed so far."""
     if depth > MAX_REMOVE_DEPTH:
-        raise Refused("the directory is nested deeper than %d levels" % MAX_REMOVE_DEPTH)
+        raise Refused("the directory is nested deeper than %d levels" % MAX_REMOVE_DEPTH, code="tree_too_large")
     listing = _entries(fd)
     found = _holds_repository(listing)
     if found:
-        raise Refused("the directory holds a nested repository (%s)" % found)
+        raise Refused("the directory holds a nested repository (%s)" % found, code="nested_repository")
     counter[0] += len(listing)
     if counter[0] > MAX_REMOVE_ENTRIES:
-        raise Refused("the directory tree holds more than %d entries" % MAX_REMOVE_ENTRIES)
+        raise Refused("the directory tree holds more than %d entries" % MAX_REMOVE_ENTRIES, code="tree_too_large")
+    counter[1] += sum(info.st_size for _, info in listing if stat.S_ISREG(info.st_mode))
     for name, info in listing:
         if stat.S_ISDIR(info.st_mode):
             if _device(info) != device:
-                raise Refused("the directory holds another filesystem (%s)" % shown(name, 60))
+                raise Refused("the directory holds another filesystem (%s)" % shown(name, 60), code="other_filesystem")
             _event("scanning", name)
             try:
                 child = os.open(name, _DIR, dir_fd=fd)
             except OSError:
-                raise Refused("a directory changed while it was being checked: %s" % shown(name, 60))
+                raise Refused("a directory changed while it was being checked: %s" % shown(name, 60),
+                              code="target_changed")
             try:
                 opened = os.fstat(child)
                 if not _same(opened, info):
-                    raise Refused("a directory changed while it was being checked: %s" % shown(name, 60))
+                    raise Refused("a directory changed while it was being checked: %s" % shown(name, 60),
+                              code="target_changed")
                 _scan(child, device, depth + 1, counter)
             finally:
                 os.close(child)
@@ -1036,52 +1054,53 @@ def plan_removal(root_fd, paths, recursive):
         try:
             parts = safefs.validate_relpath(path)
         except safefs.SafeFsError as exc:
-            raise Refused("path refused: %s" % display.ascii_text(str(exc))[:200])
+            raise Refused("path refused: %s" % display.ascii_text(str(exc))[:200], code="path_refused")
         if path.startswith("-") or any(c in path for c in "*?[]"):
-            raise Refused("path refused (a glob or an option): %s" % label)
+            raise Refused("path refused (a glob or an option): %s" % label, code="path_refused")
         if any(_git_name(part) for part in parts):
-            raise Refused("refusing to remove Git metadata: %s" % label)
+            raise Refused("refusing to remove Git metadata: %s" % label, code="git_metadata_refused")
         key = tuple(unicodedata.normalize("NFC", part.casefold()) for part in parts)
         if any(key[:len(other)] == other or other[:len(key)] == key for other in keys):
-            raise Refused("overlapping removal targets are not allowed: %s" % label)
+            raise Refused("overlapping removal targets are not allowed: %s" % label, code="path_duplicate")
         try:
             parent = _parent_of(root_fd, parts, device, seen)
         except Refused as exc:
-            raise Refused("%s: %s" % (exc, label))
+            raise Refused("%s: %s" % (exc, label), code=exc.code)
         try:
             try:
                 info = os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)
             except FileNotFoundError:
-                raise Refused("removal target does not exist: %s" % label)
+                raise Refused("removal target does not exist: %s" % label, code="target_missing")
             kind = _kind(info.st_mode)
             entries = 0
+            size = info.st_size if kind == "file" else 0
             if kind == "directory":
                 if not recursive:
-                    raise Refused("directory removal requires --recursive: %s" % label)
+                    raise Refused("directory removal requires --recursive: %s" % label, code="recursive_required")
                 if _same(info, root_info):
-                    raise Refused("refusing to remove the repository root")
+                    raise Refused("refusing to remove the repository root", code="repository_root_refused")
                 if _device(info) != device:
-                    raise Refused("the directory is another filesystem: %s" % label)
+                    raise Refused("the directory is another filesystem: %s" % label, code="other_filesystem")
                 _event("planning", path)
                 try:
                     child = os.open(parts[-1], _DIR, dir_fd=parent)
                 except OSError:
-                    raise Refused("the directory changed while it was being checked: %s" % label)
+                    raise Refused("the directory changed while it was being checked: %s" % label, code="target_changed")
                 try:
                     if not _same(os.fstat(child), info):
-                        raise Refused("the directory changed while it was being checked: %s" % label)
-                    counter = [0]
+                        raise Refused("the directory changed while it was being checked: %s" % label, code="target_changed")
+                    counter = [0, 0]
                     try:
                         _scan(child, device, 1, counter)
                     except Refused as exc:
-                        raise Refused("%s: %s" % (exc, label))
-                    entries = counter[0]
+                        raise Refused("%s: %s" % (exc, label), code=exc.code)
+                    entries, size = counter
                 finally:
                     os.close(child)
         finally:
             os.close(parent)
         keys.append(key)
-        targets.append(Target(path, parts, kind, info, entries))
+        targets.append(Target(path, parts, kind, info, entries, size))
     return targets
 
 
@@ -1182,6 +1201,174 @@ def command_remove(argv, cwd, out, err):
         return 0
     finally:
         os.close(root_fd)
+
+
+# --- describe ------------------------------------------------------------------------------------
+
+# `describe <action> ...` takes the arguments of the real command and prints what that command would act on, as one
+# JSON object (docs/specs/safe-git.md, "Describe"). It runs the real command's own validation and stops before
+# anything changes, so a refusal the real command would give is data here, with a code, and the exit status is 0.
+
+CONTRACT = 1
+MAX_OBJECT = 196608       # bytes, as printed: compact JSON with every non-ASCII character escaped, and its newline
+MAX_STRING = 32768        # bytes of a string value other than the diff
+MAX_DIFF = 98304          # bytes of the `diff` string, before escaping
+MAX_ARRAY = 200           # elements of an array
+MAX_ELEMENT = 1024        # bytes of an element
+MAX_WHOLE = 2 ** 53 - 1   # a whole number must survive a JSON reader that uses a double
+MAX_MESSAGE = 500         # characters of an error message
+STATS_ENTRY_CAP = 10000   # entries above which the totals of a removal are left out
+IGNORE_TIMEOUT = 10       # seconds for one `git check-ignore`; a longer one leaves that target's status unknown
+OMIT = object()           # a fact the caller could not find out: left out of the object and named in `omitted`
+_CODE = re.compile(r"\A[a-z0-9_]{1,64}\Z")
+
+
+def _bytes(text):
+    return len(text.encode("utf-8", "backslashreplace"))
+
+
+def _within_cap(name, value):
+    """Whether `value` fits the cap of its own kind. A type or a number the contract does not allow is a mistake of
+    the caller and raises ``ValueError``."""
+    if value is None or isinstance(value, bool):
+        return True
+    if isinstance(value, int):
+        if not 0 <= value <= MAX_WHOLE:
+            raise ValueError("fact %s is a whole number outside 0 to 2^53 - 1" % name)
+        return True
+    if isinstance(value, str):
+        return _bytes(value) <= (MAX_DIFF if name == "diff" else MAX_STRING)
+    if isinstance(value, list):
+        if not all(isinstance(item, str) for item in value):
+            raise ValueError("fact %s is a list with an element that is not a string" % name)
+        return len(value) <= MAX_ARRAY and all(_bytes(item) <= MAX_ELEMENT for item in value)
+    raise ValueError("fact %s is not a string, a whole number, a boolean, null or a list of strings" % name)
+
+
+def render_description(built):
+    """The line `describe` prints."""
+    return json.dumps(built, separators=(",", ":"), ensure_ascii=True) + "\n"
+
+
+def build_description(action, errors, facts):
+    """The object for `action`. `errors` is ``[(code, message)]`` and `facts` is ``[(name, value)]`` in the order of
+    the tables of the spec. A value is never cut: one that is over its cap, or that would take the printed object past
+    `MAX_OBJECT`, is left out whole and named in `omitted` (in table order), and `truncated` is true. Facts are tried in
+    order, so a later, smaller one may still fit. Naming a value can itself push the object past the cap, and then the
+    last fact that was kept is left out too, until the object fits."""
+    listed = []
+    for code, message in errors:
+        if not isinstance(code, str) or not _CODE.match(code):
+            raise ValueError("an error code is 1 to 64 characters of a-z, 0-9 and _")
+        listed.append({"code": code, "message": display.ascii_text(str(message))[:MAX_MESSAGE]})
+    names = [name for name, _ in facts]
+    if len(set(names)) != len(names) or "omitted" in names:
+        raise ValueError("a fact is named once, and `omitted` is not the caller's")
+    kept, left = [], []
+
+    def draft():
+        body = {names[index]: facts[index][1] for index in sorted(kept)}
+        body["omitted"] = [names[index] for index in sorted(left)]
+        return {"contract": CONTRACT, "action": action, "ok": not listed, "truncated": bool(left),
+                "errors": listed, "facts": body}
+
+    for index, (name, value) in enumerate(facts):
+        if value is OMIT or not _within_cap(name, value):
+            left.append(index)
+            continue
+        kept.append(index)
+        if len(render_description(draft())) > MAX_OBJECT:
+            left.append(kept.pop())
+    while kept and len(render_description(draft())) > MAX_OBJECT:
+        left.append(kept.pop())
+    return draft()
+
+
+_REMOVE_FACTS = ("confirm", "recursive", "requested_paths", "target_paths", "file_targets", "directory_targets",
+                 "link_targets", "other_targets", "tracked_targets", "ignored_targets", "ignore_unknown_targets",
+                 "tracked_file_total", "entry_total", "size_total")
+_KINDS = (("file_targets", "file"), ("directory_targets", "directory"), ("link_targets", "symlink"),
+          ("other_targets", "other"))
+
+
+def _fold(path):
+    return unicodedata.normalize("NFC", path.casefold())
+
+
+def _remove_facts(root, targets, facts):
+    """Fill `facts` from the planned `targets`. Git is asked only to list tracked files and whether a path is ignored."""
+    facts["target_paths"] = [target.path for target in targets]
+    for name, kind in _KINDS:
+        facts[name] = [target.path for target in targets if target.kind == kind]
+    entries = sum(1 + target.entries for target in targets)
+    if entries <= STATS_ENTRY_CAP:
+        facts["entry_total"], facts["size_total"] = entries, sum(target.size for target in targets)
+    listing = run(["git", "ls-files", "-z", "--"] + facts["target_paths"], root).stdout
+    tracked = [item for item in listing.split("\0") if item]
+    facts["tracked_file_total"] = len(tracked)
+    by_name = {_fold(target.path): target.path for target in targets}
+    holding = set()
+    for item in tracked:
+        parts = _fold(item).split("/")
+        for length in range(1, len(parts) + 1):
+            found = by_name.get("/".join(parts[:length]))
+            if found is not None:
+                holding.add(found)
+                break
+    facts["tracked_targets"] = [target.path for target in targets if target.path in holding]
+    for target in targets:
+        # `check-ignore` dies when literal pathspecs are on. A validated target has no glob character, colon,
+        # backslash or leading dash, so it carries no pathspec magic and the setting is not needed for it.
+        try:
+            answer = run(["git", "check-ignore", "-q", "--", target.path], root, check=False,
+                         timeout=IGNORE_TIMEOUT, env_extra={"GIT_LITERAL_PATHSPECS": "0"}).returncode
+        except Refused:
+            answer = None
+        if answer == 0:
+            facts["ignored_targets"].append(target.path)
+        elif answer != 1:
+            facts["ignore_unknown_targets"].append(target.path)
+
+
+def describe_remove(argv, cwd):
+    """``(errors, facts)`` of `remove <argv>`: what `command_remove` would act on, with nothing deleted."""
+    split = argv.index("--") if "--" in argv else None
+    options = argv if split is None else argv[:split]
+    facts = {"confirm": "--confirm" in options, "recursive": "--recursive" in options,
+             "requested_paths": [] if split is None else argv[split + 1:], "target_paths": [],
+             "file_targets": [], "directory_targets": [], "link_targets": [], "other_targets": [],
+             "tracked_targets": [], "ignored_targets": [], "ignore_unknown_targets": [],
+             "tracked_file_total": None, "entry_total": OMIT, "size_total": OMIT}
+    errors = []
+    try:
+        recursive, _, paths = parse_remove(argv)
+        root = git_root(cwd)
+        try:
+            root_fd = safefs.open_root(root, "repository")
+        except safefs.SafeFsError as exc:
+            raise Refused("the repository cannot be read safely: %s" % display.ascii_text(str(exc))[:200],
+                          code="repository_unreadable")
+        try:
+            targets = plan_removal(root_fd, paths, recursive)
+        finally:
+            os.close(root_fd)
+        _remove_facts(root, targets, facts)
+    except Refused as exc:
+        if exc.code is None:
+            raise      # a refusal with no code has no place in the tables: stop with no object, as a decline
+        errors.append((exc.code, str(exc)))
+    return errors, [(name, facts[name]) for name in _REMOVE_FACTS]
+
+
+DESCRIBERS = {"remove": describe_remove}
+
+
+def command_describe(argv, cwd, out, err):
+    if not argv or argv[0] not in DESCRIBERS:
+        raise Refused("usage: safe-git describe %s, with the arguments of that command" % "|".join(sorted(DESCRIBERS)))
+    errors, facts = DESCRIBERS[argv[0]](argv[1:], cwd)
+    out.write(render_description(build_description(argv[0], errors, facts)))
+    return 0
 
 
 # --- push-check ----------------------------------------------------------------------------------
@@ -1366,7 +1553,8 @@ def command_push_check(argv, cwd, out, err):
     return 0
 
 
-COMMANDS = {"commit": command_commit, "remove": command_remove, "push-check": command_push_check}
+COMMANDS = {"commit": command_commit, "describe": command_describe, "remove": command_remove,
+            "push-check": command_push_check}
 
 
 def main(argv, out, err, cwd):

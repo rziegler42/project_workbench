@@ -1,0 +1,10 @@
+{
+  "approver": "workbench-release",
+  "declaration_hash": "5c3f7966c38c616c5ae82f64a237efb42b6e05eef811a721855536b4a263fa55",
+  "format": 1,
+  "kind": "module",
+  "subject": "workbench/safe-git",
+  "time": "1970-01-01T00:00:00Z",
+  "tree_hash": "a98023984268d6ac5cb6451313de473f3b2bff923bfff21cd7fe8933eca52b21",
+  "workbench_version": "0.1.0"
+}

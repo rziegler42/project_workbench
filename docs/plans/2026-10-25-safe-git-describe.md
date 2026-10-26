@@ -302,7 +302,7 @@ Committed as `ef1f159`.
 
 ### Increment B — The launcher rule for a declared action
 
-Done, not yet committed at the time of writing. Changed: `workbench/commands.py` (`_arguments` calls the new
+Committed as `3a67058`. Changed: `workbench/commands.py` (`_arguments` calls the new
 `_described` when the first argument is `describe`; both `resolve` and `launch_refusal` reach it through `_arguments`),
 the new `tests/test_describe_launch.py` (14 tests, on the synthetic `tool` module) and the `describes` bullet and the
 refused-list wording in `docs/specs/module-boundary.md`. `describe` with no action, with an unlisted action or with
@@ -317,4 +317,41 @@ Accepted limit, for the security pass: a pin the owner typed under another name 
 launches there; `describes` is a filter there, as the spec says. Left for Increment G: `action-review.md` (lines
 ~193-199) and `module-contract.md` (lines ~297, ~411) still say "not built". Not checked by the reviewer: it ran nothing.
 
-Not done: C to G.
+### Increment C — The output builder and `describe remove`
+
+Done, not yet committed at the time of writing. Changed, all in `packages/workbench/safe-git/`: `helper/safe-git`
+(`Refused` takes an optional `code`, and every refusal on the removal path carries one, by class and never read from the
+message; `Target` gains `size` and `_scan` counts bytes; the shapes `ls-files -z -- <paths>` and `check-ignore -q -- <path>`;
+a "describe" section with `build_description`, `render_description`, `describe_remove` and `command_describe`),
+`module.json` (the argument `describe` and `describes: ["remove"]`), `tests/test_safegit_module.py` and the new
+`tests/test_safegit_describe_builder.py` (25 tests) and `tests/test_safegit_describe_remove.py` (35 tests). The real
+`remove` messages and output are unchanged by reading and by the existing 58 tests, which pass unchanged.
+
+How it was done, as a departure from the plan's wording: every edit to a file under `packages/workbench/` changes the package
+tree hash, and the edit gate (`wb gate claude`) then refuses all edits until `release-approvals` is run again, which is the
+owner's step here. With the owner's agreement the change was built and tested in a copy in the scratch directory and landed
+with one `cp` of five files. `workbench/shipped_approvals/packages/` therefore holds new records, which the commit must
+include, and stale untracked ones left by interim runs, which the owner is asked to approve deleting. Neither is in the
+plan's affected areas.
+
+Verification as run: the new tests failed first (no `describe`), then passed; `python3 -B -W error tests/run_all.py` ran
+4314 tests OK in the real tree (4253 before, 61 added); `git diff --check`, `doccheck`, `refcheck` and `wb check` clean.
+A test found a defect: the helper's environment sets `GIT_LITERAL_PATHSPECS=1`, under which `git check-ignore` exits 128,
+so every target would have been reported as ignore-unknown; `describe` now sets it to 0 for that one call, which is safe
+because a validated target has no glob character, colon, backslash or leading dash.
+
+Choices where the spec is open, for the owner: the size of the object is the printed line including its newline; on a
+refused call `entry_total` and `size_total` are omitted and named (so `truncated` is true) and `tracked_file_total` is null;
+a `Refused` with no code, or an `OSError` such as an unreadable directory, stops `describe` with exit 1 and no object (the
+real `remove` also exits 1 there), because the errors table has no code for it; a refusal after planning (`ls-files`
+failing) keeps the facts already found.
+
+Review: the `reviewer` agent, one exchange, no blocking finding. Not blocking, left open: the exit-1 stop above is not in
+the spec's list of exit-1 cases (Increment G should state it or the spec should name a code); `_remove_facts` treats an
+uncoded `Refused` from `check-ignore` as ignore-unknown, which cannot happen with the fixed shapes; the premise that
+validation removed pathspec magic is commented at the call and not enforced by the `check-ignore` shape; the generic usage
+line now lists `describe`, which no test pins; the marker test covers some config keys and hooks but not a
+`.gitattributes` filter or `diff.external`, and the two new calls start no program by reading. Not checked by the reviewer:
+it ran nothing and did not read the builder tests.
+
+Not done: D to G.
