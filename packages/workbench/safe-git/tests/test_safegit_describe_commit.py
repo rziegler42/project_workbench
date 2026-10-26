@@ -439,7 +439,7 @@ class Inert(Describe):
         self.assertTrue(built["ok"], built)
         commands = {arguments[0] for arguments, _ in self.runs()}
         self.assertTrue(commands)
-        self.assertLessEqual(commands, {"rev-parse", "ls-files", "diff", "config", "cat-file"})
+        self.assertLessEqual(commands, {"rev-parse", "ls-files", "diff", "config", "cat-file", "check-attr"})
         self.assertTrue(all(H.git_shape_ok(["git"] + arguments) for arguments, _ in self.runs()))
 
     def test_the_whitespace_check_does_not_refresh_the_index(self):

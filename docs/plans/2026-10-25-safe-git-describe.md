@@ -389,7 +389,7 @@ leaves the file alone (the snapshot test covers the file). Not checked by the re
 
 ### Increment E — The change lists, the diff and the cap, and the commit declaration
 
-Done, not yet committed at the time of writing. Changed, in `packages/workbench/safe-git/`: `helper/safe-git` (the
+Done and committed as `985692e`. Changed, in `packages/workbench/safe-git/`: `helper/safe-git` (the
 `cat-file` shape, only `-s` or `blob` of `HEAD:<path>` with a path that has no empty, `.` or `..` segment; `Checked`
 gains `entries`; `_read_work` opens the work-tree path from the root descriptor with no link followed and reads at most
 `MAX_SIDE` (262,144 bytes, the approver's whole-diff bound); `_head_side` asks `cat-file -s` first and reads the blob
@@ -426,4 +426,77 @@ answering one of its questions, for F: `git diff --check` of a tracked path with
 clean filter if it is defined in the global configuration (a repository's own filter is refused earlier). That is the real
 `commit`'s existing check, shared by `describe`; the contents read for the lists and the diff never start a program.
 
-Not done: F and G.
+Superseded by F, which is now done: the non-UTF-8 choice above (shown as an escape) became "listed as binary", and the
+failed `cat-file -s` reading became "absent only for an intent-to-add path".
+
+### Increment F — Security pass and its fixes
+
+Done, not yet committed at the time of writing. The owner approved the new error code `path_converts_on_add` and the
+narrower attribute list (`filter`, `ident`, `working-tree-encoding`; not `text` or `eol`) after the pass. Changed, in
+`packages/workbench/safe-git/`: `helper/safe-git`, the new `tests/test_safegit_describe_pass.py` (30 tests, one group for
+each finding), and small edits to three test files (two lists of allowed git commands gain `check-attr`; the test that
+named a filter attribute names a diff driver instead; the non-UTF-8 test expects `binary_paths`). The landing procedure
+was that of C to E, twice (the review of the fixes needed a second landing), so `workbench/shipped_approvals/packages/`
+holds the new records.
+
+The pass: the `security-reviewer` agent, on a scratch copy, with fake programs, throwaway hostile repositories and
+`python3 -I -B`. It tried 38 git argument forms against the allowlist; a repository with a textconv, an external diff, a
+filter, a file system monitor, a hooks path, six hooks and a gitlink (no program started for `describe remove` or
+`describe commit`); links, a FIFO, a 300 MiB sparse file, case and Unicode spellings, `.git` look-alikes and 60 and 120
+levels of depth; a 300-trial fuzz of the printed object; 21 launcher-rule cases; and `core.fileMode=false`. It disclosed
+that it ran three stale probe scripts of an earlier task before overwriting them, and that it did not read the tests or
+the verifier. Found sound by test: the allowlist, the paths, no program started by a repository's own configuration, the
+object bound and its JSON, the launcher rule, and `describe remove --confirm` deleting nothing.
+
+Found and fixed, each with a test that failed first:
+- High, H1: a repository's attributes (`working-tree-encoding`, `ident`, `filter`; from an untracked `.gitattributes`, a
+  directory's own file or `.git/info/attributes`) make `git add` store other bytes than the work tree holds, so the diff
+  and a scan over it could be blind to what is committed (a token in UTF-7 showed as `+AGc-hp_…`).
+- Medium, M1: `git diff --check` starts a filter from the owner's own global configuration (for example the one
+  `git lfs install` writes) when such an attribute names it, and a filter that writes into `.git/` changes the repository.
+  Both are closed by one change: `check_commit`, which the real `commit` runs too, asks `git check-attr -z filter ident
+  working-tree-encoding -- <paths>` first and refuses with the new code `path_converts_on_add` for any value other than
+  unset or unspecified. The output must be exactly one answer for each path and attribute, in order, else
+  `repository_unreadable`.
+- Medium, M2: `difflib` took 3.6 to 6.8 s for one file of 262 KB of repeated short lines, and the diff cap never stopped
+  the work. Now the lines both sides share at the start and the end are set aside before the comparison, a side with more
+  than `MAX_MIDDLE` (500) differing lines is not compared, and the diffs of one `describe` have a budget of 20 s
+  (`DIFF_BUDGET`); either limit omits `diff` and sets `truncated`. The hand-built unified diff equals `difflib`'s on 300
+  random cases with distinct lines.
+- Low: a side that is not UTF-8 is listed in `binary_paths` and its diff is withheld (two different bad bytes, or a literal
+  `\xe9` against a raw byte, no longer read alike); a failed `cat-file -s` is "absent from HEAD" only for an intent-to-add
+  path (an index entry with the empty blob), else `repository_unreadable`; the `check-ignore` shape itself refuses a
+  leading colon, a glob character, a backslash and a leading dash; a lone surrogate is printed as its escape text so a strict
+  JSON reader accepts the object.
+
+Verification as run: the first 23 new tests failed before the fixes (a partial run showed failures and errors; no count was kept), then passed; the
+`safe-git` root runs 444 tests OK (414 before); `python3 -B -W error tests/run_all.py` ran 4435 tests OK in 10 roots;
+`git diff --check`, `wb check`, `wb run code-work check` (48 plans), `doccheck` and `refcheck` clean. Stray Finder
+`.DS_Store` files made `release-approvals` and `tests/test_boundary` refuse twice; they were removed with the owner's
+approval and are not part of the work.
+
+Review of the fixes: the `reviewer` agent, one exchange, no blocking finding; it ran nothing. Applied: the `check-attr`
+output must match the paths and attributes asked for (it only had to be a multiple of three fields); `MAX_MIDDLE` from 1,000
+to 500 after the reviewer's input (1,000 alternating lines) took 2.5 s for one file, 500 about 0.6 s; the `check-ignore`
+shape refuses a leading colon only, not any colon, and a wrong comment about it is corrected; tests for an empty
+`filter=`, a macro, one converted path among several, a `check-attr` output that is short or out of order, and the
+`difflib` equality. The tests of that second round were written with the fix, not before it.
+
+Limits left open, to be written down in G:
+- `text`, `eol` and the old `crlf` attribute, `core.autocrlf` and `core.eol` (and, as the owner chose, no refusal for
+  them) change line endings on `git add`: `describe` shows the bytes of the work tree where the real command stores
+  converted ones. The difference is whitespace only; a path can be listed modified or unchanged accordingly.
+- `check-attr` prints a literal value `unspecified` or `unset` as it prints the state; a repository line
+  `filter=unspecified` is therefore not refused, and would run a filter of that name only if the owner's own global
+  configuration defines one (a repository cannot, `repo_selects_program` refuses it).
+- A `.gitattributes` or work-tree change between `describe` and the real command is the race the spec already accepts.
+- The budget is checked between files, not inside one comparison, so one `describe` can take the budget plus one
+  comparison (about 0.6 s at the bound). Each of up to 2,000 paths costs two git runs (about 26 ms each in the pass, 52 s
+  in all for 2,000); nothing bounds that total.
+- A `describe remove` target the `check-ignore` shape refuses (a leading colon, or a backslash) can be listed in
+  `ignore_unknown_targets`, because the ignore status is not asked, not refused; the reviewer read this, it was not run.
+- Not checked by the reviewer or the pass: a full run of 2,000 paths (extrapolated from 1,000), `wb launch` through a real
+  pin, the repository's own tests and the verifier by the pass, and timings by the reviewer. A SHA-256 repository has no
+  test.
+
+Not done: G.

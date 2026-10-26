@@ -22,6 +22,7 @@ import os
 import re
 import stat
 import sys
+import time
 import unicodedata
 
 from wbkit import display, jsonstrict, safefs
@@ -214,6 +215,14 @@ def _head_blob(argument):
     return path is not None and _paths_ok([path]) and all(part not in ("", ".") for part in path.split("/"))
 
 
+_CONVERTING = ("filter", "ident", "working-tree-encoding")
+
+
+def _literal(path):
+    """A path git reads as the file it names: no leading colon (pathspec magic), glob or escape, and no leading dash."""
+    return not path.startswith(("-", ":")) and not any(char in path for char in "*?[]\\")
+
+
 def _commit_shape(rest):
     start = 1 if rest[:1] == ["--cleanup=whitespace"] else 0
     index = start
@@ -240,7 +249,10 @@ _SHAPES = {
     or rest == ["-s", "-z"] or (rest[:3] == ["-s", "-z", "--"] and _paths_ok(rest[3:]))
     or (rest[:2] == ["-z", "--"] and _paths_ok(rest[2:])),
     "cat-file": lambda rest: len(rest) == 2 and rest[0] in ("-s", "blob") and _head_blob(rest[1]),
-    "check-ignore": lambda rest: len(rest) == 3 and rest[:2] == ["-q", "--"] and _paths_ok(rest[2:]),
+    "check-attr": lambda rest: rest[:1 + len(_CONVERTING)] == ["-z"] + list(_CONVERTING)
+    and _after_dashes(rest, 1 + len(_CONVERTING)),
+    "check-ignore": lambda rest: len(rest) == 3 and rest[:2] == ["-q", "--"] and _paths_ok(rest[2:])
+    and _literal(rest[2]),
     "add": lambda rest: _after_dashes(rest, 0),
     "commit": _commit_shape,
     "reset": lambda rest: rest[:1] == ["-q"] and _after_dashes(rest, 1),
@@ -819,6 +831,22 @@ def attribution_allowed(root):
     return value["attribution"] == "allow"
 
 
+def refuse_converting_attributes(root, paths):
+    """Refuse a named path that an attribute converts when git adds it: a filter, `ident` or a working-tree encoding.
+    What `git add` stores is then not what the work tree holds, and the owner's own filter would be started by the
+    comparison that follows. `text` and `eol` change line endings only and are not refused."""
+    found = run(["git", "check-attr", "-z"] + list(_CONVERTING) + ["--"] + paths, root, check=False)
+    fields = found.stdout.split("\0")
+    if found.returncode or fields[-1:] != [""] or len(fields) - 1 != 3 * len(_CONVERTING) * len(paths) \
+            or [fields[index] for index in range(1, len(fields) - 1, 3)] != list(_CONVERTING) * len(paths):
+        raise Refused("git check-attr did not give the attributes of the named paths", code="repository_unreadable")
+    for index in range(0, len(fields) - 1, 3):
+        path, attribute, value = fields[index:index + 3]
+        if value not in ("unspecified", "unset"):
+            raise Refused("git would convert %s when adding it (attribute %s is %s); commit by hand"
+                          % (shown(path, 80), shown(attribute, 30), shown(value, 40)), code="path_converts_on_add")
+
+
 class Checked:
     """What the checks of `commit` established: the request, the repository root, the staged paths, the index listing
     the commit will be compared with and the index as ``{path: (mode, stage)}``."""
@@ -871,6 +899,7 @@ def check_commit(argv, cwd, note=None):
     if staged & named:
         raise Refused("a named path is already staged: %s" % shown(sorted(staged & named)[0], 80),
                       code="path_already_staged")
+    refuse_converting_attributes(root, paths)
     # Optional locks are off so that comparing the work tree with the index does not refresh the index file.
     problems = run(["git", "diff", "--check", "--no-ext-diff", "--no-textconv", "--"] + paths, root,
                    check=False, env_extra={"GIT_OPTIONAL_LOCKS": "0"})
@@ -1298,6 +1327,16 @@ def _bytes(text):
     return len(text.encode("utf-8", "backslashreplace"))
 
 
+def _printable(value):
+    """`value` with every lone surrogate written out as its escape text, so that the printed object is one a strict
+    reader accepts."""
+    if isinstance(value, str):
+        return value.encode("utf-8", "backslashreplace").decode("utf-8")
+    if isinstance(value, list):
+        return [_printable(item) for item in value]
+    return value
+
+
 def _within_cap(name, value):
     """Whether `value` fits the cap of its own kind. A type or a number the contract does not allow is a mistake of
     the caller and raises ``ValueError``."""
@@ -1331,7 +1370,8 @@ def build_description(action, errors, facts):
     for code, message in errors:
         if not isinstance(code, str) or not _CODE.match(code):
             raise ValueError("an error code is 1 to 64 characters of a-z, 0-9 and _")
-        listed.append({"code": code, "message": display.ascii_text(str(message))[:MAX_MESSAGE]})
+        listed.append({"code": code, "message": _printable(display.ascii_text(str(message))[:MAX_MESSAGE])})
+    facts = [(name, _printable(value)) for name, value in facts]
     names = [name for name, _ in facts]
     if len(set(names)) != len(names) or "omitted" in names:
         raise ValueError("a fact is named once, and `omitted` is not the caller's")
@@ -1388,8 +1428,8 @@ def _remove_facts(root, targets, facts):
                 break
     facts["tracked_targets"] = [target.path for target in targets if target.path in holding]
     for target in targets:
-        # `check-ignore` dies when literal pathspecs are on. A validated target has no glob character, colon,
-        # backslash or leading dash, so it carries no pathspec magic and the setting is not needed for it.
+        # `check-ignore` dies when literal pathspecs are on. The shape of the call refuses a glob character, a
+        # backslash, a leading colon and a leading dash, so a target it runs carries no pathspec magic.
         try:
             answer = run(["git", "check-ignore", "-q", "--", target.path], root, check=False,
                          timeout=IGNORE_TIMEOUT, env_extra={"GIT_LITERAL_PATHSPECS": "0"}).returncode
@@ -1431,6 +1471,10 @@ def describe_remove(argv, cwd):
     return errors, [(name, facts[name]) for name in _REMOVE_FACTS]
 
 
+MAX_MIDDLE = 500          # lines of one side that differ once the shared first and last lines are set aside; more is
+#                           not compared, because the cost grows with the product of the two sides (about 0.6 s for
+#                           the worst 500 lines); the budget below is checked between files, not inside one comparison
+DIFF_BUDGET = 20.0        # seconds in all for the diffs of one `describe`; the diff is left out once they are spent
 MAX_SIDE = 262144         # bytes of one side of a diff that are read (the approver's whole-diff bound); more is not read
 _CHANGE_LISTS = ("new_paths", "modified_paths", "deleted_paths", "unchanged_paths", "binary_paths", "not_regular_paths")
 _COMMIT_FACTS = ("head", "expected_head", "leave_other_staged", "path_count", "subject", "trailers", "body",
@@ -1498,12 +1542,30 @@ def _read_work(root_fd, parts):
             os.close(fd)
 
 
-def _head_side(root, path):
-    """What HEAD holds at `path`: ``("absent",)``, ``("large", size)`` for a blob over `MAX_SIDE`, whose size is
-    asked first so that it is never read, or ``("blob", data)``. Git is asked only for the size and then the content."""
+_EMPTY_BLOBS = ("e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+                "473a0f4c3be8a93681a267e3b1e9a7dcda1185436fe141f7749120a303721813")
+
+
+def _intent_to_add(listing):
+    """The paths the index lists with the empty blob: what ``git add -N`` leaves, a path HEAD does not hold."""
+    found = set()
+    for entry in listing.split("\0"):
+        meta, _, path = entry.partition("\t")
+        fields = meta.split(" ")
+        if len(fields) == 3 and fields[1] in _EMPTY_BLOBS:
+            found.add(path)
+    return found
+
+
+def _head_side(root, path, may_be_absent):
+    """What HEAD holds at `path`: ``("absent",)`` where `may_be_absent` (an intent-to-add path), ``("large", size)``
+    for a blob over `MAX_SIDE`, whose size is asked first so that it is never read, or ``("blob", data)``. Git is asked
+    only for the size and then the content. A blob git cannot give for any other path is an unreadable repository."""
     probe = run(["git", "cat-file", "-s", "HEAD:" + path], root, check=False)
     if probe.returncode:
-        return ("absent",)
+        if may_be_absent:
+            return ("absent",)
+        raise Refused("git cat-file cannot read HEAD:%s" % shown(path, 80), code="repository_unreadable")
     if not re.fullmatch(r"[0-9]{1,15}", probe.stdout.strip()):
         raise Refused("git cat-file gave a size this helper does not read", code="repository_unreadable")
     size = int(probe.stdout)
@@ -1520,8 +1582,8 @@ def _head_side(root, path):
 
 
 def _lines(data):
-    """The lines of `data` as git splits them, on the line feed only; a last line with none is marked. A byte that is
-    not UTF-8 is shown as its escape, so two different bytes never read alike."""
+    """The lines of `data` as git splits them, on the line feed only; a last line with none is marked. Only UTF-8 text
+    is shown (`_change_facts` sets any other aside as binary)."""
     pieces = data.decode("utf-8", "backslashreplace").split("\n")
     lines = [piece + "\n" for piece in pieces[:-1]]
     if pieces[-1]:
@@ -1529,9 +1591,57 @@ def _lines(data):
     return lines
 
 
+def _range(start, stop):
+    """A range of a hunk header, as ``difflib`` writes it: the first line (counted from 1) and the count."""
+    first, length = start + 1, stop - start
+    if length == 1:
+        return str(first)
+    return "%d,%d" % (first - 1 if not length else first, length)
+
+
 def _text_diff(path, old, new):
-    """The unified diff of `old` against `new`, named ``HEAD/<path>`` and ``work/<path>``; empty when they are equal."""
-    return "".join(difflib.unified_diff(_lines(old), _lines(new), "HEAD/" + path, "work/" + path))
+    """The unified diff of `old` against `new`, named ``HEAD/<path>`` and ``work/<path>``; empty when they are equal;
+    ``None`` when more than `MAX_MIDDLE` lines differ. The lines both sides share at the start and the end are set
+    aside before they are compared, so a long file with a small change costs little."""
+    first, second = _lines(old), _lines(new)
+    if first == second:
+        return ""
+    head = 0
+    while head < min(len(first), len(second)) and first[head] == second[head]:
+        head += 1
+    tail = 0
+    while tail < min(len(first), len(second)) - head and first[-1 - tail] == second[-1 - tail]:
+        tail += 1
+    middle = (first[head:len(first) - tail], second[head:len(second) - tail])
+    if max(len(middle[0]), len(middle[1])) > MAX_MIDDLE:
+        return None
+    codes = [("equal", 0, head, 0, head)] if head else []
+    codes += [(tag, a + head, b + head, c + head, d + head)
+              for tag, a, b, c, d in difflib.SequenceMatcher(None, *middle, autojunk=False).get_opcodes()]
+    if tail:
+        codes.append(("equal", len(first) - tail, len(first), len(second) - tail, len(second)))
+    matcher = difflib.SequenceMatcher(None, [], [])
+    matcher.opcodes = codes
+    lines = ["--- HEAD/%s\n" % path, "+++ work/%s\n" % path]
+    for group in matcher.get_grouped_opcodes(3):
+        lines.append("@@ -%s +%s @@\n" % (_range(group[0][1], group[-1][2]), _range(group[0][3], group[-1][4])))
+        for tag, a, b, c, d in group:
+            if tag == "equal":
+                lines += [" " + line for line in first[a:b]]
+                continue
+            if tag in ("replace", "delete"):
+                lines += ["-" + line for line in first[a:b]]
+            if tag in ("replace", "insert"):
+                lines += ["+" + line for line in second[c:d]]
+    return "".join(lines)
+
+
+def _utf8(data):
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
 
 
 def _mode_line(path, old, new):
@@ -1548,6 +1658,8 @@ def _change_facts(checked, facts):
     in_head = checked.request.expected is not None
     lists = {name: [] for name in _CHANGE_LISTS}
     pieces, length, left_out = [], 0, False
+    deadline = time.monotonic() + DIFF_BUDGET
+    intent = _intent_to_add(checked.before)
     try:
         root_fd = safefs.open_root(root, "repository")
     except safefs.SafeFsError as exc:
@@ -1556,7 +1668,7 @@ def _change_facts(checked, facts):
     try:
         for path in paths:
             try:
-                old = _head_side(root, path) if in_head and path in entries else ("absent",)
+                old = _head_side(root, path, path in intent) if in_head and path in entries else ("absent",)
                 new = _read_work(root_fd, path.split("/"))
             except Refused as exc:
                 raise Refused(str(exc), code=exc.code or "repository_unreadable")
@@ -1585,10 +1697,14 @@ def _change_facts(checked, facts):
                 continue
             before = old[1] if old[0] == "blob" else b""
             after = new[1] if new[0] == "file" else b""
-            if b"\0" in before or b"\0" in after:
+            if b"\0" in before or b"\0" in after or not (_utf8(before) and _utf8(after)):
                 lists["binary_paths"].append(path)
             elif length <= MAX_DIFF:     # counted in characters, never more than bytes; past the cap the diff is left out whole, so the rest is not worked out
-                piece = _mode_line(path, old_mode, new_mode) + _text_diff(path, before, after)
+                text = _text_diff(path, before, after) if time.monotonic() <= deadline else None
+                if text is None:
+                    left_out = True      # too much differs to compare, or the budget is spent
+                    continue
+                piece = _mode_line(path, old_mode, new_mode) + text
                 pieces.append(piece)
                 length += len(piece)
     finally:

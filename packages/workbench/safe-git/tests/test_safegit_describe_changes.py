@@ -152,19 +152,10 @@ class Diff(Changes):
         self.assertEqual("--- HEAD/n.txt\n+++ work/n.txt\n@@ -0,0 +1,2 @@\n+a\r\n+b\x0cc\x1d d\n",
                          self.facts("n.txt")["diff"])
 
-    def test_text_that_is_not_utf8_is_shown_with_escapes_so_two_different_bytes_differ(self):
+    def test_text_that_is_not_utf8_is_listed_as_binary_and_not_shown(self):
         self.write("n.txt", b"caf\xe9\n")
         built = self.describe(self.argv("S", "n.txt"))
-        self.assertIn("+caf\\xe9\n", built["facts"]["diff"])
-        self.assertEqual([], built["facts"]["binary_paths"])
-        self.write("a.txt", b"\xff\n")
-        git(self.repo, "add", "a.txt")
-        git(self.repo, "commit", "-q", "-m", "latin")
-        self.first = self.head()
-        self.write("a.txt", b"\xfe\n")
-        diff = self.facts("a.txt")["diff"]
-        self.assertIn("-\\xff\n", diff)
-        self.assertIn("+\\xfe\n", diff)
+        self.assertEqual((["n.txt"], ""), (built["facts"]["binary_paths"], built["facts"]["diff"]))
 
     def test_the_line_ending_of_a_file_is_not_changed_by_the_attributes_of_the_repository(self):
         self.write(".gitattributes", "*.txt text eol=crlf\n")
@@ -521,7 +512,7 @@ class Inert(Changes):
         found = [arguments for arguments, _ in self.runs() if arguments[0] == "cat-file"]
         self.assertEqual([["cat-file", "-s", "HEAD:a.txt"], ["cat-file", "blob", "HEAD:a.txt"]], found)
         self.assertLessEqual({arguments[0] for arguments, _ in self.runs()},
-                             {"rev-parse", "ls-files", "diff", "config", "cat-file"})
+                             {"rev-parse", "ls-files", "diff", "config", "cat-file", "check-attr"})
 
     def test_no_program_a_filter_or_a_diff_driver_names_is_started(self):
         script = os.path.join(self.outside, "tool")
@@ -533,7 +524,7 @@ class Inert(Changes):
             handle.write("[filter \"mark\"]\n\tclean = %s\n\tsmudge = %s\n\trequired = true\n" % (script, script))
             handle.write("[diff \"mark\"]\n\ttextconv = %s\n\tcommand = %s\n\tbinary = false\n" % (script, script))
             handle.write("[core]\n\tpager = %s\n" % script)
-        self.write(".gitattributes", "n.txt filter=mark diff=mark\nu.txt diff=mark -text\nb.dat -diff\n")
+        self.write(".gitattributes", "n.txt diff=mark\nu.txt diff=mark -text\nb.dat -diff\n")
         self.write("n.txt", "new\n")
         self.write("u.txt", "changed\n")
         built = self.describe(self.argv("S", "n.txt", "u.txt"))

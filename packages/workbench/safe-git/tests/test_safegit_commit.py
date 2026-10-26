@@ -18,7 +18,8 @@ from support_git import REAL_GIT, git, needs_git
 
 H = support_helpers.load("safe-git")
 STANDARD = "/usr/bin" + os.pathsep + "/bin" + os.pathsep + "/usr/local/bin" + os.pathsep + "/opt/homebrew/bin"
-ALLOWED = {"rev-parse", "diff", "ls-files", "add", "commit", "reset", "show", "diff-tree", "config", "status"}
+ALLOWED = {"rev-parse", "diff", "ls-files", "add", "commit", "reset", "show", "diff-tree", "config", "status",
+           "check-attr"}
 FORBIDDEN = {"push", "fetch", "checkout", "switch", "merge", "rebase", "tag", "branch", "pull", "clone"}
 
 
