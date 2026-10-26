@@ -242,7 +242,7 @@ Round 3 was run after these edits, so the final text was reviewed. A review is n
 
 ## Result
 
-### Increment A — done, not committed
+### Increment A — done, committed as `1f009c7`
 
 Read the approver's program to find its verdict log, recorded its size and SHA-256, and ran a scratchpad script
 (`python3 -I -B`, binary read, counts only). The log has the failed checks, so the plan did not stop. The spec's
@@ -258,3 +258,18 @@ Review: the `reviewer` agent, one round, no blocking finding. Three non-blocking
 `no_reviewer_directed_text` for push (applied: the sentence now gives the per-action leaders); the log's last date
 is a day after the retrieval date (applied: the spec says the timezone was not checked); the Python version
 (checked: it is the printed output of `python3 -I -B -V`, 3.15.0). Nothing remains open.
+
+### Increment B — done, not committed
+
+Specified the optional `describes` field on a `commands` entry in `docs/specs/module-boundary.md` ("Declaration
+schema": the field, its refusals, the engine's admission rule, the alternatives that lose, and the note on the
+declaration hash and the contract version) and in `docs/specs/module-contract.md` (the field-table row, a bullet in
+the concrete schema, an acceptance bullet). Marked specified, not built, in each place. No code changed.
+
+Verification as run: `git diff --check`, `wb check`, `wb run code-work check` (47 plans), `doccheck` and `refcheck`
+were clean before the review fixes; they are rerun before the commit. The two specs were read side by side.
+
+Review: the `reviewer` agent, one round, no blocking finding. Applied: the hash claim now holds only for a pin the
+installer made (a hand pin records no hash, so `describes` is a filter there, like `arguments`); an empty list is
+stated to be allowed. Not applied: a blank line before the `approval` bullet, which was already there. Nothing
+remains open.

@@ -309,10 +309,30 @@ checked with the rest of its declaration, before anything is written.
     `wb launch` run one only when standard input and output are both terminals (plan
     `2026-10-24-owner-run-in-code`). The declaration authorizes the first argument only, so a form that must be allowed to the agent and a form that must not
     are two arguments of the command.
+  - `describes` (optional; *specified, not built: the verifier support and its tests are the first increment of the
+    plan for `safe-git describe`*): a list of at most 16 distinct strings, each `^[a-z][a-z0-9-]*$` and at most 32
+    characters, default empty. These are the actions the command's `describe` argument answers, in the sense of the
+    decision `2026-10-25-describe-interface-for-action-review`. It is allowed only when `describe` is one of the
+    command's `arguments`, and `describe` may not be listed in `owner`: the engine runs `describe` for the agent's
+    command and it is read-only by contract.
 - Refused: an unknown field, a wrong type, a duplicate key (the parser already refuses it), a `helper` that
   is not in `ships`, a `runtime` other than the two, a duplicate `arguments` entry, an `owner` entry that is not a
   string, is repeated or is not one of the command's `arguments`, and two entries of one
-  module that name the same `helper`.
+  module that name the same `helper`. For `describes` *(specified, not built)*: an entry that is not a string, a
+  duplicate action, an action that fails the form, a non-empty `describes` on a command whose `arguments` lack `describe` (an empty list is allowed, as the default), and
+  `describe` in `owner`.
+
+**The engine's admission rule for `describe`.** The action-review engine accepts a (module, action) only when the
+command is pinned for an installed module, `describe` is among its `arguments`, and the action is in its `describes`.
+Anything else is refused and nothing runs. This is the test "the module provides `describe` for that action" in the
+accepted decision (record 5). The `describes` list is part of the declaration, so it is covered by the declaration
+hash as written, like the other optional fields; for a pin the installer made, a pull cannot add an action without
+the owner re-confirming the declaration. A pin the owner made by hand records no declaration hash, so there
+`describes` is a filter like `arguments`, not a security boundary. The field is additive, so no contract version bump is needed.
+
+*Alternatives that lose.* A capability per action: capabilities are one project-wide namespace of names with no action
+argument, so `describe` for an action cannot be named as one. A module-level list: it would not say which command's
+`describe` answers, and the pin is per command.
 
 **`checks`.** A list of at most 16 objects with exactly the fields `helper` (as above, required) and `kit`
 (an integer from 1, required). No two entries name the same `helper`, and a helper may not be both a
