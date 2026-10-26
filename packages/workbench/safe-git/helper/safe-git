@@ -260,7 +260,7 @@ _SHAPES = {
     "diff-tree": lambda rest: rest in (
         ["--no-commit-id", "--name-only", "-r", "-z", "HEAD"],
         ["--root", "--no-commit-id", "--name-only", "-r", "-z", "HEAD"]),
-    "config": lambda rest: rest == ["--list", "-z"],
+    "config": lambda rest: rest in (["--list", "-z"], ["--list", "--show-scope", "-z"]),
     "status": lambda rest: rest == ["--porcelain=v1", "-z", "--untracked-files=all"],
 }
 
@@ -1747,7 +1747,190 @@ def describe_commit(argv, cwd):
     return errors, [(name, facts[name]) for name in _COMMIT_FACTS]
 
 
-DESCRIBERS = {"commit": describe_commit, "remove": describe_remove}
+# --- describe push -------------------------------------------------------------------------------
+
+# `describe push` takes the arguments that follow `git push` and has no real command of this module to share their
+# validation with, so this parser is the validation: a fixed grammar, and anything else is `usage` (spec: "The
+# grammar"). No message quotes an argument: a remote argument can be a URL that carries a credential.
+_PUSH_FLAGS = {"-f": "force", "--force": "force", "--force-with-lease": "force_with_lease", "-d": "delete",
+               "--delete": "delete", "-u": "set_upstream", "--set-upstream": "set_upstream",
+               "--no-verify": "no_verify", "-n": "dry_run", "--dry-run": "dry_run", "--atomic": "atomic",
+               "-q": "quiet", "--quiet": "quiet", "-v": "verbose", "--verbose": "verbose"}
+_REMOTE_STATE_FLAGS = ("--mirror", "--follow-tags")
+_PUSH_NAME = re.compile(r"\A[A-Za-z0-9._][A-Za-z0-9._/-]*\Z")
+_PUSH_FLAG_FACTS = ("force", "delete", "set_upstream", "no_verify", "dry_run", "atomic")
+_PUSH_FACTS = ("head", "branch", "remote", "default_branch", "force", "delete", "set_upstream", "no_verify",
+               "dry_run", "atomic", "remote_scheme", "remote_url_has_credentials", "push_config_findings",
+               "push_updates", "push_deletes", "push_forced", "base", "ahead",
+               "tracking_ref_reflog_looks_git_written", "commit_hashes", "commit_messages", "changed_paths",
+               "binary_paths", "submodule_paths", "findings", "diff")
+
+
+class PushRequest:
+    """What the arguments of a push say: the flags given (by their fact names), the remote named (or None), the
+    updates as ``(source, destination, forced)`` and the destinations to delete."""
+
+    def __init__(self):
+        self.flags, self.remote, self.updates, self.deletes = set(), None, [], []
+
+
+def _usage(what):
+    return Refused("usage: safe-git describe push [flags] [remote [refspec...]]: %s" % what, code="usage")
+
+
+def _push_ref(text):
+    return _plain_ref(text, _PUSH_NAME)
+
+
+def parse_push(argv):
+    """The `PushRequest` of the arguments after ``git push``. Refuses with ``usage`` anything outside the grammar,
+    and with ``remote_state_required`` a form whose targets depend on what the remote holds."""
+    request, spelled, index = PushRequest(), set(), 0
+    while index < len(argv) and argv[index].startswith("-"):
+        item = argv[index]
+        if item in _REMOTE_STATE_FLAGS:
+            raise Refused("a push with --mirror or --follow-tags sends what the remote's refs decide, so it cannot "
+                          "be described from local data", code="remote_state_required")
+        name = _PUSH_FLAGS.get(item)
+        if name is None:
+            raise _usage("a flag that is not accepted")
+        if name in spelled:
+            raise _usage("a flag given twice")
+        spelled.add(name)
+        request.flags.add("force" if name == "force_with_lease" else name)
+        index += 1
+    rest = argv[index:]
+    if not rest:
+        if "delete" in spelled:
+            raise _usage("--delete needs a remote and a destination")
+        return request
+    if _REMOTE_NAME.match(rest[0]) is None:
+        raise _usage("the remote must be a configured name, not a URL or a path")
+    request.remote = rest[0]
+    deleting = "delete" in spelled
+    for text in rest[1:]:
+        if text.startswith(("-", "^")) or text in ("", "+"):
+            raise _usage("a refspec that is not accepted")
+        forced = text.startswith("+")
+        body = text[1:] if forced else text
+        if "*" in body:
+            raise Refused("a wildcard refspec sends what the remote's refs decide, so it cannot be described "
+                          "from local data", code="remote_state_required")
+        source, colon, destination = body.partition(":")
+        if ":" in destination or (deleting and (colon or forced)):
+            raise _usage("a refspec that is not accepted")
+        if deleting or (colon and not source):
+            if (colon and forced) or not _push_destination(destination if colon else source):
+                raise _usage("a refspec that is not accepted")
+            request.deletes.append(destination if colon else source)
+        else:
+            if not _push_ref(source) or (colon and not _push_destination(destination)):
+                raise _usage("a refspec that is not accepted")
+            request.updates.append((source, destination if colon else source, forced))
+    if len(request.updates) > 1 or (request.updates and request.deletes) or (deleting and not request.deletes):
+        raise _usage("a push is one update, or deletions only")
+    return request
+
+
+def _push_destination(text):
+    """A destination: a name, or a full ref under ``refs/heads/`` or ``refs/tags/``."""
+    return (_push_ref(text) and text != "HEAD"
+            and (not text.startswith("refs/") or text.startswith(("refs/heads/", "refs/tags/"))))
+
+
+def config_entries(root):
+    """The configuration git reads, in its order, as ``[(scope, section, subsection or None, variable, value or
+    None)]``: the section and variable lower-case, the subsection as written, and a key with no value None."""
+    listing = run(["git", "config", "--list", "--show-scope", "-z"], root, check=False)
+    fields = listing.stdout.split("\0")
+    if fields and fields[-1] == "":
+        fields.pop()
+    if listing.returncode or len(fields) % 2:
+        raise Refused("git could not list its configuration", code="repository_unreadable")
+    entries = []
+    for scope, entry in zip(fields[0::2], fields[1::2]):
+        key, separator, value = entry.partition("\n")
+        section, _, rest = key.partition(".")
+        subsection, dot, variable = rest.rpartition(".")
+        entries.append((scope, section.lower(), subsection if dot else None, variable.lower(),
+                        value if separator else None))
+    return entries
+
+
+def push_remote(entries, branch, given):
+    """The remote a push goes to: `given`, else the first set of ``branch.<name>.pushRemote``, ``remote.pushDefault``
+    and ``branch.<name>.remote``, else ``origin``. A value that is not a remote name is ``target_unresolved``."""
+    if given is not None:
+        return given
+    last = {}
+    for _, section, subsection, variable, value in entries:
+        last[(section, subsection, variable)] = value
+    for key in (("branch", branch, "pushremote"), ("remote", None, "pushdefault"), ("branch", branch, "remote")):
+        if key in last:
+            value = last[key]
+            if value is None or _REMOTE_NAME.match(value) is None:
+                raise Refused("the remote a push would use, from the configuration, is not a remote name",
+                              code="target_unresolved")
+            return value
+    return "origin"
+
+
+def _without_subsection(finding):
+    """A finding of `repo_program_findings` with the subsection of a configuration key left out
+    (``credential.*.helper``): a subsection can be a URL that carries a credential. The findings that are not
+    configuration keys (``hook:pre-push``, ``submodule:path``, ``config:unreadable``) are returned as they are."""
+    if re.match(r"(?:hook|hooks|submodule|config|index):", finding):
+        return finding
+    section, _, rest = finding.partition(".")
+    subsection, dot, variable = rest.rpartition(".")
+    return "%s.*.%s" % (section, variable) if dot else finding
+
+
+def _blank_push_facts():
+    facts = {name: None for name in _PUSH_FACTS}
+    facts.update((name, False) for name in _PUSH_FLAG_FACTS)
+    facts.update((name, []) for name in ("push_config_findings", "push_updates", "push_deletes", "push_forced",
+                                         "commit_hashes", "commit_messages", "changed_paths", "binary_paths",
+                                         "submodule_paths", "findings"))
+    return facts
+
+
+def describe_push(argv, cwd):
+    """``(errors, facts)`` of ``push <argv>``: the flags, the branch, the remote, the base and the commits ahead of
+    it. Nothing is contacted and nothing is written. The facts of the later increments are empty or null."""
+    facts, errors = _blank_push_facts(), []
+    try:
+        request = parse_push(argv)
+        facts.update((name, name in request.flags) for name in _PUSH_FLAG_FACTS)
+        root = git_root(cwd)
+        found = repo_program_findings(root)
+        if found:
+            raise Refused("this repository would make git run a program (%s)"
+                          % ", ".join(_without_subsection(item) for item in found[:10]), code="repo_selects_program")
+        try:
+            facts["head"] = tip(root)
+        except Refused as exc:
+            raise Refused(str(exc), code="branch_unreadable") if exc.code == "head_unreadable" else exc
+        facts["branch"] = branch = current_branch(root, facts["head"])
+        if any(source not in ("HEAD", branch, "refs/heads/" + branch) for source, _, _ in request.updates):
+            raise _usage("the source of an update is HEAD or the current branch")
+        facts["remote"] = remote = push_remote(config_entries(root), branch, request.remote)
+        facts["default_branch"] = default = remote_default_branch(root, remote)
+        if request.deletes:
+            facts["ahead"] = 0
+        else:
+            facts["base"] = base = push_base(root, remote, branch, default)
+            facts["ahead"] = int(run(["git", "rev-list", "--count", base + "..HEAD"], root).stdout.strip())
+    except Refused as exc:
+        if exc.code is None:
+            raise      # a refusal with no code has no place in the tables: stop with no object, as a decline
+        if exc.code == "usage":
+            facts = _blank_push_facts()   # arguments the grammar refuses give no fact
+        errors.append((exc.code, str(exc)))
+    return errors, [(name, facts[name]) for name in _PUSH_FACTS]
+
+
+DESCRIBERS = {"commit": describe_commit, "push": describe_push, "remove": describe_remove}
 
 
 def command_describe(argv, cwd, out, err):
@@ -1875,6 +2058,42 @@ def _resolved(root, ref):
     return value if shown.returncode == 0 and _HEX40.match(value) else None
 
 
+def current_branch(root, commit):
+    """The short name of the branch HEAD names, given `commit`, the commit `tip` found (None when the branch has
+    none). Refuses a branch with no commit, a detached HEAD and a name this helper does not read."""
+    if commit is None:
+        raise Refused("the current branch has no commit yet, so there is nothing to send", code="branch_unborn")
+    named_head = run(["git", "symbolic-ref", "-q", "HEAD"], root, check=False)
+    if named_head.returncode:
+        raise Refused("HEAD is detached; switch to the branch to push", code="head_detached")
+    full = named_head.stdout.strip()
+    if not full.startswith("refs/heads/") or not _branch_ref(full):
+        raise Refused("the branch name is not one this helper reads (ASCII letters, digits and . _ - /)",
+                      code="branch_unreadable")
+    return full[len("refs/heads/"):]
+
+
+def remote_default_branch(root, remote):
+    """The remote's default branch as `refs/remotes/<remote>/HEAD` says, or None."""
+    named = run(["git", "symbolic-ref", "-q", "--short", "refs/remotes/%s/HEAD" % remote], root, check=False)
+    text = named.stdout.strip()
+    if named.returncode == 0 and text.startswith(remote + "/") and _branch_ref("refs/heads/" + text[len(remote) + 1:]):
+        return text[len(remote) + 1:]
+    return None
+
+
+def push_base(root, remote, branch, default, explicit=None):
+    """The commit a push of `branch` to `remote` is compared with: `explicit` when given, else the remote-tracking
+    ref of the branch, else that of the remote's default branch. Refuses when none of them exists."""
+    candidates = [explicit] if explicit else ["refs/remotes/%s/%s" % (remote, branch)]
+    if not explicit and default is not None:
+        candidates.append("refs/remotes/%s/%s" % (remote, default))
+    base = next((value for value in (_resolved(root, ref) for ref in candidates) if value), None)
+    if base is None:
+        raise Refused("no base to compare with; tried %s" % ", ".join(candidates), code="base_unresolved")
+    return base
+
+
 def command_push_check(argv, cwd, out, err):
     """Report what a push of the current branch would send, from local refs only; it never contacts a remote and
     changes nothing. One JSON line: ``remote``, ``branch``, ``target`` (the branch a push of HEAD would update),
@@ -1884,26 +2103,9 @@ def command_push_check(argv, cwd, out, err):
     found = repo_program_findings(root)
     if found:
         raise Refused("this repository would make git run a program (%s); check by hand" % ", ".join(found[:10]))
-    if tip(root) is None:
-        raise Refused("the current branch has no commit yet, so there is nothing to send")
-    named_head = run(["git", "symbolic-ref", "-q", "HEAD"], root, check=False)
-    if named_head.returncode:
-        raise Refused("HEAD is detached; switch to the branch to push")
-    full = named_head.stdout.strip()
-    branch = full[len("refs/heads/"):]
-    if not full.startswith("refs/heads/") or not _branch_ref(full):
-        raise Refused("the branch name is not one this helper reads (ASCII letters, digits and . _ - /)")
-    default = None
-    named = run(["git", "symbolic-ref", "-q", "--short", "refs/remotes/%s/HEAD" % remote], root, check=False)
-    text = named.stdout.strip()
-    if named.returncode == 0 and text.startswith(remote + "/") and _branch_ref("refs/heads/" + text[len(remote) + 1:]):
-        default = text[len(remote) + 1:]
-    candidates = [explicit] if explicit else ["refs/remotes/%s/%s" % (remote, branch)]
-    if not explicit and default is not None:
-        candidates.append("refs/remotes/%s/%s" % (remote, default))
-    base = next((value for value in (_resolved(root, ref) for ref in candidates) if value), None)
-    if base is None:
-        raise Refused("no base to compare with; tried %s" % ", ".join(candidates))
+    branch = current_branch(root, tip(root))
+    default = remote_default_branch(root, remote)
+    base = push_base(root, remote, branch, default, explicit)
     span = base + "..HEAD"
     ahead = run(["git", "rev-list", "--count", span], root).stdout.strip()
     names_text, cut_names = run_capped(["git", "diff", "--name-only", "-z", "--no-renames", "--diff-filter=d", span],

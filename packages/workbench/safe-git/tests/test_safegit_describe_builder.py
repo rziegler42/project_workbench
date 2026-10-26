@@ -190,7 +190,7 @@ class Command(unittest.TestCase):
         return code, out.getvalue(), err.getvalue()
 
     def test_an_unknown_first_argument_exits_one_with_no_object(self):
-        for argv in (["describe"], ["describe", "push"], ["describe", ""], ["describe", "Remove"],
+        for argv in (["describe"], ["describe", "push "], ["describe", ""], ["describe", "Remove"],
                      ["describe", "--help"], ["describe", "remove "], ["describe", "push-check"]):
             with self.subTest(argv=argv):
                 code, out, err = self.run_main(*argv)

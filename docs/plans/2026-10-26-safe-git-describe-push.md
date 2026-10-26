@@ -394,3 +394,54 @@ so, that is an edit beyond status, review record and result, and needs a new app
 
 Open for the owner: the facts print the scheme of the push URL but not its host, so `destination_is_appropriate` sees only
 the remote name; a host fact is deferred. Accepting the decision record is the owner's act.
+
+The owner accepted the record on 2026-10-26 (commit `a3a59d9`, which changed only its status and its index row). A's own
+commit is `94062c5`.
+
+### Increment B — The `describe push` action, its parser and the scalar facts
+
+Done, not yet committed at the time of writing. Changed: `packages/workbench/safe-git/helper/safe-git` (`parse_push` and
+`PushRequest`; `describe_push`; `config_entries` and `push_remote`, which read `git config --list --show-scope -z`, a shape
+added to the allowlist; `current_branch`, `remote_default_branch` and `push_base`, split out of `command_push_check` and
+called by both commands; `DESCRIBERS` gains `push`), the new `tests/test_safegit_describe_push.py` (32 tests), one element
+of `tests/test_safegit_describe_builder.py`, and the shipped approval records. `module.json` is not changed: `describes`
+gains `push` in E.
+
+The object has every fact of the spec in order. In B the flags, `head`, `branch`, `remote`, `default_branch`, `base` and
+`ahead` are filled; the facts of C to E are empty or null. A deletion gives `base` null and `ahead` 0. A `usage` refusal
+blanks every fact; any other code keeps the flags and the facts read so far.
+
+Verification as run: the new tests failed first (the action did not exist), then passed. In the scratch copy the whole
+safe-git directory ran 471 tests, one failing: `test_an_unknown_first_argument_exits_one_with_no_object` used `describe
+push` as its example of an unknown action. That element is now `push ` (a trailing space), so the case count is the same;
+this is the one existing test changed. After the review fixes below: `python3 -B -W error tests/run_all.py` 4467 tests in 10
+roots OK (4435 before, plus the 32 new), `git diff --check`, `wb check`, `wb run code-work check` (51 plans), `doccheck` and
+`refcheck` clean. The `push-check` tests pass unchanged. Two attempts at `release-approvals` were run by the owner (the
+second after the review fixes). The valueless-setting test was written with its fix and was not seen failing alone.
+
+Review: the `reviewer` agent, one exchange, no blocking finding. It read the code and ran nothing. Applied: a program
+setting whose key has a subsection is named without it in the `repo_selects_program` message (`credential.*.helper`), because
+a subsection can be a URL with a credential (my first form of the fix let a URL through; the new test caught it); a valueless
+`branch.<name>.pushRemote`, `remote.pushDefault` or `branch.<name>.remote` is `target_unresolved` and no longer skipped; tests
+added for a valueless setting, a newline in a value, `-f` with `--force-with-lease`, an unborn branch with a name the helper
+does not read (`head_unreadable` is reported as `branch_unreadable`), and the subsection case; one test renamed.
+Recorded, not changed:
+- `describe commit` has the same exposure: its `repo_selects_program` message can carry a subsectioned key. It is outside
+  this plan's scope.
+- `remote_url_has_credentials` and `diff` are null in B though the spec types them boolean and string. C and E set them, and
+  their tests must change the pinned nulls: `remote_url_has_credentials` false where the URL was not read, and `diff` the
+  empty string where the spec says so.
+- A destination of bare `HEAD` is accepted in the no-colon form (`origin HEAD`); D must map it to the current branch.
+- `--mirror` and `--follow-tags` give `remote_state_required` with every fact blank, so `-f --mirror` shows `force` false;
+  `origin --mirror` is `usage`, because a flag after the remote is `usage`.
+- A branch name of about 190 characters or more makes the tracking ref too long for the allowed shape and gives an uncoded
+  refusal (exit 1, no object), as `push-check` does.
+- `-f --force-with-lease` is accepted (Git accepts it); `-f --force` is `usage`.
+- Git's byte layout of `config --list --show-scope -z` (`scope`, NUL, `key`, newline, `value`, NUL) was seen on this machine
+  (Apple Git 2.54.0) and is exercised by the dotted-branch and newline tests; `--show-scope` needs Git 2.26.
+
+Not checked: nothing was run against a real `git push` yet (D); no reflog, remote URL or outgoing-commit read exists yet.
+
+Open for the owner: ten shipped approval records from the previous release are tracked and no longer part of this release,
+and two untracked ones from the first `release-approvals` run of this increment are stale. Deleting them needs the owner's
+approval (`claude-workflow remove`).

@@ -41,9 +41,9 @@
       "tree_hash": "62f5963db079bbd2a0b3d9b25c67e79c2e42fc7a0c4941342b25cb0d4f8aa8d0"
     },
     {
-      "declaration_hash": "5c3f7966c38c616c5ae82f64a237efb42b6e05eef811a721855536b4a263fa55",
+      "declaration_hash": "f4feae8e30a39b22848ba3fceeff313435ec70feec50e18b8e27915780ef462b",
       "name": "safe-git",
-      "tree_hash": "a98023984268d6ac5cb6451313de473f3b2bff923bfff21cd7fe8933eca52b21"
+      "tree_hash": "5f49cb2506f5308886a4674e1cacd13321fae6ed3c06d148420812b23c254478"
     },
     {
       "declaration_hash": "699b15cbb3637244800be23192d3085186fd448a6aab41a4c60c08586229d324",
@@ -53,6 +53,6 @@
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "65dacb99671c7adcff79d62d21e336803a9041e5ad8a6c7320db80677bac5a3a",
+  "tree_hash": "cd506e278ab2e32367d00241880ccd01cb8f567696377b8951876d7c91f6cf15",
   "workbench_version": "0.1.0"
 }
