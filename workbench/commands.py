@@ -96,6 +96,19 @@ def _arguments(command, args):
     if args[0] not in allowed:
         raise CommandError("%s is not an argument of the command %s; it takes one of: %s"
                            % (_shown(args[0]), _shown(command.name), ", ".join(allowed)))
+    if args[0] == "describe":
+        _described(command, args[1:])
+
+
+def _described(command, rest):
+    """`describe` runs only for an action the declaration lists in ``describes``."""
+    listed = ", ".join(command.describes) if command.describes else "no action"
+    if not rest:
+        raise CommandError("describe of the command %s needs an action; it describes: %s"
+                           % (_shown(command.name), listed))
+    if rest[0] not in command.describes:
+        raise CommandError("%s is not an action that the command %s describes; it describes: %s"
+                           % (_shown(rest[0]), _shown(command.name), listed))
 
 
 def check_pin(guarded, ident, found):

@@ -309,16 +309,19 @@ checked with the rest of its declaration, before anything is written.
     `wb launch` run one only when standard input and output are both terminals (plan
     `2026-10-24-owner-run-in-code`). The declaration authorizes the first argument only, so a form that must be allowed to the agent and a form that must not
     are two arguments of the command.
-  - `describes` (optional; *specified, not built: the verifier support and its tests are the first increment of the
-    plan for `safe-git describe`*): a list of at most 16 distinct strings, each `^[a-z][a-z0-9-]*$` and at most 32
+  - `describes` (optional; *the verifier and the launcher rule are built by the plan for `safe-git describe`; the
+    engine's use of it is not*): a list of at most 16 distinct strings, each `^[a-z][a-z0-9-]*$` and at most 32
     characters, default empty. These are the actions the command's `describe` argument answers, in the sense of the
     decision `2026-10-25-describe-interface-for-action-review`. It is allowed only when `describe` is one of the
     command's `arguments`, and `describe` may not be listed in `owner`: the engine runs `describe` for the agent's
-    command and it is read-only by contract.
+    command and it is read-only by contract. *Built (verifier, increment A; launcher, increment B of that plan):*
+    `wb run` and `wb launch` run `describe <action>` only when the second argument is in the command's `describes`,
+    and refuse `describe` with no action, with an action not listed, and with any action when the list is empty. The
+    rule is generic and names no module.
 - Refused: an unknown field, a wrong type, a duplicate key (the parser already refuses it), a `helper` that
   is not in `ships`, a `runtime` other than the two, a duplicate `arguments` entry, an `owner` entry that is not a
   string, is repeated or is not one of the command's `arguments`, and two entries of one
-  module that name the same `helper`. For `describes` *(specified, not built)*: an entry that is not a string, a
+  module that name the same `helper`. For `describes`: an entry that is not a string, a
   duplicate action, an action that fails the form, a non-empty `describes` on a command whose `arguments` lack `describe` (an empty list is allowed, as the default), and
   `describe` in `owner`.
 

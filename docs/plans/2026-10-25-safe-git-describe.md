@@ -298,4 +298,23 @@ not in the text the owner reads. This follows the precedent of `owner` and no sp
 later increment. The spec wording "specified, not built" is left for Increment G, as planned. Not checked by the
 reviewer: the hashing path itself (the test shows the hash changes).
 
-Not done: B to G.
+Committed as `ef1f159`.
+
+### Increment B — The launcher rule for a declared action
+
+Done, not yet committed at the time of writing. Changed: `workbench/commands.py` (`_arguments` calls the new
+`_described` when the first argument is `describe`; both `resolve` and `launch_refusal` reach it through `_arguments`),
+the new `tests/test_describe_launch.py` (14 tests, on the synthetic `tool` module) and the `describes` bullet and the
+refused-list wording in `docs/specs/module-boundary.md`. `describe` with no action, with an unlisted action or with
+any action on an empty list is refused and nothing runs; other arguments are unchanged. The rule names no module.
+
+Verification as run: the new tests failed first (21 failures, an unlisted action ran), then passed; `python3 -B -W
+error tests/run_all.py` ran 4253 tests OK; `git diff --check`, `doccheck` and `refcheck` clean.
+
+Review: the `reviewer` agent, one exchange, no blocking finding. Applied: the `--provides` test did not reach the rule
+(the module provided nothing), so it now declares `provides` and asserts the refusal and a listed action running.
+Accepted limit, for the security pass: a pin the owner typed under another name is left alone, so `describe push`
+launches there; `describes` is a filter there, as the spec says. Left for Increment G: `action-review.md` (lines
+~193-199) and `module-contract.md` (lines ~297, ~411) still say "not built". Not checked by the reviewer: it ran nothing.
+
+Not done: C to G.
