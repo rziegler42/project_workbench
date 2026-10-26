@@ -259,7 +259,7 @@ Review: the `reviewer` agent, one round, no blocking finding. Three non-blocking
 is a day after the retrieval date (applied: the spec says the timezone was not checked); the Python version
 (checked: it is the printed output of `python3 -I -B -V`, 3.15.0). Nothing remains open.
 
-### Increment B — done, not committed
+### Increment B — done, committed as `d3c94e4`
 
 Specified the optional `describes` field on a `commands` entry in `docs/specs/module-boundary.md` ("Declaration
 schema": the field, its refusals, the engine's admission rule, the alternatives that lose, and the note on the
@@ -273,3 +273,26 @@ Review: the `reviewer` agent, one round, no blocking finding. Applied: the hash 
 installer made (a hand pin records no hash, so `describes` is a filter there, like `arguments`); an empty list is
 stated to be allowed. Not applied: a blank line before the `approval` bullet, which was already there. Nothing
 remains open.
+
+### Increment C — done, not committed
+
+Added a "Describe" section to `docs/specs/safe-git.md`, marked specified, not built, and a note in the Declaration
+table and in "Non-goals". It holds: the error codes for the refusals of the real `commit` and `remove` (read from the
+helper and the shared path check); the facts of `describe commit` and `describe remove` with their types; the caps with
+their sources and the arithmetic (196,608 + 28,332 + 8,192 = 233,132 of 262,144, 29,012 spare); the rule that a value is
+omitted whole and never cut; a table that maps each approver check for commit and remove to a fact or an engine or
+rubric check; the push gap as a list; and the acceptance criteria for the plan that builds `describe`. The approver's
+rules, rubric and program were read read-only; their SHA-256 and sizes are in the section. No code changed.
+
+Calls made by the author, for the owner to judge: the `diff` cap of 96 KiB (narrower than the approver's 256 KiB, so a
+commit with a diff between the two declines under `describe`; stated in the section); the object cap of 196,608 bytes;
+the array cap of 200 elements; one error code per refusal class rather than per message; and the new git shapes
+(`cat-file`, `check-ignore`, `ls-files`) that `describe` needs, left to the security pass of plan 2.
+
+Verification as run: `git diff --check`, `wb check`, `wb run code-work check` (47 plans), `doccheck` and `refcheck`
+were clean before the last review fixes; they are rerun before the commit. Not run: the test suite (no code changed).
+
+Review: the `reviewer` agent, two rounds (cap 3). Round 1 found two blocking findings (two `remove` refusals with no
+code; an exit-status contradiction) and nine non-blocking; all were applied. Round 2 found no blocking finding and five
+non-blocking points, all applied (the `no_git_metadata` row, the non-goals line, facts on a refusal, the file system
+monitor in the program-selection test, a criterion for `entry_total`). Nothing remains open.

@@ -18,7 +18,8 @@ one read of the repository is the credential check before a push (`push-check`).
 Non-goals:
 
 - Any other git operation. There is no push, branch, worktree, merge, rebase, reset or tag, and the only
-  reads are the fixed shapes `push-check` uses. A push is a checkpoint that a process module builds
+  reads are the fixed shapes `push-check` uses *(and, once built, the few more that `describe` adds; see
+  "Describe")*. A push is a checkpoint that a process module builds
   (`code-work.md`, "Push") and the owner decides; merging into a shared branch is outside the agent.
 - Review, plans or approval. The module commits what it is told to commit; whether the work was reviewed is
   the process's business.
@@ -33,7 +34,7 @@ Non-goals:
 | requires | nothing |
 | fills, writes | nothing |
 | ships | one helper, `helper/safe-git`, and one neutral skill, `commit-changes` |
-| commands | `safe-git`, whose first argument is `commit`, `remove` or `push-check` (kit 1) |
+| commands | `safe-git`, whose first argument is `commit`, `remove` or `push-check` (kit 1). *(Specified, not built: `describe`, with `describes: ["commit", "remove"]`; see "Describe".)* |
 
 It is run as `wb run safe-git commit`, `wb run safe-git remove` and `wb run safe-git push-check`. The installer pins the helper when the
 owner confirms the install; an edited helper is not run until the change is acknowledged. `code-work`
@@ -98,6 +99,238 @@ repository whose own configuration named a program for a filter, a file system m
 hooks path. A bare `git diff --name-only -z` on a gitlink in the index did start that program in the same setup.
 This is one nested-repository shape and one Git version, not a security review of `commit`, and no test pins
 the case that only HEAD holds.
+
+## Describe *(specified, not built)*
+
+`wb run safe-git describe commit ...` and `wb run safe-git describe remove ...` take exactly the arguments of the real
+`commit` and `remove` and report what the real command would act on, as the accepted decision
+`2026-10-25-describe-interface-for-action-review` requires. This section is what that decision left to the module:
+the names and types of the facts, the refusals as error codes, the numeric caps with their sources, and the
+counterpart of each check of the owner's approver. Nothing here exists in the helper yet. The plan for `safe-git
+describe` builds it and declares `describe` among the command's `arguments` and `describes: ["commit", "remove"]`
+(`module-boundary.md`, "Declaration schema").
+
+**What `describe` does.** It runs the same parsing and validation as the real command, in the same order, up to the
+last step that changes anything, and then stops. For `commit` it runs everything through `git diff --check` of the
+named paths; it stages nothing, runs no `git add`, `git commit` or `_unstage`, and writes no file. For `remove` it
+runs `plan_removal`, which is the real preview, and deletes nothing. It runs git only in the fixed argument
+shapes of the helper. The shapes it has today do not read a HEAD blob, ask whether a path is ignored, or list the tracked
+files below a path, which the facts need (`cat-file -s` and `cat-file blob` of `HEAD:<path>`, `check-ignore -q`, and
+`ls-files -z` of a path). The plan for `describe` adds exactly those shapes to the allowlist, and they are new surface
+that its security pass covers. A refusal the real command would give is returned as `ok: false` with an error, and the
+exit status of `describe` is 0. The only refusal with exit 1 and no object is a `describe` call whose first argument is
+not `commit` or `remove`. Everything else, a missing repository included, is an object with `ok: false`.
+On such an object `contract` is 1, and every fact the refusal prevented is null (a string, whole number or boolean
+fact that could not be found out) or empty (an array); a fact that is simply a copy of an argument (`leave_other_staged`,
+`confirm`, `recursive`) keeps the value given, and `path_count` is the number of paths the call named; a total that could
+not be counted is omitted and named in `omitted`. The names of the other facts are always present. The one outcome it cannot report is a race after the last check: a path
+changed, or HEAD moved, between `describe` and the real command. The real command's own checks (`staging did not give
+exactly the named paths`, `HEAD moved`, and the check of the finished commit) stay with it and have no error code in
+`describe`.
+
+### Errors (`errors[].code`)
+
+One code for each refusal class of the real command. A `message` is the real refusal text, display-cleaned and cut to
+500 characters.
+
+| Action | Code | The real refusal |
+|---|---|---|
+| both | `usage` | an unknown option, an option given twice, an option without its value, a required option missing, no path after `--`, more than 2,000 paths |
+| both | `repository_unreadable` | no repository, a work tree that is not the repository holding its metadata, a working directory outside the repository root, a `.git` that is a link or not a directory, git not found or not runnable, git timed out or exited with an error, or the root cannot be opened safely |
+| both | `path_refused` | a path that is empty, too long, not printable, absolute, with a backslash or colon, an empty, `.` or `..` segment, or with a `.git` or `git~N` segment (the shared path check runs first, so these spellings of Git metadata give this code); a glob or an option-like path; a path that cannot be examined (commit); for remove, a path through a link or something that is not a directory |
+| both | `path_duplicate` | a path named twice, or two spellings of one file (commit); overlapping targets (remove) |
+| commit | `expected_head_invalid` | `--expected-head` that is neither the full 40-digit lower-case hash nor `none` |
+| commit | `head_mismatch` | HEAD is not the expected commit; `none` given where a commit exists |
+| commit | `head_unreadable` | HEAD names neither a commit nor a branch without commits |
+| commit | `subject_invalid` | a subject that is empty, has more than one line (or a NUL or CR) or is over 300 characters |
+| commit | `body_invalid` | a body that is empty, holds a NUL or is over 100,000 characters |
+| commit | `trailer_invalid` | more than 50 trailers, or a trailer that is not one `Key: value` line (at most 1,000 characters) |
+| commit | `message_character_refused` | a control, combining, private-use or invisible character; a look-alike letter; a word that mixes scripts; the real command makes this check only where the attribution setting does not allow attribution, and so does `describe` |
+| commit | `attribution_refused` | tool attribution in the message, where `.workbench/safe-git.json` does not allow it |
+| commit | `setting_invalid` | the attribution setting cannot be read, is not valid, or has the wrong shape or size |
+| commit | `repo_selects_program` | the repository would make git run a program: a hook, a filter, a file system monitor, signing, a gitlink, or an unreadable config, hooks directory or index |
+| commit | `operation_in_progress` | a merge, revert, cherry-pick, rebase or sequencer in progress |
+| commit | `path_unmerged` | a path with an unresolved merge state |
+| commit | `path_in_nested_repository` | a path inside a nested repository |
+| commit | `path_not_a_file` | a path that is, or goes through, a link or a directory, or a link under another spelling (for remove, a path through a link gives `path_refused`) |
+| commit | `path_unknown` | a path that does not exist and is not tracked |
+| commit | `index_unreadable` | git lists the index in a form the helper does not read |
+| commit | `index_has_staged_changes` | something is staged and `--leave-other-staged` was not given |
+| commit | `path_already_staged` | a named path is already staged |
+| commit | `whitespace_errors` | `git diff --check` finds whitespace errors in the named paths |
+| remove | `git_metadata_refused` | a target the removal's own check takes for Git metadata after the shared path check passed it (a look-alike spelling of `.git`); a plain `.git` segment gives `path_refused` |
+| remove | `target_missing` | a target that does not exist, or a directory on the way that does not exist |
+| remove | `recursive_required` | a directory target without `--recursive` |
+| remove | `repository_root_refused` | the repository root as a target |
+| remove | `nested_repository` | a target that is, lies inside, or holds a nested repository |
+| remove | `other_filesystem` | a target, a directory on the way to it, or a directory in it, on another filesystem |
+| remove | `tree_too_large` | a tree deeper than 100 levels or with more than 100,000 entries |
+| remove | `target_changed` | a directory that changed while it was being checked |
+
+Whether the same code is given for two causes is a choice of this table: a code names the class a rule can act on, and
+the `message` keeps the detail. `describe` fails the test of plan 2 if a real refusal has no code here, or maps to a
+code that does not describe it.
+
+### Facts of `describe commit`
+
+Types are those the decision allows: a string, a whole number, a boolean, null, or an array of strings. Facts are listed
+in the order they are added to the object, which is the order that decides what is omitted at the cap (below).
+
+| Fact | Type | Meaning |
+|---|---|---|
+| `head` | string or null | the full hash of HEAD; null on a branch with no commit |
+| `expected_head` | string or null | the `--expected-head` as given when valid, else null |
+| `leave_other_staged` | boolean | whether the option was given |
+| `path_count` | whole number | the number of paths named |
+| `subject` | string | the subject as given |
+| `trailers` | array of strings | the trailers as given |
+| `body` | string or null | the body as given, or null when none |
+| `attribution_allowed` | boolean | whether the attribution setting allows tool attribution |
+| `program_findings` | array of strings | the names, never the values, of the settings, hooks and gitlinks that make git run a program (as `repo_program_findings` returns them) |
+| `staged_paths` | array of strings | the paths already staged |
+| `requested_paths` | array of strings | the named paths, as given |
+| `paths` | array of strings | the same paths after validation; empty when validation refused them |
+| `new_paths`, `modified_paths`, `deleted_paths`, `unchanged_paths` | arrays of strings | each path by its change against HEAD, computed from the HEAD blob and the working-tree file without a filter |
+| `binary_paths` | array of strings | paths with a NUL byte in the old or new content, whose diff is not given |
+| `not_regular_paths` | array of strings | paths that are not a regular file, or that lie under a linked directory |
+| `diff` | string | the unified diff of the text paths, `HEAD/<path>` against `work/<path>`, computed by the module without any filter, text conversion or external diff |
+| `omitted` | array of strings | the names of facts left out at a cap; empty when `truncated` is false |
+
+The facts are the values the real command acts on: the paths are the ones it would stage, the message is the one it
+would write, and HEAD is the one it would compare. The helper does not duplicate the checks it shares with the real
+command; it calls them.
+
+### Facts of `describe remove`
+
+| Fact | Type | Meaning |
+|---|---|---|
+| `confirm` | boolean | whether `--confirm` was given |
+| `recursive` | boolean | whether `--recursive` was given |
+| `requested_paths` | array of strings | the named paths, as given |
+| `target_paths` | array of strings | the paths the real preview lists, in order; empty when validation refused them |
+| `file_targets`, `directory_targets`, `link_targets`, `other_targets` | arrays of strings | the targets by kind, the four kinds the real preview reports; a link target is unlinked and its destination is not followed |
+| `tracked_targets` | array of strings | targets with at least one tracked file below or at them |
+| `ignored_targets` | array of strings | targets that `.gitignore` ignores |
+| `ignore_unknown_targets` | array of strings | targets whose ignored status could not be determined (a timeout or an error), never guessed |
+| `tracked_file_total` | whole number | the exact number of tracked files at or under all targets |
+| `entry_total` | whole number | the number of entries, counting each target and everything below it (files, directories and links), links not followed |
+| `size_total` | whole number | the bytes of the regular files under all targets |
+| `omitted` | array of strings | as above |
+
+When a tree holds more than 10,000 entries the totals are not complete: `entry_total` and `size_total` are omitted,
+named in `omitted`, and `truncated` is true (source: the approver's own bound, `STATS_ENTRY_CAP`). The real command
+allows 100,000 entries; a removal between the two always declines and the owner sees the normal prompt.
+
+### Caps and their sources
+
+| Cap | Value | Source and reason |
+|---|---|---|
+| the serialized object | 196,608 bytes (192 KiB), compact JSON as the module prints it, non-ASCII escaped | the bridge prompt limit less the margin below |
+| a string value other than `diff` | 32,768 bytes | the real body limit is 100,000 characters; a body over this is omitted, so a commit with a very long body declines |
+| `diff` | 98,304 bytes (96 KiB), measured before escaping | the approver's own cap is 256 KiB in all and 64 KiB for a file, read in pieces; whole-value rule below |
+| an array | 200 elements, each at most 1,024 bytes | the approver's outgoing-path cap, 200; the real command allows 2,000 paths |
+| a whole number | 0 to 2<sup>53</sup> − 1 | it must survive a JSON reader that uses a double |
+
+The arithmetic. The model bridge accepts a prompt of at most 262,144 bytes (`model-bridge.md`). The facts, the rubric,
+the questions and the framing travel in one prompt. Facts: 196,608. Remainder: 262,144 − 196,608 = 65,536. The approver's
+rubric file today is 14,166 bytes; twice that is 28,332, which allows the engine's rubric to grow to twice the size of
+today's; the check names, the command text and the framing are allowed 8,192. Together 196,608 + 28,332 + 8,192 =
+233,132, which leaves 29,012 bytes unused. The object cap, not the sum of the caps of its parts, bounds the prompt: the
+parts can add up to more than 196,608 and that is handled by the rule below. The rubric size is the author's estimate
+from the approver's file; the engine's plan measures its own and adjusts the cap, not the rule.
+
+**What is left out at a cap.** A value is never cut. Facts are added in the order of the tables. A value that would
+exceed a cap above, or that makes the object exceed 196,608 bytes, is not added: its name goes into `omitted`, `truncated`
+is true, and later facts are still tried in order. A `diff` that does not fit is therefore omitted in full. The engine
+treats `truncated: true` as incomplete and declines (decision 3). In plain words, a very large commit always declines
+and the owner then sees the normal prompt. This is the intended price of a complete view: the review never judges a
+partial diff.
+
+### Each check of the approver, and where it goes
+
+The checks of today's approver for the rules `claude-workflow-commit`, `safe-git-commit`, `claude-workflow-remove`,
+`safe-git-remove` and `git-push` (read on 2026-10-25, role USER, not run). Provenance, role USER, SHA-256: the
+approver program `d8b3facdee46432d27547a07865abf024741929ae2d9191e1015ee8280bcd613` (122,474 bytes); its rubric
+`49e369d28ee425c66608dcd6540eb9aa945d6ca000a47e48f117ac1a2b172799` (14,166 bytes, the figure used above); the rule files
+`claude-workflow-commit` `e7743892a3bb77c034153999478faf131b04446a294accbbb3e5558cc55407c1`, `safe-git-commit`
+`dc539ae04d061aa82fb4a494543001d2377525e6f7ff1bafc2a73ee9ce362d4e`, `claude-workflow-remove`
+`f7822bfbca84da927bbe04564ff2589ce8df7bd7587fb7eed38b73f2b4ec84e9`, `safe-git-remove`
+`560f4edcc281d40f745b9f990cefbff0ba9593166101e55a632696f6dcd4b5b2` and `git-push`
+`11a01a007a99bd3e79fe4e9f3ac25da0c3706770478260ee9c1f0288a6f5f3cf`. The caps quoted from the approver (256 KiB in all,
+64 KiB for a file, 200 outgoing paths, 10,000 entries) are its constants `DIFF_CAP_TOTAL`, `DIFF_CAP_PER_FILE`,
+`OUTGOING_PATH_CAP` and `STATS_ENTRY_CAP` as read. "Engine" is a check the engine makes in code
+over facts; "rubric" is a question the model answers over facts. Every check has a counterpart for a commit and a
+removal. One bound is narrower: the approver reads a diff up to 256 KiB in all, and `describe` gives one of at most
+96 KiB, so a commit whose diff lies between the two is reviewed today and declines under `describe` (the owner sees the
+normal prompt). The owner may raise the `diff` cap; the object cap and the rubric margin above are the limit.
+
+| Approver check | Action | Counterpart |
+|---|---|---|
+| `head_matches` | commit | engine: `head` equals `expected_head`; also error `head_mismatch` |
+| `repo_config_safe` | commit | engine: `program_findings` is empty; also error `repo_selects_program` |
+| `staging_state_ok` | commit | engine: `staged_paths` and `leave_other_staged`; also errors `index_has_staged_changes`, `path_already_staged` |
+| `paths_valid` | commit | `ok` and the path errors |
+| `message_valid` | commit | `ok` and the message errors |
+| `paths_not_credentials` | commit | engine: its credential-name list over `requested_paths` and `paths` (the list moves from the approver to rule data) |
+| `paths_regular` | commit | engine: `not_regular_paths` is empty |
+| `facts_complete` | commit | engine: `truncated` is false and `binary_paths` is empty |
+| `no_secret_lines` | commit | engine: its secret scan over `diff`, `subject`, `body` and `trailers`, before anything goes to a bridge; a hit withholds the diff |
+| `message_matches_change` | commit | rubric over `subject`, `body`, `trailers`, `paths` and `diff` |
+| `scope_is_coherent` | commit | rubric over `paths` and `diff` |
+| `change_is_safe_in_itself` | commit | rubric over `diff` and the change lists |
+| `no_reviewer_directed_text` | commit | rubric over `subject`, `body`, `trailers` and `diff`; the approver's list of reviewer-facing paths is rule data over `paths` |
+| (completeness) | remove | engine: `truncated` is false, as for a commit |
+| `confirm_present` | remove | engine: `confirm` is true |
+| `removal_valid` | remove | `ok` and the removal errors |
+| `ignore_status_known` | remove | engine: `ignore_unknown_targets` is empty |
+| `preview_matches_arguments` | remove | engine: `target_paths` equals `requested_paths` |
+| `no_git_metadata` | remove | engine: no segment of `requested_paths` is `.git`, folded; also errors `path_refused` and `git_metadata_refused` |
+| `targets_look_disposable`, `scope_is_narrow`, `no_reviewer_directed_text` | remove | rubric over the target lists, the counts and `requested_paths` |
+
+**The push gap.** `push-check` is the module's read for `git push`. It gives `remote`, `branch`, `target`,
+`default_branch`, `base`, `ahead`, `changed_paths`, `findings` and `truncated`. Of the approver's checks for
+`git-push`, these have a counterpart today: `facts_complete` (`truncated`), `outgoing_paths_not_credentials`
+(engine over `changed_paths`, at most 500), `no_secret_lines` in part (`findings`, six narrow patterns against the
+approver's wider scan) and `destination_is_appropriate` (`remote`, `branch`, `default_branch`). These have none:
+
+- `repo_config_safe` for a push: the approver also refuses credential helpers, a git proxy, an askpass program, a
+  receive-pack or vcs setting and an ssh variant; `push-check` refuses only what `commit` refuses.
+- `remote_is_configured` and `remote_transport_safe`: `push-check` does not report whether the remote is configured, its
+  URL scheme, or whether the URL embeds credentials.
+- `push_target_known`: it takes the target to be the current branch; it does not read `push.default`, `pushRemote`,
+  `remote.<name>.push` or the refspecs of the command.
+- `no_force_push`, `no_delete_push`, `no_tag_push`: these depend on the flags and refspecs of the command and on
+  `push.followTags` and `remote.<name>.mirror`. The flags are in the command text, which the engine reads itself;
+  the configuration is not reported.
+- `outgoing_known` in part, and `outgoing_trusted`: `ahead` and `base` are given, but not whether the tracking ref
+  looks written by git (the approver reads its reflog).
+- `commits_match_the_branch_purpose`, `change_is_safe_in_itself`, `no_reviewer_directed_text` for a push: they need the
+  outgoing commit messages and the outgoing diff, which `push-check` does not give.
+
+The gap is not designed here. A later plan extends `push-check`, or adds a `describe push`, to cover it; the split in
+`action-review.md` has a step for it (Increment D records it). Until then a push stays with the approver.
+
+### Acceptance criteria for the plan that builds `describe`
+
+- For each action the facts equal what the real command acts on: a test builds one repository state and compares the
+  `paths`, the message and `head` of `describe commit` with the commit the real command makes, and `target_paths` of
+  `describe remove` with the real preview; `entry_total` is checked against a count made by the test, since the real
+  preview reports `entries` only below a directory.
+- The repository is byte for byte the same after the call, for every case of the tests: files, index, refs, hooks and
+  configuration.
+- Every refusal in the "Errors" table has a test that gives it and shows `ok: false` and that code, and the real
+  command refuses the same input.
+- A value over a cap is omitted whole, named in `omitted`, and `truncated` is true; no string in `facts` is a cut
+  string; a diff over 98,304 bytes is omitted in full.
+- The output obeys the decision's field rules: the types, the bounds on `code` and `message`, `ok` true only with no
+  error, and no extra field.
+- A repository whose configuration selects a program (a hook, a filter, a file system monitor, a gitlink with its own configuration), for `describe remove` as well as
+`describe commit`, never
+  starts that program during `describe`: a test with a program that writes a marker file finds no marker.
+- Each overlap named in "Errors" gives the code the table says: a plain `.git` segment gives `path_refused` for both
+  actions; a link on the way gives `path_not_a_file` for a commit and `path_refused` for a removal; `contract` is 1.
+- An object of exactly 196,608 bytes is accepted and one byte more omits the value that crosses it; `omitted` lists
+  names in the order of the tables.
 
 ## The attribution setting
 
