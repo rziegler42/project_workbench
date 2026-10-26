@@ -1,6 +1,6 @@
 # Build `safe-git describe` for `commit` and `remove`
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-25
 Candidate: none (plan 2 of the five in the split of `docs/specs/action-review.md` for `workbench-v1#action-review-engine`; it builds the facts side only, and the candidate is complete only when the engine is built, so the plan that builds the engine names the candidate)
 Specs: safe-git, module-boundary, module-contract, action-review
@@ -281,7 +281,7 @@ not an approval; the plan stays `Proposed` for the owner.
 
 ### Increment A — Verifier support for `describes`
 
-Done, not yet committed at the time of writing. Changed: `workbench/declarations.py` (`Command` gains `describes` after
+Done and committed as `ef1f159`. Changed: `workbench/declarations.py` (`Command` gains `describes` after
 `owner`, default empty; `MAX_DESCRIBES = 16`; validation in `_commands`; the module docstring) and the new
 `tests/test_describes_declaration.py` (14 tests). Refused: a non-list or non-string entry, more than 16, a duplicate, an
 action of the wrong form or over 32 characters, a non-empty list without `describe` among the `arguments`, and
@@ -501,7 +501,7 @@ Limits left open, to be written down in G:
 
 ### Increment G — The specs say what is built
 
-Done, not yet committed at the time of writing. Documents only; nothing under `packages/workbench/` changed. Changed:
+Done and committed as `3db2b98`. Documents only; nothing under `packages/workbench/` changed. Changed:
 `docs/specs/safe-git.md` (the declaration row, the "Describe" section marked built, the errors table gains
 `path_converts_on_add`, `binary_paths` covers bytes that are not UTF-8, the exit-1 cases are stated, the acceptance
 criteria are marked as the plan's, and "As built, and its limits" records the departures from the draft, the limits of
