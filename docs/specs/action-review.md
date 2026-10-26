@@ -177,8 +177,11 @@ not of the raw text); `facts_sha256` (of the canonical serialization of the `des
 format number). It holds no command text, no fact and no diff, with two residual exposures: `reason` is bounded,
 display-cleaned model output that could quote a path or a line it was shown, and a hash of a short argument list can be
 guessed by dictionary, so "hashes, never text" is not secrecy. It lives outside every project, in the owner's own data
-directory beside the approver's verdict log, so a vendor program that opens files in the project cannot find it. Who
-writes it, and whether a failed write may withhold an approve, are open questions for the owner (below).
+directory beside the approver's verdict log, so a vendor program that opens files in the project cannot find it. The owner
+decided on 2026-10-25 that the owner's thin hook writes it, from the row the engine hands back, and that a failed write
+never withholds an approve (below, "Decided by the owner"). The engine writes nothing outside the project; the engine's
+plan fixes how the row reaches the hook (for example a flag that prints it as one JSON line on standard error), without
+adding a field to the verdict object.
 
 **How the engine learns that a command is pinned and declared.** Only part of this is settled today:
 
@@ -187,12 +190,21 @@ writes it, and whether a failed write may withhold an approve, are open question
   (`module-boundary.md`, "A helper that runs another module's command"; a hand pin records no declaration hash). The
   engine treats any refusal as a refusal of its own (exit 1) and approves nothing. `wb run` takes a command name, not
   a module name, so a rule's module and action must map to a command name; the engine's plan fixes that mapping.
-- *Declared: not settled.* The launcher checks the first argument against `arguments`, and has no knowledge of
-  `describes` (`module-boundary.md`, "Declaration schema"). Nothing today lets a helper learn which action a command
-  answers, and the engine reading `module.json` itself would be a second check of a declaration the launcher already
-  hash-checks, with a different trust. This is a named open question for the owner. The author does not choose.
+- *Declared: decided, not built.* Today the launcher checks the first argument against `arguments` and has no
+  knowledge of `describes` (`module-boundary.md`, "Declaration schema"); nothing lets a helper learn which action a
+  command answers, and the engine reading `module.json` itself would be a second check of a declaration the launcher
+  already hash-checks, with a different trust. The owner decided on 2026-10-25 that the launcher enforces it: when a
+  command's first argument is `describe`, `wb run` refuses unless the second argument is in the command's `describes`.
+  The rule is generic and names no module or action. The engine then needs no knowledge of declarations, and a
+  refusal is a refusal of the engine (exit 1). The rule is built by the plan for `safe-git describe`.
 
-**The timeout.** Still open (see "Constraints and assumptions"). No figure has been stated; the author chooses none.
+**The timeout.** Decided by the owner on 2026-10-25, as provisional figures: the bridge's `--timeout` is 20 seconds,
+the engine's own limit is 25 seconds, and the hook's limit is 30 seconds, so each layer reports before the one outside
+it ends it (`model-bridge.md` requires the engine's limit to exceed the bridge's). The source is the approver's log,
+read on 2026-10-25: 876 reviews, the median model call 7.5 seconds, the 95th percentile 13.4 seconds, and 20 reviews
+(about 2%) ended at the approver's 15-second limit with no verdict; the approver's hook limit is 25 seconds. The engine
+adds the launcher, `describe` and a larger fact set, so the margin is wider. The figures are revisited when the shadow
+period has logged about 30 of the engine's own reviews. A review that times out leaves the owner at the normal prompt.
 
 ### Settings and the bridge (default)
 
@@ -277,12 +289,13 @@ Each is a plan of its own, in this order. None exists, and the owner approves ea
 1. **The interface, documented. Done by plan `2026-10-25-describe-interface-documented`.** The `describe` decision
    is accepted. The plan settled what it left open: the form of a module's declaration in `module-contract.md` and
    `module-boundary.md`, the numeric caps and the fact names for `commit` and `remove` in `safe-git.md`, and the
-   engine's contract in this spec, with three questions left to the owner (how the engine knows a command is declared, who writes the log, the timeout; see "Open questions"). It also holds the
+   engine's contract in this spec, and the owner's three decisions on 2026-10-25 (the launcher rule for a declared action, who writes the log, the timeout; see "Decided by the owner"). It also holds the
    read-only count of the approver's declines by failed check, so the rubric is written knowing where the approver
    goes wrong.
 2. **`safe-git describe`** for `commit` and `remove`, with tests that the facts equal what the real command acts on and
-   that the call changes nothing. Its first increment is the verifier support for the `describes` field (and the
-   launcher rule, if the owner chooses option (a) under "Open questions"); its security pass covers the new git shapes.
+   that the call changes nothing. Its first increment is the verifier support for the `describes` field; the launcher rule that refuses
+   `describe <action>` for an action not in `describes` follows it; its security pass covers the new git shapes and
+   that rule.
    Between 2 and 3, or alongside 3: **the push gap**, extending `push-check` or adding `describe push` for the checks
    listed in `safe-git.md` ("The push gap"). Until it is done a push stays with the approver.
 3. **The engine** with its checks, rules, rubric, log and bridge call, tested with a fake bridge. No hook.
@@ -316,24 +329,30 @@ Each is a plan of its own, in this order. None exists, and the owner approves ea
 - Standard library only, a helper per command, pinned by the installer (`module-boundary.md`).
 - The engine runs a `describe` command and a bridge only through `wb run`, as decision 4 requires. A security review is
   owed because a helper starts another module's pinned command (decision 4, consequences).
-- Assumes a hook can run `wb run` in good time. How long a review may take before the prompt is shown is open.
+- Assumes a hook can run `wb run` in good time. The provisional limits are under "The verdict, the output and the log".
 - The approver's rubric text is read and ported by the plan that builds the engine; this spec does not restate it.
+
+## Decided by the owner (2026-10-25)
+
+The owner took the author's recommendation on each of three questions the plan `2026-10-25-describe-interface-documented`
+left open.
+
+- **How the engine knows a command is declared for an action: the launcher enforces it (option (a)).** `wb run` refuses
+  `describe <action>` unless the action is in the command's `describes`. Rejected: (b), a read-only `wb` command that
+  lists declared (module, command, action) triples for the engine to check first, because it leaves two places to
+  enforce. The cost accepted: the launcher knows one verb and one argument position, although `module-boundary.md` says
+  the installer knows no command by name and the decision rejected a launcher `describe` as module content. The rule is
+  generic and names no module. `module-boundary.md` is updated when the rule is built.
+- **Who writes the engine's log: the owner's thin hook, and a failed write never withholds an approve.** The engine runs
+  as an agent-reachable pinned command and the floor decision (`2026-10-24-project-guarantees-a-floor`) says the agent
+  writes nothing at the user level, so the engine writes nothing outside the project. The hook notes a failed write and
+  goes on. The cost accepted: a review can be approved with no log row, so the log is a record and not a gate.
+- **The timeout: 20 seconds for the bridge, 25 for the engine, 30 for the hook, provisional.** The source and the
+  reason for the order are under "The verdict, the output and the log". They are revisited with the shadow period's
+  own durations.
 
 ## Open questions for the owner
 
-- **How does the engine know a command is declared for an action?** The launcher enforces the pin but not `describes`.
-  Options: (a) the launcher refuses `describe <action>` unless the action is in the command's `describes`, so the
-  engine needs no knowledge and the check is enforced where the pin is; this adds a small rule to `wb run` and its
-  plan; (b) a read-only `wb` command lists the declared (module, command, action) triples and the engine checks them
-  first. The author leans to (a): one enforcement point, nothing for the engine to get wrong. The cost of (a) is that the
-  launcher would know a verb and an argument position, though `module-boundary.md` says the installer knows no command
-  by name and the decision rejected a launcher `describe` as module content; (b) keeps the launcher generic. Plan 2's first
-  increment (the verifier support for `describes`) is the same under both; (a) adds the launcher rule to it.
-- **Who writes the engine's log, and may a failed write withhold an approve?** The engine runs as an agent-reachable pinned command, and the floor decision
-  (`2026-10-24-project-guarantees-a-floor`) says the agent writes nothing at the user level. Options: the owner's thin
-  hook writes the row from fields the engine prints (the author's lean, so that the engine writes nothing outside the
-  project); or the engine writes it as the owner's process when the hook runs it. The location is fixed above.
-- **The timeout** the hook gives a review is still open.
 - Is a separate `describe` subcommand the right shape, or should the interface be something else?
 - Decided: you label real commands and review a test set, with the bound above. Open: whether 10% stays after
   plan 1's count.
@@ -424,6 +443,12 @@ Limits. A decline in the log is not a false decline: no label exists, so the cou
 and not which were wrong. The log grows, so these figures hold as of the retrieval date. The `ask-codex-archive` rows
 belong to an action this design retires. A command whose rule does not load is not reviewed at all, so the log cannot
 show it (see "Non-goals and anti-goals"). The `reason_text` field was not read.
+
+Durations for the timeout decision: a second read of the same log (role USER, `verdicts.jsonl`), later on 2026-10-25,
+by a scratch script (`python3 -I -B`, binary read, counts only) over the `codex_seconds` field. Measured immediately
+afterwards, the log was 672,275 bytes with SHA-256 `796046453f59e0ffb09ce28401b133e6c6c0443c8de43d13d832c9a8c3fc7f48`
+(it had grown since the first read, so the two sets of counts differ by the rows added). Result: 876 rows with a
+duration, median 7.5 s, 90th percentile 11.7 s, 95th 13.4 s, 168 over 10 s, 20 at the 15 s limit.
 
 What it shows: `no_reviewer_directed_text` (99) and `no_secret_lines` (52) lead the commit declines;
 `no_secret_lines` (47) leads the push declines, with `facts_complete` (15) second; and `targets_look_disposable` (48)
