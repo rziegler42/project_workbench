@@ -15,11 +15,14 @@ anything that would make git run a program, and a commit is refused when there i
 global and system Git configuration is trusted. It never reads or writes the guarded store.
 """
 
+import difflib
+import errno
 import json
 import os
 import re
 import stat
 import sys
+import time
 import unicodedata
 
 from wbkit import display, jsonstrict, safefs
@@ -28,7 +31,12 @@ _DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0
 
 
 class Refused(Exception):
-    """Nothing was done; the message says why."""
+    """Nothing was done; the message says why. `code` names the class of refusal for `describe`, which reports
+    it as data; the real commands print the message only."""
+
+    def __init__(self, message="", code=None):
+        super().__init__(message)
+        self.code = code
 
 
 def shown(text, limit=120):
@@ -201,6 +209,20 @@ def _diff_shape(rest):
     return _flags_ok(flags) and bool(flags)
 
 
+def _head_blob(argument):
+    """``HEAD:<path>`` for a path that stays in the repository and has no empty or ``.`` segment."""
+    path = argument[5:] if isinstance(argument, str) and argument.startswith("HEAD:") else None
+    return path is not None and _paths_ok([path]) and all(part not in ("", ".") for part in path.split("/"))
+
+
+_CONVERTING = ("filter", "ident", "working-tree-encoding")
+
+
+def _literal(path):
+    """A path git reads as the file it names: no leading colon (pathspec magic), glob or escape, and no leading dash."""
+    return not path.startswith(("-", ":")) and not any(char in path for char in "*?[]\\")
+
+
 def _commit_shape(rest):
     start = 1 if rest[:1] == ["--cleanup=whitespace"] else 0
     index = start
@@ -224,7 +246,13 @@ _SHAPES = {
     and set(rest[:-1]) <= _LOG_FLAGS and _LOG_REQUIRED <= set(rest[:-1]),
     "rev-list": lambda rest: len(rest) == 2 and rest[0] == "--count" and _RANGE.match(rest[1]) is not None,
     "ls-files": lambda rest: (rest[:2] == ["--error-unmatch", "--"] and _paths_ok(rest[2:]))
-    or rest == ["-s", "-z"] or (rest[:3] == ["-s", "-z", "--"] and _paths_ok(rest[3:])),
+    or rest == ["-s", "-z"] or (rest[:3] == ["-s", "-z", "--"] and _paths_ok(rest[3:]))
+    or (rest[:2] == ["-z", "--"] and _paths_ok(rest[2:])),
+    "cat-file": lambda rest: len(rest) == 2 and rest[0] in ("-s", "blob") and _head_blob(rest[1]),
+    "check-attr": lambda rest: rest[:1 + len(_CONVERTING)] == ["-z"] + list(_CONVERTING)
+    and _after_dashes(rest, 1 + len(_CONVERTING)),
+    "check-ignore": lambda rest: len(rest) == 3 and rest[:2] == ["-q", "--"] and _paths_ok(rest[2:])
+    and _literal(rest[2]),
     "add": lambda rest: _after_dashes(rest, 0),
     "commit": _commit_shape,
     "reset": lambda rest: rest[:1] == ["-q"] and _after_dashes(rest, 1),
@@ -256,7 +284,8 @@ def _resolve_git(argv, cwd):
     entries = trusted_path_entries(boundary) or FALLBACK_PATH
     found = trusted_which("git", boundary, entries)
     if found is None:
-        raise Refused("git was not found in an absolute PATH entry outside the repository")
+        raise Refused("git was not found in an absolute PATH entry outside the repository",
+                      code="repository_unreadable")
     return found, entries
 
 
@@ -271,12 +300,14 @@ def run(argv, cwd, check=True, timeout=GIT_TIMEOUT, env_extra=None):
                                 encoding="utf-8", errors="surrogateescape", check=False,
                                 env=git_environment(entries, env_extra), timeout=timeout)
     except subprocess.TimeoutExpired:
-        raise Refused("git %s did not finish within %d seconds" % (argv[1], timeout))
+        raise Refused("git %s did not finish within %d seconds" % (argv[1], timeout), code="repository_unreadable")
     except OSError as exc:
-        raise Refused("git %s could not be started (%s)" % (argv[1], display.ascii_text(exc.strerror or "error")))
+        raise Refused("git %s could not be started (%s)" % (argv[1], display.ascii_text(exc.strerror or "error")),
+                      code="repository_unreadable")
     if check and result.returncode:
         detail = (result.stderr or result.stdout or "no message").strip()[-300:]
-        raise Refused("git %s failed (%d): %s" % (argv[1], result.returncode, display.ascii_text(detail)))
+        raise Refused("git %s failed (%d): %s" % (argv[1], result.returncode, display.ascii_text(detail)),
+                      code="repository_unreadable")
     return result
 
 
@@ -342,20 +373,21 @@ def git_root(path):
         same = False
     if not same:
         raise Refused("git reports a work tree that is not the repository holding its metadata "
-                      "(a core.worktree redirect?); refusing to act")
+                      "(a core.worktree redirect?); refusing to act", code="repository_unreadable")
     marker = os.path.join(top, ".git")
     if os.path.islink(marker):
-        raise Refused("the repository's .git is a link; refusing to act")
+        raise Refused("the repository's .git is a link; refusing to act", code="repository_unreadable")
     if os.path.isdir(marker):
         gitdir = run(["git", "rev-parse", "--absolute-git-dir"], path).stdout.strip()
         if os.path.realpath(gitdir) != os.path.realpath(marker):
             raise Refused("git is using a git directory that is not the repository's own .git "
-                          "(an embedded or bare repository?); refusing to act")
+                          "(an embedded or bare repository?); refusing to act", code="repository_unreadable")
     else:
         raise Refused("the repository's .git is not a directory (a separate git directory or a work tree "
-                      "of another repository?); refusing to act")
+                      "of another repository?); refusing to act", code="repository_unreadable")
     if os.path.commonpath([path, top]) != top:
-        raise Refused("the working directory is outside the repository root git reports; refusing to act")
+        raise Refused("the working directory is outside the repository root git reports; refusing to act",
+                      code="repository_unreadable")
     return top
 
 
@@ -501,16 +533,16 @@ def parse_commit(argv):
     while index < len(argv) and argv[index] != "--":
         option = argv[index]
         if option not in _COMMIT_OPTIONS:
-            raise Refused("unknown option: %s" % shown(option, 40))
+            raise Refused("unknown option: %s" % shown(option, 40), code="usage")
         if option != "--trailer" and option in seen:
-            raise Refused("%s was given more than once" % option)
+            raise Refused("%s was given more than once" % option, code="usage")
         seen.add(option)
         if option == "--leave-other-staged":
             request.leave_other_staged = True
             index += 1
             continue
         if index + 1 >= len(argv):
-            raise Refused("%s needs a value" % option)
+            raise Refused("%s needs a value" % option, code="usage")
         value = argv[index + 1]
         index += 2
         if option == "--expected-head":
@@ -523,15 +555,15 @@ def parse_commit(argv):
             request.trailers.append(value)
     if index >= len(argv):
         raise Refused("usage: safe-git commit --expected-head <hash> --subject <text> [--body <text>] "
-                      "[--trailer 'Key: value']... [--leave-other-staged] -- <path>...")
+                      "[--trailer 'Key: value']... [--leave-other-staged] -- <path>...", code="usage")
     request.paths = argv[index + 1:]
     for required, label in ((request.expected, "--expected-head"), (request.subject, "--subject")):
         if required is None:
-            raise Refused("%s is required" % label)
+            raise Refused("%s is required" % label, code="usage")
     if not request.paths:
-        raise Refused("name at least one path after --")
+        raise Refused("name at least one path after --", code="usage")
     if len(request.paths) > MAX_PATHS:
-        raise Refused("more than %d paths" % MAX_PATHS)
+        raise Refused("more than %d paths" % MAX_PATHS, code="usage")
     return request
 
 
@@ -541,7 +573,8 @@ def validate_expected(value):
     if value == "none":
         return None
     if _HEX40.match(value) is None:
-        raise Refused("--expected-head must be the full 40-digit lower-case hash of HEAD, or none")
+        raise Refused("--expected-head must be the full 40-digit lower-case hash of HEAD, or none",
+                      code="expected_head_invalid")
     return value
 
 
@@ -549,15 +582,17 @@ def validate_message(request):
     """Refuse a subject, body or trailer that git or a reader would read differently from what was given."""
     subject = request.subject
     if not subject.strip() or len(subject) > MAX_SUBJECT or any(c in subject for c in "\0\r\n"):
-        raise Refused("the subject must be one non-empty line of at most %d characters" % MAX_SUBJECT)
+        raise Refused("the subject must be one non-empty line of at most %d characters" % MAX_SUBJECT,
+                      code="subject_invalid")
     if request.body is not None:
         if "\0" in request.body or len(request.body) > MAX_BODY or not request.body.strip():
-            raise Refused("the body must be non-empty text without NUL, at most %d characters" % MAX_BODY)
+            raise Refused("the body must be non-empty text without NUL, at most %d characters" % MAX_BODY,
+                          code="body_invalid")
     if len(request.trailers) > MAX_TRAILERS:
-        raise Refused("more than %d trailers" % MAX_TRAILERS)
+        raise Refused("more than %d trailers" % MAX_TRAILERS, code="trailer_invalid")
     for trailer in request.trailers:
         if len(trailer) > MAX_TRAILER or _TRAILER.match(trailer) is None:
-            raise Refused("a trailer must be one 'Key: value' line: %s" % shown(trailer, 60))
+            raise Refused("a trailer must be one 'Key: value' line: %s" % shown(trailer, 60), code="trailer_invalid")
 
 
 def _folded(text):
@@ -569,16 +604,17 @@ def _folded(text):
     if any(unicodedata.category(c) in ("Mn", "Me", "Co", "Cn") or c in _BLANKS
            or (unicodedata.category(c) == "Cc" and c not in "\n\t") for c in text):
         raise Refused("the message has a control, combining, private-use or invisible character; "
-                      "write it with plain letters")
+                      "write it with plain letters", code="message_character_refused")
     text = "".join(c for c in text if unicodedata.category(c) != "Cf" and c not in _FILLERS)
     text = text.casefold().replace("\u00b7", "")   # NFKC reads a letter with a middle dot as the letter and a dot
     for c in text:
         if c.isalpha() and ord(c) not in _CONFUSABLE and any(low <= ord(c) <= high for low, high in _PHONETIC):
-            raise Refused("a letter in the message looks like another letter: %s" % shown(c, 10))
+            raise Refused("a letter in the message looks like another letter: %s" % shown(c, 10),
+                          code="message_character_refused")
     for word in re.findall(r"\w+", text.replace("\u03bc", "u")):      # a micro sign is not a look-alike
         scripts = {_script(c) for c in word if c.isalpha()}
         if "LATIN" in scripts and scripts & _LOOKALIKE_SCRIPTS:
-            raise Refused("a word in the message mixes scripts: %s" % shown(word, 40))
+            raise Refused("a word in the message mixes scripts: %s" % shown(word, 40), code="message_character_refused")
     text = "".join(_base_letter(c) for c in text.translate(_CONFUSABLE))
     text = "".join("-" if unicodedata.category(c) == "Pd" or c == "\u2212" else c for c in text)
     text = "".join(c for c in unicodedata.normalize("NFKD", text) if unicodedata.category(c) != "Mn")
@@ -586,7 +622,8 @@ def _folded(text):
         scripts = {"LATIN" if c.isascii() else _script(c) for c in token
                    if (c.isascii() and c.isalpha()) or (not c.isascii() and (c.isalpha() or unicodedata.category(c)[0] == "N"))}
         if len(scripts - {"CJK"}) > 1:
-            raise Refused("a word in the message mixes scripts: %s" % shown(token, 40))
+            raise Refused("a word in the message mixes scripts: %s" % shown(token, 40),
+                          code="message_character_refused")
     text = re.sub(r"[^\S\n]+", " ", text)
     return re.sub(r":[ \t]*\n[ \t]*", ": ", re.sub(r"\n[ \t]+", " ", text))
 
@@ -597,7 +634,8 @@ def refuse_attribution(request):
     for text in fields + ["\n".join(fields)]:
         folded = _folded(text)
         if any(pattern.search(folded) for pattern in _ATTRIBUTION):
-            raise Refused("the message carries tool attribution; this project does not allow it")
+            raise Refused("the message carries tool attribution; this project does not allow it",
+                          code="attribution_refused")
 
 
 def message_paragraphs(request):
@@ -629,7 +667,8 @@ def validate_paths(root, paths, entries):
     try:
         tree = safefs.Root(root, "repository")
     except safefs.SafeFsError as exc:
-        raise Refused("the repository cannot be read safely: %s" % display.ascii_text(str(exc))[:200])
+        raise Refused("the repository cannot be read safely: %s" % display.ascii_text(str(exc))[:200],
+                      code="repository_unreadable")
     with tree:
         def listing(directory):
             if directory not in cache:
@@ -641,27 +680,29 @@ def validate_paths(root, paths, entries):
             try:
                 parts = safefs.validate_relpath(path)
                 if path.startswith("-") or any(c in path for c in "*?[]"):
-                    raise Refused("path refused (a glob or an option): %s" % label)
+                    raise Refused("path refused (a glob or an option): %s" % label, code="path_refused")
                 if path.casefold() in seen:
-                    raise Refused("path named twice (or two spellings of one file): %s" % label)
+                    raise Refused("path named twice (or two spellings of one file): %s" % label, code="path_duplicate")
                 seen.add(path.casefold())
                 if entries.get(path, ("", "0"))[1] != "0":
-                    raise Refused("path has an unresolved merge state: %s" % label)
+                    raise Refused("path has an unresolved merge state: %s" % label, code="path_unmerged")
                 present = False
                 for depth in range(len(parts)):
                     found = listing("/".join(parts[:depth]))
                     if found is None:
                         break
                     if depth and any(name.casefold().rstrip(" .") == ".git" for name, _ in found):
-                        raise Refused("path lies inside a nested repository: %s" % label)
+                        raise Refused("path lies inside a nested repository: %s" % label,
+                                      code="path_in_nested_repository")
                     kind = dict(found).get(parts[depth])
                     if kind is None:
                         break
                     if kind != ("dir" if depth < len(parts) - 1 else "file"):
-                        raise Refused("path goes through, or is, a %s and not a file: %s" % (kind, label))
+                        raise Refused("path goes through, or is, a %s and not a file: %s" % (kind, label),
+                                      code="path_not_a_file")
                     present = depth == len(parts) - 1
                 if not present and path not in entries:
-                    raise Refused("path does not exist and is not tracked: %s" % label)
+                    raise Refused("path does not exist and is not tracked: %s" % label, code="path_unknown")
                 if not present:
                     # A tracked name the listing did not show may still be there under another spelling
                     # of the same name (Unicode normalisation): it must be a plain file or nothing.
@@ -670,11 +711,13 @@ def validate_paths(root, paths, entries):
                     except FileNotFoundError:
                         continue
                     except OSError as exc:
-                        raise Refused("path refused: %s" % display.ascii_text(exc.strerror or "error"))
+                        raise Refused("path refused: %s" % display.ascii_text(exc.strerror or "error"),
+                                      code="path_refused")
                     if not stat.S_ISREG(mode):
-                        raise Refused("path is a link or not a file under another spelling: %s" % label)
+                        raise Refused("path is a link or not a file under another spelling: %s" % label,
+                                      code="path_not_a_file")
             except safefs.SafeFsError as exc:
-                raise Refused("path refused: %s" % display.ascii_text(str(exc))[:200])
+                raise Refused("path refused: %s" % display.ascii_text(str(exc))[:200], code="path_refused")
     return paths
 
 
@@ -688,7 +731,7 @@ def indexed(root):
         meta, _, path = entry.partition("\t")
         fields = meta.split(" ")
         if len(fields) != 3:
-            raise Refused("git listed the index in a form this helper does not read")
+            raise Refused("git listed the index in a form this helper does not read", code="index_unreadable")
         found[path] = (fields[0], fields[2])
     return found, listing
 
@@ -700,7 +743,7 @@ def refuse_operation_in_progress(root):
     for name in ("MERGE_HEAD", "REVERT_HEAD", "CHERRY_PICK_HEAD", "rebase-merge", "rebase-apply", "sequencer"):
         if os.path.lexists(os.path.join(directory, name)):
             raise Refused("a %s is in progress in this repository; finish or abort it by hand"
-                          % name.replace("_HEAD", "").replace("-", " ").lower())
+                          % name.replace("_HEAD", "").replace("-", " ").lower(), code="operation_in_progress")
 
 
 def _short(commit):
@@ -738,14 +781,17 @@ def tip(root):
         return found.stdout.strip()
     if _unborn_branch(root) is None:
         raise Refused("HEAD names neither a commit nor a branch without commits whose name this helper reads "
-                      "(ASCII letters, digits and . _ - /); refusing to act")
+                      "(ASCII letters, digits and . _ - /); refusing to act", code="head_unreadable")
     return None
 
 
-def _expect_head(root, expected, when):
+def _expect_head(root, expected, when, note=None):
     now = tip(root)
+    if note is not None:
+        note("head", now)
     if now != expected:
-        raise Refused("HEAD moved %s: expected %s, found %s" % (when, _short(expected), _short(now)))
+        raise Refused("HEAD moved %s: expected %s, found %s" % (when, _short(expected), _short(now)),
+                      code="head_mismatch")
 
 
 def _unstage(root, paths, expected):
@@ -764,50 +810,112 @@ def attribution_allowed(root):
     ``{"format": 1, "attribution": "refuse" | "allow"}``, and a link or other non-file at that path, stop
     the commit rather than read as either."""
     try:
-        with safefs.Root(root, "repository") as tree:
+        tree = safefs.Root(root, "repository")
+    except safefs.SafeFsError as exc:
+        raise Refused("%s cannot be read: %s" % (SETTING, display.ascii_text(str(exc))[:200]),
+                      code="repository_unreadable")
+    try:
+        with tree:
             data = tree.read_if_present(SETTING, MAX_SETTING)
     except safefs.SafeFsError as exc:
-        raise Refused("%s cannot be read: %s" % (SETTING, display.ascii_text(str(exc))[:200]))
+        raise Refused("%s cannot be read: %s" % (SETTING, display.ascii_text(str(exc))[:200]), code="setting_invalid")
     if data is None:
         return False
     try:
         value = jsonstrict.parse_object(data, MAX_SETTING)
     except ValueError as exc:
-        raise Refused("%s is not valid: %s" % (SETTING, display.ascii_text(str(exc))[:100]))
+        raise Refused("%s is not valid: %s" % (SETTING, display.ascii_text(str(exc))[:100]), code="setting_invalid")
     if set(value) != {"format", "attribution"} or type(value["format"]) is not int or value["format"] != 1 \
             or value["attribution"] not in ("refuse", "allow"):
-        raise Refused('%s must be {"format": 1, "attribution": "refuse" or "allow"}' % SETTING)
+        raise Refused('%s must be {"format": 1, "attribution": "refuse" or "allow"}' % SETTING, code="setting_invalid")
     return value["attribution"] == "allow"
 
 
-def command_commit(argv, cwd, out, err):
+def refuse_converting_attributes(root, paths):
+    """Refuse a named path that an attribute converts when git adds it: a filter, `ident` or a working-tree encoding.
+    What `git add` stores is then not what the work tree holds, and the owner's own filter would be started by the
+    comparison that follows. `text` and `eol` change line endings only and are not refused."""
+    found = run(["git", "check-attr", "-z"] + list(_CONVERTING) + ["--"] + paths, root, check=False)
+    fields = found.stdout.split("\0")
+    if found.returncode or fields[-1:] != [""] or len(fields) - 1 != 3 * len(_CONVERTING) * len(paths) \
+            or [fields[index] for index in range(1, len(fields) - 1, 3)] != list(_CONVERTING) * len(paths):
+        raise Refused("git check-attr did not give the attributes of the named paths", code="repository_unreadable")
+    for index in range(0, len(fields) - 1, 3):
+        path, attribute, value = fields[index:index + 3]
+        if value not in ("unspecified", "unset"):
+            raise Refused("git would convert %s when adding it (attribute %s is %s); commit by hand"
+                          % (shown(path, 80), shown(attribute, 30), shown(value, 40)), code="path_converts_on_add")
+
+
+class Checked:
+    """What the checks of `commit` established: the request, the repository root, the staged paths, the index listing
+    the commit will be compared with and the index as ``{path: (mode, stage)}``."""
+
+    def __init__(self, request, root, staged, before, entries):
+        self.request, self.root, self.staged, self.before, self.entries = request, root, staged, before, entries
+
+
+def check_commit(argv, cwd, note=None):
+    """Every check `commit` makes before it changes anything, through `git diff --check` of the named paths, in order.
+    Returns a ``Checked`` or raises ``Refused``. `describe commit` calls it too, with `note(name, value)`, which is told
+    each fact the moment it is known, so a refusal still reports what was found before it."""
+    def told(name, value):
+        if note is not None:
+            note(name, value)
+
     request = parse_commit(argv)
-    request.expected = validate_expected(request.expected)
+    told("leave_other_staged", request.leave_other_staged)
+    told("path_count", len(request.paths))
+    told("requested_paths", list(request.paths))
+    told("subject", request.subject)
+    told("trailers", list(request.trailers))
+    told("body", request.body)
+    given = request.expected
+    request.expected = validate_expected(given)
+    told("expected_head", given)
     validate_message(request)
     root = git_root(cwd)
-    if not attribution_allowed(root):
+    allowed = attribution_allowed(root)
+    told("attribution_allowed", allowed)
+    if not allowed:
         refuse_attribution(request)
     found = repo_program_findings(root)
+    told("program_findings", list(found))
     if found:
         raise Refused("this repository would make git run a program (%s); commit by hand"
-                      % ", ".join(found[:10]))
+                      % ", ".join(found[:10]), code="repo_selects_program")
     refuse_operation_in_progress(root)
     paths = request.paths
     named = set(paths)
-    _expect_head(root, request.expected, "before the commit was started")
+    _expect_head(root, request.expected, "before the commit was started", note)
     entries, before = indexed(root)
     validate_paths(root, paths, entries)
+    told("paths", list(paths))
     staged = names(root, cached=True)
+    told("staged_paths", sorted(staged))
     if staged and not request.leave_other_staged:
         raise Refused("the index already holds staged changes (%d path(s)); use --leave-other-staged to keep "
-                      "them out of this commit" % len(staged))
+                      "them out of this commit" % len(staged), code="index_has_staged_changes")
     if staged & named:
-        raise Refused("a named path is already staged: %s" % shown(sorted(staged & named)[0], 80))
+        raise Refused("a named path is already staged: %s" % shown(sorted(staged & named)[0], 80),
+                      code="path_already_staged")
+    refuse_converting_attributes(root, paths)
+    # Optional locks are off so that comparing the work tree with the index does not refresh the index file.
     problems = run(["git", "diff", "--check", "--no-ext-diff", "--no-textconv", "--"] + paths, root,
-                   check=False)
+                   check=False, env_extra={"GIT_OPTIONAL_LOCKS": "0"})
     if problems.returncode:
+        # Git exits 2 (older versions 1) when it finds whitespace errors, and 128 when it fails.
         raise Refused("git diff --check finds whitespace errors in the named paths: %s"
-                      % display.ascii_text(problems.stdout.strip())[:300])
+                      % display.ascii_text(problems.stdout.strip())[:300],
+                      code="whitespace_errors" if problems.returncode in (1, 2) else "repository_unreadable")
+    return Checked(request, root, staged, before, entries)
+
+
+def command_commit(argv, cwd, out, err):
+    checked = check_commit(argv, cwd)
+    request, root, staged, before = checked.request, checked.root, checked.staged, checked.before
+    paths = request.paths
+    named = set(paths)
     try:
         _expect_head(root, request.expected, "before staging")
         run(["git", "add", "--"] + paths, root)
@@ -888,10 +996,12 @@ class Stopped(Exception):
 
 
 class Target:
-    """One validated path to remove: its parts, its kind and what was seen of it."""
+    """One validated path to remove: its parts, its kind and what was seen of it. `size` is the bytes of the
+    regular files at or below it (read by `describe` only)."""
 
-    def __init__(self, path, parts, kind, info, entries):
+    def __init__(self, path, parts, kind, info, entries, size=0):
         self.path, self.parts, self.kind, self.info, self.entries = path, parts, kind, info, entries
+        self.size = size
 
 
 def _event(stage, path):
@@ -926,7 +1036,7 @@ def _entries(fd):
     with os.scandir(fd) as scanning:
         for entry in scanning:
             if len(found) >= MAX_REMOVE_ENTRIES:
-                raise Refused("a directory holds more than %d entries" % MAX_REMOVE_ENTRIES)
+                raise Refused("a directory holds more than %d entries" % MAX_REMOVE_ENTRIES, code="tree_too_large")
             found.append((entry.name, entry.stat(follow_symlinks=False)))
     return sorted(found, key=lambda item: item[0])
 
@@ -951,18 +1061,18 @@ def parse_remove(argv):
     while index < len(argv) and argv[index] != "--":
         option = argv[index]
         if option not in _REMOVE_OPTIONS:
-            raise Refused("unknown option: %s" % shown(option, 40))
+            raise Refused("unknown option: %s" % shown(option, 40), code="usage")
         if (recursive if option == "--recursive" else confirm):
-            raise Refused("%s was given more than once" % option)
+            raise Refused("%s was given more than once" % option, code="usage")
         recursive, confirm = recursive or option == "--recursive", confirm or option == "--confirm"
         index += 1
     if index >= len(argv):
-        raise Refused("usage: safe-git remove [--recursive] [--confirm] -- <path>...")
+        raise Refused("usage: safe-git remove [--recursive] [--confirm] -- <path>...", code="usage")
     paths = argv[index + 1:]
     if not paths:
-        raise Refused("name at least one path after --")
+        raise Refused("name at least one path after --", code="usage")
     if len(paths) > MAX_PATHS:
-        raise Refused("more than %d paths" % MAX_PATHS)
+        raise Refused("more than %d paths" % MAX_PATHS, code="usage")
     return recursive, confirm, paths
 
 
@@ -977,18 +1087,20 @@ def _parent_of(root_fd, parts, device, seen):
             try:
                 step = os.open(part, _DIR, dir_fd=fd)
             except FileNotFoundError:
-                raise Refused("a directory on the way does not exist: %s" % shown(part, 60))
+                raise Refused("a directory on the way does not exist: %s" % shown(part, 60), code="target_missing")
             except OSError:
                 raise Refused("the path goes through a link or something that is not a directory: %s"
-                              % shown(part, 60))
+                              % shown(part, 60), code="path_refused")
             os.close(fd)
             fd = step
             if _device(os.fstat(fd)) != device:
-                raise Refused("the path crosses into another filesystem at %s" % shown(part, 60))
+                raise Refused("the path crosses into another filesystem at %s" % shown(part, 60),
+                              code="other_filesystem")
             info = os.fstat(fd)
             if (info.st_dev, info.st_ino) not in seen:
                 if _holds_repository(_entries(fd)):
-                    raise Refused("the path lies inside a nested Git repository (%s)" % shown(part, 60))
+                    raise Refused("the path lies inside a nested Git repository (%s)" % shown(part, 60),
+                                  code="nested_repository")
                 seen.add((info.st_dev, info.st_ino))
         taken, fd = fd, -1
         return taken
@@ -998,29 +1110,33 @@ def _parent_of(root_fd, parts, device, seen):
 
 
 def _scan(fd, device, depth, counter):
-    """Check a directory tree before it is deleted: no nested repository, no other filesystem, bounded."""
+    """Check a directory tree before it is deleted: no nested repository, no other filesystem, bounded.
+    `counter` is ``[entries, bytes of regular files]`` of everything listed so far."""
     if depth > MAX_REMOVE_DEPTH:
-        raise Refused("the directory is nested deeper than %d levels" % MAX_REMOVE_DEPTH)
+        raise Refused("the directory is nested deeper than %d levels" % MAX_REMOVE_DEPTH, code="tree_too_large")
     listing = _entries(fd)
     found = _holds_repository(listing)
     if found:
-        raise Refused("the directory holds a nested repository (%s)" % found)
+        raise Refused("the directory holds a nested repository (%s)" % found, code="nested_repository")
     counter[0] += len(listing)
     if counter[0] > MAX_REMOVE_ENTRIES:
-        raise Refused("the directory tree holds more than %d entries" % MAX_REMOVE_ENTRIES)
+        raise Refused("the directory tree holds more than %d entries" % MAX_REMOVE_ENTRIES, code="tree_too_large")
+    counter[1] += sum(info.st_size for _, info in listing if stat.S_ISREG(info.st_mode))
     for name, info in listing:
         if stat.S_ISDIR(info.st_mode):
             if _device(info) != device:
-                raise Refused("the directory holds another filesystem (%s)" % shown(name, 60))
+                raise Refused("the directory holds another filesystem (%s)" % shown(name, 60), code="other_filesystem")
             _event("scanning", name)
             try:
                 child = os.open(name, _DIR, dir_fd=fd)
             except OSError:
-                raise Refused("a directory changed while it was being checked: %s" % shown(name, 60))
+                raise Refused("a directory changed while it was being checked: %s" % shown(name, 60),
+                              code="target_changed")
             try:
                 opened = os.fstat(child)
                 if not _same(opened, info):
-                    raise Refused("a directory changed while it was being checked: %s" % shown(name, 60))
+                    raise Refused("a directory changed while it was being checked: %s" % shown(name, 60),
+                              code="target_changed")
                 _scan(child, device, depth + 1, counter)
             finally:
                 os.close(child)
@@ -1036,52 +1152,54 @@ def plan_removal(root_fd, paths, recursive):
         try:
             parts = safefs.validate_relpath(path)
         except safefs.SafeFsError as exc:
-            raise Refused("path refused: %s" % display.ascii_text(str(exc))[:200])
+            raise Refused("path refused: %s" % display.ascii_text(str(exc))[:200], code="path_refused")
         if path.startswith("-") or any(c in path for c in "*?[]"):
-            raise Refused("path refused (a glob or an option): %s" % label)
+            raise Refused("path refused (a glob or an option): %s" % label, code="path_refused")
         if any(_git_name(part) for part in parts):
-            raise Refused("refusing to remove Git metadata: %s" % label)
+            raise Refused("refusing to remove Git metadata: %s" % label, code="git_metadata_refused")
         key = tuple(unicodedata.normalize("NFC", part.casefold()) for part in parts)
         if any(key[:len(other)] == other or other[:len(key)] == key for other in keys):
-            raise Refused("overlapping removal targets are not allowed: %s" % label)
+            raise Refused("overlapping removal targets are not allowed: %s" % label, code="path_duplicate")
         try:
             parent = _parent_of(root_fd, parts, device, seen)
         except Refused as exc:
-            raise Refused("%s: %s" % (exc, label))
+            raise Refused("%s: %s" % (exc, label), code=exc.code)
         try:
             try:
                 info = os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)
             except FileNotFoundError:
-                raise Refused("removal target does not exist: %s" % label)
+                raise Refused("removal target does not exist: %s" % label, code="target_missing")
             kind = _kind(info.st_mode)
             entries = 0
+            size = info.st_size if kind == "file" else 0
             if kind == "directory":
                 if not recursive:
-                    raise Refused("directory removal requires --recursive: %s" % label)
+                    raise Refused("directory removal requires --recursive: %s" % label, code="recursive_required")
                 if _same(info, root_info):
-                    raise Refused("refusing to remove the repository root")
+                    raise Refused("refusing to remove the repository root", code="repository_root_refused")
                 if _device(info) != device:
-                    raise Refused("the directory is another filesystem: %s" % label)
+                    raise Refused("the directory is another filesystem: %s" % label, code="other_filesystem")
                 _event("planning", path)
                 try:
                     child = os.open(parts[-1], _DIR, dir_fd=parent)
                 except OSError:
-                    raise Refused("the directory changed while it was being checked: %s" % label)
+                    raise Refused("the directory changed while it was being checked: %s" % label, code="target_changed")
                 try:
                     if not _same(os.fstat(child), info):
-                        raise Refused("the directory changed while it was being checked: %s" % label)
-                    counter = [0]
+                        raise Refused("the directory changed while it was being checked: %s" % label,
+                                      code="target_changed")
+                    counter = [0, 0]
                     try:
                         _scan(child, device, 1, counter)
                     except Refused as exc:
-                        raise Refused("%s: %s" % (exc, label))
-                    entries = counter[0]
+                        raise Refused("%s: %s" % (exc, label), code=exc.code)
+                    entries, size = counter
                 finally:
                     os.close(child)
         finally:
             os.close(parent)
         keys.append(key)
-        targets.append(Target(path, parts, kind, info, entries))
+        targets.append(Target(path, parts, kind, info, entries, size))
     return targets
 
 
@@ -1152,7 +1270,8 @@ def command_remove(argv, cwd, out, err):
     try:
         root_fd = safefs.open_root(root, "repository")
     except safefs.SafeFsError as exc:
-        raise Refused("the repository cannot be read safely: %s" % display.ascii_text(str(exc))[:200])
+        raise Refused("the repository cannot be read safely: %s" % display.ascii_text(str(exc))[:200],
+                      code="repository_unreadable")
     try:
         targets = plan_removal(root_fd, paths, recursive)
         listed = [{"path": t.path, "kind": t.kind} for t in targets]
@@ -1182,6 +1301,461 @@ def command_remove(argv, cwd, out, err):
         return 0
     finally:
         os.close(root_fd)
+
+
+# --- describe ------------------------------------------------------------------------------------
+
+# `describe <action> ...` takes the arguments of the real command and prints what that command would act on, as one
+# JSON object (docs/specs/safe-git.md, "Describe"). It runs the real command's own validation and stops before
+# anything changes, so a refusal the real command would give is data here, with a code, and the exit status is 0.
+
+CONTRACT = 1
+MAX_OBJECT = 196608       # bytes, as printed: compact JSON with every non-ASCII character escaped, and its newline
+MAX_STRING = 32768        # bytes of a string value other than the diff
+MAX_DIFF = 98304          # bytes of the `diff` string, before escaping
+MAX_ARRAY = 200           # elements of an array
+MAX_ELEMENT = 1024        # bytes of an element
+MAX_WHOLE = 2 ** 53 - 1   # a whole number must survive a JSON reader that uses a double
+MAX_MESSAGE = 500         # characters of an error message
+STATS_ENTRY_CAP = 10000   # entries above which the totals of a removal are left out
+IGNORE_TIMEOUT = 10       # seconds for one `git check-ignore`; a longer one leaves that target's status unknown
+OMIT = object()           # a fact the caller could not find out: left out of the object and named in `omitted`
+_CODE = re.compile(r"\A[a-z0-9_]{1,64}\Z")
+
+
+def _bytes(text):
+    return len(text.encode("utf-8", "backslashreplace"))
+
+
+def _printable(value):
+    """`value` with every lone surrogate written out as its escape text, so that the printed object is one a strict
+    reader accepts."""
+    if isinstance(value, str):
+        return value.encode("utf-8", "backslashreplace").decode("utf-8")
+    if isinstance(value, list):
+        return [_printable(item) for item in value]
+    return value
+
+
+def _within_cap(name, value):
+    """Whether `value` fits the cap of its own kind. A type or a number the contract does not allow is a mistake of
+    the caller and raises ``ValueError``."""
+    if value is None or isinstance(value, bool):
+        return True
+    if isinstance(value, int):
+        if not 0 <= value <= MAX_WHOLE:
+            raise ValueError("fact %s is a whole number outside 0 to 2^53 - 1" % name)
+        return True
+    if isinstance(value, str):
+        return _bytes(value) <= (MAX_DIFF if name == "diff" else MAX_STRING)
+    if isinstance(value, list):
+        if not all(isinstance(item, str) for item in value):
+            raise ValueError("fact %s is a list with an element that is not a string" % name)
+        return len(value) <= MAX_ARRAY and all(_bytes(item) <= MAX_ELEMENT for item in value)
+    raise ValueError("fact %s is not a string, a whole number, a boolean, null or a list of strings" % name)
+
+
+def render_description(built):
+    """The line `describe` prints."""
+    return json.dumps(built, separators=(",", ":"), ensure_ascii=True) + "\n"
+
+
+def build_description(action, errors, facts):
+    """The object for `action`. `errors` is ``[(code, message)]`` and `facts` is ``[(name, value)]`` in the order of
+    the tables of the spec. A value is never cut: one that is over its cap, or that would take the printed object past
+    `MAX_OBJECT`, is left out whole and named in `omitted` (in table order), and `truncated` is true. Facts are tried in
+    order, so a later, smaller one may still fit. Naming a value can itself push the object past the cap, and then the
+    last fact that was kept is left out too, until the object fits."""
+    listed = []
+    for code, message in errors:
+        if not isinstance(code, str) or not _CODE.match(code):
+            raise ValueError("an error code is 1 to 64 characters of a-z, 0-9 and _")
+        listed.append({"code": code, "message": _printable(display.ascii_text(str(message))[:MAX_MESSAGE])})
+    facts = [(name, _printable(value)) for name, value in facts]
+    names = [name for name, _ in facts]
+    if len(set(names)) != len(names) or "omitted" in names:
+        raise ValueError("a fact is named once, and `omitted` is not the caller's")
+    kept, left = [], []
+
+    def draft():
+        body = {names[index]: facts[index][1] for index in sorted(kept)}
+        body["omitted"] = [names[index] for index in sorted(left)]
+        return {"contract": CONTRACT, "action": action, "ok": not listed, "truncated": bool(left),
+                "errors": listed, "facts": body}
+
+    for index, (name, value) in enumerate(facts):
+        if value is OMIT or not _within_cap(name, value):
+            left.append(index)
+            continue
+        kept.append(index)
+        if len(render_description(draft())) > MAX_OBJECT:
+            left.append(kept.pop())
+    while kept and len(render_description(draft())) > MAX_OBJECT:
+        left.append(kept.pop())
+    return draft()
+
+
+_REMOVE_FACTS = ("confirm", "recursive", "requested_paths", "target_paths", "file_targets", "directory_targets",
+                 "link_targets", "other_targets", "tracked_targets", "ignored_targets", "ignore_unknown_targets",
+                 "tracked_file_total", "entry_total", "size_total")
+_KINDS = (("file_targets", "file"), ("directory_targets", "directory"), ("link_targets", "symlink"),
+          ("other_targets", "other"))
+
+
+def _fold(path):
+    return unicodedata.normalize("NFC", path.casefold())
+
+
+def _remove_facts(root, targets, facts):
+    """Fill `facts` from the planned `targets`. Git is asked only to list tracked files and whether a path is ignored."""
+    facts["target_paths"] = [target.path for target in targets]
+    for name, kind in _KINDS:
+        facts[name] = [target.path for target in targets if target.kind == kind]
+    entries = sum(1 + target.entries for target in targets)
+    if entries <= STATS_ENTRY_CAP:
+        facts["entry_total"], facts["size_total"] = entries, sum(target.size for target in targets)
+    listing = run(["git", "ls-files", "-z", "--"] + facts["target_paths"], root).stdout
+    tracked = [item for item in listing.split("\0") if item]
+    facts["tracked_file_total"] = len(tracked)
+    by_name = {_fold(target.path): target.path for target in targets}
+    holding = set()
+    for item in tracked:
+        parts = _fold(item).split("/")
+        for length in range(1, len(parts) + 1):
+            found = by_name.get("/".join(parts[:length]))
+            if found is not None:
+                holding.add(found)
+                break
+    facts["tracked_targets"] = [target.path for target in targets if target.path in holding]
+    for target in targets:
+        # `check-ignore` dies when literal pathspecs are on. The shape of the call refuses a glob character, a
+        # backslash, a leading colon and a leading dash, so a target it runs carries no pathspec magic.
+        try:
+            answer = run(["git", "check-ignore", "-q", "--", target.path], root, check=False,
+                         timeout=IGNORE_TIMEOUT, env_extra={"GIT_LITERAL_PATHSPECS": "0"}).returncode
+        except Refused:
+            answer = None
+        if answer == 0:
+            facts["ignored_targets"].append(target.path)
+        elif answer != 1:
+            facts["ignore_unknown_targets"].append(target.path)
+
+
+def describe_remove(argv, cwd):
+    """``(errors, facts)`` of `remove <argv>`: what `command_remove` would act on, with nothing deleted."""
+    split = argv.index("--") if "--" in argv else None
+    options = argv if split is None else argv[:split]
+    facts = {"confirm": "--confirm" in options, "recursive": "--recursive" in options,
+             "requested_paths": [] if split is None else argv[split + 1:], "target_paths": [],
+             "file_targets": [], "directory_targets": [], "link_targets": [], "other_targets": [],
+             "tracked_targets": [], "ignored_targets": [], "ignore_unknown_targets": [],
+             "tracked_file_total": None, "entry_total": OMIT, "size_total": OMIT}
+    errors = []
+    try:
+        recursive, _, paths = parse_remove(argv)
+        root = git_root(cwd)
+        try:
+            root_fd = safefs.open_root(root, "repository")
+        except safefs.SafeFsError as exc:
+            raise Refused("the repository cannot be read safely: %s" % display.ascii_text(str(exc))[:200],
+                          code="repository_unreadable")
+        try:
+            targets = plan_removal(root_fd, paths, recursive)
+        finally:
+            os.close(root_fd)
+        _remove_facts(root, targets, facts)
+    except Refused as exc:
+        if exc.code is None:
+            raise      # a refusal with no code has no place in the tables: stop with no object, as a decline
+        errors.append((exc.code, str(exc)))
+    return errors, [(name, facts[name]) for name in _REMOVE_FACTS]
+
+
+MAX_MIDDLE = 500          # lines of one side that differ once the shared first and last lines are set aside; more is
+#                           not compared, because the cost grows with the product of the two sides (about 0.6 s for
+#                           the worst 500 lines); the budget below is checked between files, not inside one comparison
+DIFF_BUDGET = 20.0        # seconds in all for the diffs of one `describe`; the diff is left out once they are spent
+MAX_SIDE = 262144         # bytes of one side of a diff that are read (the approver's whole-diff bound); more is not read
+_CHANGE_LISTS = ("new_paths", "modified_paths", "deleted_paths", "unchanged_paths", "binary_paths", "not_regular_paths")
+_COMMIT_FACTS = ("head", "expected_head", "leave_other_staged", "path_count", "subject", "trailers", "body",
+                 "attribution_allowed", "program_findings", "staged_paths", "requested_paths", "paths") \
+    + _CHANGE_LISTS + ("diff",)
+
+
+def _read_work(root_fd, parts):
+    """What the work-tree path `parts` holds, reached from the open root without following a link: ``("absent",)``;
+    ``("irregular",)`` for a link, a directory, a pipe or anything else that is not a regular file, and for a path
+    that goes through a link or a file; ``("large", size, mode)`` for a regular file over `MAX_SIDE`, which is not read;
+    else ``("file", data, mode)``. The mode is the one git would record: 100755 when the owner may execute the file,
+    else 100644."""
+    opened = []
+    try:
+        current = root_fd
+        for part in parts[:-1]:
+            try:
+                current = os.open(part, _DIR, dir_fd=current)
+            except FileNotFoundError:
+                return ("absent",)
+            except OSError as exc:
+                if exc.errno in (errno.ELOOP, errno.ENOTDIR):
+                    return ("irregular",)
+                raise
+            opened.append(current)
+        try:
+            info = os.stat(parts[-1], dir_fd=current, follow_symlinks=False)
+        except FileNotFoundError:
+            return ("absent",)
+        except NotADirectoryError:
+            return ("irregular",)
+        if not stat.S_ISREG(info.st_mode):
+            return ("irregular",)
+        try:
+            fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0),
+                         dir_fd=current)
+        except FileNotFoundError:
+            return ("absent",)
+        except OSError as exc:
+            if exc.errno in (errno.ELOOP, errno.ENXIO):
+                return ("irregular",)
+            raise
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode):
+                return ("irregular",)
+            mode = "100755" if info.st_mode & stat.S_IXUSR else "100644"
+            if info.st_size > MAX_SIDE:
+                return ("large", info.st_size, mode)
+            chunks, total = [], 0
+            while total <= MAX_SIDE:
+                chunk = os.read(fd, min(65536, MAX_SIDE + 1 - total))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                total += len(chunk)
+            if total > MAX_SIDE:
+                return ("large", total, mode)
+            return ("file", b"".join(chunks), mode)
+        finally:
+            os.close(fd)
+    finally:
+        for fd in opened:
+            os.close(fd)
+
+
+_EMPTY_BLOBS = ("e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+                "473a0f4c3be8a93681a267e3b1e9a7dcda1185436fe141f7749120a303721813")
+
+
+def _intent_to_add(listing):
+    """The paths the index lists with the empty blob: what ``git add -N`` leaves, a path HEAD does not hold."""
+    found = set()
+    for entry in listing.split("\0"):
+        meta, _, path = entry.partition("\t")
+        fields = meta.split(" ")
+        if len(fields) == 3 and fields[1] in _EMPTY_BLOBS:
+            found.add(path)
+    return found
+
+
+def _head_side(root, path, may_be_absent):
+    """What HEAD holds at `path`: ``("absent",)`` where `may_be_absent` (an intent-to-add path), ``("large", size)``
+    for a blob over `MAX_SIDE`, whose size is asked first so that it is never read, or ``("blob", data)``. Git is asked
+    only for the size and then the content. A blob git cannot give for any other path is an unreadable repository."""
+    probe = run(["git", "cat-file", "-s", "HEAD:" + path], root, check=False)
+    if probe.returncode:
+        if may_be_absent:
+            return ("absent",)
+        raise Refused("git cat-file cannot read HEAD:%s" % shown(path, 80), code="repository_unreadable")
+    if not re.fullmatch(r"[0-9]{1,15}", probe.stdout.strip()):
+        raise Refused("git cat-file gave a size this helper does not read", code="repository_unreadable")
+    size = int(probe.stdout)
+    if size > MAX_SIDE:
+        return ("large", size)
+    try:
+        text, cut = run_capped(["git", "cat-file", "blob", "HEAD:" + path], root, size + 1)
+    except Refused as exc:
+        raise Refused(str(exc), code="repository_unreadable")
+    data = text.encode("utf-8", "surrogateescape")
+    if cut or len(data) != size:
+        raise Refused("git cat-file gave a blob that is not the size it reported", code="repository_unreadable")
+    return ("blob", data)
+
+
+def _lines(data):
+    """The lines of `data` as git splits them, on the line feed only; a last line with none is marked. Only UTF-8 text
+    is shown (`_change_facts` sets any other aside as binary)."""
+    pieces = data.decode("utf-8", "backslashreplace").split("\n")
+    lines = [piece + "\n" for piece in pieces[:-1]]
+    if pieces[-1]:
+        lines.append(pieces[-1] + "\n\\ No newline at end of file\n")
+    return lines
+
+
+def _range(start, stop):
+    """A range of a hunk header, as ``difflib`` writes it: the first line (counted from 1) and the count."""
+    first, length = start + 1, stop - start
+    if length == 1:
+        return str(first)
+    return "%d,%d" % (first - 1 if not length else first, length)
+
+
+def _text_diff(path, old, new):
+    """The unified diff of `old` against `new`, named ``HEAD/<path>`` and ``work/<path>``; empty when they are equal;
+    ``None`` when more than `MAX_MIDDLE` lines differ. The lines both sides share at the start and the end are set
+    aside before they are compared, so a long file with a small change costs little."""
+    first, second = _lines(old), _lines(new)
+    if first == second:
+        return ""
+    head = 0
+    while head < min(len(first), len(second)) and first[head] == second[head]:
+        head += 1
+    tail = 0
+    while tail < min(len(first), len(second)) - head and first[-1 - tail] == second[-1 - tail]:
+        tail += 1
+    middle = (first[head:len(first) - tail], second[head:len(second) - tail])
+    if max(len(middle[0]), len(middle[1])) > MAX_MIDDLE:
+        return None
+    codes = [("equal", 0, head, 0, head)] if head else []
+    codes += [(tag, a + head, b + head, c + head, d + head)
+              for tag, a, b, c, d in difflib.SequenceMatcher(None, *middle, autojunk=False).get_opcodes()]
+    if tail:
+        codes.append(("equal", len(first) - tail, len(first), len(second) - tail, len(second)))
+    matcher = difflib.SequenceMatcher(None, [], [])
+    matcher.opcodes = codes
+    lines = ["--- HEAD/%s\n" % path, "+++ work/%s\n" % path]
+    for group in matcher.get_grouped_opcodes(3):
+        lines.append("@@ -%s +%s @@\n" % (_range(group[0][1], group[-1][2]), _range(group[0][3], group[-1][4])))
+        for tag, a, b, c, d in group:
+            if tag == "equal":
+                lines += [" " + line for line in first[a:b]]
+                continue
+            if tag in ("replace", "delete"):
+                lines += ["-" + line for line in first[a:b]]
+            if tag in ("replace", "insert"):
+                lines += ["+" + line for line in second[c:d]]
+    return "".join(lines)
+
+
+def _utf8(data):
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return True
+
+
+def _mode_line(path, old, new):
+    """A line for a change of mode, with ``none`` for a side that is not there; none for a plain new or deleted file."""
+    if old == new or (old is None and new == "100644") or (new is None and old == "100644"):
+        return ""
+    return "mode HEAD/%s %s -> work/%s %s\n" % (path, old or "none", path, new or "none")
+
+
+def _change_facts(checked, facts):
+    """Fill the change lists and the diff of the checked paths, HEAD against the work tree, byte for byte: no git
+    filter, text conversion or external diff, and no link followed. Nothing is set unless all of it is found."""
+    root, paths, entries = checked.root, checked.request.paths, checked.entries
+    in_head = checked.request.expected is not None
+    lists = {name: [] for name in _CHANGE_LISTS}
+    pieces, length, left_out = [], 0, False
+    deadline = time.monotonic() + DIFF_BUDGET
+    intent = _intent_to_add(checked.before)
+    try:
+        root_fd = safefs.open_root(root, "repository")
+    except safefs.SafeFsError as exc:
+        raise Refused("the repository cannot be read safely: %s" % display.ascii_text(str(exc))[:200],
+                      code="repository_unreadable")
+    try:
+        for path in paths:
+            try:
+                old = _head_side(root, path, path in intent) if in_head and path in entries else ("absent",)
+                new = _read_work(root_fd, path.split("/"))
+            except Refused as exc:
+                raise Refused(str(exc), code=exc.code or "repository_unreadable")
+            except OSError as exc:
+                raise Refused("path refused: %s" % display.ascii_text(exc.strerror or "error"), code="path_refused")
+            if new[0] == "irregular":
+                lists["not_regular_paths"].append(path)
+                continue
+            if old[0] == "absent" and new[0] == "absent":
+                continue      # gone from both sides since the checks: there is nothing to say of it
+            old_mode = entries[path][0] if old[0] != "absent" else None
+            new_mode = new[2] if new[0] != "absent" else None
+            if new[0] == "absent":
+                kind = "deleted_paths"
+            elif old[0] == "absent":
+                kind = "new_paths"
+            elif "large" in (old[0], new[0]):
+                kind = "modified_paths"      # not read, so not compared: the cautious reading
+            elif old[1] == new[1] and old_mode == new_mode:
+                kind = "unchanged_paths"
+            else:
+                kind = "modified_paths"
+            lists[kind].append(path)
+            if "large" in (old[0], new[0]):
+                left_out = True
+                continue
+            before = old[1] if old[0] == "blob" else b""
+            after = new[1] if new[0] == "file" else b""
+            if b"\0" in before or b"\0" in after or not (_utf8(before) and _utf8(after)):
+                lists["binary_paths"].append(path)
+            elif length <= MAX_DIFF:     # counted in characters, never more than bytes; past the cap the diff is left out whole, so the rest is not worked out
+                text = _text_diff(path, before, after) if time.monotonic() <= deadline else None
+                if text is None:
+                    left_out = True      # too much differs to compare, or the budget is spent
+                    continue
+                piece = _mode_line(path, old_mode, new_mode) + text
+                pieces.append(piece)
+                length += len(piece)
+    finally:
+        os.close(root_fd)
+    facts.update(lists)
+    facts["diff"] = OMIT if left_out else "".join(pieces)
+
+
+def _given_commit(argv):
+    """``(leave_other_staged, paths)`` of a command line that `parse_commit` refused, read as it reads them: an option
+    that takes a value takes the next word whatever it is, so that word may be ``--`` or another option. A command
+    line it accepts is reported from its request instead."""
+    leave, index = False, 0
+    while index < len(argv) and argv[index] != "--":
+        if argv[index] == "--leave-other-staged":
+            leave, index = True, index + 1
+        elif argv[index] in _COMMIT_OPTIONS and index + 1 < len(argv):
+            index += 2
+        else:
+            index += 1
+    return leave, ([] if index >= len(argv) else argv[index + 1:])
+
+
+def describe_commit(argv, cwd):
+    """``(errors, facts)`` of `commit <argv>`: the checks the real command makes through `git diff --check`, the facts
+    they establish, and the change lists and the diff of the named paths. Nothing is staged and nothing is committed."""
+    leave, given = _given_commit(argv)
+    facts = {"head": None, "expected_head": None, "leave_other_staged": leave,
+             "path_count": len(given), "subject": None, "trailers": [], "body": None,
+             "attribution_allowed": None, "program_findings": [], "staged_paths": [],
+             "requested_paths": given, "paths": [], "diff": None}
+    facts.update((name, []) for name in _CHANGE_LISTS)
+    errors = []
+    try:
+        _change_facts(check_commit(argv, cwd, note=facts.__setitem__), facts)
+    except Refused as exc:
+        if exc.code is None:
+            raise      # a refusal with no code has no place in the tables: stop with no object, as a decline
+        errors.append((exc.code, str(exc)))
+    return errors, [(name, facts[name]) for name in _COMMIT_FACTS]
+
+
+DESCRIBERS = {"commit": describe_commit, "remove": describe_remove}
+
+
+def command_describe(argv, cwd, out, err):
+    if not argv or argv[0] not in DESCRIBERS:
+        raise Refused("usage: safe-git describe %s, with the arguments of that command" % "|".join(sorted(DESCRIBERS)))
+    errors, facts = DESCRIBERS[argv[0]](argv[1:], cwd)
+    out.write(render_description(build_description(argv[0], errors, facts)))
+    return 0
 
 
 # --- push-check ----------------------------------------------------------------------------------
@@ -1366,7 +1940,8 @@ def command_push_check(argv, cwd, out, err):
     return 0
 
 
-COMMANDS = {"commit": command_commit, "remove": command_remove, "push-check": command_push_check}
+COMMANDS = {"commit": command_commit, "describe": command_describe, "remove": command_remove,
+            "push-check": command_push_check}
 
 
 def main(argv, out, err, cwd):
