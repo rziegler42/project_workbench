@@ -541,3 +541,51 @@ Review: the `reviewer` agent, one exchange, no blocking finding (it read and ran
 
 Open for the owner: the two approval directories of the previous commit (`1ce32890…`, `546f7ada…`) are stale again and need
 the owner's approval to remove.
+
+### Increment E — The outgoing commits, their trust and the diff
+
+Done, not yet committed at the time of writing. Changed: `packages/workbench/safe-git/helper/safe-git` (new shapes: `log` for
+the messages, `reflog show` of a tracking ref, `diff --raw`, `-U3` and `--ignore-submodules=none`; `push_base_ref`;
+`range_findings`, shared with `push-check`; `reflog_looks_git_written`, `range_commits`, `range_changes`; the wiring in
+`describe_push`; the comment on the unreachable `push.default` branch), `module.json` (`describes` is `remove`, `commit`,
+`push`), the new `tests/test_safegit_describe_push_outgoing.py` (45 tests), `tests/test_safegit_describe_push.py` (the pins of
+the empty later facts are gone), `tests/test_safegit_module.py` (the declaration, and a launcher test of `describe push` and of
+`describe` of another action) and the shipped approval records.
+
+The facts: for an update with commits ahead of the base, `commit_hashes` and `commit_messages` come from one `git log -z`
+(oldest first, merges included, each record a hash and a message, the count equal to `ahead`); `changed_paths`,
+`submodule_paths` from `git diff --raw -z --no-renames --ignore-submodules=none` of `<base>..HEAD`; `diff` and `binary_paths`
+from a text patch (`--text`, no filter, text conversion or external diff, `-U3`) split by file, a file whose patch holds a NUL
+or a byte that is not UTF-8 being binary and having no hunk in `diff`; `findings` as `<rule> <line> <path>` from the same two
+scans as `push-check`. `tracking_ref_reflog_looks_git_written` reads the reflog of the ref that gave the base: true when every
+entry begins `fetch`, `push` or `update by push`, false otherwise, null for none or one empty entry. A range with no commit
+(including a branch behind its base) and a deletion give empty lists and `diff` `""`. A read that is cut, a listing that does not
+add up, more than 200 commits, a path or message over a cap, or a diff over 98,304 bytes leaves the fact out whole and
+`truncated` is true; a read that fails or runs out of time is `repository_unreadable`.
+
+Verification as run: the new tests failed first (31 failures and errors), then passed; eight mutations of the helper (the raw
+diff without `none`, the patch without `--text`, `any` for `all` in the reflog, no empty-range short circuit, binary paths not
+set aside, merges dropped from the log, newest first, findings never cut) each made them fail. After landing and the owner's
+`release-approvals`: `python3 -B -W error tests/run_all.py` 4620 tests in 10 roots OK (4574 before, plus 46), `git diff --check`,
+`wb check`, `wb run code-work check` (51 plans), `doccheck` and `refcheck` clean. Git 2.54.0 (Apple Git-157).
+
+Review: the `reviewer` agent, one exchange, no blocking finding (it ran nothing). Applied: the reflog shape fixes
+`--no-show-signature`; `--ignore-submodules=none` is allowed only on a `--raw` diff of a range. Recorded for Increment G:
+- `--ignore-submodules=none` replaces the spec's "no `--ignore-submodules`": `submodule.<name>.ignore` and
+  `diff.ignoreSubmodules` hide a changed gitlink otherwise (checked). A gitlink in the index is already `repo_selects_program`,
+  so `submodule_paths` is reachable only where the index no longer holds the link.
+- `diff` and `changed_paths` are the net difference of the two trees, with three lines of context that count toward the cap;
+  for a diverged branch they also show the reverse of the remote-only commits. `rev-list --no-merges` is not used.
+- A binary test covers the whole patch of a file, context lines included (stricter than "added or removed content").
+- A diff slower than 20 seconds is `repository_unreadable`, not an omitted diff; the plan's "budget of `describe commit`" is
+  met by the time limit, not by a shared budget. No test covers the 8 MB cut or a timeout.
+- The reflog heuristic declines a tracking ref written by `clone` or `pull`. `GIT_OPTIONAL_LOCKS=0` is not set for these reads
+  (none takes a lock; the tests show the repository unchanged).
+- `push-check` prints the same fields and refuses the same cases; the text of one refusal (a branch name too long to read) differs.
+For the security pass (F): `diff.orderFile` (and other repository settings naming a file git reads) is not refused; a commit
+whose message holds a NUL cannot be made by git's own tools (`hash-object` refuses it) and the code treats a count mismatch as
+unreadable; `run_capped` with no `timeout` argument raises a `TypeError` instead of a refusal when it times out (the new calls
+pass one; `describe commit`'s `cat-file` calls do not).
+
+Open for the owner: the two approval directories of the previous commit (`1a1768c0…`, `45bf7993…`) are stale and need the
+owner's approval to remove.

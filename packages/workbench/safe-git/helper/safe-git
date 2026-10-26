@@ -69,12 +69,16 @@ _REMOTE_HEAD = re.compile(r"\Arefs/remotes/[A-Za-z0-9_][A-Za-z0-9._-]{0,63}/HEAD
 _REMOTE_NAME = re.compile(r"\A[A-Za-z0-9_][A-Za-z0-9._-]{0,63}\Z")
 _RANGE = re.compile(r"\A[0-9a-f]{40}\.\.HEAD\Z")
 _DIFF_FLAGS = ("--cached", "--name-only", "-z", "--check", "--no-ext-diff", "--no-textconv", "--no-renames",
-               "--no-color", "-U0", "--diff-filter=d", "--src-prefix=a/", "--dst-prefix=b/", "--text",
-               "--ignore-submodules=all")
+               "--no-color", "-U0", "-U3", "--diff-filter=d", "--src-prefix=a/", "--dst-prefix=b/", "--text",
+               "--ignore-submodules=all", "--ignore-submodules=none", "--raw")
 # A log of patches for `push-check`: these flags, and every one of the first group.
 _LOG_REQUIRED = {"--no-merges", "-p", "--format=", "--no-show-signature", "--no-ext-diff", "--no-textconv",
                  "--ignore-submodules=all"}
 _LOG_FLAGS = _LOG_REQUIRED | {"--no-renames", "--no-color", "-U0", "--src-prefix=a/", "--dst-prefix=b/", "--text"}
+# A log of the messages of a range for `describe push`: these flags in this order, and the range. `-z` ends each commit
+# with a NUL, `--topo-order` with `--reverse` puts a parent before its children, and the encoding is fixed so that
+# `i18n.logOutputEncoding` cannot change the bytes.
+_LOG_MESSAGES = ["-z", "--reverse", "--topo-order", "--no-show-signature", "--encoding=UTF-8", "--format=%H%n%B"]
 # Repository settings shaped like "a program or command to run": the shape decides and not a list of
 # names, because a list kept missing keys. A key is lower-cased before it is matched.
 EXEC_KEY = re.compile(
@@ -200,19 +204,24 @@ def _flags_ok(flags):
                                               or ("--no-ext-diff" in flags and "--no-textconv" in flags))
 
 
+# Whether a submodule is looked into follows this flag when it is `none`, so it is allowed only where two trees are
+# compared (a range): a diff of the work tree with it would enter a nested repository and read its configuration.
+_NO_ENTRY = "--ignore-submodules=none"
+
+
 def _diff_shape(rest):
     """A diff in the allowed flags. One that reads file contents must also switch off external diff and
     text conversion, so a program a configuration names is never started by it."""
     flags = []
     for index, item in enumerate(rest):
         if item == "--":
-            return _flags_ok(flags) and _after_dashes(rest, index)
+            return _flags_ok(flags) and _after_dashes(rest, index) and _NO_ENTRY not in flags
         if index == len(rest) - 1 and _RANGE.match(item):   # `<40 hex>..HEAD`, last, and no paths after it
-            return _flags_ok(flags)
+            return _flags_ok(flags) and (_NO_ENTRY not in flags or "--raw" in flags)
         if item not in _DIFF_FLAGS:
             return False
         flags.append(item)
-    return _flags_ok(flags) and bool(flags)
+    return _flags_ok(flags) and bool(flags) and _NO_ENTRY not in flags
 
 
 def _head_blob(argument):
@@ -248,8 +257,12 @@ _SHAPES = {
     "show-ref": lambda rest: len(rest) == 3 and rest[:2] == ["--verify", "--hash"] and _readable_ref(rest[2]),
     "symbolic-ref": lambda rest: rest == ["-q", "HEAD"] or (
         len(rest) == 3 and rest[:2] == ["-q", "--short"] and _plain_ref(rest[2], _REMOTE_HEAD)),
-    "log": lambda rest: bool(rest) and _RANGE.match(rest[-1]) is not None and len(set(rest[:-1])) == len(rest) - 1
-    and set(rest[:-1]) <= _LOG_FLAGS and _LOG_REQUIRED <= set(rest[:-1]),
+    "log": lambda rest: bool(rest) and _RANGE.match(rest[-1]) is not None and (
+        rest[:-1] == _LOG_MESSAGES
+        or (len(set(rest[:-1])) == len(rest) - 1 and set(rest[:-1]) <= _LOG_FLAGS and _LOG_REQUIRED <= set(rest[:-1]))),
+    # The reflog of a tracking ref, newest entry first, with the subject of each entry and nothing else.
+    "reflog": lambda rest: len(rest) == 6 and rest[:4] == ["show", "-z", "--no-show-signature", "--format=%gs"]
+    and _plain_ref(rest[4], _TRACKING) and rest[5] == "--",
     "rev-list": lambda rest: len(rest) == 2 and rest[0] == "--count" and _RANGE.match(rest[1]) is not None,
     "ls-files": lambda rest: (rest[:2] == ["--error-unmatch", "--"] and _paths_ok(rest[2:]))
     or rest == ["-s", "-z"] or (rest[:3] == ["-s", "-z", "--"] and _paths_ok(rest[3:]))
@@ -2028,6 +2041,9 @@ def configured_targets(entries, branch, remote):
     if mode == "current":
         return [(current, current, False)], []
     if mode not in ("simple", "upstream", "tracking"):
+        # `nothing` is the one value that reaches this: for a value git does not know it fails on every command, even
+        # `rev-parse`, so the repository was refused as unreadable before this ran. The guard stays so that a value
+        # a later git accepts is never guessed.
         raise _unresolved("push.default is nothing or a value git refuses")
     fetched = config_values(entries, "branch", branch, "remote")
     fetch = fetched[-1] if fetched else "origin"      # where the branch's upstream is, or git's default remote
@@ -2088,8 +2104,8 @@ def _blank_push_facts():
 
 def describe_push(argv, cwd):
     """``(errors, facts)`` of ``push <argv>``: the flags, the branch, the remote, the refs the push updates or
-    deletes, the base and the commits ahead of it. Nothing is contacted and nothing is written. The facts of the later
-    increments are empty or null."""
+    deletes, the base, and the commits ahead of it with their messages, changed paths, credential-looking lines and
+    diff. Nothing is contacted and nothing is written. A fact that could not be found out whole is ``OMIT``."""
     facts, errors = _blank_push_facts(), []
     try:
         request = parse_push(argv)
@@ -2125,12 +2141,24 @@ def describe_push(argv, cwd):
         facts["push_forced"] = [destination for _, destination, forced in updates if forced or forcing]
         facts["push_forced"] += list(deletes) if forcing else []
         if deletes:
-            facts["ahead"] = 0
+            facts["ahead"], facts["diff"] = 0, ""
         else:
             destination = updates[0][1]
             named = destination[len("refs/heads/"):] if destination.startswith("refs/heads/") else None
-            facts["base"] = base = push_base(root, remote, named, default)
-            facts["ahead"] = int(run(["git", "rev-list", "--count", base + "..HEAD"], root).stdout.strip())
+            tracking, facts["base"] = push_base_ref(root, remote, named, default)
+            base = facts["base"]
+            facts["ahead"] = ahead = int(run(["git", "rev-list", "--count", base + "..HEAD"], root).stdout.strip())
+            facts["tracking_ref_reflog_looks_git_written"] = _coded(reflog_looks_git_written, root, tracking)
+            facts["diff"] = ""
+            if ahead:     # a range with no commit sends nothing, whatever the trees say
+                span = base + "..HEAD"
+                facts["commit_hashes"], facts["commit_messages"] = _coded(range_commits, root, span, ahead)
+                (facts["changed_paths"], facts["binary_paths"], facts["submodule_paths"],
+                 facts["diff"]) = _coded(range_changes, root, span)
+                found, cut = _coded(range_findings, root, span)
+                facts["findings"] = OMIT if cut else [
+                    "%s %s %s" % (item["rule"], "-" if item["line"] is None else item["line"], item["path"])
+                    for item in found]
     except Refused as exc:
         if exc.code is None:
             raise      # a refusal with no code has no place in the tables: stop with no object, as a decline
@@ -2292,19 +2320,172 @@ def remote_default_branch(root, remote):
     return None
 
 
-def push_base(root, remote, branch, default, explicit=None):
-    """The commit a push of `branch` (None for a tag) to `remote` is compared with: `explicit` when given, else the
-    remote-tracking ref of the branch, else that of the remote's default branch. Refuses when none of them exists."""
+def push_base_ref(root, remote, branch, default, explicit=None):
+    """``(ref, commit)``: the ref a push of `branch` (None for a tag) to `remote` is compared with, and the commit it
+    names. It is `explicit` when given, else the remote-tracking ref of the branch, else that of the remote's default
+    branch. Refuses when none of them exists."""
     if explicit:
         candidates = [explicit]
     else:
         candidates = ["refs/remotes/%s/%s" % (remote, name) for name in (branch, default) if name is not None]
         candidates = [ref for ref in candidates if _scan_ref(ref)]   # a name too long to be read has no tracking ref here
-    base = next((value for value in (_resolved(root, ref) for ref in candidates) if value), None)
-    if base is None:
-        raise Refused("no base to compare with; tried %s" % (", ".join(candidates) or "no tracking ref"),
-                      code="base_unresolved")
-    return base
+    for ref in candidates:
+        value = _resolved(root, ref)
+        if value:
+            return ref, value
+    raise Refused("no base to compare with; tried %s" % (", ".join(candidates) or "no tracking ref"),
+                  code="base_unresolved")
+
+
+def push_base(root, remote, branch, default, explicit=None):
+    """The commit of `push_base_ref`."""
+    return push_base_ref(root, remote, branch, default, explicit)[1]
+
+
+# The flags of a patch made with no context, which is what the scan for credentials reads.
+_PATCH_SHAPE = ["--no-ext-diff", "--no-textconv", "--no-renames", "--no-color", "-U0", "--text",
+                "--ignore-submodules=all", "--src-prefix=a/", "--dst-prefix=b/"]
+
+
+def range_findings(root, span):
+    """``(findings, cut)`` of the credential-looking added lines of the range `span`, each ``{"path", "line",
+    "rule"}``. Each commit is read on its own, so a secret added and taken out again inside the range is still seen,
+    and so is the net change, which also holds what a merge brought in. A changed submodule is not entered: that would
+    start the program its own configuration names. `cut` is true when a read or the list was cut short."""
+    history, cut_history = run_capped(["git", "log", "--no-merges", "-p", "--format=", "--no-show-signature"]
+                                      + _PATCH_SHAPE + [span], root, MAX_SCAN, timeout=GIT_TIMEOUT)
+    patch, cut_patch = run_capped(["git", "diff"] + _PATCH_SHAPE + [span], root, MAX_SCAN, timeout=GIT_TIMEOUT)
+    findings, cut = scan_patch(history, MAX_FINDINGS)
+    more, cut_more = scan_patch(patch, MAX_FINDINGS)
+    for item in more:
+        if item not in findings:
+            if len(findings) >= MAX_FINDINGS:
+                cut = True
+                break
+            findings.append(item)
+    return findings, bool(cut or cut_more or cut_history or cut_patch)
+
+
+# --- what `describe push` reads of the range -------------------------------------------------------
+
+# A read here that fails, or runs out of time, is an unreadable repository and not a mistake of the caller, and a read
+# that is cut at its limit leaves the facts it would have given out of the object.
+_RAW_LINE = re.compile(r"\A:([0-7]{6}) ([0-7]{6}) [0-9a-f]+ [0-9a-f]+ [A-Z]\Z")
+_ESCAPED_BYTE = re.compile("[\udc80-\udcff]")
+_DIFF_HEADER = "diff --git "
+_TEXT_PATCH = ["--text", "--no-ext-diff", "--no-textconv", "--ignore-submodules=all", "--no-renames", "--no-color",
+               "-U3", "--src-prefix=a/", "--dst-prefix=b/"]
+_GIT_WRITTEN = ("fetch", "push", "update by push")
+
+
+def _coded(function, *arguments):
+    """``function(*arguments)``, with a refusal that has no code made an unreadable repository."""
+    try:
+        return function(*arguments)
+    except Refused as exc:
+        raise Refused(str(exc), code=exc.code or "repository_unreadable")
+
+
+def reflog_looks_git_written(root, ref):
+    """True when every entry of the reflog of the tracking ref `ref` begins ``fetch``, ``push`` or ``update by push``,
+    False when one does not, None when there is no reflog (git shows one empty entry for a ref that has none), and OMIT
+    when the read was cut. A reflog is local and cannot show who wrote a ref: a forged one passes."""
+    text, cut = run_capped(["git", "reflog", "show", "-z", "--no-show-signature", "--format=%gs", ref, "--"], root, MAX_SCAN,
+                           timeout=GIT_TIMEOUT, separator="\0")
+    if cut or (text and not text.endswith("\0")):
+        return OMIT
+    entries = text.split("\0")[:-1]
+    if entries in ([], [""]):
+        return None
+    return all(entry.startswith(_GIT_WRITTEN) for entry in entries)
+
+
+def range_commits(root, span, count):
+    """``(hashes, messages)`` of the `count` commits of `span`, oldest first, merges included, each message as git keeps
+    it. Both are OMIT for more than `MAX_ARRAY` commits, a read that was cut, and output that is not `count` records of
+    a hash and a message (a message with a NUL in it ends early in git's own output, so the records stop adding up)."""
+    if count > MAX_ARRAY:
+        return OMIT, OMIT
+    text, cut = run_capped(["git", "log"] + _LOG_MESSAGES + [span], root, MAX_SCAN, timeout=GIT_TIMEOUT,
+                           separator="\0")
+    if cut or (text and not text.endswith("\0")):
+        return OMIT, OMIT
+    records = text.split("\0")[:-1]
+    hashes, messages = [], []
+    for record in records:
+        if _HEX40.match(record[:40]) is None or record[40:41] != "\n":
+            return OMIT, OMIT
+        hashes.append(record[:40])
+        messages.append(record[41:])
+    return (hashes, messages) if len(hashes) == count else (OMIT, OMIT)
+
+
+def _header_path(line):
+    """The path of a ``diff --git a/<path> b/<path>`` header (`line` is the text after ``diff --git ``), or None for a
+    header of another shape. A path git quotes is unquoted; the two sides of a patch made with no renames are one path."""
+    if line.startswith('"'):
+        end = 1
+        while end < len(line) and line[end] != '"':
+            end += 2 if line[end] == "\\" else 1
+        if line[end + 1:end + 3] != ' "':
+            return None
+        left, right = _unquote(line[:end + 1]), _unquote(line[end + 2:])
+    else:
+        size = (len(line) - 5) // 2
+        if len(line) != 2 * size + 5 or line[size + 2] != " ":
+            return None
+        left, right = line[:size + 2], line[size + 3:]
+    return left[2:] if left.startswith("a/") and right == "b/" + left[2:] else None
+
+
+def _patch_sections(patch):
+    """``[(path, text)]``, one for each ``diff --git`` header of `patch`; None when a header is not one this helper
+    reads. A line of a hunk starts with a space, ``+``, ``-`` or a backslash, so no line of content is a header."""
+    starts = [found.start() for found in re.finditer(r"^diff --git ", patch, re.M)]
+    if (starts and starts[0] != 0) or (not starts and patch):
+        return None
+    sections = []
+    for begin, end in zip(starts, starts[1:] + [len(patch)]):
+        text = patch[begin:end]
+        newline = text.find("\n")
+        path = _header_path(text[len(_DIFF_HEADER):newline]) if newline > 0 else None
+        if path is None:
+            return None
+        sections.append((path, text))
+    return sections
+
+
+def range_changes(root, span):
+    """``(changed_paths, binary_paths, submodule_paths, diff)`` of the range `span`, from the difference of its two
+    trees. The paths come from a raw listing that does not skip a submodule whatever the configuration says; the diff
+    is made with no filter, text conversion or external diff and with every file read as text, and a path whose patch
+    holds a NUL or a byte that is not UTF-8 is binary and has no hunk in it. Any of the four is OMIT where it could not
+    be found out whole."""
+    raw, cut = run_capped(["git", "diff", "--raw", "-z", "--no-renames", "--no-ext-diff", "--no-textconv",
+                           "--ignore-submodules=none", span], root, MAX_SCAN, timeout=GIT_TIMEOUT, separator="\0")
+    if cut:
+        return OMIT, OMIT, OMIT, OMIT
+    fields = raw.split("\0")
+    if fields.pop() != "" or len(fields) % 2:
+        raise Refused("git diff gave a listing this helper does not read", code="repository_unreadable")
+    paths, links = [], []
+    for meta, path in zip(fields[0::2], fields[1::2]):
+        found = _RAW_LINE.match(meta)
+        if found is None or not path:
+            raise Refused("git diff gave a line this helper does not read", code="repository_unreadable")
+        paths.append(path)
+        if "160000" in found.groups():
+            links.append(path)
+    patch, cut = run_capped(["git", "diff"] + _TEXT_PATCH + [span], root, MAX_SCAN, timeout=DIFF_BUDGET)
+    sections = None if cut else _patch_sections(patch)
+    if sections is None or not set(paths) - set(links) <= {path for path, _ in sections} \
+            or not {path for path, _ in sections} <= set(paths):
+        return paths, OMIT, links, OMIT
+    binary = []
+    for path, text in sections:
+        if path not in binary and ("\0" in text or _ESCAPED_BYTE.search(text)):
+            binary.append(path)
+    return paths, binary, links, "".join(text for path, text in sections if path not in binary)
 
 
 def command_push_check(argv, cwd, out, err):
@@ -2323,24 +2504,8 @@ def command_push_check(argv, cwd, out, err):
     ahead = run(["git", "rev-list", "--count", span], root).stdout.strip()
     names_text, cut_names = run_capped(["git", "diff", "--name-only", "-z", "--no-renames", "--diff-filter=d", span],
                                        root, MAX_SCAN, separator="\0")
-    shape = ["--no-ext-diff", "--no-textconv", "--no-renames", "--no-color", "-U0", "--text",
-             "--ignore-submodules=all", "--src-prefix=a/", "--dst-prefix=b/"]
-    # Each commit on its own, so a secret added and taken out again inside the range is still seen, and the net
-    # change, which also holds what a merge brought in. A changed submodule is not entered: that would start
-    # the program its own configuration names.
-    history, cut_history = run_capped(["git", "log", "--no-merges", "-p", "--format=", "--no-show-signature"]
-                                      + shape + [span], root, MAX_SCAN)
-    patch, cut_patch = run_capped(["git", "diff"] + shape + [span], root, MAX_SCAN)
     paths = [item for item in names_text.split("\0") if item]
-    findings, cut_findings = scan_patch(history, MAX_FINDINGS)
-    more, cut_more = scan_patch(patch, MAX_FINDINGS)
-    for item in more:
-        if item not in findings:
-            if len(findings) >= MAX_FINDINGS:
-                cut_findings = True
-                break
-            findings.append(item)
-    cut_findings = cut_findings or cut_more
+    findings, cut_findings = range_findings(root, span)
     for item in paths:
         if secret_name(item):
             if len(findings) >= MAX_FINDINGS:
@@ -2349,8 +2514,7 @@ def command_push_check(argv, cwd, out, err):
             findings.append({"path": display.ascii_text(item)[:200], "line": None, "rule": "secret-file-name"})
     report = {"remote": remote, "branch": branch, "target": branch, "default_branch": default, "base": base,
               "ahead": int(ahead), "changed_paths": [display.ascii_text(item)[:200] for item in paths[:MAX_CHANGED]],
-              "findings": findings, "truncated": bool(cut_names or cut_history or cut_patch or cut_findings
-                                or len(paths) > MAX_CHANGED)}
+              "findings": findings, "truncated": bool(cut_names or cut_findings or len(paths) > MAX_CHANGED)}
     out.write(json.dumps(report) + "\n")
     return 0
 

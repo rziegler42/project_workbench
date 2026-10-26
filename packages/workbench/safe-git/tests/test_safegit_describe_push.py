@@ -3,7 +3,7 @@
 
 Real repositories, real git, no network and no push. A refusal is data with its code and exit status 0; every call is
 checked by what it leaves behind: the repository is byte for byte the same. The later facts (the remote's transport,
-the configuration, the target, the outgoing commits and the diff) belong to increments C to E and are empty or null."""
+the configuration and the target) belong to increments C and D; the outgoing commits and the diff to increment E."""
 
 import io
 import json
@@ -25,9 +25,6 @@ FACTS = ("head", "branch", "remote", "default_branch", "force", "delete", "set_u
          "push_deletes", "push_forced", "base", "ahead", "tracking_ref_reflog_looks_git_written", "commit_hashes",
          "commit_messages", "changed_paths", "binary_paths", "submodule_paths", "findings", "diff")
 FLAGS = ("force", "delete", "set_upstream", "no_verify", "dry_run", "atomic")
-LATER = {"tracking_ref_reflog_looks_git_written": None, "commit_hashes": [],
-         "commit_messages": [], "changed_paths": [], "binary_paths": [], "submodule_paths": [], "findings": [],
-         "diff": None}
 CREDENTIAL = "hunter2-not-a-real-password"
 
 
@@ -128,8 +125,8 @@ class Facts(Push):
                                                 self.own(facts["push_config_findings"])))
         self.assertEqual((["refs/heads/feature:refs/heads/feature"], [], []),
                          (facts["push_updates"], facts["push_deletes"], facts["push_forced"]))
-        for name, value in LATER.items():
-            self.assertEqual(value, facts[name], name)
+        self.assertEqual(([head], ["change\n"], ["b.txt"]), (facts["commit_hashes"], facts["commit_messages"],
+                                                             facts["changed_paths"]))
         built = self.describe()
         self.assertTrue(built["ok"])
         self.assertEqual([], built["errors"])
