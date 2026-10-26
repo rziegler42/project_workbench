@@ -25,7 +25,7 @@ every run at a level other than `block` is logged, and the specs say so.
 - A trial that shows whether an interactive `ask` prompt reaches the owner's remote channel (done, Increment A).
 - Revision 2: a command gate, a second hook that stops a Bash command naming a relaxed command unless it is one simple
   command the `ask` rule matches, with a trial before it (Increment I), its build and the repeated spelling probe (Increment
-  J), and the default flip that waits for that probe.
+  J), hardened as the security review of the design asked; the default stays `block`.
 - The changes the design-stage security review asked for (Revision 1 below): an appended, bounded log; a rendering record
   that lists every key and the harness file's hash; a 32-character digest that covers the declaration, helper and project;
   a bad key that blocks the whole table; a refused duplicate key; and the `ask` pattern for the store's `bin/wb` path.
@@ -81,6 +81,8 @@ every run at a level other than `block` is logged, and the specs say so.
   the owner in a new decision that names `2026-10-26-ask-level-spelling-limit` and says what changes (Increment I, step 0):
   the check is on text, so a command that builds the word at run time (a variable, a decoded string) is not seen; a command
   that merely contains the word (a `grep`, a commit message) is blocked until the owner runs it; a hook is not a boundary.
+  After the design review (Result of Increment J) the owner chose the cheap hardening of the review's ranked remedies, the
+  default left at `block`, and the remaining limits accepted in writing; the provenance check in `approve-plan` was not tried.
   Increments G and H (the review engine's `extend`, and the specs) wait for I and J.
 - Every increment is one verified, reviewed local commit made through the project's commit helper, and the commit message
   carries the trailer `Plan: 2026-10-26-command-permission-levels#<label>`.
@@ -104,8 +106,8 @@ every run at a level other than `block` is logged, and the specs say so.
 7. The trial of Increment A is recorded with its result, and the plan was stopped and revised if it failed.
 8. The decision `2026-10-26-ask-level-spelling-limit` and the decision that follows from Revision 2 are recorded in the
    Result as accepted by the owner before `ask` shipped for any key; the first spelling probe (Increment F) is recorded as
-   having stopped the plan; and the probe repeated after the command gate (Increment J) is recorded with its result and
-   passed, in auto mode, for every spelling it lists.
+   having stopped the plan; and the probe repeated after the command gate (Increment J) is recorded with its result, passed for
+   the forms that J step 4 says must stop the plan, and the limits it showed are accepted by the owner in writing.
 9. The full test suite passes, `wb check` and the document checks report nothing new, and nothing outside the increments'
    affected areas changed.
 
@@ -252,7 +254,7 @@ the digest (`plan-status` or a sibling), `workbench/levels.py` (offer `ask` and 
    **Stop condition:** if a spelling the pattern does not cover approves a plan without a prompt, stop, report, and revise the
    plan; `ask` does not ship for `approve-plan` until the owner decides.
    *Outcome, 2026-10-26: the stop condition was met (`bash -c`, in auto mode). Revision 2 adds Increments I and J; the probe is
-   repeated at the end of J, and the default flip (step 4's last clause) happens there, not here.*
+   repeated at the end of J; the default flip (step 4's last clause) is no longer planned: `ask` stays the owner's opt-in.*
 **Verification:** the new tests, the plan-approval and delegation tests, then the full suite; the probe's record is in the
 Result.
 **Evidence:** the one local commit, with the trailer `Plan: 2026-10-26-command-permission-levels#F`.
@@ -323,47 +325,68 @@ plan's Result. No code.
 **Stop condition:** if a hook that exits 2 does not stop a Bash command in auto mode, or a hook that exits 0 removes the `ask`
 rule's prompt, stop and report; the command gate cannot work as designed and the owner chooses between options 2 and 3.
 
-### Increment J — The command gate, the repeated probe and the default flip
+### Increment J — The hardened command gate and the repeated probe (the default stays `block`)
 
 **Outcome:** with a key at `ask` or `none`, attach renders a Bash hook that stops every command naming that key's command
-unless it is one simple command an `ask` pattern matches; the rendering record says the gate was rendered; the spelling probe
-is repeated in auto mode and passes; and the `approve-plan` default becomes `ask`.
-**Dependencies:** I, with the decision of its step 0 `Accepted`.
+unless it is exactly the simple command the `ask` rule matches; the rendering record names the gate and the settings files it
+hashed; the spelling probe is repeated in auto mode with the forms the security review added; and the limits that remain are
+accepted by the owner in writing. The shipped default of `approve-plan` is **not** changed: `ask` stays the owner's opt-in.
+**Dependencies:** I, with its decision `2026-10-26-ask-level-command-gate` `Accepted` (done), and this revision approved.
 **Affected areas:** the harness layout schema and its validator (`workbench/layout.py`) and the Claude module's layout (a field
-for a command hook beside the edit gate's `hooks`; a change to a module declaration that the owner re-approves, so the shipped
-approvals go stale until the owner runs `release-approvals`), `workbench/harnessplan.py` (render the second hook entry only
-when a key is at `ask` or `none`), a new `workbench/command_gate.py`, `workbench/cli.py` and `workbench/rules.py` (the new
-agent-safe command `gate-command`), `workbench/rendering.py` (the record names the gate; `ask` and `none` read `block`
-without it), `workbench/levels.py` (the default), tests under `tests/` and `packages/workbench/claude/tests/`.
+for a command hook beside the edit gate's `hooks`, and a field naming the shared project settings file beside
+`local_settings`; a change to a module declaration that the owner re-approves, so the shipped approvals go stale until the
+owner runs `release-approvals`), `workbench/harnessplan.py` (render the second hook entry only when a key is at `ask` or `none`,
+with a harness timeout larger than the gate's own deadline, and the settings deny when either hook is rendered),
+`workbench/command_gate.py` (new), `workbench/cli.py` and `workbench/rules.py` (the new agent-safe command `gate-command`),
+`workbench/rendering.py` (the record names the gate and hashes both settings files; interpreter spellings are not rendered as
+`ask`), `tests/` and `packages/workbench/claude/tests/`. The layout lacking a field for the shared settings file is a stop:
+adding a field to the declaration contract is allowed here, but report it.
 **Steps:**
-1. **Security checkpoint (owner).** This is a hook that decides what an agent may run. Ask whether to run a security review of
-   the design now, and record the answer. Ask again on the built code before the specs (Increment H).
-2. Write the tests first. The gate reads one Bash tool call as JSON on standard input and prints nothing and returns 0 to
-   allow, or one `refused:` line and 2 to block (as `wb gate` does; every other outcome, a crash and a deadline included, is a
-   block). Guarded words come from the relaxed keys of the effective table (for `approve-plan`, `approve-plan`; for `wb run
-   <command> <argument>`, both words). A command is allowed when it contains no guarded word, or when it is one simple command
-   (no `;`, `&`, `|`, `<`, `>`, backtick, `$`, `(`, `)`, newline or backslash, and no quote around the guarded word) that matches
-   one of the rendered `ask` patterns, so the `ask` rule fires. Test that these are blocked when they name a guarded word:
-   `bash -c`, `sh -c`, `env`, `eval`, `exec`, `nohup`, `time`, `command`, `xargs`, `$( )`, backticks, `&&`, `;`, `|`, a
-   redirect, a here-document, a leading `VAR=value`, an absolute path to `wb`, `python3 -I -m workbench`; that these are
-   allowed: `wb plan-status <plan> --digest`, `wb check`, `wb approve-plan <plan> --digest <d>` (then the rule prompts), any
-   command with no guarded word; that the word is matched in a case-folded, Unicode-folded form; that an input of more than
-   the bound, a missing field and a non-string command block; that the hook entry is rendered only when a key is at `ask` or
-   `none`, with `|| exit 2`, and not when none is; that the rendering record has `gate: true` and a deleted or `false` field,
-   a missing hook in the file, or a changed file makes `ask` and `none` read `block`; that the existing edit gate's hook is
-   unchanged; that the planned files, the digest and the preview still cover the same bytes.
-3. Build the layout field, the validator, the Claude layout, the renderer, `gate-command` and the record field. A harness whose
-   layout describes no command hook cannot render the gate, so `ask` and `none` read `block` for it. The installer holds no
-   tool name: the matcher and the field come from the layout.
+1. **Security checkpoint (owner): done.** Asked 2026-10-26, answered yes; the findings and the owner's choice (the cheap
+   hardening, the default left at `block`, the rest accepted in writing) are in the Result. Ask again on the built code before
+   the specs (Increment H).
+2. Write the tests first, and see them fail. The gate reads one Bash tool call as JSON on standard input, prints nothing and
+   returns 0 to allow, or prints one `refused:` line and returns 2 to block (as `wb gate` does; every other outcome, a crash and
+   a deadline included, is a block). The rules, from the review:
+   - **Guarded words** come from the relaxed keys (for `approve-plan`, `approve-plan`; for `wb run <command> <argument>`, both
+     words, in that order). The exact token `delegate-approve-plan` is removed before the search.
+   - **Allowed:** a command with no guarded word under either test below; or a command that equals the exact grammar of an
+     `ask` form on the raw text, single spaces, case-sensitive: for `approve-plan`,
+     `wb approve-plan <path> [--digest <32 hex>]` and the same with the store's `bin/wb` path, with `<path>` made of
+     `[A-Za-z0-9._/-]`. No other form reaches the `ask` rule: the interpreter spellings (`python3 -m workbench`, `python3 -I -m
+     workbench`) stay denied and are not rendered as `ask`.
+   - **Blocked, if not allowed above:** a command whose case- and Unicode-folded text contains a guarded word, or whose
+     *skeleton* does (the folded text with every character that is not a letter or digit removed, so quote splicing, backslashes
+     and an inserted punctuation mark do not hide the word); and any command that contains `$'` or `$"` while a guarded word's
+     letters appear in its skeleton in order.
+   - **Failures:** an input over the bound, a missing field, a non-string command, a crash and a deadline block. The deadline is
+     10 seconds and the harness timeout is 60.
+   Tests: each of these is blocked when it names a guarded word: `bash -c`, `sh -c`, `env`, `eval`, `exec`, `nohup`, `time`,
+   `command`, `xargs`, `find -exec`, `$( )`, backticks, `&&`, `;`, `|`, a redirect, a here-document, a leading `VAR=value`, an
+   absolute path to `wb` that is not the store's, `python3 -I -m workbench`, `wb approve""-plan`, `wb appr'ove-p'lan`, `wb
+   approve\-plan`, `wb $'approve\x2dplan'`, a fullwidth or ligature spelling; each of these is allowed: `wb plan-status <plan>
+   --digest`, `wb check`, `wb delegate-approve-plan <plan>`, `wb approve-plan <plan> --digest <d>` (then the rule prompts), a
+   command with no guarded word. The hook entry is rendered only when a key is at `ask` or `none`, with `|| exit 2`. The record
+   has `gate: true` and the hashes of `settings.local.json` and the shared settings file; a deleted or false field, a missing
+   hook, or a changed or newly created settings file makes `ask` and `none` read `block`. The deny on both settings files is
+   rendered when either hook is rendered. The edit gate's hook is unchanged. The planned files, the digest and the preview
+   still cover the same bytes.
+3. Build the layout fields, the validator, the Claude layout, the renderer, `gate-command` and the record fields. A harness
+   whose layout describes no command hook cannot render the gate, so `ask` and `none` read `block` for it. The installer holds
+   no tool name: the matcher and the field come from the layout.
 4. **Repeat the spelling probe**, owner steps, described and not run by the agent, in auto mode and in default mode, in a
-   throwaway project with `approve-plan` at `ask`: the five spellings of Increment F, and `sh -c`, `eval "wb approve-plan …"`,
-   `$(echo wb) approve-plan …`, `xargs`, and a command that builds the word (`a=approve; wb ${a}-plan …`). Record, per spelling:
-   blocked by the gate, prompted by the rule, or ran. **Stop condition:** a spelling other than one built from fragments at run
-   time approves a plan without a prompt: stop and revise. A fragment-built command that runs is the stated limit of the
-   decision and is recorded; the owner decides whether it is acceptable before the flip.
-5. Only when step 4 passes and the decision is `Accepted`: change the shipped default of `approve-plan` to `ask`, with the test
-   that with no settings or a version 1 file it reads `ask` only after an attach rendered the rule and the gate, and `block`
-   otherwise.
+   throwaway project with `approve-plan` at `ask`: the five spellings of Increment F; `sh -c`; `eval "wb approve-plan …"`;
+   `$(echo wb) approve-plan …`; `xargs`; `wb approve""-plan …`; `wb $'approve\x2dplan' …`; a written script run with `bash x.sh`
+   and with `python3 x.py`; a shell function or git alias that holds the call; the edit, act, restore sequence on
+   `.claude/settings.local.json`; `disableAllHooks` in `.claude/settings.json`; and a command that builds the word from variables.
+   Record, per spelling: blocked by the gate, prompted by the rule, or ran. **Stop condition:** a single-command form that
+   contains the word contiguously or as a static splice (quotes, backslashes, `$'…'`), or the edit, act, restore sequence, or
+   `disableAllHooks`, approves a plan without a prompt: stop and revise. A script file, an alias or function, a variable-built
+   word and a base64-decoded word that run are the stated limit of the decision: record them; they do not stop the plan.
+5. The shipped default of `approve-plan` stays `block`. Do not flip it. Record in the Result that `ask` is the owner's opt-in
+   and what the probe showed.
+6. **Limits the owner accepts in writing.** A dated note after the body of `2026-10-26-ask-level-command-gate` states them
+   (written 2026-10-26, at the owner's instruction, in this revision); step 4's results are added to it.
 **Verification:** the new tests, `python3 -B -W error tests/run_all.py`, `python3 -m workbench check`, and the probe's record in
 the Result.
 **Evidence:** the one local commit, with the trailer `Plan: 2026-10-26-command-permission-levels#J`.
@@ -389,7 +412,9 @@ see each refuse with a wrong digest; and the spelling probe of Increment F (it i
   mitigations are now the live-file hash check, the `bin/wb` pattern and the command gate of Increments I and J, which stops a
   Bash command that names a relaxed command unless the `ask` rule can fire on it. The remainder is a stated limit that the
   owner accepts in a decision before `ask` ships: a command that builds the word at run time, and false blocks of a command
-  that merely names it. The probe is repeated after J; if a spelling other than a fragment-built one runs, the plan stops.
+  that merely names it. The probe is repeated after J; if a single-command form with the word contiguous or as a static splice, the
+  edit, act, restore sequence, or `disableAllHooks` approves a plan without a prompt, the plan stops. A script file, an alias or
+  function, a variable-built word and a decoded word are the owner's accepted limit; the shipped default stays `block`.
 - **A hook that does not hold.** The command gate rests on an unverified assumption (a Bash hook blocks in auto mode, and a
   hook that exits 0 leaves the `ask` rule in force). Increment I tests it first and stops the plan if it fails.
 - **A change to a module declaration.** Increment J changes the Claude harness module's layout, so the shipped approvals go
@@ -433,8 +458,21 @@ dependencies of G and H on them, and the entries above. It has not been reviewed
 its bound of 3 rounds for this plan, and a further review needs the owner to extend or reset it. The owner has not approved
 Revision 2.
 
+Revision 3 (2026-10-26): the security review of the command gate's design (Result of Increment J) found that a text gate leaves
+the script-file class, static splices and an edit, act, restore sequence open, and that the store is shell-writable at every
+level. The owner chose to harden Increment J as the review ranked it (exact grammar, skeleton match, `wb` forms only, settings
+deny and hash for every settings file, the `delegate-approve-plan` exemption, a timeout margin), to add the missing forms to
+the probe, to leave the default at `block`, and to accept the remaining limits in writing. This text has not been reviewed by a
+second reviewer, and the owner has not approved Revision 3.
+
 ## Deferred work
 
+- A provenance check inside `approve-plan` (refuse unless its ancestor shell's `-c` payload is exactly one simple command): it would
+  close the script, splice and eval classes, needs the harness's spawn format inspected, and reverses an alternative the earlier
+  decision rejected. A trial first.
+- Moving approval integrity out of the shell's reach (a different uid, or a keychain-held MAC checked by `load`).
+- Managed, root-owned settings for the hook, the rules and the denies.
+- A command that re-renders the harness in an attached clone (a table or module change leaves `ask` and `none` reading `block`).
 - The other keys of the decision's table, each with its own preview digest, in later plans.
 - A command that edits the table, if hand edits prove error-prone.
 - A roadmap candidate for this work, if the owner wants one.
@@ -726,3 +764,37 @@ the agent in the session to record it, so the agent edited the status line and t
 nothing. The earlier decision `2026-10-26-ask-level-spelling-limit` is not marked `Superseded`: the new record says its items 1 to
 5 stand and replaces item 6, and leaves the marking to the owner. The condition of Increment J (the decision `Accepted`) is met;
 the security checkpoint of J's step 1 is still to be asked.
+
+Committed as `49108b7` (the acceptance).
+
+### Increment J — The command gate (stopped at the security checkpoint; no code written)
+
+Security checkpoint (step 1), 2026-10-26: the owner was asked and answered yes, run the review now. The `security-reviewer` agent
+ran a design-stage review of the command gate. It was read-only in effect: its scratch write was refused again (the agent gate's
+scratch path template is the macOS form), and all its Bash calls were refused, so nothing it reports is tested, and it observed
+no Claude Code behavior. Findings, not yet judged by the owner:
+
+- HIGH-1: the gate does not cover script and file indirection (the agent writes a file holding the word, or a spliced word,
+  then runs `bash x.sh`, `python3 x.py`, a shell rc function, a git alias, a Makefile or the project's own tests). The probe list
+  of J step 4 does not contain it, so the probe as written would pass without testing the strongest form.
+- HIGH-2: static splices (`wb approve""-plan`, `$'...'`, backslash, brace and glob forms) are not run-time construction, but the
+  decision's limit and the stop condition say only "run-time"; the trial showed `echo probe""word` passing a text hook.
+- HIGH-3: the live hash check cannot catch edit, act, restore (a shell edit removes the hook and rule, a later command restores
+  the file and approves in one call); `.claude/settings.json` and user-level files are neither denied nor hashed
+  (`disableAllHooks`, other hooks that run outside any Bash call). Unverified.
+- HIGH-4 (pre-existing, not from this plan): the guarded store is writable from a shell, so the agent can write the approvals
+  file or rewrite the rendering record without running `wb approve-plan`; at every level, `block` included, the barrier against
+  a shell is the auto-mode classifier and the rules, not the store.
+- MEDIUM: the `python3 -m workbench` spelling at `ask` can run a planted package; "one simple command that a pattern matches" is a
+  blocklist where an exact grammar would be tighter; the settings deny is rendered only with the edit gate's hook; the substring
+  match blocks the shipped `wb delegate-approve-plan`. LOW: the hook timeout lets a call through, uncovered channels (subagents,
+  background shells, `!` skill shell), `none` has no ask pattern, oversize input, "don't ask again" writes an allow rule.
+- Ranked remedies: (1) managed, root-owned settings for the hook, rules and denies; (2) a provenance check inside `approve-plan`
+  (it refuses unless its ancestor shell's `-c` payload is exactly the one simple command), which would close the script,
+  splice and eval classes but needs the harness's spawn format inspected and reverses the earlier rejected alternative; (3) cheap
+  hardening: exact grammar on raw text, skeleton match and `$'` rule, only the `wb` forms to the ask rule, settings deny and hash
+  for every settings file, the `delegate-approve-plan` exemption, a timeout margin; (4) move approval integrity out of the
+  shell's reach (a separate plan); (5) keep `ask` opt-in with the default at `block`.
+
+Not done: no test, code or commit for J. The findings change the plan's J (the grammar, the probe list, whether to try the
+provenance check, and what the owner accepts in writing), so it stops here to be revised and re-approved; nothing was widened.

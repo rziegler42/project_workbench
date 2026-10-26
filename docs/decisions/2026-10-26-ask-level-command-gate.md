@@ -91,3 +91,27 @@ record, whether to mark the earlier one `Superseded by` it.
   decision (one simple command that an `ask` pattern matches) was exercised only as an exact match; a missing script, a JSON
   answer and a subagent's call were not tried. The record therefore does not prove the gate. Increment J's tests and its repeated
   probe are the test of the built gate.
+
+## Note, 2026-10-26 (a clarification, written at the owner's instruction; the body above is unchanged)
+
+A design-stage security review of the gate (the Result of Increment J of the plan) read the design and tested nothing. It found
+that the limit stated above is wider than "a command that builds the word at run time". The owner chose to harden the gate as the
+review ranked it, to leave the shipped default of `approve-plan` at `block` so that `ask` is the owner's opt-in, and to accept
+the following limits.
+
+- **Static splices are text and not run time.** `wb approve""-plan`, a backslash, `$'…'` and brace or glob forms hide the word
+  from a plain text match. The gate adds a skeleton match (the folded command with every character that is not a letter or digit
+  removed) and a rule for `$'` and `$"`, and the probe must show these stopped. A word built from variables, `printf` escapes or
+  a decoded string is still not seen.
+- **Script and file indirection is not covered.** An agent that writes a file holding the call, or a spliced call, and then runs
+  it (`bash x.sh`, `python3 x.py`, a shell function, a git alias, a Makefile, the project's own tests) runs the approval with no
+  prompt in auto mode, because the run command contains no guarded word and a file write is not a Bash call.
+- **An edit, act, restore sequence** on a settings file may defeat the live hash. The gate hashes both settings files and the probe
+  tries the sequence; if it works, the plan stops.
+- **The guarded store is writable from a shell.** This holds today at every level, `block` included: an agent with a shell can
+  write the approvals file or the rendering record without running `wb approve-plan`. The barrier against a shell is the rules
+  and the auto-mode classifier. That is a property of the store (`2026-10-19-guarded-store`) and not of this gate.
+- **The gate is a speed bump.** It makes the casual and classifier-lenient routes safe. It does not stop an agent that sets out
+  to approve a plan. The owner accepts that the classifier remains the barrier for everything else.
+- **Not decided here, and deferred in the plan:** a provenance check inside `approve-plan`, managed settings, a store whose
+  approvals the shell cannot forge, and a command to re-render an attached clone.
