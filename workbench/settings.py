@@ -145,7 +145,9 @@ def load(store):
         for key in sorted(given):
             value = given[key]
             if len(key) > MAX_KEY or not _KEY_RE.match(key):
-                problems.append("settings name a level key that is not valid: %s" % declarations._shown(key))
+                problems.append("settings name a level key that is not valid: %s; every key reads as block"
+                                % declarations._shown(key))
+                levels_blocked = True
             elif key in _FLOOR_IDS:
                 problems.append("settings name a floor action, %s, which the table cannot set; it is refused"
                                 % declarations._shown(key))

@@ -70,7 +70,8 @@ refused with a note and ignored. A command that reaches more than one key takes 
 
 1. A missing file is seeded as today. A damaged file, an unsupported version, a duplicated key, a key of the wrong
    type or a value that is not one of the four levels reads as `block` for the whole table, or for that key when the
-   rest is sound, and is reported by `wb settings`.
+   rest is sound, and is reported by `wb settings`. A key that is not a valid name, so that it cannot be matched to any
+   key, blocks the whole table: a mistyped key must never leave a default of `ask` in force.
 2. A key with no entry reads as its shipped default (below).
 3. A level the key does not offer (below) reads as `block` with a note.
 4. A key on the compiled floor, or a hard stop a module adds, is not a key. An entry that names one is refused.
@@ -104,7 +105,10 @@ to accept in the decision; the first slice of the plan builds `approve-plan` and
 ### The preview and the digest (`ask`)
 
 An action that offers `ask` has a read-only preview that an agent may run and that prints what the action would do.
-The digest is the first 12 lowercase hexadecimal characters of the SHA-256 of the preview's canonical text. At `ask`
+The digest is the first 32 lowercase hexadecimal characters of the SHA-256 of the preview's canonical text, which also
+holds the project's identifier, the hash of the process module's declaration and the hash of the command's helper, so a
+confirmation cannot be reused by another clone or after the approval command changed. (Twelve characters were proposed and
+rejected: the plan is attacker-controlled, 48 bits can be ground, and the owner never types the digest at `ask`.) At `ask`
 the command is accepted without the terminal test, and it:
 
 1. requires the digest as an argument, recomputes the preview in its own process, and refuses on any difference, so a
@@ -134,25 +138,39 @@ by the table. Only `ask` needs a rendered rule, the one that produces the prompt
 and `block` need the `deny`.
 
 **The rendering record.** At attach the installer writes, in the guarded store, a record the agent cannot write: the
-harness's identity, whether it provides `permissions`, a digest of the effective table it rendered from, and, for each
-key, the rule it rendered (`deny`, `ask` or none). A key's effective level is `block` unless all of these hold when the
+harness's identity, whether it provides `permissions`, a digest of the effective table it rendered from, a hash of the
+harness file it wrote, and, for every key of the registry without exception, the rule it rendered (`deny`, `ask` or
+`none`). A key the record does not list reads as `block`: "no rule" is written, never implied by absence. A key's effective level is `block` unless all of these hold when the
 command runs: the record exists and is readable; it names the attached harness and says it provides `permissions`; its
-table digest equals the digest of the effective table now; and, for `ask`, it records an `ask` for the key and, for
-`none`, it records no rule for the key. A missing, damaged or stale record, a table changed since attach, an unattached
+table digest equals the digest of the effective table now; for `ask` and `none`, the harness file read now hashes to the
+record's hash; and, for `ask`, it records an `ask` for the key and, for `none`, it records `none` for the key. A missing, damaged or stale record, a table changed since attach, an unattached
 harness or one without `permissions` therefore fails closed to `block`, and the owner repairs it by attaching again.
-The record attests what attach rendered, not the current bytes of the harness's own file. `wb check` additionally
+At `ask` and `none` the command re-reads the harness file and refuses unless it hashes to the record's hash, so a shell
+edit that removed the rule is seen when the command runs. `wb check` additionally
 compares that file with what the record says and reports a difference, and an agent allowed edits to it remains the
 limit stated in `harness-modules.md`. Changing the table takes effect in a harness at the next attach, which is the
 owner's command.
+
+**A stated limit.** At `ask` and `none` the terminal test no longer applies, so the only barrier is the harness's rule, which
+matches the command text an agent submits. A spelling the rule does not match (a path-qualified `wb`, the store's own
+`bin/wb`, `bash -c`) is not stopped by it, and a Bash rule is not a boundary (`harness-modules.md`). Attach renders the `ask`
+pattern for the store's `bin/wb` path as well as for the spellings in `rules.SPELLINGS`, and the live-file check closes the
+shell-edit variant, but other spellings remain. The owner accepts that residual risk, in writing, in a decision, before `ask`
+ships for any key. `none` is opt-in and is never a default.
 
 ### The log
 
 Every run at a level other than `block` appends two lines to `level-log` in the guarded store, never rewriting one. The
 first, the attempt, is written before the command acts: a random operation identifier, the key, the level, the gate or
 the digest, and the time. The second, the outcome, is written on every path after it: the same identifier, the time and
-`done` or `refused` with a reason of at most 200 printable characters. If the attempt cannot be written the command does
+`done` or `refused` with a reason of at most 200 printable characters. The attempt is written after every read-only check has passed and immediately before the change of state, and a run that
+changes nothing (an approval that already exists) writes no entry. The file is appended to with one write of one line, to a
+descriptor opened for append that refuses a link and a file that is not a regular file with one link; the writer never
+reads or rewrites the file. The log holds about 4 MiB (the size is read before the write, so concurrent writers can pass the limit by a line each); at the cap a run above `block` is refused with a message that
+names the log, and the owner rotates it by hand. If the attempt cannot be written the command does
 nothing. If the outcome cannot be written after the action ran, the command reports that on standard error and exits
-non-zero, and the owner's reader lists an attempt with no outcome as unfinished. Each line is at most 1,024 bytes. The
+non-zero, and the owner's reader lists an attempt with no outcome as unfinished ("unfinished" does not mean "not approved": a killed process leaves an
+attempt with no outcome after the change was made). Each line is at most 1,024 bytes. The
 agent cannot write the store. The log is for the owner to read, is not consulted to decide anything, and is not pruned by
 any command here.
 
@@ -174,7 +192,7 @@ keeps the existing `checkpoint <name>: stop|delegate` lines. Problems and notes 
    reported, and the affected key reads as `block`.
 3. `delegated` for a key with no declared gate is refused. `delegated` for `approve-plan` behaves as the existing
    decision requires.
-4. At `ask`, `wb approve-plan <plan> --digest <12>` approves the plan when the digest matches the region it computes, and
+4. At `ask`, `wb approve-plan <plan> --digest <32>` approves the plan when the digest matches the region it computes, and
    refuses, and writes no approval, on a mismatch, a changed plan, a missing rendered rule, a missing or unwritable log.
 5. At `block`, the same command still refuses without a terminal. At no level can a table entry cause a floor action to run.
 6. `wb run review-engine extend` follows the same rules with the review state's digest.

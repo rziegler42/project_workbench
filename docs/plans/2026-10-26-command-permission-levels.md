@@ -1,6 +1,6 @@
 # Command permission levels
 
-Status: Approved
+Status: Proposed
 Created: 2026-10-26
 Candidate: none (an owner request that implements the accepted decision `2026-10-26-per-command-permission-levels`; no roadmap candidate names it yet)
 Specs: command-permissions, trust-and-approval, code-work, installer-interface, harness-modules, review-engine
@@ -22,7 +22,10 @@ every run at a level other than `block` is logged, and the specs say so.
 - Rendering of `ask` and no rule in a harness that provides `permissions`, and the check that reports a table that differs
   from the rendered rules.
 - The append-only log.
-- A trial that shows whether an interactive `ask` prompt reaches the owner's remote channel.
+- A trial that shows whether an interactive `ask` prompt reaches the owner's remote channel (done, Increment A).
+- The changes the design-stage security review asked for (Revision 1 below): an appended, bounded log; a rendering record
+  that lists every key and the harness file's hash; a 32-character digest that covers the declaration, helper and project;
+  a bad key that blocks the whole table; a refused duplicate key; and the `ask` pattern for the store's `bin/wb` path.
 - The spec edits that follow once the decision is accepted.
 
 ## Non-goals
@@ -55,6 +58,13 @@ every run at a level other than `block` is logged, and the specs say so.
   what the owner does day to day remotely is answer the prompt.
 - The terminal test is a mistake guard (`2026-10-20-preview-then-owner-run-write`). An `ask` is the harness's prompt, whose
   behavior in an interactive session is unverified (Increment A).
+- **Revision 1 (2026-10-26), after the security checkpoint of Increment D.** The owner answered yes and the
+  `security-reviewer` agent read the design (read-only in effect; its scratch write was refused, so nothing it reports is
+  tested). The findings are recorded in the Result and are folded into D, E, F and G below. The one finding that is a
+  decision and not a fix is HIGH-1: at `ask` and `none` the only barrier is a harness rule that matches command text, which a
+  path-qualified `wb` or a shell edit of the harness file can walk around. The mitigations here are the live-file hash check
+  and the `bin/wb` pattern; the residue is accepted by the owner in a decision (`Proposed` by the agent, accepted by the
+  owner) before `ask` ships for any key. Increment F depends on that decision being `Accepted`.
 - Every increment is one verified, reviewed local commit made through the project's commit helper, and the commit message
   carries the trailer `Plan: 2026-10-26-command-permission-levels#<label>`.
 
@@ -63,15 +73,21 @@ every run at a level other than `block` is logged, and the specs say so.
 1. `command-permissions.md` is `Current`, matches the code, and the edits to the other specs listed in Increment H exist.
 2. With no settings or a version 1 file, no action that an agent cannot run today becomes runnable, and `wb settings`
    prints the same checkpoint lines as before; a test shows this.
-3. At `ask`, `wb approve-plan <plan> --digest <12>` and `wb run review-engine extend <document> <n> --digest <12>` run without a
+3. At `ask`, `wb approve-plan <plan> --digest <32>` and `wb run review-engine extend <document> <n> --digest <32>` run without a
    terminal only when the digest matches, the rendered `ask` rule is present and the log entry is written; each is refused
    otherwise, with nothing written. At `none` each runs without a terminal and without a digest only when the rendering
    record shows no rule for it and the log entry is written, and is refused otherwise. A delegated plan approval writes its
-   log entry first and is refused when it cannot.
+   log entry first and is refused when it cannot. At `ask` and `none` the harness file must also hash to the rendering
+   record's hash.
 4. At `block` both still refuse without a terminal.
-5. A table entry cannot name a floor action, cannot set a level a key does not offer, and a damaged table reads as `block`.
-6. The trial of Increment A is recorded with its result, and the plan was stopped and revised if it failed.
-7. The full test suite passes, `wb check` and the document checks report nothing new, and nothing outside the increments'
+5. The log is appended and never rewritten, holds at most 4 MiB, and a full log refuses runs above `block` with a message that
+   names it. The rendering record lists every key and a key it does not list reads as `block`. A key that is not a valid name
+   blocks the whole table. The registry refuses two declarations of one key.
+6. A table entry cannot name a floor action, cannot set a level a key does not offer, and a damaged table reads as `block`.
+7. The trial of Increment A is recorded with its result, and the plan was stopped and revised if it failed.
+8. The decision `2026-10-26-ask-level-spelling-limit` is recorded in the Result as accepted by the owner before `ask` shipped
+   for any key, and the spelling probe of Increment F is recorded with its result.
+9. The full test suite passes, `wb check` and the document checks report nothing new, and nothing outside the increments'
    affected areas changed.
 
 ## Increments
@@ -128,23 +144,39 @@ the prompt cannot be answered remotely, stop and report; `ask` is then not offer
 
 ### Increment D — The log
 
-**Outcome:** a run at a level other than `block` writes an entry first, and does nothing when it cannot.
-**Dependencies:** C, and the owner's recorded answer at the security checkpoint (step 1).
-**Affected areas:** a new `workbench/levellog.py`, `workbench/store.py` only if a new store file kind is needed,
-`workbench/delegation.py` (the delegated approval writes its entry first), `tests/test_levellog.py`, the delegation tests.
+**Outcome:** a run at a level other than `block` writes an entry first, and does nothing when it cannot; the log is appended,
+bounded and cannot be filled by an agent without limit; and two carry-over fixes to the reader and the registry are made.
+**Dependencies:** C. Step 1 is done (Revision 1): the owner answered yes and the review's outcome is in the Result.
+**Affected areas:** `workbench/wbkit/safefs.py` (a new append call; check whether the kit is mirrored under `packages/` and
+keep the copies identical), a new `workbench/levellog.py`, `workbench/store.py` only if a new store file kind is needed,
+`workbench/delegation.py` (the delegated approval writes its entry first), `workbench/settings.py` and `workbench/levels.py`
+(the carry-over fixes, with `tests/test_levels.py` and `tests/test_settingscmd.py`), `tests/test_levellog.py`, the delegation, settings and levels tests.
 **Steps:**
-1. **Security checkpoint (owner).** This is the first increment that writes the guarded store, and the work changes who may
-   approve a plan and extend a review. Stop and ask the owner whether to run a security review of the design now, and record
-   the answer, the reviewer and the outcome in the Result. A review runs only when the owner asks. Ask again before H, on
-   the built code. An answer of no is recorded and the increment continues.
-2. Write the tests first: an attempt line and an outcome line share an operation identifier and neither is rewritten; each
-   line is within 1,024 bytes; a damaged log is reported and refuses the action; the agent's harness deny covers the file; a
-   `block` run writes nothing; `delegate-approve-plan` writes its attempt before the approval and refuses, writing no
+1. **Security checkpoint (owner): done.** Asked on 2026-10-26; the answer was yes; the findings are in the Result. Ask
+   again before H, on the built code, and again after F with a probe of the spelling bypass on a copy (see F).
+2. Write the tests first, and see them fail: two appends run in parallel keep both lines; a symbolic link, a FIFO, a
+   directory and a file with more than one link at the log path are refused; a damaged log is reported and does not stop the
+   reader; the log at 4 MiB refuses a run above `block` with a message that names it; each line is within 1,024 bytes counted
+   in bytes, with a reason cleaned of control characters and then cut to 200 characters; the operation identifier comes from
+   `secrets`; an attempt line and an outcome line share an identifier and neither is rewritten; the agent's harness deny
+   covers the file; a `block` run writes nothing; a run that changes nothing (an approval that already exists) writes
+   nothing; the attempt is written after every read-only check and immediately before the change of state, so a refusal
+   before it leaves no entry; `delegate-approve-plan` writes its attempt before the approval and refuses, writing no
    approval, when it cannot; a refusal after the attempt, and a success, each write an outcome; an attempt with no outcome
-   is listed as unfinished; an outcome that cannot be written after the action is reported and exits non-zero.
-3. Build the two-line append (attempt before, outcome after on every path), a reader for the owner, and call it from
-   `delegation.py`. Increments F and G call it for `ask` and `none`, and test the same two lines for both.
-**Verification:** the new tests, the harness deny test, the delegation tests, then the full suite.
+   is listed as unfinished and the reader says that this does not mean "not approved"; an outcome that cannot be written
+   after the action is reported and exits non-zero; a bad key in `levels` blocks the whole table; a registry with two
+   declarations of the same key is refused.
+3. Add the append call to `safefs` (`O_APPEND`, `O_NOFOLLOW`, regular file, one link, one write of one line, fsync, no read
+   of the existing file). Build the two-line append, a reader for the owner that cleans what it prints and parses by field
+   position with the reason last, and call it from `delegation.py`. Increments F and G call it for `ask` and `none`, and
+   test the same two lines for both.
+4. Make the carry-over fixes: `settings.load` sets `levels_blocked` when any key in `levels` is not a valid name;
+   `levels.registry` refuses two declarations that give one key; and `levels.registry` no longer makes `wb acknowledge` a
+   key, because that command already reaches the checkpoints `acknowledge-first-tier` and `acknowledge-second-tier` and the
+   spec gives a checkpointed action its checkpoint's name as its key (review finding R1-F1 of this revision; Increment C
+   added the extra key). Tests: the pinned `OWNER_RUN_KEYS` list, `wb settings` and the registry tests change accordingly,
+   and a test shows that a command with a declared checkpoint has no command-spelling key.
+**Verification:** the new tests, the harness deny test, the delegation, settings and levels tests, then the full suite.
 **Evidence:** the one local commit, with the trailer `Plan: 2026-10-26-command-permission-levels#D`.
 
 ### Increment E — Rendering and the drift check
@@ -162,21 +194,31 @@ Claude module's rendering, tests under `tests/` and `packages/workbench/claude/t
    `permissions` capability the key reads as `block`; with no rendering record, a damaged record, a table changed since
    attach or an unattached harness every key reads as `block`.
 2. Render from the table at attach, and write the rendering record in the guarded store (the harness's identity, whether it
-   provides `permissions`, a digest of the effective table, and the rule rendered per key), as `command-permissions.md`,
-   "Rendering", specifies. A neutral rule list still holds only `ask` and `deny`.
+   provides `permissions`, a digest of the effective table, a hash of the harness file written, and the rule rendered for
+   every key with `none` written and not implied), as `command-permissions.md`, "Rendering", specifies. A neutral rule list
+   still holds only `ask` and `deny`. For an `ask` key attach also renders the pattern for the store's own `bin/wb` path.
+   Tests added first: a record with one key deleted reads that key as `block`; a harness file edited after attach makes
+   `ask` and `none` read as `block`; the `bin/wb` pattern is rendered.
 3. Add the drift check, which compares the harness file with the record, and a function that answers a key's effective
-   level from the record to the commands, which read it in F and G.
+   level from the record to the commands, which read it in F and G; it refuses `ask` and `none` when the harness file no longer hashes to the record.
 **Verification:** the new tests, `python3 -B -W error tests/run_all.py`, and `python3 -m workbench check` on this repository.
 **Evidence:** the one local commit, with the trailer `Plan: 2026-10-26-command-permission-levels#E`.
 
 ### Increment F — `approve-plan` at `ask` and `none`
 
 **Outcome:** the owner can approve a plan from a prompt, bound to the plan's region digest.
-**Dependencies:** E.
+**Dependencies:** E, and the decision `docs/decisions/2026-10-26-ask-level-spelling-limit.md` accepting the HIGH-1 residual
+risk (step 0). If it is not `Accepted`, stop: `approve-plan` does not ship at `ask`.
 **Affected areas:** `workbench/planapprovals.py`, `workbench/cli.py` (the argument grammar), the read-only preview that prints
 the digest (`plan-status` or a sibling), `workbench/levels.py` (offer `ask` and `none` for the key), tests.
 **Steps:**
-1. Write the tests first: at `ask`, the command with a matching digest approves and writes the same record as the owner's
+0. **Owner checkpoint.** Before any code, draft the decision `docs/decisions/2026-10-26-ask-level-spelling-limit.md` as
+   `Proposed` with the `draft-decision` skill (the problem: at `ask` and `none` the only barrier is a harness rule that
+   matches command text; the mitigations: the live-file hash check and the `bin/wb` pattern; the residue: other spellings;
+   the alternative: hold `ask`), then stop and ask the owner. Record in the Result whether the owner accepted it and when.
+   Only the owner accepts a decision. If it is not accepted, stop and revise the plan.
+1. Write the tests first (the digest is 32 hexadecimal characters of the canonical preview, which holds the project
+   identifier, the declaration hash and the helper hash): at `ask`, the command with a matching digest approves and writes the same record as the owner's
    terminal command; a mismatch, a plan edited after the preview, a missing rendered rule, an unwritable log and a missing
    digest each refuse and write no approval; at `block` it still refuses without a terminal; the terminal path is unchanged; at `none` it runs with no digest only when
    the record shows no rule and the log is written, and a digest given at `none` is refused as an unknown argument.
@@ -184,24 +226,35 @@ the digest (`plan-status` or a sibling), `workbench/levels.py` (offer `ask` and 
 3. Write the log entry before the approval, and the approval from the bytes already held.
 4. Change the registry default of `approve-plan` to `ask`, and test that with no settings or a version 1 file it reads `ask`
    only when the rendering record shows the `ask` rule after an attach, and `block` otherwise.
-**Verification:** the new tests, the plan-approval and delegation tests, then the full suite.
+5. **Spelling probe, on a copy.** In a throwaway project with the harness attached by the finished code and `approve-plan` at
+   `ask`, try each spelling an agent could submit that the rendered rules do not name: a path-qualified `wb`, the store's own
+   `bin/wb`, `python3 -I -m workbench`, `bash -c` and `env wb`. Record, with tool versions and the commit, which spellings the
+   harness stopped, which it let run, and which of those ran the approval. Owner steps are described and not run by the agent.
+   **Stop condition:** if a spelling the pattern does not cover approves a plan without a prompt, stop, report, and revise the
+   plan; `ask` does not ship for `approve-plan` until the owner decides.
+**Verification:** the new tests, the plan-approval and delegation tests, then the full suite; the probe's record is in the
+Result.
 **Evidence:** the one local commit, with the trailer `Plan: 2026-10-26-command-permission-levels#F`.
 
 ### Increment G — `wb run review-engine extend` at `ask` and `none`
 
 **Outcome:** the owner can extend a review that reached its bound from a prompt, bound to the review's state.
-**Dependencies:** F.
-**Affected areas:** `commands.owner_refusal`, the `review-engine` module's helper, its declaration and tests.
+**Dependencies:** F (and so the accepted decision on the HIGH-1 residual risk).
+**Affected areas:** `commands.owner_refusal`, `workbench/levels.py` (the offered levels and the default of the key), the
+`review-engine` module's helper, its declaration and tests.
 **Steps:**
 1. Read the module's code and `docs/specs/review-engine.md`; if it disagrees with this plan, stop and revise the plan.
 2. Write the tests first: a matching digest of the `status` extends within the ceiling; a changed review, a missing rendered
    rule and an unwritable log refuse; the ceiling of 5 still holds at every level; at `block` the terminal test is unchanged; at `none` it extends with no digest
    only when the record shows no rule and the log is written, still within the ceiling.
-3. Keep the grammar `extend <document> <n>` (`n` from 1 to 5, as `review-engine.md` defines) and add `--digest <12>` at
+3. Keep the grammar `extend <document> <n>` (`n` from 1 to 5, as `review-engine.md` defines) and add `--digest <32>` at
    `ask`. The digest covers the review's `status` and `n`, so a different increase is not approved by an earlier answer.
    Make `owner_refusal` read the effective level, and let `extend` print and require the digest.
-4. Change the registry default of `wb run review-engine extend` to `ask`, with the same no-settings and version 1 test as
-   in F.
+4. Enable `ask` and `none` for the key `wb run review-engine extend` in the registry, and change its default to `ask`, with
+   the same no-settings and version 1 tests as in F and a test for an explicit `none`. The installer's tests forbid naming a
+   module's command (`tests/test_boundary.py`), so the offer must come from the module's own declaration of the owner-run
+   argument and not from a name in `levels.py`. If the declaration schema has no field for it, stop and revise the plan:
+   adding one is a change to the declaration contract that this plan does not authorize.
 **Verification:** the module's tests, the `commands` tests, then the full suite.
 **Evidence:** the one local commit, with the trailer `Plan: 2026-10-26-command-permission-levels#G`.
 
@@ -226,7 +279,7 @@ table, and `accept-decision` no longer listed as delegable), `installer-interfac
 `python3 -B -W error tests/run_all.py`; `python3 -m workbench check`; the plan check
 (`python3 -m workbench run code-work check`); `git diff --check`; and the owner's document checks. The trial of A is
 repeated against the finished code in a throwaway project: approve a plan and extend a review from the remote channel, and
-see each refuse with a wrong digest.
+see each refuse with a wrong digest; and the spelling probe of Increment F (it is part of F, not repeated here).
 
 ## Risks and sensitive actions
 
@@ -238,6 +291,12 @@ see each refuse with a wrong digest.
 - **The prompt may not work remotely.** If A fails, the plan stops.
 - **A table that loosens a default.** The shipped defaults stay `block` in B to E, and `ask` ships only for the two keys
   of F and G.
+- **`ask` is bypassable by spelling (HIGH-1).** The mitigations are the live-file hash check and the `bin/wb` pattern. The
+  rest is a stated limit that the owner accepts in a decision before F. After F a probe of the spelling bypass is run on a
+  copy and recorded; if it succeeds with a spelling the pattern does not cover, the plan stops and is revised.
+- **A full log.** The log is capped at 4 MiB, an agent can fill it by repeated runs, and a full log refuses runs above
+  `block`. The owner rotates it. The attempt is written only when a change is about to be made, and nothing is written for
+  an approval that already exists, which limits what an agent can add.
 - **A stale rendered rule.** The table and the rendered rules can differ until the next attach. E makes the key read as
   `block` and `wb check` reports it.
 - **Owner steps.** Increment A needs the owner's terminal and remote channel; H needs the owner to run the document checks.
@@ -256,6 +315,16 @@ a stale step, and its claim that the status-line change breaks policy was not ac
 text added for R3-F1 and R3-F2, and the spec edits made for R2-F3 and R3-F1, were not reviewed again. The owner approved
 the plan on 2026-10-26 with `wb approve-plan`, knowing that the review did not converge and that those edits were not
 reviewed again.
+
+Revision 1 (2026-10-26): after the owner approved the plan, the security checkpoint of Increment D found the issues listed
+in the Result. The plan was revised as described under "Assumptions and constraints". The revision was reviewed by the review
+engine through the `ask-codex` bridge (model `gpt-5.6-terra`, effort medium) on 2026-10-26, at the owner's request: two rounds
+of the bound of 3, not converged and not extended. Round 1: the `wb acknowledge` key duplicated two checkpoint keys (R1-F1),
+Increment F had no spelling-probe step (R1-F2) and the HIGH-1 decision had no named file or owner checkpoint (R1-F3); all
+applied. Round 2: the revision is not yet approved (R2-F1, rejected: true by design, only the owner approves) and Increment G
+could not enable `ask` and `none` (R2-F2, applied, with a stop if the module declaration lacks a field). The text added for
+R2-F2 and the other round 2 edits were not reviewed again. The reason recorded for R2-F1 says "install command" where it meant
+`wb approve-plan`; decisions are recorded once and it stands as written. The owner has not approved the revision.
 
 ## Deferred work
 
@@ -338,3 +407,62 @@ the spec says `accept-decision` offers `block` and `ask` and needs the "from the
 shipped-defaults table must list `wb acknowledge`; the rule that a command reaching more than one key takes the strictest is
 not built and must not be claimed built; the installer-interface text and `development.md` must document the new `level` lines.
 Findings 3 and 4 need no change.
+
+Committed as `dac9139`.
+
+### Increment D — The log
+
+Security checkpoint (step 1), 2026-10-26: the owner was asked and answered yes, review the design now. The `security-reviewer`
+agent ran a design-stage review. It was read-only in effect: its scratch write was refused (the agent gate's scratch template is
+the macOS path form, and this machine's is `/tmp/claude-1000/...`), so it ran no probe and nothing is "tested". It read `store.py`,
+`safefs.py`, `settings.py`, `levels.py`, `delegation.py`, `planapprovals.py`, `approvalcmd.py`, `rules.py`, `gate.py`, `display.py`
+and the specs. It did not read `declarations.parse_json`, `commands.owner_refusal`, the review-engine module or the attach code.
+Findings, unjudged by the owner: HIGH-1 at `ask`/`none` the only barrier is a harness rule matching the command text, so a
+path-qualified `wb` (the store's own `bin/wb`) or a shell edit of the harness file defeats it; MEDIUM-1 the store API has no
+append, so "append-only" needs a new `safefs` call (`O_APPEND|O_NOFOLLOW`, regular file, one link, a single write of at most
+1,024 bytes); MEDIUM-2 an agent can fill the log until every run above `block` refuses, since `delegate-approve-plan` is agent-safe
+and nothing prunes it; MEDIUM-3 the rendering record must list every key, and a missing key must read `block`; LOW-1 a 12-character
+digest can be ground (full or at least 32 characters, and cover the declaration and helper hashes and the project id); LOW-2 a
+malformed `levels` key falls back to the default, which becomes `ask` for two keys in F and G; LOW-3 the key `wb run review-engine
+extend` names a command, not a module. B and C: no loosening path found.
+
+Not done: no test, code or commit for D. Several findings change the approved plan or the specs (the log's append call and
+its bound, the digest length, the rendering record, the acceptance of the HIGH-1 limit). Per the plan, it stops here to be
+revised and re-approved; nothing was widened.
+
+Revision 1 was approved by the owner on 2026-10-26 and Increment D was then built.
+
+Changed: `workbench/wbkit/safefs.py` (new `append_line` and `FullError`: one `O_APPEND` write of one line, no-follow,
+non-blocking open, regular file with one link, a size limit checked before the write, fsync, nothing read); a new
+`workbench/levellog.py` (`begin`, `finish`, `read`, `report`: tab-separated ASCII lines, identifier from `secrets`, key,
+level and evidence validated, reason cleaned with `display.ascii_text` and cut to 200 characters, 4 MiB cap, a damaged
+line a problem and never a refusal, a second outcome never replaces the first); `workbench/delegation.py` (the attempt is
+written after every check and just before `planapprovals.add`, and only when no equal entry exists; the outcome follows on
+every path; an unwritable attempt refuses with nothing recorded; an unwritable outcome after the approval prints to
+standard error and exits 3); `workbench/settings.py` (a key that is not a valid name blocks the whole table);
+`workbench/levels.py` (`RegistryError` for two declarations of one key; `wb acknowledge` is no longer a key, review
+finding R1-F1); `workbench/settingscmd.py` (a `RegistryError` is a refusal); tests `tests/test_levellog.py` (new),
+`tests/test_delegation.py`, `tests/test_settings.py`, `tests/test_levels.py`, `tests/test_settingscmd.py`,
+`tests/test_attach.py`. The plan and `docs/specs/command-permissions.md` carry the uncommitted revision.
+
+Choices made: the owner's reader is the functions `levellog.read` and `levellog.report`, not a command: no `wb` command prints
+the log yet (the owner can read the plain-text file); the attempt for a delegated approval carries the evidence
+`converged-<rounds>-of-<bound>`; the exit code 3 for an outcome that could not be logged is new. The harness-deny test is
+a weak structural assertion (the store's `Edit(//store/**)` deny already covers every file below it).
+
+Verification as run: the log, settings, levels and settings-command tests were written first and seen failing; the
+delegation tests were written first but not run before the implementation, so their ability to fail is shown only by their
+content. Afterwards: `python3 -B -W error tests/run_all.py` (4586 tests in 10 roots, OK); `git diff --check` clean;
+`python3 -m workbench check` no problems. Not run: the plan check after the last edit; the security review of the built
+code (asked before H).
+
+Review: one round by the `reviewer` agent (cap 3), recommendation "no blocking findings"; it ran nothing. Applied: a write
+that succeeded but could not be read back now logs `done` with a reason that says so, not `refused` (finding 1, with a
+test); the short-write fragment and the approximate cap are documented in `safefs.append_line`, `levellog.py` and the spec
+(findings 2, 3); `begin` bounds the key at 96 characters (finding 4); the reader rejects an attempt at `block` and a line
+over 1,024 bytes, and says that `Operation.reason` is uncleaned (finding 5); the `delegate_approve_plan` docstring lists exit
+3 (finding 6); tests for a review that has not converged, the read-back case and a `RegistryError` in `wb settings`, and a
+test name fixed (finding 7). Not applied: the harness-deny check stays structural, and the delegation tests were still not
+seen failing before the implementation. No `packages/` mirror of `safefs` exists (searched). Exit 3 is not yet in a spec or
+`docs/development.md`; Increment H must add it. Final verification: `python3 -B -W error tests/run_all.py` (4590 tests in 10
+roots, OK), `git diff --check`, `python3 -m workbench check` and the plan check, all clean.

@@ -16,7 +16,7 @@ import unittest.mock
 
 from tests import support_project
 from tests.support_project import HELPER_PATH, tool
-from workbench import approvalcmd, cli, gate_hook, planapprovals, rules, settings, settingscmd, verify
+from workbench import approvalcmd, cli, gate_hook, levellog, planapprovals, rules, settings, settingscmd, verify
 
 PLAN = "docs/plans/a.md"
 TEXT = b"# A plan\nStatus: Proposed\n\n## Goal\nDo it.\n\n## Result\nNone yet.\n"
@@ -256,6 +256,112 @@ class Recorded(Delegated):
     def test_a_closed_review_counts(self):
         self.control(convergence={"set": {"closed": True}})
         self.approved()
+
+
+class Logged(Delegated):
+    """The level log: ``delegate-approve-plan`` writes an attempt before the approval and an outcome after it."""
+
+    def log_lines(self):
+        if self.guarded.kind(levellog.LOG) is None:
+            return []
+        return self.guarded.read(levellog.LOG).decode("ascii").splitlines()
+
+    def test_a_recorded_approval_leaves_an_attempt_and_a_done_outcome(self):
+        self.approved()
+        attempt, outcome = self.log_lines()
+        fields = attempt.split("\t")
+        self.assertEqual(["A"], fields[:1])
+        self.assertEqual(["approve-plan", "delegated"], fields[3:5])
+        self.assertTrue(fields[5].startswith("converged-2-of-3"), fields)
+        done = outcome.split("\t", 4)
+        self.assertEqual(["O", fields[1]], done[:2])
+        self.assertEqual("done", done[3])
+
+    def test_the_attempt_is_written_before_the_approval(self):
+        seen = []
+        real = planapprovals.add
+
+        def spy(*args, **kwargs):
+            seen.append(self.log_lines())
+            return real(*args, **kwargs)
+
+        with unittest.mock.patch.object(planapprovals, "add", spy):
+            self.approved()
+        self.assertEqual(1, len(seen[0]))
+        self.assertTrue(seen[0][0].startswith("A\t"))
+
+    def test_an_approval_that_already_exists_writes_no_entry(self):
+        self.approved()
+        before = self.log_lines()
+        code, out, err = self.delegate(PLAN)
+        self.assertEqual((0, "already approved: %s\n" % PLAN, ""), (code, out, err))
+        self.assertEqual(before, self.log_lines())
+
+    def test_a_refusal_before_the_change_leaves_no_entry(self):
+        self.setting({"approve-plan": "stop"})
+        self.refuses("approve-plan is not set to delegate")
+        self.assertEqual([], self.log_lines())
+
+    def test_a_plan_that_is_not_delegable_leaves_no_entry(self):
+        self.control(delegable={"set": {"delegable": False, "reason": "not yet"}})
+        self.refuses("is not delegable")
+        self.assertEqual([], self.log_lines())
+
+    def test_a_review_that_has_not_converged_leaves_no_entry(self):
+        self.control(convergence={"set": {"converged": False}})
+        self.refuses("has not converged")
+        self.assertEqual([], self.log_lines())
+
+    def test_a_write_that_cannot_be_read_back_logs_done_and_not_refused(self):
+        real = planapprovals.load
+        calls = []
+
+        def hide(store, project_id):
+            calls.append(1)
+            return [] if len(calls) > 1 else real(store, project_id)
+
+        with unittest.mock.patch.object(planapprovals, "load", hide):
+            code, out, err = self.delegate(PLAN)
+        self.assertEqual(1, code)
+        self.assertIn("could not be read back", err)
+        attempt, outcome = self.log_lines()
+        self.assertEqual("done", outcome.split("\t", 4)[3])
+
+    def test_a_log_that_cannot_be_written_refuses_and_records_no_approval(self):
+        os.mkdir(os.path.join(self.store_root, levellog.LOG))
+        before = self.stored()
+        self.refuses("level log")
+        self.assertEqual(before, self.stored())
+        self.assertEqual([], self.recorded())
+
+    def test_a_full_log_refuses_and_records_no_approval(self):
+        with unittest.mock.patch.object(levellog, "MAX_BYTES", 10):
+            self.guarded.write(levellog.LOG, b"x" * 20)
+            self.refuses("level-log")
+        self.assertEqual([], self.recorded())
+
+    def test_a_failure_after_the_attempt_writes_a_refused_outcome(self):
+        with unittest.mock.patch.object(planapprovals, "add",
+                                        side_effect=planapprovals.PlanApprovalError("the file cannot be written")):
+            code, out, err = self.delegate(PLAN)
+        self.assertEqual((1, ""), (code, out))
+        attempt, outcome = self.log_lines()
+        self.assertEqual("refused", outcome.split("\t", 4)[3])
+        self.assertEqual([], self.recorded())
+
+    def test_an_outcome_that_cannot_be_written_after_the_approval_exits_non_zero(self):
+        real = levellog.finish
+
+        def fail(*args, **kwargs):
+            raise levellog.OutcomeError("the level log cannot be written")
+
+        with unittest.mock.patch.object(levellog, "finish", fail):
+            code, out, err = self.delegate(PLAN)
+        self.assertEqual(3, code)
+        self.assertIn("level log", err)
+        self.assertEqual(1, len(self.recorded()))
+        self.assertEqual(1, len(self.log_lines()))
+        self.assertTrue(self.log_lines()[0].startswith("A\t"))
 
 
 class Setting(Delegated):

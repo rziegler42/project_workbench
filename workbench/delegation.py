@@ -16,6 +16,10 @@ plan approval records"):
    same as before;
 8. one entry is written and read back; nothing is written when an equal entry exists, whoever made it.
 
+Before the entry is written (and only when one will be), the level log gets an attempt line, and afterwards an outcome
+line (``levellog.py``). If the attempt cannot be written nothing is recorded; if the outcome cannot be written after the
+approval was recorded, the approval stands, the command says so on standard error and exits 3.
+
 The installer reads no section of a plan: the process module's declared, pinned commands do. It hashes the file,
 because the provider names the file it reviewed by that hash. Everything the commands print is data: it is
 validated and never followed. Every refusal writes nothing.
@@ -24,7 +28,7 @@ validated and never followed. Every refusal writes nothing.
 import hashlib
 import os
 
-from . import __version__, approvalcmd, approvals, approve, planapprovals
+from . import __version__, approvalcmd, approvals, approve, levellog, planapprovals, settings
 from .planapprovals import PlanApprovalError
 from .wbkit import display, safefs
 
@@ -35,6 +39,15 @@ MAX_PLAN = 1024 * 1024
 def _refuse(err, text):
     err.write("refused: %s\n" % display.clean(text).replace("\n", " "))
     return 1
+
+
+def _outcome(guarded, op, outcome, reason):
+    """Write a refusal's outcome line. A failure to is not reported again: the command already refuses and the
+    attempt stays listed as unfinished."""
+    try:
+        levellog.finish(guarded, op, outcome, reason)
+    except levellog.OutcomeError:
+        pass
 
 
 def _setting(guarded):
@@ -65,7 +78,8 @@ def _facts(guarded, start, plan):
 
 
 def delegate_approve_plan(guarded, tokens, out, err, *, cwd=None):
-    """``delegate-approve-plan <plan>``. Exit 0 recorded or already recorded, 1 refused with nothing written, 2 usage."""
+    """``delegate-approve-plan <plan>``. Exit 0 recorded or already recorded, 1 refused with nothing written, 2 usage, 3 the
+    approval was recorded but its outcome could not be written to the level log."""
     argument = planapprovals.one_argument(tokens)
     if argument is None:
         err.write(USAGE)
@@ -103,14 +117,36 @@ def delegate_approve_plan(guarded, tokens, out, err, *, cwd=None):
                     "document_sha256": review.document_sha256}
         entry = planapprovals.Approval(plan, report.region_hash, process.declaration, process.helper_sha256,
                                        approve.approver_name(), approvals.utc_now(), __version__, delegate)
-        written = planapprovals.add(guarded, process.project_id, entry)
-        if written and not any(planapprovals._same(item, entry) and item.delegate == delegate
-                               for item in planapprovals.load(guarded, process.project_id)):
-            return _refuse(err, "the approval could not be read back from the record")
+        op = None
+        if not any(planapprovals._same(item, entry) for item in planapprovals.load(guarded, process.project_id)):
+            try:
+                op = levellog.begin(guarded, settings.APPROVE_PLAN, settings.DELEGATED,
+                                    "converged-%d-of-%d" % (review.rounds_used, review.bound))
+            except levellog.LogError as exc:
+                return _refuse(err, "%s; nothing was recorded" % exc)
+        written = False
+        try:
+            written = planapprovals.add(guarded, process.project_id, entry)
+            if written and not any(planapprovals._same(item, entry) and item.delegate == delegate
+                                   for item in planapprovals.load(guarded, process.project_id)):
+                raise PlanApprovalError("the approval could not be read back from the record")
+        except BaseException as exc:
+            if op is not None:
+                reason = str(exc) if isinstance(exc, Exception) else type(exc).__name__
+                # A write that succeeded and could not be read back is not a refusal: the entry may be there.
+                _outcome(guarded, op, "done" if written else "refused",
+                         "written, but %s" % reason if written else reason)
+            raise
     except (PlanApprovalError, approvalcmd.ApprovalError) as exc:
         return _refuse(err, str(exc))
     if written:
         out.write("approved: %s (delegated, %d of %d rounds)\n" % (shown, review.rounds_used, review.bound))
     else:
         out.write("already approved: %s\n" % shown)
+    if op is not None:
+        try:
+            levellog.finish(guarded, op, "done", "recorded")
+        except levellog.OutcomeError as exc:
+            err.write("the approval was recorded, but its outcome was not logged: %s\n" % display.clean(str(exc)))
+            return 3
     return 0

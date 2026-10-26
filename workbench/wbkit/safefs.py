@@ -22,6 +22,10 @@ Limits of the checks, recorded here on purpose:
   power loss can lose a rename but cannot leave a partial file.
 * A replaced file keeps only its permission bits (without setuid or setgid); its
   owner, ACLs and extended attributes are not carried over.
+* Appending (``append_line``) never reads or rewrites the file: one ``O_APPEND`` write of one line. It refuses a
+  symbolic link, a file that is not regular and a file with another hard link, and a file that the line would make
+  larger than the given limit. Two writers' lines are never interleaved within a line; the limit is checked before the
+  write, so concurrent writers can exceed it by their lines.
 * Deletion is not provided yet.
 
 A platform that lacks the no-follow and directory-relative calls used here is
@@ -49,6 +53,10 @@ _hook = None
 
 class SafeFsError(Exception):
     """A refusal; the message names the path."""
+
+
+class FullError(SafeFsError):
+    """An append that would make the file larger than its limit."""
 
 
 def _fire(stage, **info):
@@ -634,3 +642,59 @@ def write_tree(root_path, tree, executable=()):
                 os.close(fd)
         root.close()
     return rels
+
+
+def append_line(root_path, rel, line, limit_total=None, limit_line=1024):
+    """Append the bytes `line`, one line ending in a newline, to the file `rel` below an existing root.
+
+    The file is created with mode 0600 when absent. It is opened with no-follow flags relative to a held parent
+    descriptor, without blocking, and refused unless it is a regular file with one link. `line` has exactly one
+    newline, at its end, and is at most `limit_line` bytes; the file may not grow past `limit_total` bytes. The line goes
+    out in one ``write`` on an ``O_APPEND`` descriptor and is synced; a short write is an error. Nothing is read.
+    A short write (a full disk, a quota) can leave a fragment with no newline that the next line is appended to, which
+    damages that next record; a reader reports it as a problem. A failure of the sync after a complete write is an error
+    although the line is on disk.
+    """
+    if not isinstance(line, bytes) or not line.endswith(b"\n") or line.count(b"\n") != 1:
+        raise SafeFsError("an appended line must be bytes with one newline, at its end")
+    if len(line) > limit_line:
+        raise SafeFsError("an appended line is longer than %d bytes" % limit_line)
+    parts = validate_relpath(rel)
+    fds = []
+    root = Root(root_path, "append target")
+    try:
+        current = root._live_fd()
+        shown = root_path
+        for part in parts[:-1]:
+            shown = shown + "/" + part
+            current = _open_or_make_dir(part, current, shown)
+            fds.append(current)
+        shown = "%s/%s" % (root_path, rel)
+        try:
+            fd = os.open(parts[-1], os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK
+                         | getattr(os, "O_CLOEXEC", 0), 0o600, dir_fd=current)
+        except OSError as exc:
+            if exc.errno in (errno.ELOOP, errno.EISDIR, errno.ENXIO):
+                raise SafeFsError("refusing to append to %s (symbolic link, directory or not a regular file)" % shown)
+            raise _os_error("open", shown, exc)
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode):
+                raise SafeFsError("refusing to append to %s (not a regular file)" % shown)
+            if info.st_nlink != 1:
+                raise SafeFsError("refusing to append to %s (it has another hard link)" % shown)
+            if limit_total is not None and info.st_size + len(line) > limit_total:
+                raise FullError("%s is full (%d bytes of %d)" % (shown, info.st_size, limit_total))
+            try:
+                written = os.write(fd, line)
+                if written != len(line):
+                    raise SafeFsError("a short write to %s (%d of %d bytes)" % (shown, written, len(line)))
+                os.fsync(fd)
+            except OSError as exc:
+                raise _os_error("append to", shown, exc)
+        finally:
+            os.close(fd)
+    finally:
+        for fd in fds:
+            os.close(fd)
+        root.close()

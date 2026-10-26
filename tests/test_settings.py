@@ -384,6 +384,16 @@ class LevelsTest(SettingsBase):
         self.assertNotIn("nope", got.levels)
         self.assertEqual(2, len(got.notes))
 
+    def test_a_key_that_is_not_a_valid_name_blocks_the_whole_table(self):
+        for key in ("Approve-Plan", "approve-plan ", "approve plan\n", "", "x" * 200, "a\tb"):
+            with self.subTest(key=key):
+                loaded, got = self.effective({"version": 2, "checkpoints": {"approve-plan": "delegate"},
+                                              "levels": {key: "block", "approve-plan": "delegated"}})
+                self.assertEqual(self.declared(got), {"approve-plan": "block", "beta": "block"})
+                self.assertEqual("stop", got.checkpoints["approve-plan"])
+                self.assertEqual({"block"}, set(got.levels.values()))
+                self.assertEqual(1, len(loaded.problems))
+
     def test_a_known_key_that_no_checkpoint_declares_has_a_level(self):
         loaded, got = self.effective({"version": 2, "levels": {"wb install": "block"}})
         self.assertEqual("block", got.levels["wb install"])
@@ -413,7 +423,7 @@ class LevelsTest(SettingsBase):
                 self.assertEqual(1, len(got.notes))
                 self.assertIn("wb install", got.notes[0])
 
-    def test_an_invalid_key_is_reported_escaped_and_ignored(self):
+    def test_an_invalid_key_is_reported_and_escaped(self):
         loaded, got = self.effective({"version": 2, "levels": {"Bad Key\x1b[31m": "block", "x" * 200: "block"}})
         self.assertEqual(2, len(loaded.problems))
         for text in loaded.problems:

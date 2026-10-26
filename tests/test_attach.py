@@ -13,7 +13,7 @@ from tests import test_preview as preview_tests
 from tests import test_upgrade_preview as base_tests
 from tests import support_harness
 from tests.support_harness import AGENT, COMMAND, SKILL
-from workbench import (acknowledgement, attach, cli, harnessplan, installplan, localmanifest, manifest,
+from workbench import (acknowledgement, attach, cli, harnessplan, installplan, levellog, localmanifest, manifest,
                        neutral, projectfs, rules, snapshot, sources)
 from workbench.wbkit import safefs
 
@@ -173,6 +173,9 @@ class Attached(Base):
             self.assertIn("Bash(wb %s *)" % command, permissions["deny"])
             self.assertIn("Bash(python3 -m workbench %s *)" % command, permissions["deny"])
         self.assertIn("Edit(//%s/**)" % store, permissions["deny"])
+        # The level log is a file directly in the guarded store, so the store's deny covers it.
+        self.assertEqual(levellog.LOG, os.path.basename(levellog.LOG))
+        self.assertNotIn(os.sep, levellog.LOG)
         self.assertNotIn("Bash(wb preview *)", permissions["deny"])
         self.assertIn("Bash(git push --force*)", permissions["ask"])
 

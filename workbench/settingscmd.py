@@ -15,7 +15,7 @@ Nothing is started, written or approved here; the owner's settings are data. Exi
 
 import os
 
-from . import approvalcmd, settings
+from . import approvalcmd, levels, settings
 from .wbkit import display
 
 USAGE = "usage: wb settings\n"
@@ -47,7 +47,10 @@ def run(guarded, tokens, out, err, *, cwd=None):
     module = process[0].module
     loaded = settings.load(guarded)
     owner_commands = [(command.name, command.owner) for item in found for command in item.module.commands]
-    effective = settings.effective(loaded, module.checkpoints, module.caps, owner_commands)
+    try:
+        effective = settings.effective(loaded, module.checkpoints, module.caps, owner_commands)
+    except levels.RegistryError as exc:
+        return _refuse(err, "the installed modules do not give each owner-run command one key: %s" % exc)
     for name in module.checkpoints:
         out.write("checkpoint %s: %s\n" % (name, effective.checkpoints[name]))
     for cap in module.caps:

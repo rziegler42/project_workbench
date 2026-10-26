@@ -12,7 +12,7 @@ import unittest.mock
 
 from tests import support_project
 from tests.support_project import tool
-from workbench import approvalcmd, cli, commands, manifest, rules, settingscmd
+from workbench import approvalcmd, cli, commands, levels, manifest, rules, settingscmd
 
 CHECKPOINTS = ["approve-plan", "beta"]
 CAPS = [{"name": "rounds", "default": 3, "ceiling": 5}, {"name": "tries", "default": 1, "ceiling": 2}]
@@ -24,6 +24,8 @@ def level_lines(declared, **levels):
     `levels` (keyed with underscores for spaces and dashes) says otherwise."""
     names = list(declared)
     for command in rules.OWNER_RUN:
+        if command == "acknowledge":
+            continue
         name = "approve-plan" if command == "approve-plan" else "wb " + command
         if name not in names:
             names.append(name)
@@ -179,6 +181,10 @@ class Printed(Settings):
         self.assertIn("checkpoint approve-plan: stop\n", out)
         self.assertIn("level approve-plan: block\n", out)
         self.assertIn("settings: ", out)
+
+    def test_two_declarations_of_one_key_are_a_refusal(self):
+        with unittest.mock.patch.object(levels, "registry", side_effect=levels.RegistryError("more than one")):
+            self.refused("do not give each owner-run command one key")
 
     def test_a_version_1_file_prints_the_same_checkpoint_lines_as_before(self):
         self.owner({"version": 1, "checkpoints": {"approve-plan": "delegate"}})

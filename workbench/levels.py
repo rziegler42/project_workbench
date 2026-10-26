@@ -21,6 +21,14 @@ APPROVE_PLAN = "approve-plan"
 
 Key = collections.namedtuple("Key", "name offers default")
 
+# Owner-run commands whose levels the declared checkpoints set, so the command spelling is not a key of its own: a
+# checkpointed action uses its checkpoint's name (the first and second tier of ``acknowledge``).
+CHECKPOINTED_COMMANDS = ("acknowledge",)
+
+
+class RegistryError(ValueError):
+    """Two declarations give one key, so a level could not say which of them it sets."""
+
 # The levels beyond ``block`` that a key offers in this version, by key.
 _OFFERS = {APPROVE_PLAN: (DELEGATED,)}
 # The shipped default of a key that is not ``block``; none yet.
@@ -42,13 +50,20 @@ def registry(checkpoints=(), commands=()):
     First the process module's declared `checkpoints`, in declaration order; then one key for each owner-run
     command of ``rules.OWNER_RUN`` in the ``wb`` spelling (``approve-plan`` is the checkpoint of that name); then
     ``wb run <command> <argument>`` for each owner-run argument of `commands`, a sequence of
-    ``(command name, owner-run arguments)``. A repeated key is one key, and a floor action is not a key.
+    ``(command name, owner-run arguments)``; two declarations of one key are refused (``RegistryError``). A repeated
+    checkpoint is one key, and a floor action is not a key.
     """
     names = []
     names.extend(checkpoints)
-    names.extend(APPROVE_PLAN if command == APPROVE_PLAN else "wb " + command for command in rules.OWNER_RUN)
+    names.extend(APPROVE_PLAN if command == APPROVE_PLAN else "wb " + command for command in rules.OWNER_RUN
+                 if command not in CHECKPOINTED_COMMANDS)
+    declared = []
     for command, arguments in commands:
-        names.extend("wb run %s %s" % (command, argument) for argument in arguments)
+        declared.extend("wb run %s %s" % (command, argument) for argument in arguments)
+    repeated = sorted({name for name in declared if declared.count(name) > 1})
+    if repeated:
+        raise RegistryError("more than one declaration gives the key %s" % repeated[0])
+    names.extend(declared)
     ids = {stop.id for stop in floor.FLOOR}
     keys = collections.OrderedDict()
     for name in names:
