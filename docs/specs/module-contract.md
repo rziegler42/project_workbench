@@ -74,7 +74,7 @@ Each module has one declaration file, `module.json`, at the root of its director
 | `fills` | Blocks the module contributes: the slot, and the source file. |
 | `writes` | The project paths the module writes, beyond its own namespace. |
 | `ships` | Executable or code-bearing items it ships, such as hooks or helper scripts. |
-| `commands` | Commands it offers, each a helper it ships and the first arguments it accepts, run with `wb run`. A command may also list `describes`, the actions its `describe` argument answers (`module-boundary.md`, "Declaration schema"; *specified, not built*). The installer pins the helper when the owner confirms the install; nothing in the name of the shipped file declares a command. A command may also list `owner`, the arguments only the owner runs, which a harness that provides `permissions` denies the agent (`module-boundary.md`, "Declaration schema"). *(built: verified, and run with `wb run`; `owner` built by plan `2026-10-23-review-engine`)* |
+| `commands` | Commands it offers, each a helper it ships and the first arguments it accepts, run with `wb run`. A command may also list `describes`, the actions its `describe` argument answers (`module-boundary.md`, "Declaration schema"; *built*). The installer pins the helper when the owner confirms the install; nothing in the name of the shipped file declares a command. A command may also list `owner`, the arguments only the owner runs, which a harness that provides `permissions` denies the agent (`module-boundary.md`, "Declaration schema"). *(built: verified, and run with `wb run`; `owner` built by plan `2026-10-23-review-engine`)* |
 | `checks` | Pinned Python helpers it contributes to `wb check`. *(built: verified, listed in the approval request, and run by `wb check`)* |
 | `approval` | Process modules only: the command of its own that computes the hashed region of a plan and, optionally, the argument that lists the plans under way. *(built by plans `2026-10-22-plan-approval-records` and `2026-10-22-checkpoint-settings-and-caps`)* |
 | `checkpoints` | Process modules only: the names of the checkpoints it asks the owner about. *(built by plan `2026-10-22-checkpoint-settings-and-caps`)* |
@@ -294,8 +294,7 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   command's helper to be a regular file of the module. In short, each names a helper that is an item of `ships` (or a file below one),
   a Python helper declares the kit API number it needs in `kit`, and an unknown field is refused as
   everywhere else.
-- `commands[].describes` *(specified, not built; the verifier support is the first increment of the plan for
-  `safe-git describe`)*: an optional list of at most 16 distinct strings, each `^[a-z][a-z0-9-]*$` and at most 32
+- `commands[].describes` *(built by plan `2026-10-25-safe-git-describe`; the verifier is its increment A)*: an optional list of at most 16 distinct strings, each `^[a-z][a-z0-9-]*$` and at most 32
   characters, naming the actions the command's `describe` argument answers. A non-empty list is refused unless `describe` is among
   the command's `arguments`, and `describe` may not be in `owner`. The form, the refusals, the engine's admission
   rule and the alternatives are in `module-boundary.md`, "Declaration schema". It is additive and covered by the
@@ -408,7 +407,7 @@ result is a refusal and carries no hashes and no order.
 - A `commands` entry with an unknown field, a helper that is not in
   `ships`, or a missing or misplaced `kit` is refused, naming the module and the field. The same holds for a `checks` entry
   (it has no `runtime` and no `arguments`), and for a pin name already used by another entry.
-- *(Specified, not built.)* A `commands` entry whose `describes` has an entry that is not a string, a duplicate or a
+- A `commands` entry whose `describes` has an entry that is not a string, a duplicate or a
   malformed action, that is non-empty while `describe` is not in `arguments`, or that lists `describe` in `owner`, is refused, naming the
   module and the field.
 - An `approval` field on a module that is not a `process` module, or naming a command or an

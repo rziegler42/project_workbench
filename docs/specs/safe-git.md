@@ -18,8 +18,7 @@ one read of the repository is the credential check before a push (`push-check`).
 Non-goals:
 
 - Any other git operation. There is no push, branch, worktree, merge, rebase, reset or tag, and the only
-  reads are the fixed shapes `push-check` uses *(and, once built, the few more that `describe` adds; see
-  "Describe")*. A push is a checkpoint that a process module builds
+  reads are the fixed shapes `push-check` uses and the few more that `describe` adds (see "Describe"). A push is a checkpoint that a process module builds
   (`code-work.md`, "Push") and the owner decides; merging into a shared branch is outside the agent.
 - Review, plans or approval. The module commits what it is told to commit; whether the work was reviewed is
   the process's business.
@@ -34,9 +33,10 @@ Non-goals:
 | requires | nothing |
 | fills, writes | nothing |
 | ships | one helper, `helper/safe-git`, and one neutral skill, `commit-changes` |
-| commands | `safe-git`, whose first argument is `commit`, `remove` or `push-check` (kit 1). *(Specified, not built: `describe`, with `describes: ["commit", "remove"]`; see "Describe".)* |
+| commands | `safe-git`, whose first argument is `commit`, `remove`, `push-check` or `describe` (kit 1), with `describes: ["remove", "commit"]` (see "Describe"). |
 
-It is run as `wb run safe-git commit`, `wb run safe-git remove` and `wb run safe-git push-check`. The installer pins the helper when the
+It is run as `wb run safe-git commit`, `wb run safe-git remove`, `wb run safe-git push-check` and `wb run safe-git
+describe commit|remove`. The installer pins the helper when the
 owner confirms the install; an edited helper is not run until the change is acknowledged. `code-work`
 requires the capability `commit`, so installing it without this module stops with the hard-requirement
 message.
@@ -100,26 +100,28 @@ hooks path. A bare `git diff --name-only -z` on a gitlink in the index did start
 This is one nested-repository shape and one Git version, not a security review of `commit`, and no test pins
 the case that only HEAD holds.
 
-## Describe *(specified, not built)*
+## Describe *(built by plan `2026-10-25-safe-git-describe`)*
 
 `wb run safe-git describe commit ...` and `wb run safe-git describe remove ...` take exactly the arguments of the real
 `commit` and `remove` and report what the real command would act on, as the accepted decision
 `2026-10-25-describe-interface-for-action-review` requires. This section is what that decision left to the module:
 the names and types of the facts, the refusals as error codes, the numeric caps with their sources, and the
-counterpart of each check of the owner's approver. Nothing here exists in the helper yet. The plan for `safe-git
-describe` builds it and declares `describe` among the command's `arguments` and `describes: ["commit", "remove"]`
-(`module-boundary.md`, "Declaration schema").
+counterpart of each check of the owner's approver. The helper builds it, and the command declares `describe` among its
+`arguments` and `describes: ["remove", "commit"]` (`module-boundary.md`, "Declaration schema"). "As built, and its
+limits" lists where the helper differs from, or adds to, the text below.
 
 **What `describe` does.** It runs the same parsing and validation as the real command, in the same order, up to the
 last step that changes anything, and then stops. For `commit` it runs everything through `git diff --check` of the
 named paths; it stages nothing, runs no `git add`, `git commit` or `_unstage`, and writes no file. For `remove` it
 runs `plan_removal`, which is the real preview, and deletes nothing. It runs git only in the fixed argument
-shapes of the helper. The shapes it has today do not read a HEAD blob, ask whether a path is ignored, or list the tracked
-files below a path, which the facts need (`cat-file -s` and `cat-file blob` of `HEAD:<path>`, `check-ignore -q`, and
-`ls-files -z` of a path). The plan for `describe` adds exactly those shapes to the allowlist, and they are new surface
-that its security pass covers. A refusal the real command would give is returned as `ok: false` with an error, and the
-exit status of `describe` is 0. The only refusal with exit 1 and no object is a `describe` call whose first argument is
-not `commit` or `remove`. Everything else, a missing repository included, is an object with `ok: false`.
+shapes of the helper. The facts need three reads that `push-check` has no shape for, and the helper adds exactly those
+shapes to the allowlist: `cat-file -s` and `cat-file blob` of `HEAD:<path>`, `check-ignore -q`, and `ls-files -z` of a
+path. A fourth, `check-attr -z filter ident working-tree-encoding`, is also run by the real `commit` (see
+`path_converts_on_add`). They were new surface, and the security pass of the plan covered them. A refusal the real command would give is returned as `ok: false` with an error, and the
+exit status of `describe` is 0. The refusals with exit 1 and no object are a `describe` call whose first argument is
+not `commit` or `remove`, and, as built, a refusal that has no code in the table or an `OSError` outside the handled
+sites (an unreadable directory under a removal target, for example), which the real `remove` also ends with exit 1.
+Everything else, a missing repository included, is an object with `ok: false`.
 On such an object `contract` is 1, and every fact the refusal prevented is null (a string, whole number or boolean
 fact that could not be found out) or empty (an array); a fact that is simply a copy of an argument (`leave_other_staged`,
 `confirm`, `recursive`) keeps the value given, and `path_count` is the number of paths the call named; a total that could
@@ -157,6 +159,7 @@ One code for each refusal class of the real command. A `message` is the real ref
 | commit | `index_unreadable` | git lists the index in a form the helper does not read |
 | commit | `index_has_staged_changes` | something is staged and `--leave-other-staged` was not given |
 | commit | `path_already_staged` | a named path is already staged |
+| commit | `path_converts_on_add` | a named path has a `filter`, `ident` or `working-tree-encoding` attribute set to a value (anything but unset or unspecified), so `git add` would store other bytes than the work tree holds; asked of `git check-attr -z` before `git diff --check`, by the real command too; an answer that does not match the paths and attributes asked for gives `repository_unreadable` |
 | commit | `whitespace_errors` | `git diff --check` finds whitespace errors in the named paths |
 | remove | `git_metadata_refused` | a target the removal's own check takes for Git metadata after the shared path check passed it (a look-alike spelling of `.git`); a plain `.git` segment gives `path_refused` |
 | remove | `target_missing` | a target that does not exist, or a directory on the way that does not exist |
@@ -168,7 +171,7 @@ One code for each refusal class of the real command. A `message` is the real ref
 | remove | `target_changed` | a directory that changed while it was being checked |
 
 Whether the same code is given for two causes is a choice of this table: a code names the class a rule can act on, and
-the `message` keeps the detail. `describe` fails the test of plan 2 if a real refusal has no code here, or maps to a
+the `message` keeps the detail. `describe` failed the test of plan 2 if a real refusal had no code here, or maps to a
 code that does not describe it.
 
 ### Facts of `describe commit`
@@ -191,7 +194,7 @@ in the order they are added to the object, which is the order that decides what 
 | `requested_paths` | array of strings | the named paths, as given |
 | `paths` | array of strings | the same paths after validation; empty when validation refused them |
 | `new_paths`, `modified_paths`, `deleted_paths`, `unchanged_paths` | arrays of strings | each path by its change against HEAD, computed from the HEAD blob and the working-tree file without a filter |
-| `binary_paths` | array of strings | paths with a NUL byte in the old or new content, whose diff is not given |
+| `binary_paths` | array of strings | paths with a NUL byte or bytes that are not UTF-8 in the old or new content, whose diff is not given |
 | `not_regular_paths` | array of strings | paths that are not a regular file, or that lie under a linked directory |
 | `diff` | string | the unified diff of the text paths, `HEAD/<path>` against `work/<path>`, computed by the module without any filter, text conversion or external diff |
 | `omitted` | array of strings | the names of facts left out at a cap; empty when `truncated` is false |
@@ -310,7 +313,9 @@ approver's wider scan) and `destination_is_appropriate` (`remote`, `branch`, `de
 The gap is not designed here. A later plan extends `push-check`, or adds a `describe push`, to cover it; the split in
 `action-review.md` has a step for it (Increment D records it). Until then a push stays with the approver.
 
-### Acceptance criteria for the plan that builds `describe`
+### Acceptance criteria of plan `2026-10-25-safe-git-describe`
+
+These were the criteria of the plan; its Result records the tests that meet them.
 
 - For each action the facts equal what the real command acts on: a test builds one repository state and compares the
   `paths`, the message and `head` of `describe commit` with the commit the real command makes, and `target_paths` of
@@ -381,6 +386,48 @@ looked at here:
   committed to by hand.
 - Built, from plan `2026-10-23-push-checkpoint`: `push-check` and its git shapes, with an adversarial security
   pass whose findings were fixed and tested. See "Push check" for its limits.
+- Built, from plan `2026-10-25-safe-git-describe`: `describe commit` and `describe remove` as specified in "Describe",
+  with the 32 error codes of the table (`path_converts_on_add` was added by the security pass), and the launcher rule for a declared
+  action. The command declares `describes: ["remove", "commit"]`, in that order. Where the helper differs from the
+  draft text or adds to it:
+  - Contents are compared byte for byte, without a filter. A side with a NUL or bytes that are not UTF-8 is listed in
+    `binary_paths` and its diff is withheld. A side over 262,144 bytes (the approver's whole-diff bound) is not read:
+    the path is listed new, deleted or modified without being compared, `diff` is omitted and `truncated` is true; the path is not in `binary_paths`, so that list
+    is complete only when `truncated` is false. A change of the
+    executable bit is a modification, with a line `mode HEAD/<path> <old|none> -> work/<path> <new|none>` in the diff.
+  - A path in the index whose `HEAD:<path>` object cannot be sized is taken as absent from HEAD only for an
+    intent-to-add entry (the empty blob); otherwise it gives `repository_unreadable`.
+  - The diff is built by the module from `difflib` after the lines both sides share at the start and the end are set
+    aside. A side with more than 500 differing lines is not compared, and all the diffs of one call share a budget of
+    20 seconds; either limit omits `diff` and sets `truncated`.
+  - A value is printed as ASCII with a lone surrogate written as its escape text, so a strict JSON reader accepts it.
+  - The size of the object is the printed line, newline included. On a refused `describe remove`, `entry_total` and
+    `size_total` are omitted and named, and `tracked_file_total` is null.
+  - `expected_head` is the string as given once it is valid (so `none` for `none`) and null before; after a usage
+    refusal `subject`, `body`, `trailers` and `expected_head` are null or empty even when given.
+  - The real `commit` runs `git diff --check` with `GIT_OPTIONAL_LOCKS=0`, because it shares that function with
+    `describe`.
+- Limits of `describe`, recorded by the security pass and the reviews of that plan:
+  - Attributes other than the three it refuses are not read: `text`, `eol`, `crlf`, `core.autocrlf` and `core.eol`
+    change line endings on `git add`, so `describe` shows the work tree's bytes where the real command stores converted
+    ones. The difference is whitespace only; a path can be listed modified or unchanged accordingly. Likewise
+    `core.fileMode=false` can make a path modified for `describe` that `git add` would not stage; the real command then
+    refuses at staging.
+  - `git check-attr` prints a literal value `unspecified` or `unset` as it prints the state, so a repository line
+    `filter=unspecified` is not refused; it would run a filter of that name only if the owner's own global configuration
+    defines one (a repository's own filter is refused by `repo_selects_program`).
+  - A `.gitattributes` or work-tree change between `describe` and the real command is the race already accepted.
+  - The time budget is checked between files, so one call can take the budget plus one comparison (about 0.6 s at the
+    bound). Each of up to 2,000 paths costs two git runs (about 26 ms each in the pass, so about 52 s for 2,000);
+    nothing bounds that total.
+  - A `describe remove` target that the `check-ignore` shape refuses (a leading colon or a backslash) can be listed in
+    `ignore_unknown_targets`, because its ignore status is not asked.
+  - Not checked: a full run of 2,000 paths, `wb launch` through a real pin, a SHA-256 repository, and the engine's use of
+    the facts (plan 3 of the split in `action-review.md`). The push gap is open.
+- The shipped approvals (`workbench/shipped_approvals/packages/`) are re-written by the owner's `release-approvals`
+  after any change under `packages/workbench/`, and the new records are committed with that change. The edit gate
+  refuses every edit until the owner has done so, so a change to the package is built and tested in a copy and landed
+  with one copy.
 - Tests that run git need it and skip with a reason without it.
 - No end-to-end run in a live session has been done.
 

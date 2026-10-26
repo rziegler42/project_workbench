@@ -6,7 +6,7 @@ after settling the accuracy method, the false-decline bound, the name `describe`
 and `amend-message`. A call marked **(default)** was the author's and is approved with the design but was not
 separately chosen; the owner may still change it. The approval is of the design only and approves no plan. The
 `describe` interface is a decision record of its own, accepted by the owner on 2026-10-25
-(`2026-10-25-describe-interface-for-action-review`). The status stays `Draft` because nothing in this spec is built.
+(`2026-10-25-describe-interface-for-action-review`). The status stays `Draft` because the engine, its hook and its log are not built; the `describe` side of `safe-git` and the launcher rule are (plan `2026-10-25-safe-git-describe`).
 
 Terms are defined in `terms.md`. The engine sits above the bridge of `model-bridge.md` and beside the engine of
 `review-engine.md`. The decision behind it is `2026-10-22-model-calls-go-through-vendor-bridges` (decisions 3, 6, 7
@@ -190,13 +190,12 @@ adding a field to the verdict object.
   (`module-boundary.md`, "A helper that runs another module's command"; a hand pin records no declaration hash). The
   engine treats any refusal as a refusal of its own (exit 1) and approves nothing. `wb run` takes a command name, not
   a module name, so a rule's module and action must map to a command name; the engine's plan fixes that mapping.
-- *Declared: decided, not built.* Today the launcher checks the first argument against `arguments` and has no
-  knowledge of `describes` (`module-boundary.md`, "Declaration schema"); nothing lets a helper learn which action a
-  command answers, and the engine reading `module.json` itself would be a second check of a declaration the launcher
+- *Declared: built.* The engine reading `module.json` itself would be a second check of a declaration the launcher
   already hash-checks, with a different trust. The owner decided on 2026-10-25 that the launcher enforces it: when a
-  command's first argument is `describe`, `wb run` refuses unless the second argument is in the command's `describes`.
-  The rule is generic and names no module or action. The engine then needs no knowledge of declarations, and a
-  refusal is a refusal of the engine (exit 1). The rule is built by the plan for `safe-git describe`.
+  command's first argument is `describe`, `wb run` refuses unless the second argument is in the command's `describes`
+  (`module-boundary.md`, "Declaration schema"). The rule is generic and names no module or action. The engine then
+  needs no knowledge of declarations, and a refusal is a refusal of the engine (exit 1). Plan
+  `2026-10-25-safe-git-describe` built the rule and `safe-git` declares it.
 
 **The timeout.** Decided by the owner on 2026-10-25, as provisional figures: the bridge's `--timeout` is 20 seconds,
 the engine's own limit is 25 seconds, and the hook's limit is 30 seconds, so each layer reports before the one outside
@@ -284,7 +283,7 @@ not measured.
 
 ## Proposed split into plans (default)
 
-Each is a plan of its own, in this order. None exists, and the owner approves each.
+Each is a plan of its own, in this order. Plans 3 to 5 do not exist yet, and the owner approves each.
 
 1. **The interface, documented. Done by plan `2026-10-25-describe-interface-documented`.** The `describe` decision
    is accepted. The plan settled what it left open: the form of a module's declaration in `module-contract.md` and
@@ -292,7 +291,8 @@ Each is a plan of its own, in this order. None exists, and the owner approves ea
    engine's contract in this spec, and the owner's three decisions on 2026-10-25 (the launcher rule for a declared action, who writes the log, the timeout; see "Decided by the owner"). It also holds the
    read-only count of the approver's declines by failed check, so the rubric is written knowing where the approver
    goes wrong.
-2. **`safe-git describe`** for `commit` and `remove`, with tests that the facts equal what the real command acts on and
+2. **`safe-git describe`. Done by plan `2026-10-25-safe-git-describe`** (see `safe-git.md`, "As built, and its limits",
+   for what differs from the draft). It is for `commit` and `remove`, with tests that the facts equal what the real command acts on and
    that the call changes nothing. Its first increment is the verifier support for the `describes` field; the launcher rule that refuses
    `describe <action>` for an action not in `describes` follows it; its security pass covers the new git shapes and
    that rule.
@@ -398,7 +398,7 @@ left open.
   `d8b3facdee46432d27547a07865abf024741929ae2d9191e1015ee8280bcd613`); `load_helper`, `collect_commit` and
   `collect_remove` call the global `claude-workflow` program as a library. Read, not run.
 - The module sides were read in `safe-git.md` (`commit`, `remove`, `push-check`) and `model-bridge.md`.
-- Not run: any `describe` command, any engine, any hook. The proposals are the author's.
+- Not run when this spec was written (2026-10-25): any `describe` command, any engine, any hook. The proposals are the author's.
 
 ### The approver's declines by failed check
 

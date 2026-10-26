@@ -431,7 +431,7 @@ failed `cat-file -s` reading became "absent only for an intent-to-add path".
 
 ### Increment F — Security pass and its fixes
 
-Done, not yet committed at the time of writing. The owner approved the new error code `path_converts_on_add` and the
+Done and committed as `42945e1`. The owner approved the new error code `path_converts_on_add` and the
 narrower attribute list (`filter`, `ident`, `working-tree-encoding`; not `text` or `eol`) after the pass. Changed, in
 `packages/workbench/safe-git/`: `helper/safe-git`, the new `tests/test_safegit_describe_pass.py` (30 tests, one group for
 each finding), and small edits to three test files (two lists of allowed git commands gain `check-attr`; the test that
@@ -499,4 +499,29 @@ Limits left open, to be written down in G:
   pin, the repository's own tests and the verifier by the pass, and timings by the reviewer. A SHA-256 repository has no
   test.
 
-Not done: G.
+### Increment G — The specs say what is built
+
+Done, not yet committed at the time of writing. Documents only; nothing under `packages/workbench/` changed. Changed:
+`docs/specs/safe-git.md` (the declaration row, the "Describe" section marked built, the errors table gains
+`path_converts_on_add`, `binary_paths` covers bytes that are not UTF-8, the exit-1 cases are stated, the acceptance
+criteria are marked as the plan's, and "As built, and its limits" records the departures from the draft, the limits of
+F and the shipped-approvals practice), `docs/specs/module-boundary.md`, `docs/specs/module-contract.md` and
+`docs/specs/action-review.md` (the "not built" wording for `describes` and the launcher rule, plan 2 of the split marked
+done, the status line and the evidence line made exact), and `docs/development.md` (a row for `describe`).
+`docs/specs/README.md` lists no status and is unchanged. `workbench/shipped_approvals/` was not added to the affected
+areas; the practice is written in `safe-git.md`.
+
+Verification as run: `git diff --check`, `wb check`, `wb run code-work check` (48 plans), `doccheck` and `refcheck`
+clean; a search of `docs/specs` and `docs/development.md` for "specified, not built", "once built" and "decided, not
+built" finds nothing. `describe` itself was not run through `wb run` here: this project's installed pin predates it, and
+upgrading is the owner's. The keys of the output were read in the helper.
+
+Review: the `reviewer` agent, one exchange. Two blocking findings, both applied: I had written 34 error codes where the
+table and the helper have 32 (counted again with a search of the helper), and `action-review.md` still said nothing in
+it was built and that no plan existed. Also applied: the acceptance-criteria heading and a future-tense sentence, and a
+note that `binary_paths` is complete only when `truncated` is false. Not changed: the diff cap is measured in bytes at
+the final gate and in characters in a running counter, which does not change the result. Not checked by the reviewer: it
+ran nothing, and did not open `docs/specs/README.md`.
+
+Not done: nothing in this plan remains except the owner's verdict. Open for the owner, outside the plan: the push gap,
+the engine (plan 3 of the split), and the old tracked approval records.
