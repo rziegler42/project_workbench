@@ -87,11 +87,11 @@ class OfferedLevelsTest(unittest.TestCase):
             with self.subTest(key=name):
                 self.assertEqual(name == "approve-plan", "delegated" in key.offers)
 
-    def test_no_key_offers_ask_or_none_in_this_increment(self):
+    def test_only_approve_plan_offers_ask_or_none(self):
         for name, key in self.keys().items():
             with self.subTest(key=name):
-                self.assertNotIn("ask", key.offers)
-                self.assertNotIn("none", key.offers)
+                self.assertEqual(name == "approve-plan", "ask" in key.offers)
+                self.assertEqual(name == "approve-plan", "none" in key.offers)
 
     def test_accept_decision_offers_block_only(self):
         self.assertEqual(("block",), self.keys()["accept-decision"].offers)

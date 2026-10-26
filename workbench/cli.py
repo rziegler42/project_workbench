@@ -285,7 +285,9 @@ def _run(tokens, out, err, store_root, distribution):
 
 def _plan_command(name, tokens, out, err, store_root, distribution, stdin):
     """``approve-plan``, ``plan-status`` and ``delegate-approve-plan``: one argument, never parsed as an option here."""
-    if planapprovals.one_argument(tokens) is None:
+    grammar = {"approve-plan": planapprovals.approve_arguments, "plan-status": planapprovals.status_arguments}.get(
+        name, planapprovals.one_argument)
+    if grammar(tokens) is None:
         err.write({"approve-plan": planapprovals.APPROVE_USAGE, "plan-status": planapprovals.STATUS_USAGE}.get(
             name, delegation.USAGE))
         return 2

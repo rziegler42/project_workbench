@@ -7,8 +7,9 @@ and the owner-run arguments of the installed commands. No module is named here
 
 A level is offered by a key only from the increment that builds it for that key; until then the key offers
 ``block`` only. In this version ``approve-plan`` also offers ``delegated`` (``wb delegate-approve-plan`` is its
-gate), and no key offers ``ask`` or ``none``. Every default is ``block``: a table can only make a key stricter or
-equal to what it reads without one.
+gate), ``ask`` (a digest of its preview) and ``none``; no other key offers ``ask`` or ``none``. Every default is
+``block``: the shipped default of ``approve-plan`` becomes ``ask`` only after the probe the decision
+``2026-10-26-ask-level-spelling-limit`` requires is recorded.
 """
 
 import collections
@@ -30,7 +31,7 @@ class RegistryError(ValueError):
     """Two declarations give one key, so a level could not say which of them it sets."""
 
 # The levels beyond ``block`` that a key offers in this version, by key.
-_OFFERS = {APPROVE_PLAN: (DELEGATED,)}
+_OFFERS = {APPROVE_PLAN: (DELEGATED, ASK, NONE)}
 # The shipped default of a key that is not ``block``; none yet.
 _DEFAULTS = {}
 

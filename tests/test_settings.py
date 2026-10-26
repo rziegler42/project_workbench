@@ -310,14 +310,21 @@ class LevelsTest(SettingsBase):
         self.assertEqual(1, len(got.notes))
         self.assertIn("beta", got.notes[0])
 
-    def test_ask_and_none_are_read_but_not_offered_yet_so_they_read_as_block_with_a_note(self):
+    def test_ask_and_none_are_read_for_a_key_that_does_not_offer_them_as_block_with_a_note(self):
+        for level in ("ask", "none"):
+            with self.subTest(level=level):
+                loaded, got = self.effective({"version": 2, "levels": {"beta": level}})
+                self.assertEqual([], loaded.problems)
+                self.assertEqual(("block", "stop"), (got.levels["beta"], got.checkpoints["beta"]))
+                self.assertEqual(1, len(got.notes))
+                self.assertIn(level, got.notes[0])
+
+    def test_approve_plan_offers_ask_and_none_and_neither_makes_it_delegate(self):
         for level in ("ask", "none"):
             with self.subTest(level=level):
                 loaded, got = self.effective({"version": 2, "levels": {"approve-plan": level}})
-                self.assertEqual([], loaded.problems)
-                self.assertEqual(("block", "stop"), (got.levels["approve-plan"], got.checkpoints["approve-plan"]))
-                self.assertEqual(1, len(got.notes))
-                self.assertIn(level, got.notes[0])
+                self.assertEqual(([], []), (loaded.problems, got.notes))
+                self.assertEqual((level, "stop"), (got.levels["approve-plan"], got.checkpoints["approve-plan"]))
 
     def test_a_value_that_is_not_one_of_the_four_levels_reads_as_block_with_a_note(self):
         bad = ["BLOCK", "Ask", "allow", "", None, True, 1, ["block"], {"block": 1}, "block "]
@@ -365,6 +372,11 @@ class LevelsTest(SettingsBase):
         self.assertEqual(("block", "stop"), (got.levels["approve-plan"], got.checkpoints["approve-plan"]))
         self.assertEqual(1, len(loaded.problems))
         self.assertIn("levels", loaded.problems[0])
+
+    def test_a_checkpoint_of_delegate_with_a_level_of_none_stays_delegated(self):
+        loaded, got = self.effective({"version": 2, "checkpoints": {"approve-plan": "delegate"},
+                                      "levels": {"approve-plan": "none"}})
+        self.assertEqual(("delegated", "delegate"), (got.levels["approve-plan"], got.checkpoints["approve-plan"]))
 
     def test_a_key_in_both_takes_the_stricter_and_the_difference_is_noted(self):
         cases = (("delegate", "block", "block"), ("stop", "delegated", "block"), ("delegate", "delegated", "delegated"),
@@ -442,7 +454,8 @@ class LevelsTest(SettingsBase):
         self.assertTrue(self.delegating({"version": 2, "levels": {"approve-plan": "delegated"}}))
         self.assertTrue(self.delegating({"version": 2, "checkpoints": {"approve-plan": "delegate"},
                                          "levels": {"approve-plan": "delegated"}}))
-        for level in ("block", "ask", "none", "DELEGATED", "", None, True, ["delegated"]):
+        # A checkpoint of delegate with a level of none stays delegated: the stricter applies.
+        for level in ("block", "ask", "DELEGATED", "", None, True, ["delegated"]):
             with self.subTest(level=level):
                 self.assertFalse(self.delegating({"version": 2, "checkpoints": {"approve-plan": "delegate"},
                                                   "levels": {"approve-plan": level}}))

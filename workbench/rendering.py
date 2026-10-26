@@ -78,6 +78,20 @@ def table_of(guarded, checkpoints, commands):
     return dict(settings.effective(settings.load(guarded), checkpoints, (), commands).levels)
 
 
+def current_table(guarded, start):
+    """``(table, root, project id)`` for the project that holds the directory `start`: the effective table built from
+    the installed modules' process checkpoints and commands, as ``harnessstage.stage`` builds it at attach. ``ApprovalError``
+    when the project or an installed declaration cannot be used; ``levels.RegistryError`` when two declarations give one
+    key."""
+    from . import approvalcmd
+    root, ident, found = approvalcmd.installed_modules(start)
+    table = table_of(
+        guarded,
+        tuple(name for item in found if item.module.type == "process" for name in item.module.checkpoints),
+        [(command.name, command.owner) for item in found for command in item.module.commands])
+    return table, root, ident
+
+
 def record_of(harness, provides_permissions, table, built, path, file_hash):
     """The record body for a harness `harness` (``<package>/<module>``) that wrote `path` with hash `file_hash`."""
     return {"format": FORMAT, "harness": harness, "permissions": bool(provides_permissions),

@@ -27,21 +27,24 @@ component (the last included) or is not a regular file. The same plan named two 
 """
 
 import collections
+import hashlib
 import json
 import os
 import re
 import stat
 
-from . import __version__, approvalcmd, approvals, approve, settings
+from . import __version__, approvalcmd, approvals, approve, levellog, levels, rendering, settings
 from .wbkit import display, jsonstrict, safefs
 
 FORMAT = 2
 FORMATS = (1, 2)
 MAX_ENTRIES = 2000
 CONFIRM_CHARS = 12
+DIGEST_CHARS = 32
 MAX_FILE_BYTES = 2 * 1024 * 1024
 
 _HEX = re.compile(r"[0-9a-f]{64}\Z")
+_DIGEST = re.compile(r"[0-9a-f]{32}\Z")
 _TIME = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\Z")
 _REVIEW = re.compile(r"plan-[0-9a-f]{16}\Z")
 _FIELDS = ("plan", "region_hash", "declaration_hash", "helper_sha256", "approver", "time", "workbench_version")
@@ -53,8 +56,9 @@ Status = collections.namedtuple("Status", "state differs withdrawn", defaults=(F
 
 APPROVED, CHANGED, NOT_APPROVED = "approved", "changed since approval", "not approved"
 
-STATUS_USAGE = "usage: wb plan-status <plan>\n"
-APPROVE_USAGE = "usage: wb approve-plan <plan>   (owner-run, terminal only)\n"
+STATUS_USAGE = "usage: wb plan-status <plan> [--digest]\n"
+APPROVE_USAGE = ("usage: wb approve-plan <plan>   (owner-run, terminal only)\n"
+                 "       wb approve-plan <plan> --digest <32 hexadecimal characters>   (when it is set to ask)\n")
 WITHDRAWN = "delegated approval withdrawn: approve-plan is not delegate"
 
 
@@ -239,6 +243,32 @@ def plan_path(root, cwd, argument):
 # --- the commands -----------------------------------------------------------------------------
 
 
+def status_arguments(tokens):
+    """``(plan, preview)`` for ``<plan>`` or ``<plan> --digest``, or None."""
+    if len(tokens) == 2 and tokens[1] == "--digest" and not tokens[0].startswith("-"):
+        return tokens[0], True
+    plan = one_argument(tokens)
+    return (plan, False) if plan is not None else None
+
+
+def approve_arguments(tokens):
+    """``(plan, digest)`` for ``<plan>`` (digest None) or ``<plan> --digest <32 hex>``, or None."""
+    if len(tokens) == 3 and tokens[1] == "--digest" and not tokens[0].startswith("-") \
+            and _DIGEST.match(tokens[2]):
+        return tokens[0], tokens[2]
+    plan = one_argument(tokens)
+    return (plan, None) if plan is not None else None
+
+
+def digest_of(resolved, plan, report):
+    """The digest that binds a confirmation to what was previewed: the first 32 hexadecimal characters of the SHA-256 of
+    the project, the approval command (declaration and helper), the plan's path, its region hash and what the approval
+    does not cover. Another clone, another command or another plan gives another digest."""
+    lines = ["approve-plan", resolved.project_id, resolved.declaration, resolved.helper_sha256, plan,
+             report.region_hash] + ["unhashed:%s" % name for name in report.unhashed]
+    return hashlib.sha256("\n".join(lines).encode("utf-8", "replace")).hexdigest()[:DIGEST_CHARS]
+
+
 def one_argument(tokens):
     """The plan argument of a command that takes exactly one argument and no option, or None."""
     if len(tokens) != 1 or tokens[0].startswith("-"):
@@ -263,16 +293,24 @@ def _current(guarded, argument, cwd):
 
 
 def plan_status(guarded, tokens, out, err, *, cwd=None):
-    """``plan-status <plan>``: one line on standard output. Exit 0 approved, 1 anything else, 2 usage."""
-    argument = one_argument(tokens)
-    if argument is None:
+    """``plan-status <plan>``: one line on standard output. Exit 0 approved, 1 anything else, 2 usage.
+
+    ``plan-status <plan> --digest`` is the read-only preview of ``approve-plan`` at the level ``ask``: it prints what an
+    approval would bind and the digest that the approval must carry, and exits 0. It writes nothing."""
+    parsed = status_arguments(tokens)
+    if parsed is None:
         err.write(STATUS_USAGE)
         return 2
+    argument, preview = parsed
     try:
         resolved, plan, report = _current(guarded, argument, cwd)
         entries = load(guarded, resolved.project_id)
     except (PlanApprovalError, approvalcmd.ApprovalError) as exc:
         return _refuse(err, str(exc))
+    if preview:
+        _describe(out, resolved, plan, report, entries)
+        out.write("digest: %s\n" % digest_of(resolved, plan, report))
+        return 0
     found = status(entries, plan, report.region_hash, resolved.declaration, resolved.helper_sha256,
                    delegating(guarded, resolved))
     shown = display.ascii_text(plan)
@@ -286,7 +324,7 @@ def plan_status(guarded, tokens, out, err, *, cwd=None):
     return 1
 
 
-def _show(out, resolved, plan, report, entries):
+def _describe(out, resolved, plan, report, entries):
     out.write("approve plan %s\n" % display.ascii_text(plan))
     out.write("  project:           %s\n" % display.ascii_text(resolved.root))
     out.write("  approval command:  %s/%s (declaration %s, helper %s)\n" % (
@@ -303,22 +341,96 @@ def _show(out, resolved, plan, report, entries):
     if older:
         out.write("  this plan already has %d earlier approval%s; the newest was recorded %s\n" % (
             len(older), "" if len(older) == 1 else "s", older[-1].time))
+
+
+def _show(out, resolved, plan, report, entries):
+    _describe(out, resolved, plan, report, entries)
     out.write("\nThe approval binds this path, this region hash and the exact command above. Read the plan "
               "first.\nTo approve it, type the first %d characters of the region hash and press Enter.\n"
               "Anything else cancels and records nothing.\n> " % CONFIRM_CHARS)
     out.flush()
 
 
+TERMINAL_ONLY = ("approving a plan is owner-run: standard input and output must both be terminals. "
+                 "Run this command yourself, from your own terminal.")
+
+
 def approve_plan(guarded, tokens, stdin, out, err, *, cwd=None):
-    """``approve-plan <plan>``: owner-run, terminal only. Exit 0 recorded or already recorded, 1 refused or
-    cancelled with nothing written, 2 usage, 130 interrupted."""
-    argument = one_argument(tokens)
-    if argument is None:
+    """``approve-plan <plan>``: owner-run, from a terminal; or, when the owner has set it to ``ask`` or ``none``, an
+    agent's run without one (``docs/specs/command-permissions.md``). Exit 0 recorded or already recorded, 1 refused or
+    cancelled with nothing written, 2 usage, 3 recorded but not logged, 130 interrupted. An interrupt of the run without a
+    terminal logs a ``refused`` outcome; if it came after the record was written, the record stands."""
+    parsed = approve_arguments(tokens)
+    if parsed is None:
         err.write(APPROVE_USAGE)
         return 2
-    if not (approve.is_terminal(stdin) and approve.is_terminal(out)):
-        return _refuse(err, "approving a plan is owner-run: standard input and output must both be terminals. "
-                            "Run this command yourself, from your own terminal.")
+    argument, given = parsed
+    if given is None and approve.is_terminal(stdin) and approve.is_terminal(out):
+        return _approve_at_terminal(guarded, argument, stdin, out, err, cwd)
+    return _approve_without_terminal(guarded, argument, given, out, err, cwd)
+
+
+def _approve_without_terminal(guarded, argument, given, out, err, cwd):
+    """The agent's run at ``ask`` (with the digest of the preview) or ``none`` (without one). Anything else is the
+    terminal-only refusal. The attempt is written after every check and just before the record; the outcome follows."""
+    try:
+        start = cwd if cwd is not None else os.getcwd()
+    except OSError as exc:
+        return _refuse(err, "the working directory cannot be read: %s" % (exc.strerror or "unknown error"))
+    try:
+        table, root, ident = rendering.current_table(guarded, start)
+    except (approvalcmd.ApprovalError, levels.RegistryError) as exc:
+        return _refuse(err, str(exc))
+    level = rendering.effective_level(guarded, ident, root, table, settings.APPROVE_PLAN)
+    if level == levels.NONE and given is not None:
+        return _refuse(err, "approve-plan takes no digest at the level none: unknown argument --digest")
+    if given is not None and level != levels.ASK:
+        return _refuse(err, "approving a plan with a digest is owner-run unless the level of approve-plan is ask here "
+                            "and its rendered rule is present: the owner approves a plan with `wb approve-plan <plan>` "
+                            "from a terminal")
+    if level not in (levels.ASK, levels.NONE) or (level == levels.ASK and given is None):
+        return _refuse(err, TERMINAL_ONLY)
+    op = None
+    try:
+        resolved, plan, report = _current(guarded, argument, cwd)
+        if level == levels.ASK and given != digest_of(resolved, plan, report):
+            return _refuse(err, "the digest does not match the plan as it is now; preview it again with "
+                                "`wb plan-status <plan> --digest`; nothing was recorded")
+        again, same_plan, second = _current(guarded, argument, cwd)
+        if (again.declaration, again.helper_sha256, again.project_id, same_plan, second) != \
+                (resolved.declaration, resolved.helper_sha256, resolved.project_id, plan, report):
+            return _refuse(err, "the plan, the approval command or its declaration changed while the digest was "
+                                "checked, so it no longer holds; nothing was recorded")
+        entry = Approval(plan, report.region_hash, resolved.declaration, resolved.helper_sha256,
+                         approve.approver_name(), approvals.utc_now(), __version__)
+        if not any(_same(item, entry) for item in load(guarded, resolved.project_id)):
+            op = levellog.begin(guarded, settings.APPROVE_PLAN, level, "digest:%s" % given if given else "")
+        written = False
+        try:
+            written = add(guarded, resolved.project_id, entry)
+        except BaseException as exc:
+            if op is not None:
+                levellog.finish_refused(guarded, op, str(exc) if isinstance(exc, Exception) else type(exc).__name__)
+            raise
+    except levellog.LogError as exc:
+        return _refuse(err, "%s; nothing was recorded" % exc)
+    except (PlanApprovalError, approvalcmd.ApprovalError) as exc:
+        return _refuse(err, str(exc))
+    except KeyboardInterrupt:
+        out.write("\ninterrupted: the plan approvals and the level log show what was done\n")
+        return 130
+    out.write("%s: %s (region %s)\n" % ("approved" if written else "already approved", display.ascii_text(plan),
+                                        report.region_hash))
+    if op is not None:
+        try:
+            levellog.finish(guarded, op, "done", "recorded")
+        except levellog.OutcomeError as exc:
+            err.write("the approval was recorded, but its outcome was not logged: %s\n" % display.clean(str(exc)))
+            return 3
+    return 0
+
+
+def _approve_at_terminal(guarded, argument, stdin, out, err, cwd):
     try:
         resolved, plan, report = _current(guarded, argument, cwd)
         entries = load(guarded, resolved.project_id)

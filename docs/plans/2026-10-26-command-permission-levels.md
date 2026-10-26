@@ -525,3 +525,35 @@ the agent did not, because only the owner accepts a decision, and committed it a
 Step 0 outcome, 2026-10-26: the owner accepted the decision `2026-10-26-ask-level-spelling-limit`. The owner told the agent in
 the session to make the status edit ("make the edit for me, accepted"), so the agent edited the status line and the index row
 as the owner's scribe and did not decide anything. The condition of Increment F is met.
+
+Committed as `1a50529` (the acceptance).
+
+Step 1 onward, 2026-10-26: F's code. Changed: `workbench/planapprovals.py` (`plan-status <plan> --digest`, the read-only preview
+that prints what an approval binds and a 32-character digest; the remote forms of `approve-plan`: `<plan> --digest <32>` at
+`ask` and `<plan>` at `none`, each reading the level from `rendering.effective_level`, recomputing the digest in its own
+process, re-checking the plan, writing the attempt only when no equal approval exists and just before the record, and an
+outcome on every path; the terminal path unchanged); `workbench/rendering.py` (`current_table`, the table as the installed
+modules give it now); `workbench/levels.py` (`approve-plan` offers `ask` and `none`); `workbench/levellog.py`
+(`finish_refused`); `workbench/cli.py` (the two grammars); tests `tests/test_approve_levels.py` (new, 32 tests),
+`tests/test_levels.py`, `tests/test_settings.py`. The digest covers the project identifier, the declaration and helper
+hashes, the plan's path, its region hash and what the approval does not cover. Exit 3 means the approval was recorded but
+its outcome was not logged.
+
+Choices made, and one departure from the plan: the plan's step 4 (change the registry default of `approve-plan` to `ask`) is
+NOT done. The accepted decision `2026-10-26-ask-level-spelling-limit` says `ask` is not offered as a default to anyone else
+until the spelling probe is recorded, so the shipped default stays `block`; the mechanism (`levels._DEFAULTS`) and its test
+are in, and the flip is a one-line change after the probe. The preview is an option of `plan-status` (agent-safe), not a new
+command. A project that is not attached, or whose record is stale, reads `block` and the remote forms refuse with the
+terminal-only message.
+
+Verification as run: the tests were written first and failed for the missing feature (25 of 32); `python3 -B -W error
+tests/run_all.py` (4652 tests in 10 roots, OK); `git diff --check` clean; `python3 -m workbench check` no problems. Not run:
+the plan check after the last edit; the spelling probe (step 5, owner steps); a live harness.
+
+Review: one round by the `reviewer` agent (cap 3), recommendation "no blocking findings"; it ran nothing. Applied: an interrupt
+of the run without a terminal exits 130 and logs a `refused` outcome (finding 2, with a test); a digest given where the level
+is not `ask` gets a message that says what is needed, still containing "owner-run" (finding 4, with a test). Not applied:
+the harmless over-log in a race between the equal-entry check and `add` (finding 3); a positive terminal approval is covered
+by older tests, not this file (finding 5); a v1 settings test through `effective_level` (finding 1, covered by the default
+test through attach). For Increment H: the spec's shipped-defaults table must say the flip of the `approve-plan` default waits
+for the probe. Final verification (below).

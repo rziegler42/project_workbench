@@ -92,6 +92,15 @@ def finish(guarded, op, outcome, reason=""):
         raise OutcomeError(str(exc))
 
 
+def finish_refused(guarded, op, reason):
+    """Write a ``refused`` outcome for a command that is already refusing. A failure to write it is not reported
+    again: the attempt stays listed as unfinished."""
+    try:
+        finish(guarded, op, "refused", reason)
+    except OutcomeError:
+        pass
+
+
 def read(guarded):
     """The log as ``Read(operations, unfinished, problems)``. A damaged line is a problem, not a refusal.
 
