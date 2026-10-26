@@ -1,6 +1,6 @@
 # A push is described by `safe-git describe push`, which takes the arguments of `git push` and validates them itself
 
-Status: Proposed
+Status: Accepted
 Date: 2026-10-26
 
 ## Context
