@@ -3,11 +3,19 @@
 The document is strict JSON::
 
     {"caps": {"<name>": <integer>}, "checkpoints": {"<name>": "stop" | "delegate"},
-     "floor": ["<id>", ...], "version": 1}
+     "floor": ["<id>", ...], "levels": {"<key>": "block" | "ask" | "delegated" | "none"},
+     "version": 1 | 2}
+
+``levels`` exists only in version 2 (``docs/specs/command-permissions.md``). The reader accepts versions 1 and 2.
 
 * ``checkpoints`` names the checkpoints the owner has set. A checkpoint that is missing,
   malformed or set to anything but ``delegate`` reads as ``stop``, so with no settings
   every checkpoint stops. Checkpoint names are defined by a way of working, not here.
+* ``levels`` is optional. It maps a key to the level the owner chose. A value that is not one of the four levels,
+  a key that is not valid, or a ``levels`` that is not an object reads as ``block``. In this version a key is a
+  checkpoint the process module declares; ``stop`` reads as ``block`` and ``delegate`` as ``delegated``, a key set
+  in both takes the stricter, and only ``block`` and ``delegated`` (for ``approve-plan``) take effect: ``ask`` and
+  ``none`` are read but not offered yet, so they read as ``block`` with a note.
 * ``caps`` is optional. It holds the owner's value for each loop cap a process module declares.
   The loader keeps a valid name with an integer value; ``effective`` judges the value against
   the module's ceiling and falls back to the module's default with a note.
@@ -25,18 +33,30 @@ create it, and the loss is a hand edit made in the same instant.
 
 import collections
 import json
+import re
 
 from . import declarations, floor
 from .wbkit import safefs
 
 SETTINGS = "settings"
-VERSION = 1
+VERSION = 1  # the version written at seeding
+VERSIONS = (1, 2)  # the versions the reader accepts
 STOP, DELEGATE = "stop", "delegate"
+BLOCK, ASK, DELEGATED, NONE = "block", "ask", "delegated", "none"
+LEVELS = (BLOCK, ASK, DELEGATED, NONE)  # strictest first
+# A key is a checkpoint name or a command in the ``wb`` spelling, for example ``wb install``.
+_KEY_RE = re.compile(r"[a-z][a-z0-9-]*( [a-z][a-z0-9-]*)*\Z")
+MAX_KEY = 96
 # The one checkpoint for which ``delegate`` has an effect (``wb delegate-approve-plan``); any other name stops.
 APPROVE_PLAN = "approve-plan"
 
-_Settings = collections.namedtuple("_Settings", "checkpoints problems caps")
-Effective = collections.namedtuple("Effective", "checkpoints caps notes")
+_Settings = collections.namedtuple("_Settings", "checkpoints problems caps levels levels_blocked")
+Effective = collections.namedtuple("Effective", "checkpoints caps notes levels")
+
+
+def strictest(*levels):
+    """The strictest of the given levels (``block`` strictest, ``none`` least strict)."""
+    return min(levels, key=LEVELS.index)
 
 
 class Settings(_Settings):
@@ -61,7 +81,7 @@ def seed(store):
 
 
 def _default(problem):
-    return Settings({}, [problem], {})
+    return Settings({}, [problem], {}, {}, True)
 
 
 def load(store):
@@ -69,7 +89,7 @@ def load(store):
     try:
         kind = store.kind(SETTINGS)
         if kind is None:
-            return Settings({}, [], {})
+            return Settings({}, [], {}, {}, False)
         if kind != "file":
             return _default("settings are not a regular file (%s); every checkpoint stops" % kind)
         data = store.read(SETTINGS)
@@ -81,10 +101,12 @@ def load(store):
         return _default("settings are damaged (%s); every checkpoint stops" % exc)
 
     problems = []
-    if document.get("version") != VERSION or isinstance(document.get("version"), bool):
+    version = document.get("version")
+    if isinstance(version, bool) or version not in VERSIONS:
         return _default("settings have an unsupported version; every checkpoint stops")
+    known = ("caps", "checkpoints", "floor", "version") + (("levels",) if version == 2 else ())
     for key in sorted(document):
-        if key not in ("caps", "checkpoints", "floor", "version"):
+        if key not in known:
             problems.append("settings have an unknown entry %s, which is ignored"
                             % declarations._shown(key))
     checkpoints = {}
@@ -114,7 +136,24 @@ def load(store):
             problems.append("settings cap %s must be an integer; its default applies" % name)
         else:
             caps[name] = value
-    return Settings(checkpoints, problems, caps)
+    levels, levels_blocked = {}, False
+    if "levels" in document and version == 2:
+        given = document["levels"]
+        if not isinstance(given, dict):
+            problems.append("settings 'levels' is not an object; every key reads as block")
+            levels_blocked = True
+            given = {}
+        for key in sorted(given):
+            value = given[key]
+            if len(key) > MAX_KEY or not _KEY_RE.match(key):
+                problems.append("settings name a level key that is not valid: %s" % declarations._shown(key))
+            elif not isinstance(value, str) or value not in LEVELS:
+                problems.append("settings level for %s must be one of %s; it reads as block"
+                                % (declarations._shown(key), ", ".join(LEVELS)))
+                levels[key] = BLOCK
+            else:
+                levels[key] = value
+    return Settings(checkpoints, problems, caps, levels, levels_blocked)
 
 
 def effective(loaded, checkpoints, caps):
@@ -138,6 +177,14 @@ def effective(loaded, checkpoints, caps):
             values[name] = STOP
             notes.append("settings set the checkpoint %s to delegate; delegation has no effect for it, so it stops"
                          % declarations._shown(name))
+    levels = {}
+    for name in checkpoints:
+        levels[name] = _level(loaded, name, values, notes)
+        values[name] = DELEGATE if levels[name] == DELEGATED else STOP
+    for name in sorted(loaded.levels):
+        if name not in declared:
+            notes.append("settings set a level for a key this version does not know: %s; it is ignored"
+                         % declarations._shown(name))
     known = {cap.name for cap in caps}
     for name in sorted(loaded.caps):
         if name not in known:
@@ -154,7 +201,34 @@ def effective(loaded, checkpoints, caps):
             numbers[cap.name] = cap.default
             notes.append("settings cap %s is %s; it must be from 1 to %d, so the default %d applies"
                          % (cap.name, given if abs(given) < 10 ** 12 else "out of range", cap.ceiling, cap.default))
-    return Effective(values, numbers, notes)
+    return Effective(values, numbers, notes, levels)
+
+
+def _level(loaded, name, checkpoint_values, notes):
+    """The level of the declared checkpoint ``name``: the stricter of its checkpoint reading and its table entry.
+
+    A checkpoint set in the file reads ``stop`` as block and ``delegate`` as delegated; the table entry is the
+    owner's level. Only block, and delegated for ``approve-plan``, are offered here; any other level reads as
+    block with a note. With neither set the key reads as block.
+    """
+    given = []
+    if name in loaded.checkpoints:
+        given.append(DELEGATED if checkpoint_values[name] == DELEGATE else BLOCK)
+    entry = BLOCK if loaded.levels_blocked else loaded.levels.get(name)
+    if entry is not None:
+        if entry == DELEGATED and name != APPROVE_PLAN:
+            entry = BLOCK
+            notes.append("settings set the level of %s to delegated; delegation has no effect for it, so it reads as block"
+                         % declarations._shown(name))
+        elif entry in (ASK, NONE):
+            notes.append("settings set the level of %s to %s; that level is not offered for it in this version, "
+                         "so it reads as block" % (declarations._shown(name), entry))
+            entry = BLOCK
+        if given and given[0] != entry:
+            notes.append("settings give %s the checkpoint reading %s and the level %s; the stricter applies"
+                         % (declarations._shown(name), given[0], entry))
+        given.append(entry)
+    return strictest(*given) if given else BLOCK
 
 
 def initialize(store):

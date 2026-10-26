@@ -288,3 +288,25 @@ details the reviewer could not see in the owner's pastes (command text, the "1. 
 then reported tapping on the remote side only), the unreported `ask-trial-3` text and "ran" were removed, and the repository
 head and "auto mode" wording were corrected. A third round was not run on the text changed after round 2, which only records
 the owner's statement; that is for the owner to ask for.
+
+### Increment B — The levels table in the settings reader
+
+Changed: `workbench/settings.py`, `workbench/settingscmd.py`, `tests/test_settings.py`, `tests/test_settingscmd.py`. The reader
+accepts versions 1 and 2; `levels` is read only in version 2 (in version 1 it is an unknown entry, as before). `stop` and
+`delegate` read as `block` and `delegated`; a key in both takes the stricter, with a note when they differ; a bad value, a
+bad key or a `levels` that is not an object reads as `block`; `delegated` is kept for `approve-plan` only, and `ask` and
+`none` are read but clamped to `block` with a note, since no key offers them before F and G. `effective` returns a `levels`
+table and `checkpoints` follows it, so a bad entry cannot unlock delegation. `wb settings` prints a `level <key>: <level>` line
+per declared checkpoint after the cap lines. Choices made: the seed stays at version 1 (the existing seed test asserts it),
+so the owner changes `version` to 2 by hand to use `levels` (the spec says "version becomes 2"; Increment H must say how
+that happens); keys in `levels` that no declared checkpoint names are noted and ignored until the registry of C.
+
+Verification as run: tests written first and seen failing; `python3 -m unittest discover -s tests -p 'test_settings*.py'`
+(83 tests OK); `python3 -B -W error tests/run_all.py` (4530 tests in 10 roots, OK; an earlier run failed two boundary tests
+because a comment named a module, fixed); `git diff --check` clean; `python3 -m workbench check` no problems. Not run: the
+plan check after the last edit.
+
+Review: one round by the `reviewer` agent (cap 3), recommendation "no blocking findings". Applied: the key pattern now ends
+in `\Z` so a trailing newline is invalid (finding 1, with a test); a test through `planapprovals.delegating` for the unlock path
+(finding 2). Not applied: the redundant second note when a clamped entry meets a checkpoint reading (finding 3, acceptable),
+and the undeclared-key note against the spec's "refused" wording (finding 6, same effect). Finding 4 is recorded above.

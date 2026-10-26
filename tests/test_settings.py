@@ -1,10 +1,11 @@
 import json
 import os
 import tempfile
+import types
 import unittest
 
 import support
-from workbench import declarations, floor, settings, store
+from workbench import declarations, floor, planapprovals, settings, store
 from workbench.wbkit import safefs
 
 
@@ -123,7 +124,7 @@ class CheckpointTest(SettingsBase):
 
     def test_the_wrong_shape_makes_everything_stop(self):
         for document in ({"version": 1, "checkpoints": []}, {"version": 1, "checkpoints": "delegate"},
-                         {"version": 2, "checkpoints": {"a": "delegate"}},
+                         {"version": 3, "checkpoints": {"a": "delegate"}},
                          {"checkpoints": {"a": "delegate"}},
                          {"version": True, "checkpoints": {"a": "delegate"}},
                          {"version": "1", "checkpoints": {"a": "delegate"}}):
@@ -232,7 +233,7 @@ class CapsTest(SettingsBase):
                 self.assertEqual(1, len(loaded.problems))
 
     def test_a_damaged_file_uses_every_default_and_the_existing_note(self):
-        for data in (b"{", b"[]", {"version": 2, "caps": {"review-rounds": 4}}):
+        for data in (b"{", b"[]", {"version": 3, "caps": {"review-rounds": 4}}):
             with self.subTest(data=data):
                 loaded, got = self.effective(data)
                 self.assertEqual({"review-rounds": 3, "same-failure-retries": 1}, got.caps)
@@ -257,6 +258,157 @@ class CapsTest(SettingsBase):
                          json.loads(self.raw()))
 
 
+class LevelsTest(SettingsBase):
+    """The ``levels`` table of a version 2 file (docs/specs/command-permissions.md, "The table")."""
+
+    def effective(self, document=None, checkpoints=("approve-plan", "beta")):
+        if document is not None:
+            self.put(document)
+        loaded = settings.load(self.store)
+        return loaded, settings.effective(loaded, checkpoints, ())
+
+    def test_with_no_file_or_a_version_1_file_every_key_reads_as_block(self):
+        for document in (None, {"version": 1}, {"version": 1, "checkpoints": {"approve-plan": "stop"}}):
+            with self.subTest(document=document):
+                loaded, got = self.effective(document)
+                self.assertEqual({"approve-plan": "block", "beta": "block"}, got.levels)
+                self.assertEqual([], loaded.problems + got.notes)
+
+    def test_a_version_1_checkpoint_of_delegate_reads_as_delegated_for_approve_plan_only(self):
+        _, got = self.effective({"version": 1, "checkpoints": {"approve-plan": "delegate", "beta": "delegate"}})
+        self.assertEqual({"approve-plan": "delegated", "beta": "block"}, got.levels)
+        self.assertEqual({"approve-plan": "delegate", "beta": "stop"}, got.checkpoints)
+
+    def test_a_version_2_file_without_levels_loads(self):
+        loaded, got = self.effective({"version": 2, "checkpoints": {"approve-plan": "delegate"}})
+        self.assertEqual([], loaded.problems + got.notes)
+        self.assertEqual("delegated", got.levels["approve-plan"])
+
+    def test_block_is_read_in_a_version_2_table(self):
+        loaded, got = self.effective({"version": 2, "levels": {"approve-plan": "block", "beta": "block"}})
+        self.assertEqual(({"approve-plan": "block", "beta": "block"}, []), (got.levels, loaded.problems + got.notes))
+
+    def test_delegated_in_the_table_is_read_for_approve_plan_and_makes_it_delegate(self):
+        loaded, got = self.effective({"version": 2, "levels": {"approve-plan": "delegated"}})
+        self.assertEqual([], loaded.problems + got.notes)
+        self.assertEqual(("delegated", "delegate"), (got.levels["approve-plan"], got.checkpoints["approve-plan"]))
+
+    def test_delegated_for_any_other_key_reads_as_block_with_a_note(self):
+        _, got = self.effective({"version": 2, "levels": {"beta": "delegated"}})
+        self.assertEqual(("block", "stop"), (got.levels["beta"], got.checkpoints["beta"]))
+        self.assertEqual(1, len(got.notes))
+        self.assertIn("beta", got.notes[0])
+
+    def test_ask_and_none_are_read_but_not_offered_yet_so_they_read_as_block_with_a_note(self):
+        for level in ("ask", "none"):
+            with self.subTest(level=level):
+                loaded, got = self.effective({"version": 2, "levels": {"approve-plan": level}})
+                self.assertEqual([], loaded.problems)
+                self.assertEqual(("block", "stop"), (got.levels["approve-plan"], got.checkpoints["approve-plan"]))
+                self.assertEqual(1, len(got.notes))
+                self.assertIn(level, got.notes[0])
+
+    def test_a_value_that_is_not_one_of_the_four_levels_reads_as_block_with_a_note(self):
+        bad = ["BLOCK", "Ask", "allow", "", None, True, 1, ["block"], {"block": 1}, "block "]
+        for value in bad:
+            with self.subTest(value=value):
+                loaded, got = self.effective({"version": 2, "levels": {"approve-plan": value, "beta": "block"}})
+                self.assertEqual("block", got.levels["approve-plan"])
+                self.assertEqual(1, len(loaded.problems))
+                self.assertIn("approve-plan", loaded.problems[0])
+
+    def test_a_bad_value_does_not_unlock_a_delegate_checkpoint(self):
+        loaded, got = self.effective({"version": 2, "checkpoints": {"approve-plan": "delegate"},
+                                      "levels": {"approve-plan": "nonsense"}})
+        self.assertEqual(("block", "stop"), (got.levels["approve-plan"], got.checkpoints["approve-plan"]))
+
+    def test_levels_that_are_not_an_object_make_every_key_block(self):
+        for value in ([], "block", None, 3):
+            with self.subTest(value=value):
+                loaded, got = self.effective({"version": 2, "checkpoints": {"approve-plan": "delegate"},
+                                              "levels": value})
+                self.assertEqual({"approve-plan": "block", "beta": "block"}, got.levels)
+                self.assertEqual("stop", got.checkpoints["approve-plan"])
+                self.assertEqual(1, len(loaded.problems))
+
+    def test_a_duplicate_key_damages_the_file_so_every_key_blocks(self):
+        for data in (b'{"version": 2, "levels": {"beta": "block", "beta": "block"}}',
+                     b'{"version": 2, "checkpoints": {"approve-plan": "delegate"}, "levels": {}, "levels": {}}'):
+            with self.subTest(data=data):
+                loaded, got = self.effective(data)
+                self.assertEqual({"approve-plan": "block", "beta": "block"}, got.levels)
+                self.assertEqual("stop", got.checkpoints["approve-plan"])
+                self.assertIn("damaged", loaded.problems[0])
+
+    def test_a_damaged_file_and_an_unsupported_version_read_every_key_as_block(self):
+        for data in (b"{ not json", {"version": 3, "levels": {"approve-plan": "delegated"}},
+                     {"version": True, "levels": {"approve-plan": "delegated"}}):
+            with self.subTest(data=data):
+                loaded, got = self.effective(data)
+                self.assertEqual({"approve-plan": "block", "beta": "block"}, got.levels)
+                self.assertEqual("stop", got.checkpoints["approve-plan"])
+                self.assertTrue(loaded.problems)
+
+    def test_a_version_1_file_does_not_read_levels(self):
+        loaded, got = self.effective({"version": 1, "levels": {"approve-plan": "delegated"}})
+        self.assertEqual(("block", "stop"), (got.levels["approve-plan"], got.checkpoints["approve-plan"]))
+        self.assertEqual(1, len(loaded.problems))
+        self.assertIn("levels", loaded.problems[0])
+
+    def test_a_key_in_both_takes_the_stricter_and_the_difference_is_noted(self):
+        cases = (("delegate", "block", "block"), ("stop", "delegated", "block"), ("delegate", "delegated", "delegated"),
+                 ("stop", "block", "block"))
+        for checkpoint, level, want in cases:
+            with self.subTest(checkpoint=checkpoint, level=level):
+                loaded, got = self.effective({"version": 2, "checkpoints": {"approve-plan": checkpoint},
+                                              "levels": {"approve-plan": level}})
+                self.assertEqual(want, got.levels["approve-plan"])
+                self.assertEqual("delegate" if want == "delegated" else "stop", got.checkpoints["approve-plan"])
+                self.assertEqual([], loaded.problems)
+                differs = {"delegate": "delegated", "stop": "block"}[checkpoint] != level
+                self.assertEqual(1 if differs else 0, len(got.notes), got.notes)
+
+    def test_a_key_the_module_does_not_declare_is_noted_and_ignored(self):
+        loaded, got = self.effective({"version": 2, "levels": {"wb install": "block", "nope": "block"}})
+        self.assertEqual({"approve-plan": "block", "beta": "block"}, got.levels)
+        self.assertEqual(2, len(got.notes))
+
+    def test_an_invalid_key_is_reported_escaped_and_ignored(self):
+        loaded, got = self.effective({"version": 2, "levels": {"Bad Key\x1b[31m": "block", "x" * 200: "block"}})
+        self.assertEqual(2, len(loaded.problems))
+        for text in loaded.problems:
+            self.assertNotIn("\x1b", text)
+
+    def test_a_key_with_a_trailing_newline_is_not_valid(self):
+        loaded, _ = self.effective({"version": 2, "levels": {"approve-plan\n": "delegated"}})
+        self.assertEqual(1, len(loaded.problems))
+
+    def delegating(self, document):
+        self.put(document)
+        return planapprovals.delegating(self.store, types.SimpleNamespace(checkpoints=("approve-plan",)))
+
+    def test_only_a_sound_delegated_reading_makes_the_plan_approval_delegate(self):
+        self.assertTrue(self.delegating({"version": 1, "checkpoints": {"approve-plan": "delegate"}}))
+        self.assertTrue(self.delegating({"version": 2, "levels": {"approve-plan": "delegated"}}))
+        self.assertTrue(self.delegating({"version": 2, "checkpoints": {"approve-plan": "delegate"},
+                                         "levels": {"approve-plan": "delegated"}}))
+        for level in ("block", "ask", "none", "DELEGATED", "", None, True, ["delegated"]):
+            with self.subTest(level=level):
+                self.assertFalse(self.delegating({"version": 2, "checkpoints": {"approve-plan": "delegate"},
+                                                  "levels": {"approve-plan": level}}))
+        for levels in ([], "delegated", None):
+            with self.subTest(levels=levels):
+                self.assertFalse(self.delegating({"version": 2, "checkpoints": {"approve-plan": "delegate"},
+                                                  "levels": levels}))
+
+    def test_the_table_cannot_make_a_key_less_strict_than_its_default(self):
+        for level in ("ask", "none", "delegated"):
+            with self.subTest(level=level):
+                _, got = self.effective({"version": 2, "levels": {"beta": level, "approve-plan": level}})
+                self.assertEqual("block", got.levels["beta"])
+                self.assertEqual("stop", got.checkpoints["beta"])
+
+
 class FloorIsNotInTheFileTest(SettingsBase):
     # Structural, not behavioural: effective_stops takes nothing from the file, which
     # test_floor checks by its imports. These tests keep that true if a caller is added,
@@ -264,7 +416,7 @@ class FloorIsNotInTheFileTest(SettingsBase):
     def test_the_loaded_settings_expose_no_stops(self):
         settings.initialize(self.store)
         loaded = settings.load(self.store)
-        self.assertEqual(set(loaded._fields), {"checkpoints", "problems", "caps"})
+        self.assertEqual(set(loaded._fields), {"checkpoints", "problems", "caps", "levels", "levels_blocked"})
         self.assertFalse(any("stop" in name.lower() and name != "checkpoint"
                              for name in dir(loaded) if not name.startswith("_")))
         self.assertNotIn("floor", loaded.checkpoints)

@@ -16,7 +16,8 @@ from workbench import approvalcmd, cli, commands, manifest, rules, settingscmd
 
 CHECKPOINTS = ["approve-plan", "beta"]
 CAPS = [{"name": "rounds", "default": 3, "ceiling": 5}, {"name": "tries", "default": 1, "ceiling": 2}]
-DEFAULTS = "checkpoint approve-plan: stop\ncheckpoint beta: stop\ncap rounds: 3\ncap tries: 1\n"
+CHECKPOINT_LINES = "checkpoint approve-plan: stop\ncheckpoint beta: stop\n"
+DEFAULTS = CHECKPOINT_LINES + "cap rounds: 3\ncap tries: 1\nlevel approve-plan: block\nlevel beta: block\n"
 
 
 def process_module(**fields):
@@ -79,7 +80,8 @@ class Printed(Settings):
 
     def test_the_owners_values_apply(self):
         self.owner({"version": 1, "checkpoints": {"approve-plan": "delegate"}, "caps": {"rounds": 5, "tries": 2}})
-        self.assertEqual((0, "checkpoint approve-plan: delegate\ncheckpoint beta: stop\ncap rounds: 5\ncap tries: 2\n", ""),
+        self.assertEqual((0, "checkpoint approve-plan: delegate\ncheckpoint beta: stop\ncap rounds: 5\ncap tries: 2\n"
+                                "level approve-plan: delegated\nlevel beta: block\n", ""),
                          self.settings())
 
     def test_delegate_takes_effect_for_approve_plan_only(self):
@@ -115,7 +117,7 @@ class Printed(Settings):
         self.assertIn("settings: settings set a cap the process module does not declare: other", out)
 
     def test_a_damaged_file_prints_every_default_and_the_problem(self):
-        for data in (b"{", b'{"version": 1, "caps": 2.5}', b'{"version": 2}', b"[]"):
+        for data in (b"{", b'{"version": 1, "caps": 2.5}', b'{"version": 3}', b"[]"):
             with self.subTest(data):
                 self.guarded.write("settings", data)
                 code, out, err = self.settings()
@@ -131,13 +133,53 @@ class Printed(Settings):
         self.assertTrue(out.startswith(DEFAULTS), out)
         self.assertEqual(2, out.count("settings: "), out)
 
+    def test_a_level_line_is_printed_for_every_declared_key_after_the_caps(self):
+        self.owner({"version": 2, "levels": {"approve-plan": "delegated"}})
+        self.assertEqual((0, "checkpoint approve-plan: delegate\ncheckpoint beta: stop\ncap rounds: 3\ncap tries: 1\n"
+                             "level approve-plan: delegated\nlevel beta: block\n", ""), self.settings())
+
+    def test_the_checkpoint_lines_are_the_same_with_and_without_a_table(self):
+        _, plain, _ = self.settings()
+        self.owner({"version": 2, "levels": {"beta": "block"}})
+        _, with_table, _ = self.settings()
+        self.assertTrue(plain.startswith(CHECKPOINT_LINES) and with_table.startswith(CHECKPOINT_LINES))
+
+    def test_a_key_in_both_takes_the_stricter_and_says_so(self):
+        self.owner({"version": 2, "checkpoints": {"approve-plan": "delegate"}, "levels": {"approve-plan": "block"}})
+        code, out, err = self.settings()
+        self.assertEqual((0, ""), (code, err))
+        self.assertIn("level approve-plan: block\n", out)
+        self.assertEqual(1, out.count("settings: "), out)
+
+    def test_a_level_that_is_not_offered_yet_reads_as_block_and_says_so(self):
+        self.owner({"version": 2, "levels": {"beta": "ask"}})
+        code, out, err = self.settings()
+        self.assertEqual((0, ""), (code, err))
+        self.assertTrue(out.startswith(DEFAULTS), out)
+        self.assertEqual(1, out.count("settings: "), out)
+
+    def test_a_damaged_levels_table_prints_block_and_the_problem(self):
+        self.owner({"version": 2, "checkpoints": {"approve-plan": "delegate"}, "levels": ["x"]})
+        code, out, err = self.settings()
+        self.assertEqual((0, ""), (code, err))
+        self.assertIn("checkpoint approve-plan: stop\n", out)
+        self.assertIn("level approve-plan: block\n", out)
+        self.assertIn("settings: ", out)
+
+    def test_a_version_1_file_prints_the_same_checkpoint_lines_as_before(self):
+        self.owner({"version": 1, "checkpoints": {"approve-plan": "delegate"}})
+        code, out, _ = self.settings()
+        self.assertEqual(0, code)
+        self.assertTrue(out.startswith("checkpoint approve-plan: delegate\ncheckpoint beta: stop\n"), out)
+
 
 class OtherModules(Settings):
     INSTALL = False
 
     def test_the_declaration_order_is_kept(self):
         self.use(checkpoints=["zed", "ant"], caps=CAPS[::-1])
-        self.assertEqual((0, "checkpoint zed: stop\ncheckpoint ant: stop\ncap tries: 1\ncap rounds: 3\n", ""),
+        self.assertEqual((0, "checkpoint zed: stop\ncheckpoint ant: stop\ncap tries: 1\ncap rounds: 3\n"
+                          "level zed: block\nlevel ant: block\n", ""),
                          self.settings())
 
     def test_a_module_that_declares_none_prints_nothing(self):

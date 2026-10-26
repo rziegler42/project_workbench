@@ -6,6 +6,7 @@ the same reading ``approve-plan`` uses), the owner's personal settings from the 
 
     checkpoint <name>: stop|delegate     one per declared checkpoint, in declaration order
     cap <name>: <n>                      one per declared cap, in declaration order
+    level <key>: <level>                 one per declared checkpoint, in declaration order
     settings: <text>                     one per problem in the owner's settings
 
 Nothing is started, written or approved here; the owner's settings are data. Exit 0 printed, 1 refused (a
@@ -50,6 +51,8 @@ def run(guarded, tokens, out, err, *, cwd=None):
         out.write("checkpoint %s: %s\n" % (name, effective.checkpoints[name]))
     for cap in module.caps:
         out.write("cap %s: %d\n" % (cap.name, effective.caps[cap.name]))
+    for name in module.checkpoints:
+        out.write("level %s: %s\n" % (name, effective.levels[name]))
     for text in list(loaded.problems) + list(effective.notes):
         out.write("settings: %s\n" % display.clean(text))
     return 0
