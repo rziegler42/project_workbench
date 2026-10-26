@@ -1,6 +1,6 @@
 # Command permission levels
 
-Status: Proposed
+Status: Approved
 Created: 2026-10-26
 Candidate: none (an owner request that implements the accepted decision `2026-10-26-per-command-permission-levels`; no roadmap candidate names it yet)
 Specs: command-permissions, trust-and-approval, code-work, installer-interface, harness-modules, review-engine
@@ -253,8 +253,9 @@ shipped defaults to `ask` (R2-F2), that the plan and spec disagreed about `none`
 was stale (R2-F4). Round 3 found that an append-only log written before the action cannot hold an outcome (R3-F1) and that
 `accept-decision` was given an `ask` that nothing can serve (R3-F2). All nine were applied. R2-F4 was applied by removing
 a stale step, and its claim that the status-line change breaks policy was not accepted; that stays with the owner. The
-text added for R3-F1 and R3-F2, and the spec edits made for R2-F3 and R3-F1, were not reviewed again. The owner has not
-approved the plan.
+text added for R3-F1 and R3-F2, and the spec edits made for R2-F3 and R3-F1, were not reviewed again. The owner approved
+the plan on 2026-10-26 with `wb approve-plan`, knowing that the review did not converge and that those edits were not
+reviewed again.
 
 ## Deferred work
 
