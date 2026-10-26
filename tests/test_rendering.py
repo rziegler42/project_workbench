@@ -8,11 +8,12 @@ them to a few keys through the registry's table of offers."""
 import hashlib
 import json
 import os
+import shutil
 import unittest
 import unittest.mock
 
-from tests import test_attach
-from workbench import levels, rendering, rules, settings
+from tests import support_harness, test_attach
+from workbench import harnessplan, levels, rendering, rules, settings
 
 SETTINGS_FILE = ".fixture/settings.local.json"
 
@@ -20,11 +21,18 @@ SETTINGS_FILE = ".fixture/settings.local.json"
 class Rendered(test_attach.Base):
     OFFERS = {"wb pin": ("ask", "none"), "wb recover": ("ask", "none"), "approve-plan": ("delegated", "ask")}
 
+    LAYOUT = None
+
     def setUp(self):
         super().setUp()
         offers = unittest.mock.patch.dict(levels._OFFERS, self.OFFERS)
         offers.start()
         self.addCleanup(offers.stop)
+        # By default the harness describes the command gate, so a relaxed key can be rendered.
+        shutil.rmtree(self.dist)
+        self.dist = support_harness.distribution(
+            os.path.join(self.root, "distribution"), layout=self.LAYOUT or support_harness.gated_layout(),
+            provides=support_harness.GATED_PROVIDES)
 
     def table(self, **levels_table):
         document = {"version": 2, "checkpoints": {}, "floor": [], "levels": {
@@ -94,8 +102,9 @@ class RulesTest(Rendered):
         self.assertIn("Edit(//%s/**)" % store, changed["deny"])
         self.assertIn("Bash(git push --force*)", changed["ask"])
         self.assertIn("Bash(wb install)", changed["deny"])
+        # Only the wb spellings of the relaxed keys leave the deny list; the interpreter spellings stay denied.
         self.assertEqual(sorted(set(plain["deny"]) - set(changed["deny"])),
-                         sorted(r for r in plain["deny"] if " pin" in r or " recover" in r))
+                         sorted(r for r in plain["deny"] if r.startswith(("Bash(wb pin", "Bash(wb recover"))))
         self.assertNotIn("allow", self.permissions())
 
 
@@ -104,7 +113,8 @@ class RecordTest(Rendered):
         self.attached(wb_pin="ask", wb_recover="none")
         record = self.record()
         data = self.read(SETTINGS_FILE)
-        self.assertEqual(1, record["format"])
+        self.assertEqual(2, record["format"])
+        self.assertTrue(record["gate"])
         self.assertTrue(record["permissions"])
         self.assertEqual("fixture", record["harness"])
         self.assertEqual(SETTINGS_FILE, record["file"])
@@ -260,6 +270,31 @@ class DriftTest(Rendered):
         code, text = self.check()
         self.assertNotIn("rendering record", text)
 
+    def test_check_is_quiet_about_a_shared_settings_file_created_later_when_no_key_is_relaxed(self):
+        self.attached()
+        with open(os.path.join(self.place, ".fixture", "settings.json"), "w") as handle:
+            handle.write("{}\n")
+        code, text = self.check()
+        self.assertNotIn("rendering record", text)
+
+    def test_check_reports_a_shared_settings_file_created_later_when_a_key_is_relaxed(self):
+        self.attached(wb_pin="ask")
+        with open(os.path.join(self.place, ".fixture", "settings.json"), "w") as handle:
+            handle.write("{}\n")
+        code, text = self.check()
+        self.assertEqual(1, code, text)
+        self.assertIn(".fixture/settings.json: was created after the rendering record", text)
+
+    def test_check_says_when_a_relaxed_key_has_no_gate(self):
+        self.ready()
+        os.makedirs(os.path.join(self.place, ".fixture"), exist_ok=True)
+        os.mkdir(os.path.join(self.place, ".fixture", "settings.json"))
+        self.table(wb_pin="ask")
+        self.assertEqual(0, self.attach()[0])
+        code, text = self.check()
+        self.assertEqual(1, code, text)
+        self.assertIn("rendered at ask or none but no command gate was recorded", text)
+
     def test_check_reports_a_harness_file_that_differs_from_the_record(self):
         self.attached(wb_pin="ask")
         with open(os.path.join(self.place, SETTINGS_FILE), "ab") as handle:
@@ -267,6 +302,213 @@ class DriftTest(Rendered):
         code, text = self.check()
         self.assertEqual(1, code, text)
         self.assertIn("differs from the rendering record", text)
+
+
+class GateTest(Rendered):
+    def hooks(self):
+        return json.loads(self.read(SETTINGS_FILE)).get("hooks")
+
+    def test_no_gate_is_rendered_when_no_key_is_relaxed(self):
+        self.attached()
+        self.assertIsNone(self.hooks())
+        self.assertFalse(self.record()["gate"])
+
+    def test_a_relaxed_key_renders_the_bash_hook_and_the_record_says_so(self):
+        self.attached(wb_pin="ask")
+        entry, = self.hooks()["PreToolUse"]
+        self.assertEqual("Bash", entry["matcher"])
+        self.assertEqual([{"type": "command", "command": "wb gate-command fixture || exit 2", "timeout": 60}],
+                         entry["hooks"])
+        self.assertTrue(self.record()["gate"])
+
+    def test_none_renders_the_gate_too(self):
+        self.attached(wb_recover="none")
+        self.assertTrue(self.record()["gate"])
+        self.assertEqual(1, len(self.hooks()["PreToolUse"]))
+
+    def test_the_ask_rule_names_the_wb_forms_only_and_the_interpreter_forms_stay_denied(self):
+        self.attached(wb_pin="ask")
+        permissions = self.permissions()
+        store = os.path.realpath(self.store_root)
+        for rule in ("Bash(wb pin)", "Bash(wb pin *)", "Bash(%s/bin/wb pin)" % store):
+            self.assertIn(rule, permissions["ask"], rule)
+        for spelling in ("python3 -m workbench", "python3 -B -m workbench", "python -m workbench"):
+            for rule in ("Bash(%s pin)" % spelling, "Bash(%s pin *)" % spelling):
+                self.assertIn(rule, permissions["deny"], rule)
+                self.assertNotIn(rule, permissions["ask"], rule)
+
+    def test_a_harness_that_cannot_describe_the_gate_keeps_the_keys_denied(self):
+        shutil.rmtree(self.dist)
+        self.dist = support_harness.distribution(os.path.join(self.root, "distribution"))
+        self.attached(wb_pin="ask", wb_recover="none")
+        permissions = self.permissions()
+        self.assertIn("Bash(wb pin)", permissions["deny"])
+        self.assertIn("Bash(wb recover)", permissions["deny"])
+        self.assertNotIn("hooks", json.loads(self.read(SETTINGS_FILE)))
+        self.assertFalse(self.record()["gate"])
+        self.assertEqual("block", self.level("wb pin"))
+        self.assertEqual("deny", self.record()["keys"]["wb pin"])
+
+    def test_both_settings_files_are_protected_when_the_gate_is_rendered(self):
+        self.attached(wb_pin="ask")
+        deny = self.permissions()["deny"]
+        for path in (".fixture/settings.local.json", ".fixture/settings.json"):
+            self.assertIn("Edit(%s)" % path, deny)
+            self.assertIn("Edit(%s)" % ("**/" + path), deny)
+            self.assertIn("Edit(//%s/%s)" % (os.path.realpath(self.place).lstrip("/"), path), deny)
+
+    def test_the_settings_files_are_not_protected_when_no_hook_is_rendered(self):
+        self.attached()
+        self.assertNotIn("Edit(.fixture/settings.json)", self.permissions()["deny"])
+
+    def test_the_record_hashes_the_shared_settings_file(self):
+        self.attached(wb_pin="ask")
+        self.assertEqual({"path": ".fixture/settings.json", "hash": None}, self.record()["shared"])
+
+    def test_both_hooks_share_the_event_when_both_are_rendered(self):
+        layout = support_harness.gated_layout()
+        data = harnessplan.render_permissions(
+            [], layout, os.path.realpath(self.store_root), os.path.realpath(self.home), hook_for="fixture",
+            command_gate_for="fixture", root=os.path.realpath(self.place))
+        entries = json.loads(data)["hooks"]["PreToolUse"]
+        self.assertEqual(["Edit", "Bash"], [entry["matcher"] for entry in entries])
+
+
+class GateCommandTest(Rendered):
+    """``wb gate-command <harness>`` as the rendered hook runs it, in an attached project."""
+
+    def gate(self, command, harness="fixture", cwd=None, tool="Bash", field="command"):
+        import io
+        from workbench import cli
+        payload = {"cwd": cwd or os.path.realpath(self.place), "tool_name": tool, "tool_input": {field: command}}
+        err = io.StringIO()
+        previous = os.getcwd()
+        os.chdir(os.path.realpath(self.place))
+        try:
+            code = cli.main(["gate-command", harness], io.StringIO(), err, store_root=self.store_root,
+                            distribution=self.dist, stdin=io.StringIO(json.dumps(payload)))
+        finally:
+            os.chdir(previous)
+        return code, err.getvalue()
+
+    def test_a_relaxed_key_blocks_a_wrapper_and_allows_the_exact_form(self):
+        self.attached(wb_pin="ask")
+        self.assertEqual((0, ""), self.gate("wb check"))
+        self.assertEqual((0, ""), self.gate("wb pin docs/plans/a.md"))
+        code, err = self.gate("bash -c 'wb pin docs/plans/a.md'")
+        self.assertEqual(2, code)
+        self.assertTrue(err.startswith("refused: "), err)
+
+    def test_with_every_key_at_block_nothing_is_stopped(self):
+        self.attached()
+        self.assertEqual((0, ""), self.gate("bash -c 'wb pin x'"))
+
+    def test_a_table_set_back_to_block_after_attach_still_guards_what_was_rendered(self):
+        """The harness file keeps the ask rule and no deny until it is attached again (review finding F2)."""
+        self.attached(wb_pin="ask")
+        self.table()
+        code, err = self.gate("bash -c 'wb pin x'")
+        self.assertEqual(2, code, err)
+        self.assertEqual((0, ""), self.gate("wb check"))
+
+    def test_a_key_relaxed_in_the_table_after_attach_is_guarded_too(self):
+        self.attached(wb_pin="ask")
+        self.table(wb_pin="ask", wb_recover="ask")
+        self.assertEqual(2, self.gate("bash -c 'wb recover x'")[0])
+        self.assertEqual(2, self.gate("bash -c 'wb pin x'")[0])
+
+    def test_an_unknown_harness_a_wrong_tool_and_a_wrong_field_are_blocks(self):
+        self.attached(wb_pin="ask")
+        self.assertEqual(2, self.gate("wb check", harness="nobody")[0])
+        self.assertEqual(2, self.gate("wb check", tool="Write")[0])
+        self.assertEqual(2, self.gate("wb check", field="cmd")[0])
+
+    def test_a_gate_that_could_not_be_recorded_still_guards_what_was_rendered(self):
+        """The shared path was unreadable at attach, so the record says no gate; the file still holds the hook and the ask rule."""
+        self.ready()
+        os.makedirs(os.path.join(self.place, ".fixture"), exist_ok=True)
+        os.mkdir(os.path.join(self.place, ".fixture", "settings.json"))
+        self.table(wb_pin="ask")
+        self.assertEqual(0, self.attach()[0])
+        self.table()
+        self.assertEqual(2, self.gate("bash -c 'wb pin x'")[0])
+
+    def test_a_directory_that_is_no_project_is_a_block(self):
+        self.attached(wb_pin="ask")
+        self.assertEqual(2, self.gate("wb check", cwd=self.outside)[0])
+
+    def test_the_command_is_agent_safe_and_not_owner_run(self):
+        self.assertIn("gate-command", rules.AGENT_SAFE)
+        self.assertNotIn("gate-command", rules.OWNER_RUN)
+
+
+class GateEffectiveLevelTest(Rendered):
+    def test_a_symbolic_link_or_a_directory_at_the_shared_path_reads_as_block(self):
+        """Absent at attach is not the same as unreadable later (review finding F3)."""
+        self.attached(wb_pin="ask")
+        self.assertEqual("ask", self.level("wb pin"))
+        shared = os.path.join(self.place, ".fixture", "settings.json")
+        target = os.path.join(self.outside, "elsewhere.json")
+        with open(target, "w") as handle:
+            handle.write("{}\n")
+        os.symlink(target, shared)
+        self.assertEqual("block", self.level("wb pin"))
+        os.unlink(shared)
+        self.assertEqual("ask", self.level("wb pin"))
+        os.mkdir(shared)
+        self.assertEqual("block", self.level("wb pin"))
+
+    def test_a_shared_path_that_cannot_be_read_at_attach_does_not_render_the_gate(self):
+        self.ready()
+        os.makedirs(os.path.join(self.place, ".fixture"), exist_ok=True)
+        os.mkdir(os.path.join(self.place, ".fixture", "settings.json"))
+        self.table(wb_pin="ask")
+        self.assertEqual(0, self.attach()[0])
+        self.assertFalse(self.record()["gate"])
+        self.assertEqual("block", self.level("wb pin"))
+
+    def test_a_record_without_the_gate_reads_as_block(self):
+        self.attached(wb_pin="ask")
+        record = self.record()
+        record["gate"] = False
+        self.guarded.write(rendering.RECORD % self.project_id, json.dumps(record).encode())
+        self.assertEqual("block", self.level("wb pin"))
+
+    def test_a_record_with_no_gate_field_is_damaged_and_reads_as_block(self):
+        self.attached(wb_pin="ask")
+        record = self.record()
+        del record["gate"]
+        self.guarded.write(rendering.RECORD % self.project_id, json.dumps(record).encode())
+        self.assertEqual("block", self.level("wb pin"))
+
+    def test_a_shared_settings_file_created_after_attach_reads_as_block(self):
+        self.attached(wb_pin="ask")
+        self.assertEqual("ask", self.level("wb pin"))
+        with open(os.path.join(self.place, ".fixture", "settings.json"), "w") as handle:
+            handle.write('{"disableAllHooks": true}\n')
+        self.assertEqual("block", self.level("wb pin"))
+
+    def test_a_shared_settings_file_that_was_there_at_attach_and_changed_reads_as_block(self):
+        self.ready()
+        os.makedirs(os.path.join(self.place, ".fixture"), exist_ok=True)
+        path = os.path.join(self.place, ".fixture", "settings.json")
+        with open(path, "w") as handle:
+            handle.write("{}\n")
+        self.table(wb_pin="ask")
+        self.assertEqual(0, self.attach()[0])
+        self.assertIsNotNone(self.record()["shared"]["hash"])
+        self.assertEqual("ask", self.level("wb pin"))
+        with open(path, "w") as handle:
+            handle.write('{"disableAllHooks": true}\n')
+        self.assertEqual("block", self.level("wb pin"))
+
+    def test_the_settings_file_edited_to_remove_the_hook_reads_as_block(self):
+        self.attached(wb_pin="ask")
+        document = json.loads(self.read(SETTINGS_FILE))
+        del document["hooks"]
+        with open(os.path.join(self.place, SETTINGS_FILE), "w") as handle:
+            json.dump(document, handle)
+        self.assertEqual("block", self.level("wb pin"))
 
 
 if __name__ == "__main__":

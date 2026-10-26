@@ -353,7 +353,7 @@ def _listed(err, prefix, items):
         err.write("%s: and %d more\n" % (prefix, len(items) - LISTED))
 
 
-def _rendering_drift(guarded, writer):
+def _rendering_drift(guarded, writer, root):
     """Problems for the harness's permissions file when it differs from the record attach kept in the guarded store
     (``rendering.py``). No record, or a project that cannot be read here, gives none: the other checks say so."""
     try:
@@ -363,14 +363,29 @@ def _rendering_drift(guarded, writer):
     record = rendering.read(guarded, project)
     if record is None or record["file"] is None:
         return []
+    problems = []
     try:
         state = writer.read_file(record["file"])
     except safefs.SafeFsError:
-        return []  # the manifest check already says the file cannot be read
-    if state is None or hashlib.sha256(state.data).hexdigest() == record["file_hash"]:
-        return []  # a missing file is already reported as missing
-    return ["%s: differs from the rendering record attach kept in the guarded store, so a key at ask or none reads "
-            "as block" % _shown(record["file"])]
+        state = None  # the manifest check already says the file cannot be read
+    if state is not None and hashlib.sha256(state.data).hexdigest() != record["file_hash"]:
+        problems.append("%s: differs from the rendering record attach kept in the guarded store, so a key at ask or "
+                        "none reads as block" % _shown(record["file"]))
+    if not record["gate"] and any(rule in ("ask", "none") for rule in record["keys"].values()):
+        problems.append("a key is rendered at ask or none but no command gate was recorded (the shared settings file could "
+                        "not be read as a regular file when the harness was attached), so it reads as block; remove the "
+                        "obstacle and attach again in a new clone")
+    shared = record["shared"]
+    # The shared settings file only matters while a key is relaxed: the layout tolerates it, and the harness may create it.
+    if shared["path"] is not None and record["gate"]:
+        live = rendering.live_hash(root, shared["path"])
+        if live != shared["hash"]:
+            what = ("cannot be read as a regular file" if live == rendering.UNREADABLE else
+                    "was created after the rendering record attach kept" if shared["hash"] is None else
+                    "is missing from the rendering record attach kept" if live is None else
+                    "differs from the rendering record attach kept")
+            problems.append("%s: %s, so a key at ask or none reads as block" % (_shown(shared["path"]), what))
+    return problems
 
 
 def run(guarded, command, out, err, distribution=None):
@@ -382,7 +397,7 @@ def run(guarded, command, out, err, distribution=None):
                 return 1
             writer = projectfs.Writer(held)
             report = examine(writer, distribution)
-            report = report._replace(problems=list(report.problems) + _rendering_drift(guarded, writer))
+            report = report._replace(problems=list(report.problems) + _rendering_drift(guarded, writer, held.path))
             path = held.path
         report = report._replace(modules=checks.run_all(guarded, path))
     except target.TargetError as exc:

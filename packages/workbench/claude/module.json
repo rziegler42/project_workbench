@@ -24,10 +24,12 @@
       "path": ".claude/settings.local.json", "format": "json",
       "actions": {"deny": "permissions.deny", "ask": "permissions.ask"},
       "rules": {"shell": "Bash({pattern})", "read": "Read({path})", "write": "Edit({path})"},
-      "absolute": "//"
+      "absolute": "//",
+      "shared": ".claude/settings.json"
     },
     "hooks": {
       "settings_key": "hooks", "event": "PreToolUse", "timeout": 20, "block_code": 2,
+      "command_gate": {"tool": "Bash", "field": "command", "timeout": 60},
       "targets": {"Edit": ["file_path"], "MultiEdit": ["file_path"], "NotebookEdit": ["notebook_path"],
                   "Write": ["file_path"]}
     },

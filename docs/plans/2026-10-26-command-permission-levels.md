@@ -798,3 +798,75 @@ no Claude Code behavior. Findings, not yet judged by the owner:
 
 Not done: no test, code or commit for J. The findings change the plan's J (the grammar, the probe list, whether to try the
 provenance check, and what the owner accepts in writing), so it stops here to be revised and re-approved; nothing was widened.
+
+Committed as `cff4de4` (Revision 3, the plan approved again by the owner).
+
+Steps 2 and 3, 2026-10-26: J's code, written after the revision was approved. Changed: a new `workbench/command_gate.py` (the
+judging and the `gate-command` protocol: the exact grammar on raw text, the folded and skeleton word match, the decoding of
+static `$'...'` strings as bash decodes them, the `$'`/`$"` letters-in-order rule, the `delegate-approve-plan` exemption, a
+64 KiB bound on the command, every failure a block); `workbench/layout.py` (the optional `hooks.command_gate` with a tool, a
+field and a timeout above the gate's 10-second deadline, and the optional `local_settings.shared`; the new facts
+`command_gate` and `shared_settings`); `workbench/harnessplan.py` (`render_command_gate`; with either hook the settings files
+are protected, now the shared one too; both hooks share one event list); `workbench/rendering.py` (record format 2: `gate` and
+`shared`; at `ask` and `none` only the `wb` spellings are opened or asked and the interpreter spellings stay denied; a harness
+that cannot render the gate keeps every key denied; `ask` and `none` read `block` without `gate: true` or when the shared
+settings file changed, appeared or vanished); `workbench/harnessstage.py`, `workbench/attach.py` (the shared file's hash is
+taken when the record is written); `workbench/check.py` (the shared file in the drift report); `workbench/cli.py` and
+`workbench/rules.py` (the agent-safe `gate-command`); tests `tests/test_command_gate.py` (new, 22), `tests/test_rendering.py`
+(47), `tests/test_layout.py`, `tests/test_approve_levels.py`, `tests/support_harness.py`, and the Claude module's tests. The
+Claude module's own layout (`packages/workbench/claude/module.json`) gets `hooks.command_gate` (Bash, `command`, 60 seconds) and
+`local_settings.shared` (`.claude/settings.json`) as the last edit; it changes the module's hash, so its shipped approvals go
+stale until the owner runs `release-approvals`, and until then the project's own edit gate refuses every file edit (the
+harness is no longer a known first-party harness).
+
+Choices made: the gate reads the table now, from the owner's settings and the installed modules, not from the record; a
+harness whose layout lacks the command gate keeps every key denied (no key is relaxed); the record is format 2 and an older
+record reads as damaged; `none` allows only the exact grammar; the unit tests pin the stated limits (a word built from
+variables and a script file pass).
+
+Verification as run so far: the tests were written first and failed; `python3 -B -W error tests/run_all.py` before the Claude
+module edit: 4700 tests in 10 roots, with only the four tests that read the module's new layout failing. Not run: the suite
+after the edit and the owner's `release-approvals`; the probe (step 4); the review.
+
+After the `release-approvals` runs (the first staled by my edits to the Claude module's test files, which are part of its hashed
+tree; I had made those with a script and not the Edit tool, and the edit gate refused the next Edit until the owner released), the
+module's layout was edited and released again, and the four obsolete shipped records (two tracked, two untracked intermediates)
+were removed with `wb run safe-git remove` after the owner approved that exact list. The final records are
+`206cdb4b2026…` (package) and `51d13076423d…` (the Claude module).
+
+Review, round 1: the `reviewer` agent (cap 3), "blocking findings" (F1, F2, F3); it ran nothing. Applied: F1, a stray `$'` ahead of
+the real one hid a hex-escaped word, so the decoder now tries every `$'` position and the in-order rule treats an escape
+sequence as a wildcard letter; F2, the gate guarded only what the live table relaxed, so a table set back to `block` after
+attach left the rendered `ask` rule with an open gate, and the CLI now also guards every key the record says was rendered at
+`ask` or `none`; F3, a link, a directory or an oversize file at the shared settings path read as "absent", and `live_hash` now
+returns a distinct `unreadable` value, an unreadable path at attach renders no gate, and `wb check` says so; F4, brace, glob and
+parameter forms (`? * [ { $`) now trigger the in-order rule, with `*`, `?` and `[...]` as wildcards (one more thing the text
+gate catches: a word built from variables that carry its letters). Also applied: tests for each, a test tying the layout's
+deadline constant to the gate's. F6 (the gate runs on every Bash call and a damaged store or settings file blocks them all,
+`wb check` included) is a property of the design: the recovery is the owner's terminal; Increment H documents it. Not applied: F7.
+Still not caught and now pinned by tests as the stated limit: a word whose letters are not in the text (base64, `rev`), and a
+script file.
+
+Verification as run after the fixes: `python3 -B -W error tests/run_all.py` (4711 tests in 10 roots, OK); `git diff --check`
+clean; `python3 -m workbench check` and the plan check no problems. Not run: the repeated spelling probe (step 4, the owner's);
+a second review round on the fixes.
+
+Review, round 2: the `reviewer` agent (cap 3, two rounds used), "no blocking findings"; it ran nothing. Applied: a backtick command
+substitution that splits the word was not a trigger and now is (finding 1); the in-order rule now requires the letters to fall
+within three times the word's length, so a long command that holds the letters scattered through it is not blocked by chance
+(finding 3, with a test on a long commit command); a record that says no gate was rendered but lists a key at `ask` or `none` is
+still guarded by the CLI and `wb check` now says so (finding 4, with tests). Accepted as a limit and pinned by a test (finding 2):
+a `*` can stand for any number of letters but the rule lets it stand for three, because more would block most commands with a
+glob, so `wb appr*` with a file named `approve-plan` in the directory is not seen.
+
+Verification as run after round 2: `python3 -B -W error tests/run_all.py` (4716 tests in 10 roots, OK); `git diff --check` clean;
+`python3 -m workbench check` and the plan check no problems. Not run: the repeated spelling probe (step 4, the owner's) and
+the security review of the built code (asked again before Increment H).
+
+For Increment H (documentation the command gate needs): the `wb gate-command` command and its exit codes (0 allow, 2 block); the
+layout fields `hooks.command_gate` and `local_settings.shared`; record format 2 with `gate` and `shared`; that a store, settings
+file or registry that cannot be read blocks every Bash call while a key is relaxed, `wb check` included, and the recovery is the
+owner's terminal; that "Yes, and don't ask again" writes an allow rule into the per-clone settings file, which changes its hash
+and makes the keys read `block`; that any edit under a first-party module's tree, its tests included, stales that module's
+shipped approvals and makes the edit gate refuse file edits until the owner runs `release-approvals`; and the accepted limits
+(a word whose letters are not in the text, a script file, a `*` standing for more than three letters).

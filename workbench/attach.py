@@ -266,7 +266,7 @@ def record_rendering(guarded, prepared):
     """Write the rendering record to the guarded store. It comes before the files: if a file is then not written, the
     record names a hash the file does not have and ``ask`` and ``none`` read as ``block``."""
     if prepared.rendering is not None and prepared.project_id is not None:
-        rendering.write(guarded, prepared.project_id, prepared.rendering)
+        rendering.write(guarded, prepared.project_id, rendering.with_shared_hash(prepared.rendering, prepared.path))
 
 
 def apply(writer, prepared):

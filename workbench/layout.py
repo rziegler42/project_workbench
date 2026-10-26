@@ -24,7 +24,9 @@ Keys, all optional (an absent key means ``none`` or empty):
     ``"none"``, or ``{"path", "format": "json", "actions", "rules", "absolute"}``: the per-clone
     file, the dotted JSON key that holds the ``deny`` and the ``ask`` list, a rule template for
     each tool class (``Name({pattern})`` or, for ``read`` and ``write``, ``Name({path})``), and
-    the prefix that spells an absolute path (``//`` or ``~/``).
+    the prefix that spells an absolute path (``//`` or ``~/``). It may add ``"shared"``: the harness's shared project
+    settings file (the same shape of path as ``path``, a different file), which the layout does not write; it is protected
+    and hashed because a hook or a permission placed there changes what the agent may do.
 ``hooks``
     ``"none"``, or ``{"settings_key": "<key>"}`` with, optionally, ``"targets"``: for each file-editing tool the
     harness's hook can be given, the fields of that tool's input that name a file it writes
@@ -32,6 +34,9 @@ Keys, all optional (an absent key means ``none`` or empty):
     of its own. With ``"event"`` (a word), ``"timeout"`` (seconds, 1 to 600) and ``"block_code"`` (the exit code
     the harness takes as a block, 1 to 255), all three or none, and ``targets``, the layout describes the one hook
     the installer renders, the edit gate (``harnessplan.render_hook``); its matcher is the tools of ``targets``.
+    ``"command_gate"``: ``{"tool", "field", "timeout"}``, the Bash hook the installer renders when a command is set to
+    ``ask`` or ``none`` (``command_gate.py``), with the event and block code of the hook description; the timeout, in
+    seconds, must exceed the gate's own deadline.
 ``exclude``
     The literal paths written to ``.git/info/exclude`` (a trailing ``/`` marks a directory). No
     glob, no space, nothing under ``.workbench`` and not the guarded store.
@@ -173,12 +178,15 @@ def problems(layout):
         written += _settings(settings, out)
     hooks = layout.get("hooks", "none")
     if hooks != "none":
-        if out.keys(hooks, "layout.hooks", ("settings_key", "targets") + HOOK_RENDER, ("settings_key",)):
+        if out.keys(hooks, "layout.hooks", ("settings_key", "targets", "command_gate") + HOOK_RENDER,
+                    ("settings_key",)):
             if not (isinstance(hooks["settings_key"], str) and _WORD.match(hooks["settings_key"])):
                 out.add("layout.hooks", "settings_key must be a plain word")
             if "targets" in hooks:
                 _hook_targets(hooks["targets"], out)
             _hook_render(hooks, out)
+            if "command_gate" in hooks:
+                _command_gate(hooks, out)
     hook_key = hooks["settings_key"] if isinstance(hooks, dict) \
         and isinstance(hooks.get("settings_key"), str) else None
     actions = settings.get("actions") if isinstance(settings, dict) else None
@@ -241,6 +249,29 @@ def _hook_render(hooks, out):
         value = hooks[key]
         if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= high:
             out.add(where, "%s must be a whole number from 1 to %d" % (key, high))
+
+
+GATE_DEADLINE = 10  # seconds: the deadline of ``gate_hook`` and ``command_gate``; a harness timeout must exceed it
+
+
+def _command_gate(hooks, out):
+    """The command gate: the tool whose calls it covers, the field of the input that holds the command text, and the time
+    limit in seconds. It uses the event and the block code of the hook description, so they must be given."""
+    where = "layout.hooks.command_gate"
+    if not all(key in hooks for key in HOOK_RENDER):
+        out.add(where, "command_gate needs the event, timeout and block_code of the hook description")
+        return
+    gate = hooks["command_gate"]
+    if not out.keys(gate, where, ("tool", "field", "timeout"), ("tool", "field", "timeout")):
+        return
+    if not (isinstance(gate["tool"], str) and _HOOK_TOOL.match(gate["tool"])):
+        out.add(where, "tool must be a plain tool name")
+    if not (isinstance(gate["field"], str) and _HOOK_FIELD.match(gate["field"])):
+        out.add(where, "field must be a lowercase field name")
+    value = gate["timeout"]
+    if isinstance(value, bool) or not isinstance(value, int) or not GATE_DEADLINE < value <= MAX_HOOK_TIMEOUT:
+        out.add(where, "timeout must be a whole number from %d to %d, longer than the gate's own deadline of %d seconds"
+                % (GATE_DEADLINE + 1, MAX_HOOK_TIMEOUT, GATE_DEADLINE))
 
 
 ROOT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*\.md")
@@ -383,12 +414,19 @@ def _tools(tools, where, out):
 def _settings(settings, out):
     where = "layout.local_settings"
     keys = ("path", "format", "actions", "rules", "absolute")
-    if not out.keys(settings, where, keys, keys):
+    if not out.keys(settings, where, keys + ("shared",), keys):
         return []
     folded = out.path(settings["path"], where + ".path")
     if folded and not _settings_path(settings["path"]):
         out.add(where + ".path", "must be <.directory>/<name>.json, directly inside a "
                                  "dot-directory other than .git and .workbench")
+    if "shared" in settings:
+        shared = out.path(settings["shared"], where + ".shared")
+        if shared and not _settings_path(settings["shared"]):
+            out.add(where + ".shared", "must be <.directory>/<name>.json, directly inside a "
+                                       "dot-directory other than .git and .workbench")
+        elif shared and shared == folded:
+            out.add(where + ".shared", "is the same file as the per-clone settings file")
     if settings["format"] != "json":
         out.add(where + ".format", "must be \"json\"")
     actions = settings["actions"]
@@ -523,7 +561,9 @@ def facts(layout):
     ``roots``: the top-level names the harness occupies (the root file, the first segment of each kind
     directory and of the settings file). ``directories``: those that are directories. ``generated``: each
     kind's directory, which holds files the installer generates. ``tolerated``: the declared paths.
-    ``hook_targets``: the pairs ``(tool, fields)`` of the hook's ``targets`` table, or empty.
+    ``hook_targets``: the pairs ``(tool, fields)`` of the hook's ``targets`` table, or empty. ``command_gate``:
+    ``(tool, field, timeout)`` of the command gate, or empty. ``shared_settings``: the shared project settings file the
+    layout names, or an empty string.
     ``agent_gate``: ``(edit tool names, shell tool names, scratch template)`` of a layout that describes a per-agent
     hook, or empty.
     """
@@ -549,11 +589,14 @@ def facts(layout):
     unique = lambda items: tuple(dict.fromkeys(items))
     hooks = layout.get("hooks", "none")
     targets = hooks.get("targets", {}) if isinstance(hooks, dict) else {}
+    gate = hooks.get("command_gate") if isinstance(hooks, dict) else None
     agent = layout.get("kinds", {}).get("agent", {})
     confining = "hook" in agent and "scratch" in agent
     return {"roots": unique(roots), "directories": unique(directories),
             "generated": unique(generated), "tolerated": tuple(layout.get("tolerated", [])),
             "hook_targets": tuple((tool, tuple(fields)) for tool, fields in targets.items()),
+            "command_gate": (gate["tool"], gate["field"], gate["timeout"]) if gate else (),
+            "shared_settings": settings.get("shared", "") if isinstance(settings, dict) else "",
             "agent_gate": (tuple(agent["tools"]["edit"]), tuple(agent["tools"]["shell"]), agent["scratch"])
             if confining else ()}
 

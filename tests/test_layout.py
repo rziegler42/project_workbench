@@ -59,7 +59,8 @@ class Facts(unittest.TestCase):
         self.assertEqual(layout.facts(FIXTURE), {
             "roots": ("FIXTURE.md", ".fixture"), "directories": (".fixture",),
             "generated": (".fixture/skills", ".fixture/prompts"),
-            "tolerated": (".fixture/shared.json",), "hook_targets": (), "agent_gate": ()})
+            "tolerated": (".fixture/shared.json",), "hook_targets": (), "agent_gate": (),
+            "command_gate": (), "shared_settings": ""})
 
     def test_facts_of_the_synthetic_layout_include_its_settings_directory(self):
         found = layout.facts(SYNTHETIC)
@@ -70,7 +71,7 @@ class Facts(unittest.TestCase):
 
     def test_a_layout_with_nothing_gives_empty_facts(self):
         empty = {"roots": (), "directories": (), "generated": (), "tolerated": (), "hook_targets": (),
-                 "agent_gate": ()}
+                 "agent_gate": (), "command_gate": (), "shared_settings": ""}
         self.assertEqual(layout.facts({}), empty)
         self.assertEqual(layout.facts({"root": "none", "local_settings": "none", "kinds": {}}), empty)
 
@@ -318,6 +319,42 @@ class Refused(unittest.TestCase):
         table = {"Edit": ["file_path"]}
         whole = {"settings_key": "hooks", "targets": table, "event": "PreToolUse", "timeout": 20, "block_code": 2}
         self.assertEqual((("Edit", ("file_path",)),), layout.facts(edit(["hooks"], whole))["hook_targets"])
+
+    def test_the_command_gate_description(self):
+        base = {"settings_key": "hooks", "targets": {"Edit": ["file_path"]}, "event": "PreToolUse", "timeout": 20,
+                "block_code": 2}
+        gate = {"tool": "Bash", "field": "command", "timeout": 60}
+        good = edit(["hooks"], dict(base, command_gate=gate))
+        self.assertEqual([], layout.problems(good))
+        self.assertEqual(("Bash", "command", 60), layout.facts(good)["command_gate"])
+        self.assertEqual((), layout.facts(edit(["hooks"], base))["command_gate"])
+        self.assertEqual((), layout.facts(SYNTHETIC)["command_gate"])
+        # It uses the event and the block code of the hook description, so it needs them.
+        self.bad(edit(["hooks"], {"settings_key": "hooks", "command_gate": gate}), "command_gate needs")
+        for bad in ({}, [], "Bash", {"tool": "Bash"}, {"field": "command", "timeout": 60},
+                    dict(gate, extra=1), dict(gate, tool="Ba sh"), dict(gate, tool=""), dict(gate, tool=3),
+                    dict(gate, field="Command"), dict(gate, field="a b"), dict(gate, timeout=0),
+                    dict(gate, timeout=601), dict(gate, timeout=True), dict(gate, timeout="60"),
+                    dict(gate, timeout=2.5)):
+            with self.subTest(bad):
+                self.bad(edit(["hooks"], dict(base, command_gate=bad)), "command_gate")
+
+    def test_the_command_gate_timeout_must_exceed_the_edit_gates_deadline(self):
+        base = {"settings_key": "hooks", "targets": {"Edit": ["file_path"]}, "event": "PreToolUse", "timeout": 20,
+                "block_code": 2}
+        self.bad(edit(["hooks"], dict(base, command_gate={"tool": "Bash", "field": "command", "timeout": 10})),
+                 "longer than the gate's own deadline")
+
+    def test_the_shared_settings_file(self):
+        shared = ".fixture/settings.json"
+        good = edit(["local_settings", "shared"], shared)
+        self.assertEqual([], layout.problems(good))
+        self.assertEqual(shared, layout.facts(good)["shared_settings"])
+        self.assertEqual("", layout.facts(SYNTHETIC)["shared_settings"])
+        for bad in (".fixture/settings.local.json", "settings.json", "/abs/x.json", ".git/x.json", ".workbench/x.json",
+                    ".fixture/x.txt", 3, "", ".fixture/a/b.json", "../x.json", ".fixture/../x.json"):
+            with self.subTest(bad):
+                self.bad(edit(["local_settings", "shared"], bad), "layout.local_settings")
 
     def test_exclude_paths(self):
         for entry in ("/abs", "../x", "a/../x", ".git", ".git/", ".GIT/info", ".workbench",

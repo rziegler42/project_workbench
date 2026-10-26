@@ -8,10 +8,11 @@ import io
 import json
 import os
 import re
+import shutil
 import unittest
 import unittest.mock
 
-from tests import test_delegation
+from tests import support_harness, test_delegation
 from tests.test_delegation import PLAN, TEXT, cli_run
 from workbench import levellog, levels, planapprovals, rendering, settings
 
@@ -23,6 +24,11 @@ class Ask(test_delegation.Delegated):
 
     def setUp(self):
         super().setUp()
+        # The harness describes the command gate, so a key can be relaxed at all.
+        shutil.rmtree(self.dist)
+        self.dist = support_harness.distribution(
+            os.path.join(self.root, "distribution"), layout=support_harness.gated_layout(),
+            provides=support_harness.GATED_PROVIDES)
         # The project fixture says every stream is a terminal; these commands run with none.
         none = unittest.mock.patch.object(planapprovals.approve, "is_terminal", lambda stream: False)
         none.start()

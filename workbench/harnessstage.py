@@ -199,15 +199,21 @@ def stage(store_root, harness, modules, snaps, source, version, home, root):
                 guarded_store.Store(store_root),
                 tuple(name for item in modules if item.type == "process" for name in item.module.checkpoints),
                 [(command.name, command.owner) for item in modules for command in item.module.commands])
-            built = rendering.plan(table)
+            # A key is relaxed only if the harness can render the command gate: it provides hooks and its layout
+            # describes the gate. Otherwise every key keeps its deny and the record says no gate was rendered.
+            can_gate = "hooks" in harness.module.provides and harnessplan.command_gate_described(layout)
+            built = rendering.plan(table, gated=can_gate)
+            gated = can_gate and bool(built.ask or built.open)
             data = harnessplan.render_permissions(
                 owner_rules(modules), layout, os.path.realpath(store_root), os.path.realpath(home),
                 hook_for=harness.name if hook else None, root=os.path.realpath(root), protect=done.confined,
-                ask_patterns=built.ask, open_patterns=built.open)
+                ask_patterns=built.ask, open_patterns=built.open,
+                command_gate_for=harness.name if gated else None)
             settings = harnessplan.Planned(local["path"], data, harnessplan.FILE_MODE,
                                            hashlib.sha256(data).hexdigest(), "permissions")
             files.append(settings)
-            record = rendering.record_of(harness.name, True, table, built, local["path"], settings.sha256)
+            record = rendering.record_of(harness.name, True, table, built, local["path"], settings.sha256,
+                                         gate=gated, shared=local.get("shared") or None)
         else:
             record = None  # nothing was rendered, and no record reads as block
             warnings.append("this harness provides no permissions, so the hard stops and the "

@@ -6,9 +6,13 @@ The floor's ``ask`` rules and the guarded store's deny are not touched. Attach w
 of what it rendered; a key reads as ``ask`` or ``none`` only while that record, the table and the harness file all
 agree, and as ``block`` otherwise. ``delegated`` and ``block`` do not depend on the record.
 
-The record: ``{"format": 1, "harness": "<module name>", "permissions": true|false, "table_digest": <sha-256>,
-"file": "<path of the permissions file>" | null, "file_hash": <sha-256> | null, "keys": {<every key>: "deny" | "ask" |
-"none" | "unruled"}}``. ``unruled`` is a key with no command to match (a checkpoint that is not a command): it renders
+The record: ``{"format": 2, "harness": "<module name>", "permissions": true|false, "gate": true|false,
+"table_digest": <sha-256>, "file": "<path of the permissions file>" | null, "file_hash": <sha-256> | null,
+"shared": {"path": <the shared project settings file> | null, "hash": <sha-256> | null}, "keys": {<every key>:
+"deny" | "ask" | "none" | "unruled"}}``. ``gate`` says the command gate's Bash hook was rendered (``command_gate.py``);
+without it a key reads ``block``, because at ``ask`` and ``none`` the rule alone is a text match the classifier can walk around.
+``shared`` is the shared settings file the layout names: its hash is taken at attach (``null`` when it did not exist), and
+a file that is created, changed or removed later makes ``ask`` and ``none`` read ``block``. ``unruled`` is a key with no command to match (a checkpoint that is not a command): it renders
 nothing, and is never read as ``none``. The record attests what attach rendered; the live file is hashed when a command
 runs, so an edit after attach is seen. A harness that provides no ``permissions`` renders nothing and leaves no
 record, which reads as ``block``.
@@ -23,7 +27,7 @@ from . import declarations, levels, localmanifest, rules, settings
 from .wbkit import safefs
 
 RECORD = "projects/%s/rendering"
-FORMAT = 1
+FORMAT = 2
 LOCAL_MANIFEST = localmanifest.PATH
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
 RULES = ("deny", "ask", "none", "unruled")
@@ -45,22 +49,29 @@ def key_patterns(key):
     return []
 
 
-def plan(table):
+def _wb_forms(patterns):
+    """The patterns spelled with the launcher ``wb``. The interpreter spellings (``python3 -m workbench``) stay denied at
+    ``ask`` and ``none``: a prompt for them would let a planted package run under the owner's yes."""
+    return [pattern for pattern in patterns if pattern.startswith("wb ")]
+
+
+def plan(table, gated=True):
     """The ``Plan`` for the effective `table` (key to level): the rule each key renders, the patterns to ask and the
-    patterns not to deny (those at ``ask`` and ``none``)."""
+    patterns not to deny (those at ``ask`` and ``none``, and only their ``wb`` spellings). With `gated` false the harness
+    cannot render the command gate, so no key is relaxed and every command renders a ``deny``."""
     keys, ask, opened = {}, [], []
     for key in table:
         patterns = key_patterns(key)
         level = table[key]
         if not patterns:
             keys[key] = "unruled"
-        elif level == levels.ASK:
+        elif level == levels.ASK and gated:
             keys[key] = "ask"
-            ask.extend(patterns)
-            opened.extend(patterns)
-        elif level == levels.NONE:
+            ask.extend(_wb_forms(patterns))
+            opened.extend(_wb_forms(patterns))
+        elif level == levels.NONE and gated:
             keys[key] = "none"
-            opened.extend(patterns)
+            opened.extend(_wb_forms(patterns))
         else:
             keys[key] = "deny"
     return Plan(keys, ask, opened)
@@ -92,10 +103,30 @@ def current_table(guarded, start):
     return table, root, ident
 
 
-def record_of(harness, provides_permissions, table, built, path, file_hash):
-    """The record body for a harness `harness` (``<package>/<module>``) that wrote `path` with hash `file_hash`."""
-    return {"format": FORMAT, "harness": harness, "permissions": bool(provides_permissions),
-            "table_digest": digest(table), "file": path, "file_hash": file_hash, "keys": dict(built.keys)}
+def record_of(harness, provides_permissions, table, built, path, file_hash, gate=False, shared=None):
+    """The record body for a harness `harness` (the module name) that wrote `path` with hash `file_hash`, with the
+    command gate rendered or not, and `shared` the path of the shared settings file or None. The shared file's hash is
+    filled in by ``attach`` when it writes the record (``with_shared_hash``)."""
+    return {"format": FORMAT, "harness": harness, "permissions": bool(provides_permissions), "gate": bool(gate),
+            "table_digest": digest(table), "file": path, "file_hash": file_hash,
+            "shared": {"path": shared, "hash": None}, "keys": dict(built.keys)}
+
+
+UNREADABLE = "unreadable"
+
+
+def with_shared_hash(record, project_root):
+    """`record` with the hash of the shared settings file as it is now in the project at `project_root`: ``None`` when it
+    does not exist. A file that cannot be read as a regular file (a link, a directory, one that is too large) cannot be
+    watched, so the record then says no gate was rendered and every key reads ``block``."""
+    shared = record.get("shared") or {}
+    path = shared.get("path")
+    if path is None:
+        return record
+    found = live_hash(project_root, path)
+    if found == UNREADABLE:
+        return dict(record, gate=False, shared={"path": path, "hash": None})
+    return dict(record, shared={"path": path, "hash": found})
 
 
 def serialize(record):
@@ -109,7 +140,15 @@ def write(guarded, project_id, record):
 def _valid(record):
     if not isinstance(record, dict) or record.get("format") != FORMAT or isinstance(record.get("format"), bool):
         return False
-    if not isinstance(record.get("harness"), str) or not isinstance(record.get("permissions"), bool):
+    if not isinstance(record.get("harness"), str) or not isinstance(record.get("permissions"), bool) \
+            or not isinstance(record.get("gate"), bool):
+        return False
+    shared = record.get("shared")
+    if not isinstance(shared, dict) or set(shared) != {"path", "hash"}:
+        return False
+    if shared["path"] is not None and (not isinstance(shared["path"], str) or not safefs.relpath_ok(shared["path"])):
+        return False
+    if shared["hash"] is not None and (not isinstance(shared["hash"], str) or not _SHA.match(shared["hash"])):
         return False
     if not isinstance(record.get("table_digest"), str) or not _SHA.match(record["table_digest"]):
         return False
@@ -134,12 +173,17 @@ def read(guarded, project_id):
     return record if _valid(record) else None
 
 
-def _live_hash(root, path):
+def live_hash(root, path):
+    """The SHA-256 of the regular file `path` below the project `root`; ``None`` when it, or a directory above it, is not
+    there; ``UNREADABLE`` when something is there that cannot be read as a regular file (a link, a directory, a file with
+    another hard link, one over the size limit). Absent and unreadable are different: only absent matches a record that
+    saw no file."""
     try:
         with safefs.Root(root, "project root") as held:
-            return hashlib.sha256(held.read_file(path)).hexdigest()
+            data = held.read_if_present(path)
     except safefs.SafeFsError:
-        return None
+        return UNREADABLE
+    return None if data is None else hashlib.sha256(data).hexdigest()
 
 
 def _attached_harness(root):
@@ -153,9 +197,9 @@ def _attached_harness(root):
 
 def effective_level(guarded, project_id, root, table, key):
     """The level of `key` now: its level in `table` unless that is ``ask`` or ``none``, which hold only while the
-    record exists and is sound, names the attached harness and says it provides permissions, was rendered from this
-    table, lists the key with the matching rule, and the harness file now hashes to the record's hash. Anything else,
-    and a key or level that is not known, reads as ``block``."""
+    record exists and is sound, names the attached harness, says it provides permissions and rendered the command gate,
+    was rendered from this table, lists the key with the matching rule, and the harness file and the shared settings
+    file now hash to the record's hashes. Anything else, and a key or level that is not known, reads as ``block``."""
     level = table.get(key) if isinstance(table, dict) else None
     if level not in levels.LEVELS:
         return levels.BLOCK
@@ -166,8 +210,11 @@ def effective_level(guarded, project_id, root, table, key):
         return levels.BLOCK
     if record["keys"].get(key) != level or record["file"] is None or record["file_hash"] is None:
         return levels.BLOCK
-    if record["harness"] != _attached_harness(root):
+    if not record["gate"] or record["harness"] != _attached_harness(root):
         return levels.BLOCK
-    if _live_hash(root, record["file"]) != record["file_hash"]:
+    if live_hash(root, record["file"]) != record["file_hash"]:
+        return levels.BLOCK
+    shared = record["shared"]
+    if shared["path"] is not None and live_hash(root, shared["path"]) != shared["hash"]:
         return levels.BLOCK
     return level

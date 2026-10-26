@@ -441,6 +441,31 @@ def hook_described(harness_layout):
     return isinstance(hooks, dict) and all(key in hooks for key in ("targets",) + layout.HOOK_RENDER)
 
 
+def command_gate_described(harness_layout):
+    """Whether the layout describes the command gate: the hook description (event, timeout, block code) and a
+    ``command_gate`` with a tool, a field and a time limit."""
+    hooks = harness_layout.get("hooks", "none")
+    return isinstance(hooks, dict) and isinstance(hooks.get("command_gate"), dict) \
+        and all(key in hooks for key in layout.HOOK_RENDER)
+
+
+def render_command_gate(harness_layout, harness_name):
+    """``(settings key, value)`` of the command gate's hook for the harness named `harness_name`: the layout's event, the
+    layout's tool as the matcher and ``wb gate-command <harness> || exit <code>``. Raises ``PlanError``."""
+    found = layout.problems(harness_layout)
+    if found:
+        raise PlanError("the layout is refused: " + "; ".join(found))
+    if not command_gate_described(harness_layout):
+        raise PlanError("this layout does not describe the command gate")
+    if not isinstance(harness_name, str) or not _HARNESS_NAME.match(harness_name):
+        raise PlanError("the harness name %r is not one the gate command takes" % (harness_name,))
+    hooks = harness_layout["hooks"]
+    gate = hooks["command_gate"]
+    command = "wb gate-command %s || exit %d" % (harness_name, hooks["block_code"])
+    entry = {"matcher": gate["tool"], "hooks": [{"type": "command", "command": command, "timeout": gate["timeout"]}]}
+    return hooks["settings_key"], {hooks["event"]: [entry]}
+
+
 def render_hook(harness_layout, harness_name):
     """``(settings key, value)`` of the edit gate's hook for the harness named `harness_name`.
 
@@ -474,7 +499,8 @@ def _protected(settings, root):
     `root`. A relative pattern is matched from where the session started, so only the absolute one holds when the
     session starts below the root. The agent may not write them; the owner edits them by hand. This is the one rule
     beyond the hook itself, and it is rendered here and nowhere else."""
-    return _spelled((settings["path"], GIT_EXCLUDE), root)
+    shared = [settings["shared"]] if settings.get("shared") else []
+    return _spelled((settings["path"], *shared, GIT_EXCLUDE), root)
 
 
 def _plain_relative(path):
@@ -497,7 +523,7 @@ def _plain_root(root):
 
 
 def render_permissions(rules, harness_layout, store_root, home, hook_for=None, root=None, protect=(),
-                       ask_patterns=(), open_patterns=()):
+                       ask_patterns=(), open_patterns=(), command_gate_for=None):
     """Return the bytes of the local settings file for ``rules`` plus what is always rendered.
 
     Always rendered: a deny for writes to the guarded store at ``store_root``, a deny for every
@@ -516,7 +542,9 @@ def render_permissions(rules, harness_layout, store_root, home, hook_for=None, r
 
     ``ask_patterns`` and ``open_patterns`` are shell patterns of owner-run commands whose level is not ``block``
     (``rendering.py``): an open pattern is not denied, and an ask pattern is asked instead, also through the guarded
-    store's own ``bin/wb`` (a path-qualified spelling no other pattern names). Nothing here builds an ``allow``.
+    store's own ``bin/wb`` (a path-qualified spelling no other pattern names). ``command_gate_for`` is the name of the
+    harness to render the command gate's hook for (``render_command_gate``), or None; with either hook the files the hooks
+    are kept in are protected. Nothing here builds an ``allow``.
     """
     found = layout.problems(harness_layout)
     if found:
@@ -570,10 +598,15 @@ def render_permissions(rules, harness_layout, store_root, home, hook_for=None, r
             continue
         wanted[rule.action].add(render(rule.tool, rule.pattern))
     hook = render_hook(harness_layout, hook_for) if hook_for is not None else None
-    if hook:
+    gate = render_command_gate(harness_layout, command_gate_for) if command_gate_for is not None else None
+    if hook or gate:
         if root is None:
-            raise PlanError("the project directory is needed to render the edit gate's hook")
+            raise PlanError("the project directory is needed to render a hook")
         wanted["deny"].update(render("write", pattern) for pattern in _protected(settings, _plain_root(root)))
+    if hook and gate:
+        hook = (hook[0], {event: hook[1].get(event, []) + gate[1].get(event, []) for event in {*hook[1], *gate[1]}})
+    elif gate:
+        hook = gate
     if protect:
         if root is None:
             raise PlanError("the project directory is needed to protect the files that carry a hook")

@@ -61,7 +61,7 @@ def renamed(layout, name="second"):
                       .replace(".fixture", "." + name))
 
 
-def write_package(distribution, layout=None, package=PACKAGE, module=MODULE):
+def write_package(distribution, layout=None, package=PACKAGE, module=MODULE, provides=None):
     """The synthetic harness package, `<distribution>/packages/synthetic`, with one harness module named
     `fixture`; `package` and `module` name another. It provides the five capabilities its layout
     renders. Returns the package path."""
@@ -72,11 +72,11 @@ def write_package(distribution, layout=None, package=PACKAGE, module=MODULE):
     with open(os.path.join(path, module, "module.json"), "w") as handle:
         json.dump({"name": module, "version": "0.1.0", "type": "harness",
                    "description": "A synthetic harness for the installer's tests.",
-                   "provides": PROVIDES, "layout": layout or SYNTHETIC}, handle)
+                   "provides": provides or PROVIDES, "layout": layout or SYNTHETIC}, handle)
     return path
 
 
-def distribution(directory, layout=None):
+def distribution(directory, layout=None, provides=None):
     """A distribution at `directory` whose one first-party package is the synthetic harness, with its
     shipped approvals written by the release mechanism. A harness has to be first-party to provide the
     unprefixed capabilities, so the tests attach it from here and pass this path as the distribution."""
@@ -86,6 +86,20 @@ def distribution(directory, layout=None):
     # module's, so the tests copy the real one instead of making up a second.
     shutil.copytree(os.path.join(firstparty.default_distribution(), "base"),
                     os.path.join(directory, "base"))
-    write_package(directory, layout)
+    write_package(directory, layout, provides=provides)
     firstparty.release_approvals(directory)
     return directory
+
+
+def gated_layout():
+    """The synthetic layout with the command gate described and a shared settings file named, and the capabilities
+    it needs (the harness must provide ``hooks`` to render the gate)."""
+    value = json.loads(json.dumps(SYNTHETIC))
+    value["hooks"] = {"settings_key": "hooks", "targets": {"Edit": ["file_path"]}, "event": "PreToolUse",
+                      "timeout": 20, "block_code": 2,
+                      "command_gate": {"tool": "Bash", "field": "command", "timeout": 60}}
+    value["local_settings"]["shared"] = ".fixture/settings.json"
+    return value
+
+
+GATED_PROVIDES = PROVIDES + ["hooks"]

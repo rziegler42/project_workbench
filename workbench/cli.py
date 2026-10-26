@@ -10,8 +10,9 @@ import os
 import re
 import sys
 
-from . import (acknowledge, agent_gate, approve, attach, check, delegation, firstparty, gate_hook, harnesses, install, launch,
-               pins, planapprovals, preview, recover, settings, settingscmd, sources, store, target, upgrade, verify)
+from . import (acknowledge, agent_gate, approvalcmd, approve, attach, check, command_gate, delegation, firstparty,
+               gate_hook, harnesses, install, launch, levels, pins, planapprovals, preview, recover, rendering,
+               settings, settingscmd, sources, store, target, upgrade, verify)
 from . import commands as module_commands
 from .wbkit import display, safefs
 
@@ -47,6 +48,7 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench settings   (read-only)\n"
          "       python3 -m workbench gate <harness>   (read-only; the harness's hook runs it)\n"
          "       python3 -m workbench agent-gate <harness> <agent>   (read-only; a confined agent's hook runs it)\n"
+         "       python3 -m workbench gate-command <harness>   (read-only; the harness's Bash hook runs it)\n"
          "The package goes before --select, or use --dir. Options are not abbreviated.\n")
 
 
@@ -338,6 +340,41 @@ def _gate(tokens, err, store_root, distribution, stdin):
     return gate_hook.run(stdin if stdin is not None else sys.stdin, err, prepare)
 
 
+def _gate_command(tokens, err, store_root, distribution, stdin):
+    """``gate-command <harness>``: the harness's Bash hook command. Exit 0 allows, 2 refuses with one line on standard
+    error and nothing else, and a usage error is 2 as well, as for ``gate``."""
+    if len(tokens) != 1 or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", tokens[0]):
+        err.write(command_gate.USAGE)
+        return 2
+    holder = {}
+
+    def prepare(cwd):
+        said = io.StringIO()
+        opened = _open_store(store_root, said)
+        if opened is None:
+            raise gate_hook.Refusal(said.getvalue().strip().removeprefix("refused: ") or "the store cannot be used")
+        launch.install_wrapper(opened[0], distribution or firstparty.default_distribution())
+        try:
+            table, _, ident = rendering.current_table(opened[0], cwd)
+        except (approvalcmd.ApprovalError, levels.RegistryError) as exc:
+            raise gate_hook.Refusal(str(exc))
+        # The harness file keeps the ask rule and no deny until it is attached again, so what was rendered is guarded even
+        # if the table has since gone back to block.
+        record = rendering.read(opened[0], ident)
+        if record is not None:
+            for key, rule in record["keys"].items():
+                if rule in command_gate.RELAXED and table.get(key) not in command_gate.RELAXED:
+                    table[key] = rule
+        return table, os.path.join(os.path.realpath(opened[0].root), "bin", "wb")
+
+    facts = harnesses.known(distribution).get(tokens[0])
+    gate = facts["command_gate"] if facts else ()
+    if not gate:
+        err.write("refused: %s is not a known harness whose layout describes the command gate\n" % _clean(tokens[0]))
+        return 2
+    return command_gate.run(stdin if stdin is not None else sys.stdin, err, prepare, gate[0], gate[1])
+
+
 def _agent_gate(tokens, err, distribution, stdin):
     """``agent-gate <harness> <agent>``: a confined agent's hook command. Exit 0 allows, 2 refuses with one line on
     standard error and nothing else, and a usage error is 2 as well, as for ``gate``. It opens no store: the limits
@@ -371,6 +408,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         return _gate(argv[1:], err, store_root, distribution, stdin)
     if argv and argv[0] == "agent-gate":
         return _agent_gate(argv[1:], err, distribution, stdin)
+    if argv and argv[0] == "gate-command":
+        return _gate_command(argv[1:], err, store_root, distribution, stdin)
     if argv and argv[0] == "settings":
         return _settings(argv[1:], out, err, store_root, distribution)
     if argv and argv[0] in ("approve-plan", "plan-status", "delegate-approve-plan"):

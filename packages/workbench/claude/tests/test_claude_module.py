@@ -33,9 +33,10 @@ EXPECTED_LAYOUT = {
         "path": ".claude/settings.local.json", "format": "json",
         "actions": {"deny": "permissions.deny", "ask": "permissions.ask"},
         "rules": {"shell": "Bash({pattern})", "read": "Read({path})", "write": "Edit({path})"},
-        "absolute": "//"},
+        "absolute": "//", "shared": ".claude/settings.json"},
     "hooks": {
         "settings_key": "hooks", "event": "PreToolUse", "timeout": 20, "block_code": 2,
+        "command_gate": {"tool": "Bash", "field": "command", "timeout": 60},
         "targets": {"Edit": ["file_path"], "MultiEdit": ["file_path"], "NotebookEdit": ["notebook_path"],
                     "Write": ["file_path"]}},
     "exclude": ["CLAUDE.md", ".claude/"],
@@ -145,6 +146,15 @@ class Declaration(unittest.TestCase):
         self.assertEqual(shipped, expected)
         self.assertEqual(len(notes), 1)
         self.assertEqual(tolerated, [".claude/settings.json"])
+
+    def test_the_command_gate_is_the_bash_hook_the_trial_observed(self):
+        """Recorded from the trial of 2026-10-26 (Claude Code 2.1.311): a `PreToolUse` hook for `Bash` that exits 2
+        stopped a wrapped command in auto and default mode, and one that exits 0 left an `ask` rule in force. The
+        command text is `tool_input.command`; the harness's time limit exceeds the gate's own deadline."""
+        gate = declaration()["layout"]["hooks"]["command_gate"]
+        self.assertEqual(gate, {"tool": "Bash", "field": "command", "timeout": 60})
+        self.assertGreater(gate["timeout"], 10)
+        self.assertEqual(declaration()["layout"]["local_settings"]["shared"], ".claude/settings.json")
 
     def test_the_agent_hook_and_scratch_are_what_the_trial_observed(self):
         """Recorded from the live trial of 2026-10-24 (Claude Code 2.1.310): an agent's frontmatter holds

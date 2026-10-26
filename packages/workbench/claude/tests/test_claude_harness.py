@@ -39,7 +39,8 @@ class Facts(unittest.TestCase):
             "hook_targets": (("Edit", ("file_path",)), ("MultiEdit", ("file_path",)),
                              ("NotebookEdit", ("notebook_path",)), ("Write", ("file_path",))),
             "agent_gate": (("Edit", "Write"), ("Bash",),
-                           "/private/tmp/claude-{uid}/{cwd_key}/{session_id}/scratchpad")})
+                           "/private/tmp/claude-{uid}/{cwd_key}/{session_id}/scratchpad"),
+            "command_gate": ("Bash", "command", 60), "shared_settings": ".claude/settings.json"})
 
     def test_the_tolerated_file_is_not_one_the_layout_writes(self):
         document = declared()

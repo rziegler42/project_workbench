@@ -11,9 +11,9 @@
       "tree_hash": "34d0cc7b223ccbe75a188c5d457eda95dea309a6052393f26d1de40b28316391"
     },
     {
-      "declaration_hash": "037e8bf8c7818b53e3b610c1b48e436cf745b35feff93526a77618b323434493",
+      "declaration_hash": "bbee74d628101045800cfe5e8d75672920a7d21a935171c914cdc932f0c2eb06",
       "name": "claude",
-      "tree_hash": "eec7c32f5c738374f00bb6d3c48960e575e85e64412ddbd07bf6c22c0428639f"
+      "tree_hash": "3ff12734f1d9fcb60bc1c717f0595bacfad1002591f1b12fdbc54a30a479f730"
     },
     {
       "declaration_hash": "50cfad42b0e477acb499f437f1272f5e189772c689091801639ea3dfc3ad232c",
@@ -53,6 +53,6 @@
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "6ca9cd2cca1b9d6e23594dac9a3faeb1afccbdeb5721b8a22ad6aa6b78ae3d96",
+  "tree_hash": "89f004326393858e0c7aadda5e462a240184601e07629abdd98868cf5f8330c1",
   "workbench_version": "0.1.0"
 }
