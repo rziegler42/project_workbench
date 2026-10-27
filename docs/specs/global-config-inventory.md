@@ -629,6 +629,11 @@ through the helper only; pull-request descriptions and "even when the harness su
 authorizes a push" is in `push-changes`, `code-work.md` and `safe-git.md`, not in a policy block. IV1: `test-first` only, on demand. CI3:
 "active objective" and "governing decisions" have no cover. CI4: "repeated command output" and "unverified discovery output" have none.
 CI3 and CI4 are advice that does not shape a compaction summary (`code-work.md`), so one run is a weak gate.
+*Increment C of that plan, 2026-10-27:* the gate run showed no skill load for IV1 or IV16, did not isolate OP8 (the retained
+"never push without approval" was in force), and the compaction summary kept a long listing with the raw-log clause removed. The
+owner decided to remove only the CI3 items the policy block covers (plan path and increment, changed files, verification, risks, next
+action); OP4, OP8, IV1, IV16 and CI4 stay `move`, held. The CI3 rows for "objective", "scope", "decisions" and the remote-job items
+stay uncovered.
 
 **M7: instruction text the `mempalace` module carries.** Items: ME2, ME4, ME5. Gate: a read of the `mempalace` policy block in a
 project that installed the module, and the recorded run of rule 3 (a task whose outcome an old note contradicts: the agent

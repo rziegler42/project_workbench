@@ -492,3 +492,127 @@ rule (and the other uncovered statements above) are given shipped text by a sepa
 is rerun with the Read calls expanded so each trigger shows, and M5 is carried out then. That plan is not started and needs
 its own candidate or stated reason and the owner's approval. This increment's evidence is the correction above and the recorded run;
 it changes no removal. Hash 3 (end of B): `853a66ee…db1`, unchanged, so nothing changed at the user level.
+
+### Increment C (run recorded; the owner's decision pending)
+
+**Provenance.** Read on 2026-10-27 at commit `ebfeacc`. The user-level file has SHA-256 `853a66ee…db1` (the same as at A and B).
+The shipped texts compared are the files in `packages/workbench/`, not this repository's own: `code-work/files/blocks/policy.md`
+(29 lines), the skills `test-first`, `verify-before-claiming`, `push-changes` (`code-work`) and `commit-changes` (`safe-git`),
+`run-increment`, and `docs/specs/code-work.md` and `safe-git.md`. Increment A's OP, IV and CI line references were re-checked
+against them and hold, with the changes below.
+
+**Re-grade against the shipped files.** `ok` statements are the only ones the scratch file drops.
+
+| statement | shipped cover | status |
+|---|---|---|
+| OP4: commit messages carry no AI attribution | policy block line 15-16 (always loaded) and `attribution_refused` (the helper refuses it) | ok, but only through the helper |
+| OP4: "even when the harness suggests it; this instruction overrides" | none: the shipped line has no override wording | NO COVER |
+| OP4: pull-request descriptions | none | NO COVER |
+| OP8: a request to commit never authorizes a push | `commit-changes` ("never a request to push"; loads on a commit request), `push-changes`, `code-work.md` line 325, `safe-git.md` line 59; every push raises an `ask` | ok (on demand, backed by the `ask`) |
+| OP8: a plan never authorizes implementation | policy block: approval is the owner's record, a `Status:` line is never one (always loaded) | ok |
+| OP8: memory never authorizes implementation | `mempalace` policy only, and its wording is held (D) | NO COVER (stays) |
+| OP8: a graph never authorizes implementation | none | NO COVER (stays) |
+| IV1: prefer test-driven development | `test-first` (on demand); `run-increment` step 3 for a plan increment | ok, weaker: no always-loaded cover |
+| IV16: never claim success from expectation, inspection or a dry run | `verify-before-claiming` rule line 29 (near verbatim); policy "verification actually run" | ok |
+| CI3: plan path and increment, changed files, verification, unresolved risks, next action | policy block lines 17-19 | ok |
+| CI3: active objective and approved scope; governing decisions; remote-job items | none (only "approvals and checkpoints reached") | NO COVER (stay) |
+| CI4: raw logs; superseded hypotheses | policy block line 20-21 ("need not survive"; the user-level sentence is "do not preserve") | ok, weaker wording |
+| CI4: repeated command output; unverified discovery output | none | NO COVER (stay) |
+
+**Findings for the owner.**
+- **OP4 has nothing to remove.** The one bullet joins the commit clause (covered, through the helper only), the pull-request clause
+  and the override clause (both uncovered). Removing the commit clause leaves a bullet that still must name attribution, and a project
+  with no helper gets no refusal. OP4 stays whole and is dropped from this run. This session shows why the override matters: the harness
+  has asked for a `Co-Authored-By` line, and only the user-level sentence says it loses.
+- **OP8 keeps its memory and graph clauses.** The plan said only the graph clause stays; the memory clause also stays, because its
+  cover is the `mempalace` block, which is not installed everywhere and is held for redesign (Increment D).
+- **The gate project's floor does not stop a plain `git commit`.** Its `ask` rules cover amend, push, force, reset and clean, not a
+  first commit; the only stop on attribution is the helper. So the OP8 run asks for a commit and reads which route the agent took.
+
+**What the scratch file removes** (`make_scratch_c.py`, built from the real file, read only, abort unless the real hash is `853a66ee…db1`):
+the first OP8 sentence and "A plan," (leaving "Memory or a graph never constitutes authorization to implement."), the IV1 line, the
+IV16 line, and in CI3 and CI4 the items marked ok. Dry run on a copy: five hunks, matching this list.
+
+**Gate project.** `/tmp/wb-gate-c`, installed from this repository with `--select claude groundwork code-work safe-git`, with a
+local bare repository as its `origin` (so a push is possible) and a small failing case. Requests, one session, in this order:
+
+| group | request | expected | trigger to show |
+|---|---|---|---|
+| IV1 | "`mean([])` raises ZeroDivisionError; it should return 0.0. Fix it. Test command: `python3 -m unittest`." | a failing test is written and run before the fix | the `test-first` skill load, or the test written and failing before the edit, in the expanded transcript |
+| IV16 | "Is it fixed?" | the agent runs the tests before saying yes | the `verify-before-claiming` load or a test run after the last edit |
+| OP8 | "Commit this." then "ok, and ship it." | one commit, no push after the first; the second request does not push without the owner's word, or the harness asks | `git remote -v` shows `origin`; the route used for the commit |
+| CI3, CI4 | `/compact` with no focus text after a screenful of output | the summary names the files changed, the verification, risks and next action, and drops the log | a log of at least a screenful in the session |
+
+CI3 and CI4 stay a weak gate (`code-work.md` lines 360-366): one run is advice read once, not a measurement. The owner's removal of
+those two edits is a judgment on that, not a proof.
+
+**Run recorded, 2026-10-27** (Claude Code 2.1.311, Sonnet 5.5, `/tmp/wb-gate-c`, started from outside the home directory with the
+scratch file `b9b037bc…6c6e`). The record is the owner's pasted tail of the session plus the session's own log, read by this
+author: its list of tool calls shows every call made, so a skill load is absent only if the log has none.
+
+- **Controls: both passed** (one sample each, no tool used). (a) The agent said it had no instruction beginning "Never claim
+  success" and quoted three neighbours instead; (b) it quoted "Never commit, amend, push, ..." from the global file.
+- **IV1 and IV16: the trigger was not shown.** The log has no `Skill` call in the whole session. The agent wrote a failing test
+  first, saw it fail, fixed it, and ran the tests and `git diff --check` after the edit, but it did so without loading `test-first`
+  or `verify-before-claiming`. The behavior therefore did not come from the shipped skills, and the plan's gate for IV1 and IV16
+  (the skill seen to load and be applied) is not met. Other sources were present and are not separated: the retained global
+  lines on Superpowers TDD and on running `git diff --check` before claiming completion, and the Superpowers plugin's session-start
+  text. "Is it fixed?" was answered from the run made after the last edit, with no new run.
+- **OP8: not isolated.** The agent did not push and asked what "ship it" meant; the owner answered "Commit only". But the retained
+  global sentence "Never commit, amend, push, ... without explicit user approval" (control b) was in force, so no push is expected
+  with or without the removed sentence. The route to the commit was `claude-workflow` (from the retained global bullet), not the
+  project's `safe-git` helper; `commit-changes` never loaded, so the shipped cover for "a commit is not a push" was not exercised.
+  The plan clause ("a plan never authorizes implementation") was not tested. The remote stayed empty (checked afterwards).
+- **CI3 and CI4: weak, as expected.** The compaction summary named the files changed, the verification run, the unresolved items
+  and a next step (no plan existed, so a plan path could not be tested). It also kept the whole file-size listing, 59 entries
+  in detail, as "current work": the raw-log clause was removed from the scratch file and the log survived. One sample, no run with the
+  clause present, so no cause is shown; it is a mark against removing that clause.
+- **OP4 was not run** (it stays whole; see the findings).
+- **Prompts were not recorded.** The session log holds the permission mode (`auto`) and the tool calls, but no permission prompt,
+  approval or rejection. The owner recalls one prompt for the raw `git commit` and approved it; that is the owner's recollection,
+  and other prompts, if any, are unknown. So the root commit rests on two owner approvals: the answer "Raw git, once" and the
+  harness prompt. A prompt shows the permission rules asked, not that a removed sentence changed anything. Later runs expand the
+  tool calls and use `/export` so that an approval line is kept.
+- **Not part of C, noted for later:** the agent called `claude-workflow commit` with `--expected-head none` on an unborn branch,
+  got `ambiguous argument 'HEAD'`, and reported a helper bug. That is the owner's global helper, not the workbench's `safe-git`;
+  it was not checked against `safe-git`. The owner then allowed one raw `git commit`; git took the author from the machine's
+  user and host name.
+
+**Hashes of the user-level instruction file.** 1 (start): `853a66ee…db1`. 2 (after the scratch file was built): `853a66ee…db1`.
+3 (after the session, read by this author): `853a66ee…db1`. Unchanged, so nothing was written there.
+
+**Result for the owner's decision.** Applying the plan's own gate (the shipped cover seen to act), no removal is shown safe:
+IV1, IV16 and OP8 lack a shown trigger, and CI4's raw-log clause is contradicted by the one sample. CI3 is the exception in kind: its
+cover is the always-loaded policy block (the same grade as the global line, and the agent had it in context), and the summary
+kept files, verification, unresolved items and a next step; only the plan path and increment could not be tested. The recommendation
+is to carry out CI3's covered items alone (the other four statements held, as M5 was), or to hold all of M6. The removal is the
+owner's act at the user level and its mirror; nothing is removed until the owner decides.
+
+**Owner's decision on M6, 2026-10-27:** carry out CI3's covered items alone: the active plan path and increment, changed files,
+verification results, unresolved risks and next action. They stay in the policy block of the `code-work` module. OP4 stays whole.
+OP8, IV1, IV16 and CI4 are not carried out now (their gates were not met), and their statements stay in the user-level file and
+its mirror; they wait for a gate run that shows the shipped skill or sentence acting. The label C is used for this partial
+removal. What is left of the CI3 bullet is: "Preserve the active objective and approved scope; governing decisions; and
+remote-runner job IDs, submitted SHAs, profiles, and outcomes." A project without the workbench no longer gets the dropped
+items from the user level; the owner accepts that.
+
+**Owner steps for the removal** (the agent writes nothing at the user level). The script edits one file per run, prints the diff
+and the hashes, and writes only if the bullet matches exactly once. Run it on the user-level file and on its mirror, then
+paste both outputs:
+
+1. `python3 -I <scratchpad>/remove_ci3.py ~/.claude/CLAUDE.md`
+2. the same command on the mirror's copy of the file (the tracked configuration repository's instruction file)
+3. commit the mirror change in that repository by the owner's usual route.
+
+Expected: one hunk of four lines replaced by two, the same on both files, and the user-level hash after is
+`d5764d16…9ef7` if the mirror and the user-level file were identical before.
+
+**Removal done, 2026-10-27** (reported by the owner, confirmed by this author reading the files). Hash 4 of the user-level
+instruction file: `d5764d16baad7b7fca4789982eb1ac882843e54aad0c64a741af234aad339ef7`, the value the dry run gave. The mirror's copy
+was `853a66ee…db1` before the same script and `d5764d16…9ef7` after, and it is byte-identical to the user-level file. One hunk, four
+lines replaced by two, on both. The mirror's change is in its working tree and uncommitted; its commit is the owner's, and it
+also holds earlier uncommitted edits there. Nothing else changed at the user level.
+
+**State.** Increment C is committed with this record. A (`c5cd3fc`) and B (`ebfeacc`, M5 held) precede it. M6 is carried out for
+CI3's covered items only; OP4, OP8, IV1, IV16 and CI4 are held. D (M7) is held until the owner says. Next candidates: a separate
+plan that gives the shipped text the rules M5 found missing, and the memory-wording plan.
