@@ -6,7 +6,8 @@ the same reading ``approve-plan`` uses), the owner's personal settings from the 
 
     checkpoint <name>: stop|delegate     one per declared checkpoint, in declaration order
     cap <name>: <n>                      one per declared cap, in declaration order
-    level <key>: <level>                 one per key the installer knows: the checkpoints, then the owner-run commands
+    level <key>: <level>                 one per key the installer knows: the checkpoints, the owner-run commands, the
+                                         agent-safe actions, then each argument an installed command declares
     settings: <text>                     one per problem in the owner's settings
 
 Nothing is started, written or approved here; the owner's settings are data. Exit 0 printed, 1 refused (a
@@ -46,7 +47,7 @@ def run(guarded, tokens, out, err, *, cwd=None):
                        % ", ".join(sorted("%s/%s" % (item.package, item.module.name) for item in process)))
     module = process[0].module
     loaded = settings.load(guarded)
-    owner_commands = [(command.name, command.owner) for item in found for command in item.module.commands]
+    owner_commands = [(command.name, command.owner, command.arguments) for item in found for command in item.module.commands]
     try:
         effective = settings.effective(loaded, module.checkpoints, module.caps, owner_commands)
     except levels.RegistryError as exc:

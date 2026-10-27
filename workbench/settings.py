@@ -14,8 +14,9 @@ The document is strict JSON::
 * ``levels`` is optional. It maps a key to the level the owner chose. A value that is not one of the four levels,
   a key that is not valid, or a ``levels`` that is not an object reads as ``block``. In this version a key is a
   checkpoint the process module declares; ``stop`` reads as ``block`` and ``delegate`` as ``delegated``, a key set
-  in both takes the stricter, and only ``block`` and ``delegated`` (for ``approve-plan``) take effect: ``ask`` and
-  ``none`` are read but not offered yet, so they read as ``block`` with a note.
+  in both takes the stricter. ``delegated``, ``ask`` and ``none`` are offered by ``approve-plan``; ``none`` is also offered
+  by an agent-safe action and a declared module argument that is not owner-run (``levels``); any other key reads a level
+  it does not offer as ``block`` with a note.
 * ``caps`` is optional. It holds the owner's value for each loop cap a process module declares.
   The loader keeps a valid name with an integer value; ``effective`` judges the value against
   the module's ceiling and falls back to the module's default with a note.
@@ -160,7 +161,7 @@ def load(store):
     return Settings(checkpoints, problems, caps, levels, levels_blocked)
 
 
-def effective(loaded, checkpoints, caps, commands=()):
+def effective(loaded, checkpoints, caps, commands=(), agent=True):
     """The values that apply to a process module that declares ``checkpoints`` (names) and ``caps``.
 
     A checkpoint is ``delegate`` only when declared, set to exactly that and named ``approve-plan``: delegation
@@ -169,7 +170,9 @@ def effective(loaded, checkpoints, caps, commands=()):
     replaced entry adds a note; the loader's own problems are not repeated here.
 
     ``levels`` holds a level for every key of ``levels.registry(checkpoints, commands)``, where `commands` is a
-    sequence of ``(command name, owner-run arguments)`` of the installed commands. A key's level is the stricter of
+    sequence of ``(command name, owner-run arguments)`` or ``(command name, owner-run arguments, all declared
+    arguments)`` of the installed commands; with `agent` false the keys of the agent-safe actions are left out (the table
+    a harness renders holds none until one is rendered). A key's level is the stricter of
     its checkpoint reading and its table entry; an entry for a level the key does not offer reads as ``block`` with
     a note, and an entry for a key that is not in the registry is noted and ignored.
     """
@@ -186,7 +189,7 @@ def effective(loaded, checkpoints, caps, commands=()):
             values[name] = STOP
             notes.append("settings set the checkpoint %s to delegate; delegation has no effect for it, so it stops"
                          % declarations._shown(name))
-    keys = keyset.registry(checkpoints, commands)
+    keys = keyset.registry(checkpoints, commands, agent)
     levels = {}
     for name, key in keys.items():
         levels[name] = _level(loaded, key, values, notes)

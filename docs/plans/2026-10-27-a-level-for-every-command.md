@@ -301,4 +301,38 @@ The review is not an approval; the plan stays `Proposed` until the owner approve
 
 ## Result
 
-Empty until work starts.
+### Increment A — built, not committed (2026-10-27)
+
+**Done.** `workbench/levels.py` has `agent_keys()` and a `registry(checkpoints, commands, agent=True)` that adds a key for each
+agent-safe action (`wb verify`, `wb preview install|adopt|upgrade|add`, `wb launch`, `wb check`, `wb plan-status`, `wb settings`) and for
+each declared module argument; an owner-run argument defaults to `block`, any other to `none`, and an agent-safe key offers `block`
+and `none` and defaults to `none`. `workbench/rules.py` names the words that are not keys (`HOOK_ENTRY_POINTS`, `DISPATCHERS`,
+`REACHES_ANOTHER_KEY`, `PREVIEW_ACTIONS`). `settings.effective` takes `agent`; `wb settings` passes each command's arguments and prints
+the new `level` lines; `rendering.table_of` passes `agent=False`, so the table that is digested into a rendering record is the one it
+was before and an attached clone keeps its record. The spec's built sections ("Which levels a key offers", "Shipped defaults",
+acceptance criterion 1, "`wb settings`"), `docs/development.md` and two docstrings say so.
+
+**Verification as run.** The tests were written first and failed for the right reasons (missing attributes and keys). Then
+`python3 -B -W error tests/run_all.py`: `Ran 4883 tests in 10 roots`, `OK`; `wb check`: no problems; `wb settings` printed the new keys
+(agent-safe and non-owner-run module arguments `none`, owner-run `block`). Existing tests changed where they assumed the old key list:
+`tests/test_settingscmd.py` (the `level_lines` helper, and a count of `settings:` lines that the key `level wb settings: none` had
+made wrong), `tests/test_settings.py`, `tests/test_rendering.py` (the record lists the keys it rendered) and `tests/test_approve_levels.py`.
+
+**Review.** One round by the `reviewer` agent (1 of 6 exchanges, cap 3 rounds): no blocking findings, five not blocking. Applied:
+(1) the built sections of the spec and two docstrings said every default is `block`: corrected; (2) nothing tied `rules.PREVIEW_ACTIONS` to
+the tuple `cli._preview` accepts: a test parses `cli.py` and compares; (3) the digest test built its "before" table from the code under
+test, and `agent=False` left the non-owner module arguments in when a 3-tuple was given: the test now writes the old keys out, and
+`agent=False` leaves those arguments out too, with a test; (4) `docs/development.md` did not say a `block` on an agent-safe key is not
+yet enforced: added. No finding rejected. The reviewer could not run anything and did not read the diffs or the decision.
+
+**Not done, carried forward.**
+- A `block` set on an agent-safe key is read and printed and not enforced until Increment C.
+- A damaged or unreadable settings file reads the whole table as `block` (spec "Reading rules"), the agent-safe keys included.
+  When C renders a `deny` for them, such a file would deny `wb settings` and `wb check`, the commands that report it. C must decide
+  whether agent-safe keys are exempt from the whole-table block. **Owner decision needed before C.**
+- `effective_level` requires a rendering-record entry for a key at `none`. That suits a key that opens a `deny`; an agent-safe key at its
+  default `none` opens nothing and needs no record. C and D must say so.
+- The agent-safe keys are absent from the record, so C changes the record's digest for every attached clone with a relaxed key.
+  C must keep such a clone readable or say how it is re-attached.
+
+**Review of the whole plan:** not yet asked.

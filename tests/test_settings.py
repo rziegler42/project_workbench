@@ -5,7 +5,7 @@ import types
 import unittest
 
 import support
-from workbench import declarations, floor, planapprovals, settings, store
+from workbench import declarations, floor, levels, planapprovals, settings, store
 from workbench.wbkit import safefs
 
 
@@ -275,7 +275,9 @@ class LevelsTest(SettingsBase):
         for document in (None, {"version": 1}):
             with self.subTest(document=document):
                 _, got = self.effective(document)
-                self.assertEqual({"block"}, set(got.levels.values()))
+                agent = set(levels.agent_keys())
+                self.assertEqual({"block"}, {level for name, level in got.levels.items() if name not in agent})
+                self.assertEqual({"none"}, {got.levels[name] for name in agent})
                 self.assertIn("wb install", got.levels)
 
     def test_with_no_file_or_a_version_1_file_every_key_reads_as_block(self):
@@ -418,6 +420,56 @@ class LevelsTest(SettingsBase):
         self.assertEqual("block", got.levels["wb run tool go"])
         self.assertEqual(1, len(got.notes))
         self.assertIn("wb run tool other", got.notes[0])
+
+    def test_an_agent_safe_key_reads_none_by_default(self):
+        loaded, got = self.effective({"version": 2, "levels": {}})
+        for name in ("wb verify", "wb preview install", "wb launch", "wb check", "wb plan-status", "wb settings"):
+            with self.subTest(key=name):
+                self.assertEqual("none", got.levels[name])
+        self.assertEqual([], loaded.problems + got.notes)
+
+    def test_an_agent_safe_key_reads_none_with_no_settings_at_all(self):
+        got = settings.effective(settings.load(self.store), ("approve-plan",), ())
+        self.assertEqual("none", got.levels["wb check"])
+        self.assertEqual("block", got.levels["wb install"])
+
+    def test_an_owner_may_tighten_an_agent_safe_key_to_block_with_no_note(self):
+        loaded, got = self.effective({"version": 2, "levels": {"wb check": "block", "wb preview adopt": "none"}})
+        self.assertEqual("block", got.levels["wb check"])
+        self.assertEqual("none", got.levels["wb preview adopt"])
+        self.assertEqual([], loaded.problems + got.notes)
+
+    def test_a_level_an_agent_safe_key_does_not_offer_reads_as_block_with_a_note(self):
+        for level in ("ask", "delegated"):
+            with self.subTest(level=level):
+                loaded, got = self.effective({"version": 2, "levels": {"wb check": level}})
+                self.assertEqual("block", got.levels["wb check"])
+                self.assertEqual(1, len(got.notes))
+                self.assertIn("wb check", got.notes[0])
+
+    def test_a_hook_entry_point_and_a_dispatcher_are_not_keys_and_are_noted_and_ignored(self):
+        for name in ("wb gate", "wb agent-gate", "wb gate-command", "wb preview", "wb run", "wb delegate-approve-plan"):
+            with self.subTest(key=name):
+                loaded, got = self.effective({"version": 2, "levels": {name: "block"}})
+                self.assertNotIn(name, got.levels)
+                self.assertEqual(1, len(got.notes))
+                self.assertIn(name, got.notes[0])
+
+    def test_a_declared_argument_that_is_not_owner_run_is_a_key_that_reads_none(self):
+        self.put({"version": 2, "levels": {"wb run tool look": "block"}})
+        loaded = settings.load(self.store)
+        got = settings.effective(loaded, ("approve-plan",), (), commands=(("tool", ("go",), ("go", "look")),))
+        self.assertEqual("block", got.levels["wb run tool look"])
+        self.assertEqual("block", got.levels["wb run tool go"])
+        again = settings.effective(settings.load(self.store), ("approve-plan",), (),
+                                   commands=(("tool", ("go",), ("go", "look", "see")),))
+        self.assertEqual("none", again.levels["wb run tool see"])
+
+    def test_the_agent_safe_keys_can_be_left_out(self):
+        loaded = settings.load(self.store)
+        got = settings.effective(loaded, ("approve-plan",), (), agent=False)
+        self.assertNotIn("wb check", got.levels)
+        self.assertIn("wb install", got.levels)
 
     def test_a_floor_action_cannot_be_named(self):
         for stop in floor.FLOOR:

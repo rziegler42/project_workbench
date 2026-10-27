@@ -60,6 +60,29 @@ class Rendered(test_attach.Base):
         return rendering.effective_level(self.guarded, self.project_id, self.place, table, key)
 
 
+class TableTest(Rendered):
+    def test_the_table_a_harness_renders_holds_no_agent_safe_key_until_one_is_rendered(self):
+        """Plan 2026-10-27-a-level-for-every-command, increment A: the agent-safe keys are read and reported but are not
+        in the table that is digested into the record, so a clone attached before this change keeps its record."""
+        table = self.levels_now()
+        for name in levels.agent_keys():
+            self.assertNotIn(name, table)
+        self.assertEqual(sorted(table), sorted(levels.registry(agent=False)))
+
+    def test_the_digest_of_the_default_table_is_the_digest_it_was_before_the_agent_safe_keys(self):
+        table = self.levels_now()
+        # The keys of the table as it was before the agent-safe keys existed, written out so the test pins them.
+        before = {name: "block" for name in (
+            "approve-plan", "wb install", "wb adopt", "wb upgrade", "wb add", "wb attach", "wb recover", "wb approve",
+            "wb pin", "wb release-approvals")}
+        self.assertEqual(rendering.digest(before), rendering.digest(table))
+
+    def test_a_declared_argument_that_is_not_owner_run_stays_out_of_the_table_even_when_given(self):
+        table = rendering.table_of(self.guarded, (), [("tool", ("go",), ("go", "look"))])
+        self.assertIn("wb run tool go", table)
+        self.assertNotIn("wb run tool look", table)
+
+
 class RulesTest(Rendered):
     def test_a_key_at_block_is_denied_in_both_forms_and_not_asked(self):
         self.attached()
@@ -126,7 +149,7 @@ class RecordTest(Rendered):
 
     def test_the_record_lists_every_key_of_the_registry(self):
         self.attached()
-        self.assertEqual(sorted(levels.registry()), sorted(self.record()["keys"]))
+        self.assertEqual(sorted(levels.registry(agent=False)), sorted(self.record()["keys"]))
 
     def test_a_key_whose_command_is_not_matched_is_recorded_as_unruled(self):
         self.ready()

@@ -85,8 +85,9 @@ def digest(table):
 
 def table_of(guarded, checkpoints, commands):
     """The effective table (key to level) for the owner's settings, the declared `checkpoints` and the installed
-    `commands` (``(name, owner-run arguments)``)."""
-    return dict(settings.effective(settings.load(guarded), checkpoints, (), commands).levels)
+    `commands` (``(name, owner-run arguments)``). It holds no key of an agent-safe action, because none is rendered yet:
+    a key that is not rendered must not change the digest a record says it rendered from."""
+    return dict(settings.effective(settings.load(guarded), checkpoints, (), commands, agent=False).levels)
 
 
 def current_table(guarded, start):

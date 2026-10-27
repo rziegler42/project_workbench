@@ -94,12 +94,14 @@ separated by single spaces, at most 96 characters.
 - `block`: every key.
 - `delegated`: `approve-plan` only, whose gate is a converged, sealed review of the exact bytes (`delegation.py`). The gate must
   pass at the moment of the run, and the run counts only while the table still reads `delegated`.
-- `ask` and `none`: `approve-plan` only. A key offers a level only from the version that builds it for that command; `accept-decision`
+- `ask`: `approve-plan` only. `none`: `approve-plan`, every agent-safe action and every declared module argument that is not
+  owner-run; no other key offers it yet. A key offers a level only from the version that builds it for that command; `accept-decision`
   and every other key offer `block` only.
 
 ### Shipped defaults
 
-Every default is `block`. The mechanism for another default exists (`levels._DEFAULTS`), and the default of `approve-plan` was
+Every default is `block`, except the agent-safe actions and the declared module arguments that are not owner-run, which default to
+`none` because an agent may run them today. The mechanism for another default exists (`levels._DEFAULTS`), and the default of `approve-plan` was
 meant to become `ask` once a probe passed. The probe (below) showed that `ask` is bypassable by a script the agent writes and
 runs, which the owner accepted in writing, and the owner left the default at `block`: `ask` and `none` are the owner's opt-in.
 
@@ -195,8 +197,13 @@ list the operations and the attempts with no outcome as unfinished (a killed pro
 ### `wb settings`
 
 It prints the `checkpoint` and `cap` lines it always printed, then one `level <key>: <level>` line for every key it knows: the
-declared checkpoints, then the installer's owner-run commands, then `wb run <command> <argument>` for the installed modules'
-owner-run arguments, with the defaults and the table applied. Problems and notes print as `settings:` lines. Two declarations that
+declared checkpoints, then the installer's owner-run commands, then the agent-safe actions (`wb verify`, `wb preview install`,
+`wb preview adopt`, `wb preview upgrade`, `wb preview add`, `wb launch`, `wb check`, `wb plan-status`, `wb settings`), then `wb run
+<command> <argument>` for each argument the installed modules declare (an owner-run argument first), with the defaults and the
+table applied. An agent-safe key and a declared argument that is not owner-run default to `none`; every other key defaults to `block`.
+The hook entry points, the dispatcher words and `delegate-approve-plan` are not keys. As built by Increment A of the plan, a
+`block` set on an agent-safe key is read and printed and is not yet enforced, and the table a harness renders and digests holds
+none of the agent-safe keys, so an attached clone's record is unchanged. Problems and notes print as `settings:` lines. Two declarations that
 give one key are a refusal.
 
 ## Planned: a level for every command
@@ -310,7 +317,8 @@ clarification note) and are tested where a test can show them (`tests/test_comma
 
 ## Acceptance criteria
 
-1. With no settings, or with a version 1 file, every key reads `block`, and the safety controls are unchanged: the floor, the
+1. With no settings, or with a version 1 file, every key reads `block` except the agent-safe actions and the declared module
+   arguments that are not owner-run, which read `none`, and the safety controls are unchanged: the floor, the
    harness `deny` rules, the guarded store and the terminal tests. `wb settings` prints the same checkpoint lines as before.
 2. A table with an unknown key, a level that is not offered, a floor key, a duplicate key, a key that is not a valid name or a value of
    the wrong type is reported, and the affected key (or the whole table, for a bad key name) reads as `block`.

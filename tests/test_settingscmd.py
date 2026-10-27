@@ -29,8 +29,23 @@ def level_lines(declared, **levels):
         name = "approve-plan" if command == "approve-plan" else "wb " + command
         if name not in names:
             names.append(name)
-    return "".join("level %s: %s\n" % (name, levels.get(name.replace(" ", "_").replace("-", "_"), "block"))
-                   for name in names)
+    from workbench import levels as keyset
+    agent = list(keyset.agent_keys()) + ["wb run tool check", "wb run tool report"]  # the default module's arguments
+    return "".join("level %s: %s\n" % (name, levels.get(name.replace(" ", "_").replace("-", "_"),
+                                                         "none" if name in agent else "block"))
+                   for name in names + agent)
+
+
+def all_block():
+    """`level_lines` keywords that read every agent-safe key as `block`, as a damaged file does."""
+    from workbench import levels as keyset
+    names = list(keyset.agent_keys()) + ["wb run tool check", "wb run tool report"]
+    return {name.replace(" ", "_").replace("-", "_"): "block" for name in names}
+
+
+def problem_lines(out):
+    """How many `settings: <text>` problem lines `out` holds (the key `level wb settings: none` is not one)."""
+    return sum(1 for line in out.splitlines() if line.startswith("settings: "))
 
 
 DEFAULTS = CHECKPOINT_LINES + "cap rounds: 3\ncap tries: 1\n" + level_lines(CHECKPOINTS)
@@ -113,7 +128,7 @@ class Printed(Settings):
         code, out, _ = self.settings()
         self.assertEqual(0, code)
         self.assertTrue(out.startswith("checkpoint approve-plan: stop\ncheckpoint beta: stop\n"), out)
-        self.assertEqual(2, out.count("settings: "))
+        self.assertEqual(2, problem_lines(out))
 
     def test_a_cap_outside_its_range_uses_the_default_and_says_so(self):
         for value in (0, -1, 6, 10 ** 30):
@@ -122,7 +137,7 @@ class Printed(Settings):
                 code, out, err = self.settings()
                 self.assertEqual((0, ""), (code, err))
                 self.assertIn("cap rounds: 3\n", out)
-                self.assertEqual(1, out.count("settings: "), out)
+                self.assertEqual(1, problem_lines(out), out)
 
     def test_an_entry_the_module_does_not_declare_is_named_and_ignored(self):
         self.owner({"version": 1, "checkpoints": {"gamma": "delegate"}, "caps": {"other": 2}})
@@ -138,8 +153,11 @@ class Printed(Settings):
                 self.guarded.write("settings", data)
                 code, out, err = self.settings()
                 self.assertEqual((0, ""), (code, err))
-                self.assertTrue(out.startswith(DEFAULTS), out)
-                self.assertIn("settings: ", out)
+                # A damaged file reads the whole table as block, the agent-safe keys included.
+                every_key_blocked = (CHECKPOINT_LINES + "cap rounds: 3\ncap tries: 1\n"
+                                     + level_lines(CHECKPOINTS, **all_block()))
+                self.assertTrue(out.startswith(every_key_blocked), out)
+                self.assertTrue(problem_lines(out), out)
                 self.assertEqual(data, self.guarded.read("settings"))
 
     def test_a_cap_that_is_not_an_integer_is_a_problem_and_the_default_applies(self):
@@ -147,7 +165,7 @@ class Printed(Settings):
         code, out, _ = self.settings()
         self.assertEqual(0, code)
         self.assertTrue(out.startswith(DEFAULTS), out)
-        self.assertEqual(2, out.count("settings: "), out)
+        self.assertEqual(2, problem_lines(out), out)
 
     def test_a_level_line_is_printed_for_every_declared_key_after_the_caps(self):
         self.owner({"version": 2, "levels": {"approve-plan": "delegated"}})
@@ -165,14 +183,14 @@ class Printed(Settings):
         code, out, err = self.settings()
         self.assertEqual((0, ""), (code, err))
         self.assertIn("level approve-plan: block\n", out)
-        self.assertEqual(1, out.count("settings: "), out)
+        self.assertEqual(1, problem_lines(out), out)
 
     def test_a_level_that_is_not_offered_yet_reads_as_block_and_says_so(self):
         self.owner({"version": 2, "levels": {"beta": "ask"}})
         code, out, err = self.settings()
         self.assertEqual((0, ""), (code, err))
         self.assertTrue(out.startswith(DEFAULTS), out)
-        self.assertEqual(1, out.count("settings: "), out)
+        self.assertEqual(1, problem_lines(out), out)
 
     def test_a_damaged_levels_table_prints_block_and_the_problem(self):
         self.owner({"version": 2, "checkpoints": {"approve-plan": "delegate"}, "levels": ["x"]})
@@ -180,7 +198,7 @@ class Printed(Settings):
         self.assertEqual((0, ""), (code, err))
         self.assertIn("checkpoint approve-plan: stop\n", out)
         self.assertIn("level approve-plan: block\n", out)
-        self.assertIn("settings: ", out)
+        self.assertTrue(problem_lines(out), out)
 
     def test_two_declarations_of_one_key_are_a_refusal(self):
         with unittest.mock.patch.object(levels, "registry", side_effect=levels.RegistryError("more than one")):
@@ -202,7 +220,7 @@ class OtherModules(Settings):
         code, out, err = self.settings()
         self.assertEqual((0, ""), (code, err))
         self.assertIn("level wb run tool go: block\n", out)
-        self.assertNotIn("wb run tool look", out)
+        self.assertIn("level wb run tool look: none\n", out)
 
     def test_the_declaration_order_is_kept(self):
         self.use(checkpoints=["zed", "ant"], caps=CAPS[::-1])
