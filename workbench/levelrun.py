@@ -87,15 +87,15 @@ def apply_logged(guarded, route, key, digest, apply, err, refuse):
     outcome cannot be written after the writes were made, or the run is interrupted before it is, the exit code is 3."""
     word = key.split()[-1]
     try:
-        code, op = logged(guarded, key, route.level, apply, "digest:%s" % digest)
+        code, op = logged(guarded, key, route.level, apply, "digest:%s" % digest if digest else "")
     except levellog.LogError as exc:
         return refuse(err, "%s; nothing was written" % exc)
     try:
         if code == 0:
             done(guarded, op, "written")
         else:
-            levellog.finish_refused(guarded, op, "refused before writing" if code == 1
-                                    else "stopped after writing (exit %d)" % code)
+            levellog.finish_refused(guarded, op, "refused before writing" if code == 1 else
+                                    "interrupted before writing" if code == 130 else "stopped after writing (exit %d)" % code)
     except levellog.OutcomeError as exc:
         err.write("the %s was written, but its outcome was not logged: %s\n" % (word, display.clean(str(exc))))
         return 3
@@ -103,3 +103,16 @@ def apply_logged(guarded, route, key, digest, apply, err, refuse):
         err.write("the %s was written, but it was interrupted before its outcome was logged\n" % word)
         return 3
     return code
+
+
+def optional(guarded, start, key, stdin, out):
+    """For a command that has no terminal test (``attach``, ``release-approvals``): the ``Route`` when it runs without a
+    terminal at a verified ``none`` for the project that holds `start`, so that the run is logged; ``None`` otherwise, and the
+    command goes on exactly as it always did (at a terminal, at another level, or where no level can be read)."""
+    if approve.is_terminal(stdin) and approve.is_terminal(out):
+        return None
+    try:
+        level, ident, root = level_now(guarded, start, key)
+    except (Refusal, OSError):
+        return None
+    return Route(False, level, ident, root) if level == levels.NONE else None

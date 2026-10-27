@@ -35,7 +35,7 @@ and restored between two commands. A hook is a speed bump and not a boundary.
 
 import re
 
-from . import gate_hook, rules
+from . import gate_hook, levels, rules
 from .wbkit import display
 
 USAGE = "usage: wb gate-command <harness>\n"
@@ -65,6 +65,8 @@ Refusal = gate_hook.Refusal
 
 def words(key):
     """The words of the command `key` names, in order: ``approve-plan``; ``wb run <command> <argument>`` gives both."""
+    if key in levels.COMMAND_OF_CHECKPOINT:
+        return [levels.COMMAND_OF_CHECKPOINT[key]]
     if key == "approve-plan":
         return ["approve-plan"]
     parts = key.split(" ")

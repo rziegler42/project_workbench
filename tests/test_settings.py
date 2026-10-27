@@ -571,10 +571,10 @@ class LevelsTest(SettingsBase):
     def test_a_level_a_key_does_not_offer_reads_as_block_with_a_note(self):
         for level in ("ask", "none", "delegated"):
             with self.subTest(level=level):
-                loaded, got = self.effective({"version": 2, "levels": {"wb attach": level}})
-                self.assertEqual("block", got.levels["wb attach"])
+                loaded, got = self.effective({"version": 2, "levels": {"beta": level}})
+                self.assertEqual("block", got.levels["beta"])
                 self.assertEqual(1, len(got.notes))
-                self.assertIn("wb attach", got.notes[0])
+                self.assertIn("beta", got.notes[0])
 
     def test_the_installer_commands_and_approve_and_pin_offer_none_and_nothing_else(self):
         for key in ("wb install", "wb adopt", "wb upgrade", "wb add", "wb approve", "wb pin"):

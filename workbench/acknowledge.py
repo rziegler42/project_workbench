@@ -22,6 +22,11 @@ A path that is a link, a directory or another kind of file where a file is expec
 accept, so it cannot be acknowledged; the owner deals with it first. The typed text is friction,
 not authentication; what stops an agent is the deny rule a harness renders for this command and
 for the guarded store.
+
+When the owner has set the checkpoint ``acknowledge-first-tier`` to ``none`` and the rendering holds (the command line reads it,
+``levelrun.route``), the command also runs without a terminal and asks nothing: it prints the same list and digest, examines
+the project again, and writes the level log's attempt just before the baselines and its outcome after. The project listed must
+be the one the level was read for.
 """
 
 import hashlib
@@ -34,6 +39,8 @@ MANIFEST = acknowledgement.MANIFEST
 MAX_LISTED = 500          # a longer list cannot be reviewed; it is refused, not truncated
 
 _STORE = "projects/%s/baselines"
+TERMINAL_ONLY = ("acknowledge is owner-run: standard input and output must both be terminals. Run this command yourself, "
+                 "from your own terminal; `preview upgrade` shows what is different without writing.")
 
 
 class Refused(Exception):
@@ -239,7 +246,7 @@ def _pins_hash(guarded, project):
     return None if guarded.kind(rel) is None else _sha(guarded.read(rel))
 
 
-def _run(guarded, spelling, stdin, out, err, version):
+def _run(guarded, spelling, stdin, out, err, version, log=None):
     try:
         with target.open_target(spelling, guarded.root) as held:
             now = approvals.utc_now()
@@ -247,35 +254,46 @@ def _run(guarded, spelling, stdin, out, err, version):
             if not review.found:
                 out.write("nothing to acknowledge\n")
                 return 0
+            if log is not None and review.project != log.project_id:
+                return _refuse(err, "the project the level was read for is not the project being acknowledged; nothing was "
+                                    "written")
             out.write(render(review, held.path))
-            out.write("\nTo acknowledge these changes, type the first %d characters of the digest "
-                      "shown above and press Enter.\nAnything else cancels and writes nothing.\n> "
-                      % confirm.CONFIRM_CHARS)
-            out.flush()
-            if not confirm.typed_matches(stdin, review.digest):
-                out.write("cancelled: nothing was written\n")
-                return 1
+            if log is not None:
+                out.write("\nThe level of acknowledge-first-tier is none here, so nothing is asked: it is acknowledged now.\n")
+                out.flush()
+            else:
+                out.write("\nTo acknowledge these changes, type the first %d characters of the digest "
+                          "shown above and press Enter.\nAnything else cancels and writes nothing.\n> "
+                          % confirm.CONFIRM_CHARS)
+                out.flush()
+                if not confirm.typed_matches(stdin, review.digest):
+                    out.write("cancelled: nothing was written\n")
+                    return 1
             held.recheck()
             again = examine(guarded, held, version, now)
             if again.digest != review.digest:
                 return _refuse(err, "the project changed while the list was shown; nothing was "
                                     "written")
-            try:
-                guarded.write(_STORE % review.project, review.store_bytes)
-                if review.pins_bytes is not None:
-                    guarded.write("projects/%s/pins" % review.project, review.pins_bytes)
-            except (Exception, KeyboardInterrupt) as exc:
-                cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
-                kept = (_stored(guarded, review.project) == review.store_hash
-                        and _pins_hash(guarded, review.project) == review.pins_hash)
-                err.write("failed: %s\n%s\n" % (display.ascii_text(cause), (
-                    "the baselines were not changed" if kept else
-                    "the baselines or the pins may have been replaced; run `wb preview upgrade` to see")))
-                return 3
-            out.write("acknowledged %d paths%s; the project was not touched\n" % (
-                len(review.found), (" and moved %d pin%s" % (len(review.moved), "" if len(review.moved) == 1 else "s"))
-                if review.moved else ""))
-            return 0
+
+            def apply():
+                try:
+                    guarded.write(_STORE % review.project, review.store_bytes)
+                    if review.pins_bytes is not None:
+                        guarded.write("projects/%s/pins" % review.project, review.pins_bytes)
+                except (Exception, KeyboardInterrupt) as exc:
+                    cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
+                    kept = (_stored(guarded, review.project) == review.store_hash
+                            and _pins_hash(guarded, review.project) == review.pins_hash)
+                    err.write("failed: %s\n%s\n" % (display.ascii_text(cause), (
+                        "the baselines were not changed" if kept else
+                        "the baselines or the pins may have been replaced; run `wb preview upgrade` to see")))
+                    return 3
+                out.write("acknowledged %d paths%s; the project was not touched\n" % (
+                    len(review.found), (" and moved %d pin%s" % (len(review.moved), "" if len(review.moved) == 1 else "s"))
+                    if review.moved else ""))
+                return 0
+
+            return apply() if log is None else log(review.digest, apply)
     except Refused as exc:
         for index, line in enumerate(exc.lines):
             err.write(("refused: %s\n" if not line.startswith("  ") or not index else "%s\n")
@@ -291,19 +309,20 @@ def require_terminal(stdin, out, err):
     """True when both streams are terminals; otherwise print the refusal and return False."""
     if approve.is_terminal(stdin) and approve.is_terminal(out):
         return True
-    _refuse(err, "acknowledge is owner-run: standard input and output must both be terminals. "
-                 "Run this command yourself, from your own terminal; `preview upgrade` shows "
-                 "what is different without writing.")
+    _refuse(err, TERMINAL_ONLY)
     return False
 
 
-def run(guarded, spelling, stdin, out, err, version=None):
+def run(guarded, spelling, stdin, out, err, version=None, log=None):
     """Acknowledge the differences after the owner types the digest. Returns the exit code:
-    0 done or nothing to do, 1 refused or cancelled, 3 failed while writing, 130 interrupted."""
-    if not require_terminal(stdin, out, err):
+    0 done or nothing to do, 1 refused or cancelled, 3 failed while writing, 130 interrupted.
+
+    `log`, given by the command line when the level of ``acknowledge-first-tier`` is ``none`` here, is ``log(digest, apply)``
+    with a ``project_id``: the command then runs without a terminal and asks nothing."""
+    if log is None and not require_terminal(stdin, out, err):
         return 1
     try:
-        return _run(guarded, spelling, stdin, out, err, version or __version__)
+        return _run(guarded, spelling, stdin, out, err, version or __version__, log)
     except KeyboardInterrupt:
         try:
             out.write("\ncancelled: nothing was written\n")

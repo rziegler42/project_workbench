@@ -113,7 +113,12 @@ def _target(args):
     return given[0] if given else "."
 
 
-def _release(distribution, out, err):
+def _release(guarded, stdin, distribution, out, err):
+    return _unattended_call(guarded, "wb release-approvals", stdin, out, err,
+                            lambda: _release_approvals(distribution, out, err))
+
+
+def _release_approvals(distribution, out, err):
     try:
         done = firstparty.release_approvals(distribution)
     except firstparty.ReleaseError as exc:
@@ -156,7 +161,37 @@ def _levelled(guarded, key, terminal_only, stdin, out, err, project_id=None, roo
     def log(digest, apply):
         return levelrun.apply_logged(guarded, route, key, digest, apply, err, lambda stream, text: refuse(text)[1])
 
+    log.project_id = route.project_id
     return log, None
+
+
+def _unattended_call(guarded, key, stdin, out, err, call):
+    """Run `call()` (the exit code of a command that has no terminal test: ``attach``, ``release-approvals``). Without a
+    terminal at a verified ``none`` for the project the working directory is in, the run is logged: the attempt before it and
+    the outcome after. Otherwise it goes on exactly as it always did."""
+    try:
+        route = levelrun.optional(guarded, os.getcwd(), key, stdin, out)
+    except OSError:
+        route = None
+    if route is None:
+        return call()
+
+    def refuse(stream, text):
+        err.write("refused: %s\n" % _clean(text))
+        return 1
+
+    return levelrun.apply_logged(guarded, route, key, "", call, err, refuse)
+
+
+def _refuse_without_store(store_root, stdin, out, err, terminal_only):
+    """True, after refusing, when there is no terminal and no guarded store yet. The level cannot be read from a store that is
+    not there, so it reads ``block``, and a refused run must not create the store (it reads and writes nothing)."""
+    if approve.is_terminal(stdin) and approve.is_terminal(out):
+        return False
+    if os.path.lexists(store_root if store_root is not None else store.default_root()):
+        return False
+    err.write("refused: %s\n" % _clean(terminal_only))
+    return True
 
 
 def _open_store(store_root, err):
@@ -210,6 +245,8 @@ def _preview(argv, out, err, store_root, distribution, home=None):
 
 def _upgrade(tokens, out, err, store_root, distribution, stdin, mode="upgrade"):
     stdin = stdin if stdin is not None else sys.stdin
+    if _refuse_without_store(store_root, stdin, out, err, upgrade.terminal_only(mode)):
+        return 1
     opened = _project_command(tokens, out, err, store_root, distribution,
                               upgrading=mode == "upgrade")
     if isinstance(opened, int):
@@ -240,15 +277,18 @@ def _acknowledge(tokens, err, out, store_root, stdin):
         err.write("%s\n%s" % (_clean(str(exc)), USAGE))
         return 2
     stdin = stdin if stdin is not None else sys.stdin
-    if not acknowledge.require_terminal(stdin, out, err):
+    if _refuse_without_store(store_root, stdin, out, err, acknowledge.TERMINAL_ONLY):
         return 1
     opened = _open_store(store_root, err)
     if opened is None:
         return 1
+    log, code = _levelled(opened[0], levels.CHECKPOINT_ACKNOWLEDGE, acknowledge.TERMINAL_ONLY, stdin, out, err)
+    if code is not None:
+        return code
     notes = opened[1] + launch.install_wrapper(opened[0], firstparty.default_distribution())
     for note in notes:
         err.write("warning: %s\n" % _clean(note))
-    return acknowledge.run(opened[0], spelling, stdin, out, err)
+    return acknowledge.run(opened[0], spelling, stdin, out, err, log=log)
 
 
 def _recover(tokens, err, out, store_root, stdin):
@@ -258,18 +298,21 @@ def _recover(tokens, err, out, store_root, stdin):
         err.write("%s\n%s" % (_clean(str(exc)), USAGE))
         return 2
     stdin = stdin if stdin is not None else sys.stdin
-    if not recover.require_terminal(stdin, out, err):
+    if _refuse_without_store(store_root, stdin, out, err, recover.TERMINAL_ONLY):
         return 1
     opened = _open_store(store_root, err)
     if opened is None:
         return 1
+    log, code = _levelled(opened[0], "wb recover", recover.TERMINAL_ONLY, stdin, out, err)
+    if code is not None:
+        return code
     notes = opened[1] + launch.install_wrapper(opened[0], firstparty.default_distribution())
     for note in notes:
         err.write("warning: %s\n" % _clean(note))
-    return recover.run(opened[0], spelling, stdin, out, err)
+    return recover.run(opened[0], spelling, stdin, out, err, log=log)
 
 
-def _attach(tokens, out, err, store_root, distribution, home):
+def _attach(tokens, out, err, store_root, distribution, home, stdin=None):
     try:
         command = attach.parse(tokens)
     except sources.UsageError as exc:
@@ -282,7 +325,8 @@ def _attach(tokens, out, err, store_root, distribution, home):
     notes += launch.install_wrapper(guarded, distribution or firstparty.default_distribution())
     for note in notes:
         err.write("warning: %s\n" % _clean(note))
-    return attach.run(guarded, command, out, err, distribution, home=home)
+    return _unattended_call(guarded, "wb attach", stdin if stdin is not None else sys.stdin, out, err,
+                            lambda: attach.run(guarded, command, out, err, distribution, home=home))
 
 
 def _check(tokens, out, err, store_root, distribution):
@@ -448,7 +492,7 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
     if argv and argv[0] == "recover":
         return _recover(argv[1:], err, out, store_root, stdin)
     if argv and argv[0] == "attach":
-        return _attach(argv[1:], out, err, store_root, distribution, home)
+        return _attach(argv[1:], out, err, store_root, distribution, home, stdin)
     if argv and argv[0] == "check":
         return _check(argv[1:], out, err, store_root, distribution)
     if argv and argv[0] in ("upgrade", "add"):
@@ -508,7 +552,7 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         return pins.run(guarded, args.project_id, args.name, args.helper, args.root, stdin, out, err, kit=args.kit,
                         log=log)
     if args.command == "release-approvals":
-        return _release(distribution, out, err)
+        return _release(guarded, stdin if stdin is not None else sys.stdin, distribution, out, err)
     if args.command == "approve":
         for note in notes:
             err.write("warning: %s\n" % _clean(note))

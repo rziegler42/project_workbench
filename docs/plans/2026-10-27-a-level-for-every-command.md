@@ -692,3 +692,46 @@ harness was rendered with those two keys relaxed. Observed:
 
 **Not covered:** `wb upgrade`, `wb approve` and `wb pin` at `none` were not run by an agent, and the gate was not tried with
 `wb approve` relaxed (`wb approve-plan` alongside it). The commands of Increments J and K are not built.
+
+### Increment J — built, not committed (2026-10-27)
+
+**Done.** The owner answered three questions before the build. (1) `wb acknowledge` at `none` is governed by the checkpoint
+`acknowledge-first-tier` alone: every path the command can list has a baseline, so it is first-tier material, and the command has no
+notion of a tier. (2) `acknowledge-second-tier` offers `none` and is documented as governing no installer command today. (3) `attach`
+and `release-approvals` have no terminal test, so an unattended run at a verified `none` is logged and they go on exactly as before at
+any other level, with no new refusal. Built: `levels._OFFERS` gives `acknowledge-first-tier`, `acknowledge-second-tier`, `wb recover`,
+`wb attach` and `wb release-approvals` the levels `block` and `none`; `levels.COMMAND_OF_CHECKPOINT` makes the first-tier key stand for
+the `acknowledge` command in the rendering (`key_patterns`, so the `deny` of `wb acknowledge` is not rendered at `none`) and in the
+command gate (`words`). `acknowledge.run` and `recover.run` take `log`, which `cli._levelled` gives them at a verified `none`; they
+print the same list and digest, ask nothing, examine again, and the attempt (`digest:` the digest shown) is written just before the
+baselines or the first removal and the outcome after. `acknowledge` compares the project listed with the one the level was read for;
+`recover` compares nothing, because the marker of a failed `install` is in a new directory and its record is unauthenticated text.
+`attach` and `release-approvals` are wrapped whole by `cli._unattended_call`, so a refusal is logged too, with no evidence. A refused
+run without a terminal and without a store no longer creates the store (`cli._refuse_without_store`), for `acknowledge`, `recover` and
+also `upgrade` and `add`, where Increment G had lost that guarantee.
+
+**Verification as run.** `tests/test_ack_recover_levels.py` was written first and failed against the old code for the right reasons;
+it now has 39 tests, and `LiteralRunCommands`/the gate file has a test for the first-tier key. The full suite found two stale offers
+tests, one `test_settings` test that used `wb attach` as its not-offered key, and the guarantee that a refused `acknowledge` creates
+no store (a real regression, fixed); after those, `python3 -B -W error tests/run_all.py`: `Ran 5127 tests in 10 roots`, `OK`, and the
+final run: `Ran 5129 tests in 10 roots`, `OK`. `wb check` and the plan check: no problems. **Not verified:** nothing under a real harness for these five keys;
+`attach` and `release-approvals` are tested with the command mocked.
+
+**Review.** One round by the `reviewer` agent: no blocking findings. Applied: a gate test for the first-tier key, a test that an
+undeclared checkpoint leaves no key (the command reads `block`), tidied two weak tests, and the spec now says that `acknowledge` also
+moves pins, that an unwritable log refuses these two commands at a verified `none`, that the launcher wrapper is refreshed before the
+attempt, and that a read failure adds its reason to the refusal. Recorded, not changed: no test of a real `attach` at `none`.
+
+**Security review (J, read only; the reviewer's probes were refused).** No Critical or High finding. Medium, a consequence of the
+owner's answer on logging and left for the owner: an agent can run `attach` or `release-approvals` unlogged at a verified `none` by
+choosing a working directory where the level cannot be read (no project, a decoy `.git` with an unreadable manifest, a deleted
+directory), because the command then goes on as before; the spec now says so and calls the log a record and not a control. The
+owner may ask for these runs to be refused where no level is readable, as a separate change. Low, applied: a `recover` marker that
+names a project must name the one the level was read for (a forged marker can name none, so this stops a mistake only); exit 130 is
+logged as `interrupted before writing` and not as a write; a test pins that the `deny` of `wb acknowledge` is still rendered when no
+module declares the checkpoint (the reviewer doubted it; the static list of every owner-run command covers it). Low, documented: `attach`
+compares no target with the project the level was read for, as `install` does not. Sound (read only): `effective_level` and the
+rendering record, the second-tier key alone not opening `acknowledge`, a duplicate or foreign declaration of the checkpoint, the
+project check and the digest binding of `acknowledge`, the target identity and canonical form of the marker, the removals of
+`recover` bounded to the recorded empty directories, `_refuse_without_store` with links, and the clean one-line reasons. Not tested by
+the reviewer: any experiment. `tests/test_ack_recover_levels.py` is now 41 tests.

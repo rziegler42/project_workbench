@@ -46,6 +46,8 @@ def key_patterns(key):
     command have no patterns."""
     if key == levels.APPROVE_PLAN:
         return rules.owner_run_command_patterns(key)
+    if key in levels.COMMAND_OF_CHECKPOINT:
+        return rules.owner_run_command_patterns(levels.COMMAND_OF_CHECKPOINT[key])
     if key.startswith("wb run "):
         parts = key.split(" ")
         if len(parts) >= 4:

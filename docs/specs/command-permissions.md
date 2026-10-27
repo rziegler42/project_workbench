@@ -4,7 +4,7 @@ Status: Current
 
 Written by plan `2026-10-26-command-permission-levels` (Increment H), which built it. It describes the levels table, the keys, the
 log, the rendering record, the command gate and `approve-plan` at the levels `ask` and `none`. One key, `approve-plan`, is built
-beyond `block` (and, from the plan `2026-10-27-a-level-for-every-command`, `wb install`, `wb adopt`, `wb upgrade`, `wb add`, `wb approve` and `wb pin` offer `none`); every other key offers `block` only. Extending a review (`wb run review-engine extend`) was part of the design,
+beyond `block` (and, from the plan `2026-10-27-a-level-for-every-command`, `wb install`, `wb adopt`, `wb upgrade`, `wb add`, `wb approve`, `wb pin`, `acknowledge-first-tier`, `acknowledge-second-tier`, `wb recover`, `wb attach` and `wb release-approvals` offer `none`); every other key offers `block` only. Extending a review (`wb run review-engine extend`) was part of the design,
 was not built, and is listed under "Not built". The design is `docs/decisions/2026-10-26-per-command-permission-levels.md`, as refined by
 `docs/decisions/2026-10-26-permission-levels-as-built.md` (accepted), which states what stands, what changed and what was not built;
 where the two differ on the defaults or the offered levels, this spec follows the later record.
@@ -101,7 +101,7 @@ separated by single spaces, at most 96 characters.
 - `block`: every key.
 - `delegated`: `approve-plan` only, whose gate is a converged, sealed review of the exact bytes (`delegation.py`). The gate must
   pass at the moment of the run, and the run counts only while the table still reads `delegated`.
-- `ask`: `approve-plan` only. `none`: `approve-plan`, `wb install`, `wb adopt` (built by Increment F), `wb upgrade` and `wb add` (built by Increment G), `wb approve` and `wb pin` (built by Increment H), every agent-safe action and
+- `ask`: `approve-plan` only. `none`: `approve-plan`, `wb install`, `wb adopt` (built by Increment F), `wb upgrade` and `wb add` (built by Increment G), `wb approve` and `wb pin` (built by Increment H), `acknowledge-first-tier`, `acknowledge-second-tier`, `wb recover`, `wb attach` and `wb release-approvals` (built by Increment J), every agent-safe action and
   every declared module argument that is not owner-run; no other key offers it yet. A key offers a level only from the version that builds it for that command; `accept-decision`
   and every other key offer `block` only.
 
@@ -253,7 +253,7 @@ give one key are a refusal.
 
 ## Planned: a level for every command
 
-Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B, C, D, E, F, G, H and I are
+Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B, C, D, E, F, G, H, I and J are
 built). It is the owner's direction of 2026-10-26, recorded here so a plan can implement it. Calls marked **(call)** are the
 author's and are not the owner's until the owner confirms them.
 
@@ -350,6 +350,37 @@ a fetch that fails or is already approved leaves no entry; `approve` is machine-
 directory is in, so an agent in any project where the owner set `wb approve` to `none` can approve for every project; and the level is
 read once, before the fetch and the second verification, so a harness edit made in between is seen at the next run. `pin` reads its
 `--root` as spelled and refuses one that names the project only through a link or `..`.
+
+**`acknowledge`, `recover`, `attach` and `release-approvals` at `none`** (built by Increment J). The keys `acknowledge-first-tier`,
+`acknowledge-second-tier`, `wb recover`, `wb attach` and `wb release-approvals` offer `block` and `none`; the shipped defaults stay
+`block`. The command line reads the level for the project the working directory is in (`levelrun.route`), as for the commands above.
+*`acknowledge`* is governed by the checkpoint `acknowledge-first-tier` (the owner's choice): every path the command can list has a
+baseline, so it is the manifest, a file under `.workbench/`, `AGENTS.md` or a seeded file, which are first-tier material, and the
+real direction documents (roadmaps, specs, plans, decisions) are not baselined. The checkpoint stands for the command, so at `none`
+the `wb acknowledge` `deny` is not rendered (the interpreter spellings stay denied) and the command gate guards the word
+`acknowledge` in command position. **At `none` an agent can accept changes someone else made to the files that instruct and run
+it, and move the pin of a helper whose file was edited, so that the launcher runs the new bytes (the same trust as `wb pin` at `none`).** `acknowledge-second-tier` offers `none` as the plan lists it, but `wb acknowledge` never lists a second-tier file, so it governs
+no installer command today; it matters only to the agent's own checkpoint behavior. At `none` the command prints the same list and
+digest, asks nothing, examines the project again (the digest must be the same) and writes the attempt (`acknowledge-first-tier`,
+`none`, `digest:<64 hex>`) just before the baselines and the outcome after; the project listed must be the one the level was read
+for, and nothing in the project is written. A run with nothing to acknowledge writes no entry. *`recover`* at `none` prints the same
+examination and digest, asks nothing, examines again, and writes the attempt (`wb recover`, `none`, `digest:<64 hex>`) just before the
+first removal and the outcome after; the same states are cleared and the same ones refused. The marker's record is unauthenticated
+text and the marker of a failed `install` or `adopt` names no project and is in a new directory, so such a target is not compared with
+the project the level was read for (the level is the owner's setting for the project the agent works in, as for `install`); a marker
+that names a project (an unfinished `upgrade` or `add`) must name that one, which stops a mistake and not a forged marker. `attach`
+acts on its target as `install` does and compares nothing; its log entry records the level of the project the command was run from. *`attach` and `release-approvals`* have no
+terminal test and no digest, so at `none` the only change is that the `deny` is not rendered. A run without a terminal at a verified
+`none` is logged (the attempt before the command is run, the outcome after: `done` with `written` for exit 0 and `refused` with
+the exit code otherwise, a refusal included, because the command makes its own checks); a run at a terminal, at another level, or
+where no level can be read (a directory that is no project) goes on exactly as before and writes no entry, so an agent that
+runs from a directory where the level cannot be read (a directory with no project, a decoy `.git` with an unreadable manifest, a deleted
+working directory) is not logged: the log is a record and not a control, and the owner who wants these runs refused where no level
+is readable asks for that as a separate change; at a verified `none`
+an attempt that cannot be written refuses the run and nothing is done, which these two commands did not do before. The attempt is
+written after the launcher wrapper under `bin/` is refreshed, which every command does first, at a terminal or not. A refusal for a
+level that could not be read carries the reason after the terminal-only text. `release-approvals`
+writes the approvals shipped with the first-party packages, so at `none` an agent can make the first-party packages trusted.
 
 **Out of scope.** The compiled hard-stop floor is unchanged and is not a key (see "Non-goals").
 

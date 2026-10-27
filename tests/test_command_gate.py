@@ -311,6 +311,18 @@ class SingleWordKeys(unittest.TestCase):
         self.assertIsNotNone(self.judge("echo tool then go", keys=(key,)))
         self.assertIsNone(self.judge("echo tool", keys=(key,)))
 
+    def test_the_first_tier_checkpoint_guards_the_acknowledge_command(self):
+        key = "acknowledge-first-tier"
+        self.assertEqual(["acknowledge"], command_gate.words(key))
+        self.assertIsNone(self.judge("wb acknowledge --dir /x", keys=(key,)))
+        self.assertIsNone(self.judge("%s acknowledge /x" % STORE_BIN, keys=(key,)))
+        for command in ("bash -c 'wb acknowledge'", "python3 -m workbench acknowledge", "wb acknowledge; echo", 'w""b acknowledge',
+                        "wb acknow\"\"ledge", "echo acknowledge | xargs wb"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command, keys=(key,)))
+        self.assertIsNone(self.judge("echo acknowledge", keys=(key,)))
+        self.assertIsNone(self.judge("wb run helper commit --subject 'acknowledge'", keys=(key,)))
+
     def test_the_launchers_and_the_preview_actions_are_those_of_the_rules(self):
         from workbench import rules
         self.assertEqual(sorted({spelling.split()[-1] for spelling in rules.SPELLINGS}),
