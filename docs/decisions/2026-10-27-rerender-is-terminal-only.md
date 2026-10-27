@@ -1,6 +1,6 @@
 # `wb rerender` offers `block` only and always needs a terminal
 
-Status: Proposed
+Status: Accepted
 Date: 2026-10-27
 
 ## Context
@@ -23,7 +23,7 @@ command, so decision 3 would give it `none`. A `none` for it cannot work as the 
 
 ## Decision
 
-Proposed. Nothing here is built; Increment B of the plan `2026-10-27-rerender-attached-harness` builds it.
+Accepted by the owner on 2026-10-27. Nothing here is built; Increment B of the plan `2026-10-27-rerender-attached-harness` builds it.
 
 1. **`wb rerender` offers `block` only and defaults to `block`.** It always needs a terminal and the preview digest typed by the
    owner. A settings entry of `none` for it reads as `block` with a note, as for any level a key does not offer.

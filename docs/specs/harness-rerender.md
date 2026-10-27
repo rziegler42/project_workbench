@@ -60,8 +60,8 @@ table digest or the permissions file's hash differs, and those are the two ordin
 or an `allow` rule added by "Yes, and don't ask again"). It would refuse exactly when needed. A narrower recovery path would let
 a non-terminal run keep and record, as trusted, `allow` rules nobody saw, so it was not chosen. This is a second exception to decision 3 of
 `2026-10-26-a-level-for-every-command` (every key offers `block` and `none`), beside the owner-run arguments of module commands but
-for a different reason. It is proposed in `2026-10-27-rerender-is-terminal-only` and stands only when the owner accepts that
-record. `command-permissions.md` lists it with the other exception when the command is built. The preview, `wb preview rerender`, is
+for a different reason. It is recorded in `2026-10-27-rerender-is-terminal-only`, which the owner accepted on 2026-10-27.
+`command-permissions.md` lists it with the other exception when the command is built. The preview, `wb preview rerender`, is
 unaffected. A run at a terminal writes no level-log entry, as for the other owner-run commands.
 
 **(call) Keys.** The read-only plan, `wb preview rerender`, is its own agent-safe key and defaults to `none`, as the other preview
