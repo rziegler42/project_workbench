@@ -9,6 +9,7 @@
     "groundwork",
     "safe-git",
     "review-engine",
+    "action-review",
     "mempalace",
     "remote-runner",
     "security-review"

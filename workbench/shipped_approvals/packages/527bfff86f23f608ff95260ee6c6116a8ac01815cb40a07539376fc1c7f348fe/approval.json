@@ -1,10 +1,15 @@
 {
   "approver": "workbench-release",
   "commit": null,
-  "declaration_hash": "6f6e63ff1140cbf51949c1fd9591c8e91b9fa75edaf06c28c37c83ab85121f29",
+  "declaration_hash": "d6dc9f995da3b9d774a41369296253f2c3737f5a1b22f462cbef5feddcbfbc43",
   "format": 1,
   "kind": "package",
   "modules": [
+    {
+      "declaration_hash": "bf26ca5125aaf3919a7bbeb1159116352ebfcd41f7fa1f3531c59824318253a8",
+      "name": "action-review",
+      "tree_hash": "728100025102ba3254bd1c91451e13714c61205ba540a82f3b54710d211099d4"
+    },
     {
       "declaration_hash": "56198469236c21632edd088a610737b27597365ad5b608fd7a2a8d7e0bd6c877",
       "name": "ask-codex",
@@ -13,17 +18,17 @@
     {
       "declaration_hash": "bbee74d628101045800cfe5e8d75672920a7d21a935171c914cdc932f0c2eb06",
       "name": "claude",
-      "tree_hash": "3ff12734f1d9fcb60bc1c717f0595bacfad1002591f1b12fdbc54a30a479f730"
+      "tree_hash": "db67c8737c01dbe9639a688d66a79acdd3ee752fb5a7f32f9dbe2ddf8b7a30c4"
     },
     {
       "declaration_hash": "50cfad42b0e477acb499f437f1272f5e189772c689091801639ea3dfc3ad232c",
       "name": "code-work",
-      "tree_hash": "b43ba27e3db1cae577864606a7fbc3be744b9222e2cda37e39d26631e664437f"
+      "tree_hash": "dea6a306b5ff9eee8fa51f6056759d24a81caf479387522955f65c9986c48fd7"
     },
     {
       "declaration_hash": "eb8f2f640ad950914c8de822f9c50fe8bc387c4938e656f339f11d092329bf3f",
       "name": "groundwork",
-      "tree_hash": "5bf3a7aa5e8dc2819b93143d798384e30f4f36f17c5ee845ba633eced0496d55"
+      "tree_hash": "c1e8a6d0c1f574f8801f28adbbbdfa8be12d40f79e78afcccd1a1cfc6ca3acb5"
     },
     {
       "declaration_hash": "184b1eaf0af1a0482a00da156e33ef42e6da16f6a14a2f71c30d77a9418368f9",
@@ -53,6 +58,6 @@
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "5e42a9e5ea6a920ea4bd7417029bea177754dc127b18f8aacb9339bb3279a07a",
+  "tree_hash": "747e4aab6cd7a9b2846b653f16b0e0a9f90800ef0057103fa73e6af0e979fa50",
   "workbench_version": "0.1.0"
 }
