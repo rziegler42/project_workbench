@@ -673,3 +673,22 @@ forms. This is narrower than the decision's wording ("the exact token ... is rem
 is not edited. Sound (read only): the literal regex and its agreement with bash on single quotes, whitespace and prefixes, the
 reserved names, the store head with `re.escape`, linear failure on an unbalanced quote, the other keys still judged, the level table
 and the one-line reason. Not tested by the reviewer: any experiment. `tests/test_command_gate.py` is 77 tests.
+
+### Trial in a real harness — G and I (2026-10-27, run by the owner; completion criterion 4, further)
+
+A second throwaway project was installed (groundwork and safe-git) with the table at `{"wb add": "none", "wb pin": "none"}`, so its
+harness was rendered with those two keys relaxed. Observed:
+
+- The rendered `.claude/settings.local.json` has no `Bash(wb add…)` or `Bash(wb pin…)` `deny`, still denies `wb install`, `wb upgrade`,
+  `wb approve` and every `python3 -m workbench` spelling, and holds the `wb gate-command claude` hook.
+- In a new session in that project, `wb add <absolute path> --package … --select code-work` ran with no prompt and no typed digest and
+  wrote 40 paths. The level log gained `A … wb add none digest:<64 hex>` and then `O … done written` (Increment G, first run under a
+  harness).
+- `wb run safe-git commit --expected-head none --subject 'Add notes on mapping and padding' -- docs/notes.md` was not blocked by the
+  gate with `wb add` relaxed (Increment I: the subject holds `Add` and `padding`). The first attempt failed in git with exit 128 because
+  the throwaway repository had no author identity; after the owner set one the same command made the commit.
+- Blocked: `echo add; wb check` (the compound-command cost) and `python3 -m workbench add …`. `wb approve-plan` was denied by the
+  harness's own rule, with no gate message.
+
+**Not covered:** `wb upgrade`, `wb approve` and `wb pin` at `none` were not run by an agent, and the gate was not tried with
+`wb approve` relaxed (`wb approve-plan` alongside it). The commands of Increments J and K are not built.
