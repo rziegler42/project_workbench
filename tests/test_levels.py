@@ -200,13 +200,23 @@ class OfferedLevelsTest(unittest.TestCase):
             with self.subTest(key=name):
                 self.assertEqual(name == "approve-plan", "delegated" in key.offers)
 
-    def test_only_approve_plan_offers_ask_or_none_among_the_owner_run_keys(self):
+    # The owner-run keys that offer ``none`` in this version; each increment of the plan ``2026-10-27-a-level-for-every-command``
+    # adds the keys it builds.
+    NONE_KEYS = ("approve-plan", "wb install", "wb adopt")
+
+    def test_only_approve_plan_offers_ask_among_the_owner_run_keys(self):
         for name, key in self.keys().items():
             if name in AGENT_KEYS:
                 continue
             with self.subTest(key=name):
                 self.assertEqual(name == "approve-plan", "ask" in key.offers)
-                self.assertEqual(name == "approve-plan", "none" in key.offers)
+
+    def test_the_owner_run_keys_that_offer_none_are_those_built_so_far(self):
+        for name, key in self.keys().items():
+            if name in AGENT_KEYS:
+                continue
+            with self.subTest(key=name):
+                self.assertEqual(name in self.NONE_KEYS, "none" in key.offers)
 
     def test_no_key_offers_ask_except_approve_plan(self):
         for name, key in self.keys().items():

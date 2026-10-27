@@ -4,7 +4,7 @@ Status: Current
 
 Written by plan `2026-10-26-command-permission-levels` (Increment H), which built it. It describes the levels table, the keys, the
 log, the rendering record, the command gate and `approve-plan` at the levels `ask` and `none`. One key, `approve-plan`, is built
-beyond `block`; every other key offers `block` only. Extending a review (`wb run review-engine extend`) was part of the design,
+beyond `block` (and, from the plan `2026-10-27-a-level-for-every-command`, `wb install` and `wb adopt` offer `none`); every other key offers `block` only. Extending a review (`wb run review-engine extend`) was part of the design,
 was not built, and is listed under "Not built". The design is `docs/decisions/2026-10-26-per-command-permission-levels.md`, as refined by
 `docs/decisions/2026-10-26-permission-levels-as-built.md` (accepted), which states what stands, what changed and what was not built;
 where the two differ on the defaults or the offered levels, this spec follows the later record.
@@ -101,8 +101,8 @@ separated by single spaces, at most 96 characters.
 - `block`: every key.
 - `delegated`: `approve-plan` only, whose gate is a converged, sealed review of the exact bytes (`delegation.py`). The gate must
   pass at the moment of the run, and the run counts only while the table still reads `delegated`.
-- `ask`: `approve-plan` only. `none`: `approve-plan`, every agent-safe action and every declared module argument that is not
-  owner-run; no other key offers it yet. A key offers a level only from the version that builds it for that command; `accept-decision`
+- `ask`: `approve-plan` only. `none`: `approve-plan`, `wb install` and `wb adopt` (built by Increment F), every agent-safe action and
+  every declared module argument that is not owner-run; no other key offers it yet. A key offers a level only from the version that builds it for that command; `accept-decision`
   and every other key offer `block` only.
 
 ### Shipped defaults
@@ -237,7 +237,7 @@ give one key are a refusal.
 
 ## Planned: a level for every command
 
-Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B, C, D and E are
+Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B, C, D, E and F are
 built). It is the owner's direction of 2026-10-26, recorded here so a plan can implement it. Calls marked **(call)** are the
 author's and are not the owner's until the owner confirms them.
 
@@ -285,6 +285,22 @@ otherwise reads the key's level as `approve-plan`'s is read (`rendering.effectiv
 hold) and refuses with the caller's text unless `may_run` says the command may go on; `logged` and `done` write the attempt after
 every check and just before the change and the outcome after it, and write nothing for a run that changes nothing. `approve-plan`
 uses `level_now`, `logged` and `done`, and its behavior is unchanged.
+
+**`install` and `adopt` at `none`** (built by Increment F). The keys `wb install` and `wb adopt` offer `block` and `none`. The level is read
+for the project the command is run from (the directory the agent works in, not the target, which is a new or adoptable directory), as
+`levelrun.route` reads it: at a terminal nothing is read and the command asks for the digest as before; without one, `none` holds only
+while the rendering record, the live hashes and the gate hold, and any other state refuses with the terminal-only message (and, when the
+level could not be read at all, the reason). At `none` the command prints the plan and its digest, runs the same reads and checks (the
+target, each source, the approval of every module, a second build of the plan that must give the same digest) and asks nothing; it
+writes the attempt (`wb install` or `wb adopt`, `none`, `digest:<the 64 hexadecimal characters>`) just before the first write and the
+outcome after the last, `done` with `written` for exit 0 and `refused` with the exit code when it stopped after writing (exit 3,
+including a failed attach). If the attempt cannot be written, nothing is written. An outcome that cannot be written after the writes
+exits 3 and says so. The level is read once, before the sources are fetched and the plan is built twice, as `approve-plan` reads it; a level or harness edit made
+during those steps is not seen until the next run. The target is never the project the level was read for (a directory that holds
+`.workbench` is refused), so there is no second project to compare it with, but a new directory inside that project, or a repository
+that contains it, is accepted: the level is the owner's setting for the project the agent works in. An interrupt after the writes
+exits 3 and says so. The command takes the same arguments and no flag; a run at a terminal is not logged. The harness's `deny` for
+the command is removed only for the `wb` spelling, so `python3 -m workbench install` stays denied.
 
 **Out of scope.** The compiled hard-stop floor is unchanged and is not a key (see "Non-goals").
 

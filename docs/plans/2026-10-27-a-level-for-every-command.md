@@ -500,3 +500,28 @@ word, trailing text) found no command the old gate blocked and the new one allow
 `2026-10-27-command-gate-command-position` ("in order"), so a clarification note was added to that record, approved by the owner on 2026-10-27. After the change: `test_command_gate.py` 58 tests OK; full suite `Ran 4976 tests in 10 roots`, `OK`; `wb check` and the
 plan check: no problems. Limits: the reviewer did not read `gate_hook.fold`, line continuation or `python3 -c`/`runpy`; my corpus covers
 `wb install` only and the launchers and splices listed in the probe.
+
+### Increment F — built, not committed (2026-10-27)
+
+**Done.** `wb install` and `wb adopt` offer `block` and `none` (`levels._OFFERS`). `install.run` takes `cwd` and calls `levelrun.route`
+with the key `wb install` or `wb adopt`, read for the project the command is run from: at a terminal it goes on as before and reads
+nothing; without one it goes on only at a verified `none`, otherwise it refuses with the terminal-only message (and the reason when the
+level could not be read). At `none` it prints the plan and its digest, asks nothing, runs the same checks (including the second build
+of the plan, which must give the same digest), and `levelrun.logged` writes the attempt (`digest:<64 hex>`) just before the first write
+and the outcome after (`done`/`written`, or `refused` with the exit code when it stopped after writing). An unwritable log refuses
+before any write; an outcome that cannot be written, or an interrupt after the writes, exits 3. No flag. The spec, the installer
+interface and `docs/development.md` say so.
+
+**Verification as run.** The code was written before the tests, against the test-first rule; I then wrote `tests/test_install_levels.py`
+(26 tests) and ran it against the old `install.py` and `levels.py`, where it failed (5 failures, 18 errors), and against the new code,
+where it passes. The existing offers tests (`test_levels`, `test_settings`, `test_approve_levels`) were updated for the two keys. Full
+suite `python3 -B -W error tests/run_all.py`: `Ran 5004 tests in 10 roots`, `OK`; `wb check` and the plan check: no problems.
+**Not verified:** no end-to-end run under a harness with `wb install` at `none` (the owner's trial, completion criterion 4).
+
+**Review.** One round by the `reviewer` agent: no blocking findings, nine not blocking. Applied: (1) an interrupt after the writes
+returned 130 and said "cancelled"; it now exits 3 and says the install was written (test added; the `run` docstring says so);
+(2) the level is read once, before the fetch and the two plan builds: the spec says so; (3) the compare-the-project requirement of
+Increment D does not apply because the target is never the project the level was read for: a comment in `run` and the spec say so,
+and a test pins that a new directory inside the project is accepted. Recorded, not changed: (4) the log's reason for exit 3 does not
+tell a failed write from a failed attach (the stderr report does); (5) no test for a broken pipe or an adopt exit 3; the two helpers
+that print after the writes swallow `BrokenPipeError`. The reviewer ran nothing.

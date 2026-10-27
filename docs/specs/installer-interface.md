@@ -373,7 +373,8 @@ plan made and the owner may still change.
   the state found), a refused target, and every conflict above. After a failure part-way, the report
   says what was written.
 - **Terminal and exit codes.** Owner-run and terminal-only, checked before anything is read, as
-  `install` is. Exit 0 done; 1 refused or cancelled; 2 usage; 3 stopped after writing. There is no
+  `install` is, and runnable without a terminal only at the owner's level `none` for `wb adopt`
+  (`command-permissions.md`, "`install` and `adopt` at `none`"). Exit 0 done; 1 refused or cancelled; 2 usage; 3 stopped after writing. There is no
   attach step, so the exit 3 of `install` for a failed attach does not exist here. Standard output
   ends with the count of paths created, the count kept, the blocks not filled, that nothing was
   committed, and the `wb attach` and `wb upgrade` that follow.

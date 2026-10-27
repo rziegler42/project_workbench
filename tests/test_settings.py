@@ -571,10 +571,19 @@ class LevelsTest(SettingsBase):
     def test_a_level_a_key_does_not_offer_reads_as_block_with_a_note(self):
         for level in ("ask", "none", "delegated"):
             with self.subTest(level=level):
-                loaded, got = self.effective({"version": 2, "levels": {"wb install": level}})
-                self.assertEqual("block", got.levels["wb install"])
+                loaded, got = self.effective({"version": 2, "levels": {"wb upgrade": level}})
+                self.assertEqual("block", got.levels["wb upgrade"])
                 self.assertEqual(1, len(got.notes))
-                self.assertIn("wb install", got.notes[0])
+                self.assertIn("wb upgrade", got.notes[0])
+
+    def test_install_and_adopt_offer_none_and_nothing_else(self):
+        for key in ("wb install", "wb adopt"):
+            with self.subTest(key=key):
+                self.assertEqual("none", self.effective({"version": 2, "levels": {key: "none"}})[1].levels[key])
+                for level in ("ask", "delegated"):
+                    got = self.effective({"version": 2, "levels": {key: level}})[1]
+                    self.assertEqual("block", got.levels[key])
+                    self.assertEqual(1, len(got.notes))
 
     def test_an_invalid_key_is_reported_and_escaped(self):
         loaded, got = self.effective({"version": 2, "levels": {"Bad Key\x1b[31m": "block", "x" * 200: "block"}})

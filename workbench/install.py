@@ -21,14 +21,19 @@ Owner-run and terminal-only, like ``approve``. The order is fixed by
 
 The typed text is friction, not authentication; what stops an agent is the deny rule a harness
 renders for this command and for the guarded store.
+
+When the owner has set the key ``wb install`` (or ``wb adopt``) to ``none`` and the rendering holds (``levelrun.route``,
+read for the project the command is run from), the command also runs without a terminal and asks nothing: it prints the
+plan and its digest, runs the same checks, and writes the level log's attempt just before the first write and its outcome
+after the last (``levelrun.logged``). At any other level it refuses without a terminal, as above.
 """
 
 import os
 import shutil
 import stat
 
-from . import (__version__, approvals, approve, attach, confirm, fetch, installplan, manifest, preview, projectfs,
-               sources, target, unfinished)
+from . import (__version__, approvals, approve, attach, confirm, fetch, installplan, levellog, levelrun, manifest,
+               preview, projectfs, sources, target, unfinished)
 from .wbkit import display, safefs
 
 CONFIRM_CHARS = confirm.CONFIRM_CHARS
@@ -202,8 +207,9 @@ def _refuse(err, text):
 
 
 def _run(guarded, command, stdin, out, err, distribution, seed, version, which, progress, home,
-         adopt=False):
+         adopt=False, route=None):
     verb = "adopt" if adopt else "install"
+    unattended = route is not None and not route.terminal
 
     def plan_of(held, resolved, seed, version, now):
         if adopt:
@@ -233,13 +239,17 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
             if held.state in ("new-git", "adoptable"):
                 err.write("warning: the existing .git is used as it is; no remote is recorded\n")
             out.write(installplan.render(plan, held.path, show_digest=True))
-            out.write("\nTo %s, type the first %d characters of the digest shown above and "
-                      "press Enter.\nAnything else cancels and writes nothing.\n> "
-                      % (verb, CONFIRM_CHARS))
-            out.flush()
-            if not confirm.typed_matches(stdin, plan.digest):
-                out.write("cancelled: nothing was written\n")
-                return 1
+            if unattended:
+                out.write("\nThe level of wb %s is none here, so nothing is asked: it is applied now.\n" % verb)
+                out.flush()
+            else:
+                out.write("\nTo %s, type the first %d characters of the digest shown above and "
+                          "press Enter.\nAnything else cancels and writes nothing.\n> "
+                          % (verb, CONFIRM_CHARS))
+                out.flush()
+                if not confirm.typed_matches(stdin, plan.digest):
+                    out.write("cancelled: nothing was written\n")
+                    return 1
             try:
                 _still_the_same(held)
                 again, _ = plan_of(held, resolved, seed, version, now)
@@ -253,19 +263,24 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
             except unfinished.UnfinishedError as exc:
                 return _refuse(err, "the plan cannot be recorded in the marker (%s); nothing was "
                                     "written" % exc)
-            try:
-                _write(guarded, held, plan, progress, record)
-            except (Exception, KeyboardInterrupt) as exc:
-                cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
-                confirm.report_failure(progress, cause, err, what=verb)
-                return 3
-            try:
-                _finish(held, progress, out, plan)
-            except KeyboardInterrupt:
-                pass  # the install is complete; the attach below still runs
-            if adopt:
-                return 0
-            return _attach(guarded, held, progress, plan, out, err)
+            def apply():
+                try:
+                    _write(guarded, held, plan, progress, record)
+                except (Exception, KeyboardInterrupt) as exc:
+                    cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
+                    confirm.report_failure(progress, cause, err, what=verb)
+                    return 3
+                try:
+                    _finish(held, progress, out, plan)
+                except KeyboardInterrupt:
+                    pass  # the install is complete; the attach below still runs
+                if adopt:
+                    return 0
+                return _attach(guarded, held, progress, plan, out, err)
+
+            if not unattended:
+                return apply()
+            return _apply_logged(guarded, route, "wb " + verb, plan, apply, err)
     except target.TargetError as exc:
         return target.write_refusal(err, exc)
     except preview.Refused as exc:
@@ -276,20 +291,48 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
         return _refuse(err, str(exc))
 
 
+def _apply_logged(guarded, route, key, plan, apply, err):
+    """Write the attempt, run `apply` (the writes; it returns the exit code), then write the outcome. If the attempt cannot be
+    written nothing is written. An exit code other than 0 is a ``refused`` outcome: the run did not finish."""
+    try:
+        code, op = levelrun.logged(guarded, key, route.level, apply, "digest:%s" % plan.digest)
+    except levellog.LogError as exc:
+        return _refuse(err, "%s; nothing was written" % exc)
+    try:
+        if code == 0:
+            levelrun.done(guarded, op, "written")
+        else:
+            levellog.finish_refused(guarded, op, "stopped after writing (exit %d)" % code)
+    except levellog.OutcomeError as exc:
+        err.write("the %s was written, but its outcome was not logged: %s\n" % (key[3:], display.clean(str(exc))))
+        return 3
+    except KeyboardInterrupt:
+        err.write("the %s was written, but it was interrupted before its outcome was logged\n" % key[3:])
+        return 3
+    return code
+
+
 def run(guarded, command, stdin, out, err, distribution=None, seed=None, version=None,
-        which=shutil.which, home=None, adopt=False):
+        which=shutil.which, home=None, adopt=False, cwd=None):
     """Install into a new target after the owner types the digest; with `adopt`, into a repository
     that has content, changing nothing that is there. Returns the exit code: 0 done, 1 refused or
-    cancelled, 3 stopped after writing, 130 interrupted before writing."""
+    cancelled, 3 stopped after writing (or written, with its outcome not logged), 130 interrupted before writing."""
     verb = "adopt" if adopt else "install"
-    if not (approve.is_terminal(stdin) and approve.is_terminal(out)):
-        return _refuse(err, "%s is owner-run: standard input and output must both be "
-                            "terminals. Run this command yourself, from your own terminal; "
-                            "`preview %s` shows the same plan without writing." % (verb, verb))
+    # The level is read for the project the command is run from; the target is a new or adoptable directory and is not that
+    # project (a directory that holds `.workbench` is refused), so there is no second project to compare it with.
+    terminal_only = ("%s is owner-run: standard input and output must both be terminals. Run this command yourself, "
+                     "from your own terminal; `preview %s` shows the same plan without writing." % (verb, verb))
+    try:
+        route = levelrun.route(guarded, cwd if cwd is not None else os.getcwd(), "wb " + verb, stdin, out, terminal_only)
+    except levelrun.Refusal as exc:
+        text = str(exc)
+        return _refuse(err, text if text == terminal_only else "%s (%s)" % (terminal_only, text))
+    except OSError as exc:
+        return _refuse(err, "%s (the working directory cannot be read: %s)" % (terminal_only, exc.strerror or "unknown error"))
     progress = confirm.Progress()
     try:
         return _run(guarded, command, stdin, out, err, distribution, seed, version, which,
-                    progress, home, adopt)
+                    progress, home, adopt, route)
     except KeyboardInterrupt:
         try:
             out.write("\ncancelled: nothing was written\n")

@@ -32,9 +32,9 @@ ambiguous blank.
 | Owner-run: approve a package or one module (terminal only) | `python3 -m workbench approve (<package> \| --source <url> [--ref <ref>]) [--module <name>]` |
 | Owner-run: pin a helper's content (terminal only) | `python3 -m workbench pin <project-id> <name> <helper> --root <project-dir> [--kit N]` |
 | Preview an install (read-only) | `python3 -m workbench preview install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
-| Owner-run: install a new project (terminal only) | `python3 -m workbench install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
+| Owner-run: install a new project (terminal only; with `wb install` set to `none` in the personal settings and the harness attached afterwards, an agent may run it with no terminal and nothing typed, and each such run is logged) | `python3 -m workbench install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Preview an adoption (read-only) | `python3 -m workbench preview adopt [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
-| Owner-run: adopt a repository that has content (terminal only) | `python3 -m workbench adopt [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
+| Owner-run: adopt a repository that has content (terminal only; at `wb adopt` set to `none`, as for install) | `python3 -m workbench adopt [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Owner-run: accept changes made to a project (terminal only) | `python3 -m workbench acknowledge [<target> \| --dir <path>]` |
 | Owner-run: clear the marker of an unfinished write (terminal only) | `python3 -m workbench recover [<target> \| --dir <path>]` |
 | Owner-run: attach the harness to a clone (terminal only) | `python3 -m workbench attach [<target> \| --dir <path>] --harness <package>/<module>` |
@@ -270,7 +270,9 @@ the `--package` before it. Options are not abbreviated.
   (directories, files with class, mode, size and hash, the `.git`), the store entries and each pin it will make
   for a declared helper, and ends `preview only: nothing was written`. It uses a fresh seed each time, so its digest is
   not shown and differs from one run to the next.
-- **`install`** is owner-run: it refuses unless standard input and output are terminals. It
+- **`install`** is owner-run: it refuses unless standard input and output are terminals, unless the owner has set the key `wb install`
+  to `none` and the rendering holds (`command-permissions.md`, "`install` and `adopt` at `none`"): then it runs without a terminal and
+  asks nothing, and logs an attempt and an outcome. At a terminal it
   prints the same plan with its digest and asks for the first 12 characters of the digest.
   Anything else, an empty answer included, prints `cancelled: nothing was written` and exits 1.
   Input typed ahead is discarded and the answer is read to at most 200 characters. The typed
