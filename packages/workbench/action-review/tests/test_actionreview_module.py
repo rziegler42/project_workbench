@@ -8,6 +8,7 @@ import io
 import json
 import os
 import re
+import tempfile
 import unittest
 
 from tests import support_helpers, support_install
@@ -81,9 +82,9 @@ class Helper(unittest.TestCase):
     def setUpClass(cls):
         cls.helper = support_helpers.load("action-review")
 
-    def call(self, *argv):
+    def call(self, *argv, cwd=None):
         out, err = io.StringIO(), io.StringIO()
-        code = self.helper.main(list(argv), io.BytesIO(b""), out, err, os.getcwd())
+        code = self.helper.main(list(argv), io.BytesIO(b""), out, err, cwd or os.getcwd())
         return code, out.getvalue(), err.getvalue()
 
     def test_a_missing_or_unknown_argument_is_refused_with_a_usage_line_and_nothing_on_standard_output(self):
@@ -94,7 +95,8 @@ class Helper(unittest.TestCase):
             self.assertEqual(1, len(err.splitlines()), argv)
 
     def test_a_command_outside_a_project_is_refused_for_want_of_rules(self):
-        code, out, err = self.call("review", "wb run safe-git commit")
+        with tempfile.TemporaryDirectory() as outside:
+            code, out, err = self.call("review", "wb run safe-git commit", cwd=outside)
         self.assertEqual((1, ""), (code, out))
         self.assertIn("no rule is trusted", err)
 
