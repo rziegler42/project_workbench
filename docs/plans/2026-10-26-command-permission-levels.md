@@ -1,6 +1,6 @@
 # Command permission levels
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-26
 Candidate: none (an owner request that implements the accepted decision `2026-10-26-per-command-permission-levels`; no roadmap candidate names it yet)
 Specs: command-permissions, trust-and-approval, code-work, installer-interface, harness-modules, review-engine
@@ -1009,3 +1009,37 @@ or clarify it.
 
 Verification as run: `git diff --check` clean; `python3 -m workbench check` and the plan check no problems (the groundwork module's
 `doccheck` and `refcheck` run inside `wb check`). Not run: the owner's document checks (step 3).
+
+Committed as `a36b4a8` (Increment H).
+
+### Completion, 2026-10-26
+
+The owner asked to close the plan. The completion criteria (as Revision 4 left them), with the evidence in this Result:
+
+1. `command-permissions.md` is `Current` and the other specs and `docs/development.md` carry the edits: `a36b4a8`; the owner ran the
+   document checks (`python3 -m workbench check`, no problems).
+2. With no settings or a version 1 file nothing becomes runnable and `wb settings` prints the same checkpoint lines: Increments B and C
+   (`tests/test_settings.py`, `tests/test_settingscmd.py`, `tests/test_levels.py`).
+3. `approve-plan` at `ask` and `none` runs without a terminal only under the stated conditions and is refused otherwise; a delegated
+   approval writes its log entry first: Increments D, E, F, J and the fixes of `0858b12` (`tests/test_approve_levels.py`,
+   `tests/test_levellog.py`, `tests/test_rendering.py`, `tests/test_delegation.py`), and the owner's probe (A, I and the F case).
+4. At `block` it still refuses without a terminal: `tests/test_approve_levels.py`.
+5. A table entry cannot name a floor action or set a level a key does not offer, and a damaged table reads as `block`:
+   `tests/test_settings.py`, `tests/test_levels.py`.
+6. The log is appended and bounded, the record lists every key, a bad key blocks the table, and the registry refuses two
+   declarations of one key: Increments D and E (`tests/test_levellog.py`, `tests/test_rendering.py`).
+7. The trial of Increment A and the repeated spelling probe are recorded, and the plan was stopped and revised where they failed
+   (the first probe, Revisions 2 and 3).
+8. Both decisions are recorded as accepted by the owner before `ask` shipped (`1a50529`, `49108b7`); the first probe is recorded as
+   having stopped the plan; the repeated probe is recorded and no form it says must stop the plan approved one; the limits it showed
+   are accepted in writing (the clarification note).
+9. The full suite passes (4724 tests in 10 roots after the last code change, `0858b12`), `wb check` and the document checks report
+   nothing, and nothing outside the increments' affected areas changed.
+
+Not done, by decision: Increment G (`wb run review-engine extend` at `ask` and `none`), deferred by Revision 4 and listed under
+"Deferred work" with what a later plan needs. Not done, and recorded as untested in `command-permissions.md`: the `Monitor` tool and
+a skill's `!` shell, agent and skill files that set a permission mode, user-level `disableAllHooks`, mid-session hook removal and the
+settings edit, act, restore sequence end to end. The plan-wide verification asked for a live refusal of a wrong digest from the
+remote channel; the tests cover it, and the probe used correct digests only. Still open for the owner: whether a new record
+should clarify or supersede the accepted decision `2026-10-26-per-command-permission-levels`, and whether to mark
+`2026-10-26-ask-level-spelling-limit` `Superseded`.
