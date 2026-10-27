@@ -377,9 +377,9 @@ Decision 5 of `2026-10-22-model-calls-go-through-vendor-bridges` applies except 
 decision 5.** The decision says each engine reads "a file named for the engine, `.workbench/<engine module>.json`";
 the owner chose on 2026-10-26, as the plan `2026-10-26-action-review-engine` records, that this engine reads the
 project file `.workbench/review.json`, the file the review engine already reads, and not `.workbench/action-review.json`.
-A decision outranks a spec and an accepted decision is superseded, never edited, so **a record that narrows or
-supersedes decision 5 for this file name is owed**; it is the owner's to accept, and until it is accepted this section
-contradicts the decision on that one point. The file holds a format number and the bridge, the model and the effort the
+A decision outranks a spec and an accepted decision is never edited, so the departure is recorded in
+`2026-10-26-action-review-reads-the-review-setting`, which the owner accepted on 2026-10-26 and which refines decision 5
+for this file name only. The file holds a format number and the bridge, the model and the effort the
 project would like. It is a request and never an authorization.
 
 - **The reader is that of `review-engine`.** The file is at most 4,096 bytes, strict JSON, an object with `format` equal

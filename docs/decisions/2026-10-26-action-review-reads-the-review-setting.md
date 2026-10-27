@@ -1,6 +1,6 @@
 # The action-review engine reads the review setting
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-26
 
 ## Context
 
