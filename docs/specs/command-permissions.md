@@ -60,15 +60,19 @@ a harness renders it, and the command gate that protects the rendering.
 `none` is a level and not the absence of one: it means that the command needs no confirmation and no gate, and its run is still
 logged. `delegated` sits in the order by convention; it is a gate the command declares and not a step between `ask` and `none`.
 
-Strictness, from strictest to least strict: `block`, `ask`, `delegated`, `none`. A key's level is the stricter of its checkpoint
-reading and its table entry.
+Strictness, from strictest to least strict: `block`, `ask`, `delegated`, `none`. It orders the levels and settles nothing between a
+checkpoint and the table: a key's level is its table entry, else its checkpoint reading, else its shipped default (see "The table").
 
 ### The table
 
 The personal settings accept `version` 1 and 2. Version 2 may hold an object `levels`, from a key to a level; in a version 1 file
 `levels` is an unknown entry and is ignored. A new file is seeded at version 1, so the owner changes `version` to 2 by hand to
-use `levels`. A version 1 file reads its `checkpoints` as `stop` = `block` and `delegate` = `delegated`. When a key is in both,
-the stricter applies and `wb settings` notes a difference.
+use `levels`. The table is the single source of a level: an entry wins over the key's checkpoint in either direction, so loosening
+a key is one edit. A `checkpoints` entry in the file is only a fallback for a key the table does not name, and its word is read as a
+level, `stop` as `block` and `delegate` as `delegated`; `wb settings` prints a `translated <key>: <word> read as <level>` line for
+each such reading (it is not a problem, so it is not a `settings:` line). When a key is in both and they differ, `wb settings`
+notes that the level applies. `delegate` still takes effect for `approve-plan` only; a `delegate` that cannot take effect has its own note
+and no `translated` line.
 
 A key is a process module's declared checkpoint name (`approve-plan`, `accept-decision` and the others), or the command in the `wb`
 spelling: `wb install`, `wb adopt`, `wb add`, `wb upgrade`, `wb attach`, `wb approve`, `wb pin`, `wb recover`,
@@ -84,7 +88,7 @@ separated by single spaces, at most 96 characters.
    reads as `block` for the whole table. A value that is not one of the four levels reads as `block` for that key. A key that is
    not a valid name blocks the whole table, because a mistyped key must never leave a default of `ask` in force. `wb settings`
    reports each.
-2. A key with no entry reads as its shipped default (below).
+2. A key with no table entry reads as its checkpoint reading if the file sets one, and otherwise as its shipped default (below).
 3. A level the key does not offer reads as `block` with a note.
 4. A key on the compiled floor is refused, with a problem, and ignored. A valid key that no installed module or the installer
    declares is noted and ignored.
@@ -203,12 +207,15 @@ declared checkpoints, then the installer's owner-run commands, then the agent-sa
 table applied. An agent-safe key and a declared argument that is not owner-run default to `none`; every other key defaults to `block`.
 The hook entry points, the dispatcher words and `delegate-approve-plan` are not keys. As built by Increment A of the plan, a
 `block` set on an agent-safe key is read and printed and is not yet enforced, and the table a harness renders and digests holds
-none of the agent-safe keys, so an attached clone's record is unchanged. Problems and notes print as `settings:` lines. Two declarations that
+none of the agent-safe keys, so an attached clone's record is unchanged. After the `level` lines it prints one `translated <key>:
+<word> read as <level>` line for each checkpoint word it read as a level because the table does not name the key (Increment B).
+Problems and notes print as `settings:` lines. Two declarations that
 give one key are a refusal.
 
 ## Planned: a level for every command
 
-Not built. It is the owner's direction of 2026-10-26, recorded here so a plan can implement it. Calls marked **(call)** are the
+Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A and B are
+built). It is the owner's direction of 2026-10-26, recorded here so a plan can implement it. Calls marked **(call)** are the
 author's and are not the owner's until the owner confirms them.
 
 **Intent.** The owner chooses their own risk appetite, command by command, and may loosen any protection that is theirs to loosen.
@@ -239,10 +246,10 @@ preview, then the module arguments and `extend` (the deferred Increment G). At `
 and without a harness `deny`; the command's own checks of its input and its log entry apply, and the terminal prompt does not.
 `accept-decision` offers the same levels, and `AGENTS.md` says that the owner decides who accepts a decision.
 
-**One table.** The `levels` table is the only place a level is set. A version 1 file's `checkpoints` are read as a fallback for a
+**One table** (built by Increment B). The `levels` table is the only place a level is set. A version 1 file's `checkpoints` are read as a fallback for a
 key the table does not mention, and a table entry wins in either direction, so loosening a key is one edit. The checkpoint words
-`stop` and `delegate` are aliases, read from a version 1 file, for `block` and `delegated`; `wb settings` prints only the four level
-names and notes a word it translated. This replaces the rule that a key's level is the stricter of its checkpoint reading and its
+`stop` and `delegate` are aliases, read from a version 1 file, for `block` and `delegated`; the `level` lines of `wb settings` print
+only the four level names, and a `translated` line says what a checkpoint word was read as. This replaces the rule that a key's level is the stricter of its checkpoint reading and its
 table entry **(call)**.
 
 **Out of scope.** The compiled hard-stop floor is unchanged and is not a key (see "Non-goals").

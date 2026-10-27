@@ -336,3 +336,34 @@ yet enforced: added. No finding rejected. The reviewer could not run anything an
   C must keep such a clone readable or say how it is re-attached.
 
 **Review of the whole plan:** not yet asked.
+
+### Increment B — built, not committed (2026-10-27)
+
+**Done.** `settings._level` returns a key's table entry, else its checkpoint reading (`stop` as block, `delegate` as delegated), else
+its default; the stricter-of rule is gone. A table entry a key does not offer reads as block with a note; a damaged table reads every
+key as block and still overrides a checkpoint of `delegate`; a key in both with different readings gets one note that the level
+applies; `delegate` still takes effect for `approve-plan` only. `Effective` gains `translated` (a defaulted field), and `wb settings`
+prints `translated <key>: <word> read as <level>` after the `level` lines. The spec's built sections (`The levels`, `The table`,
+`Reading rules`, `wb settings`), `trust-and-approval.md`'s Settings paragraph, `docs/development.md` and two docstrings say so.
+
+**A departure from the plan's wording.** Step 1 says a translated word is read "with a note". The translation is returned in
+`Effective.translated` and printed as its own `translated` line, not added to `notes` and not printed as a `settings:` line, because
+`tests/test_delegation.py` (`test_delegate_for_the_one_name_has_no_note`) pins that a legitimate `delegate` shows no `settings:`
+line and a translation is not a problem. The Outcome ("notes a translated word") still holds. The owner may prefer a `settings:` line.
+
+**Verification as run.** Tests first; the old stricter-of tests and the new table-wins tests failed for the right reason. Then
+`python3 -B -W error tests/run_all.py`: `Ran 4893 tests in 10 roots`, `OK`; `wb check`: no problems. Tests changed: the stricter-of
+cases in `tests/test_settings.py` and `tests/test_settingscmd.py` now assert table-wins; new tests cover each checkpoint and table
+combination, the translation line, a table entry for an undeclared checkpoint, a damaged table with a `stop` checkpoint, and a
+`delegate` on a key that cannot delegate with a table entry.
+
+**Review.** One round by the `reviewer` agent (the second exchange of this run, 2 of 6 across A and B): no blocking findings, four
+not blocking, all applied or recorded: (1) the departure above is recorded here; (2) the spec's "Planned" section opened "Not built"
+though two paragraphs are built: the opening now says which; (3) `trust-and-approval.md` stated the checkpoint reading without the
+table: a clause added; (4) three untested combinations: tests added. The reviewer found no path to unintended delegation and none by
+which a damaged file reads less strict. It could not run anything, did not read `docs/development.md`'s long settings row, and did
+not diff against HEAD.
+
+**Carried forward.** A new loosening path exists by design: a `stop` checkpoint with a table entry of `delegated` now delegates, where
+the old rule gave block. It requires the owner to write `delegated`. Rendering reads the same table, so a table `none` or `ask` on a
+key whose version 2 checkpoint says `stop` now renders looser than before; that is the decision.

@@ -14,7 +14,7 @@ The document is strict JSON::
 * ``levels`` is optional. It maps a key to the level the owner chose. A value that is not one of the four levels,
   a key that is not valid, or a ``levels`` that is not an object reads as ``block``. In this version a key is a
   checkpoint the process module declares; ``stop`` reads as ``block`` and ``delegate`` as ``delegated``, a key set
-  in both takes the stricter. ``delegated``, ``ask`` and ``none`` are offered by ``approve-plan``; ``none`` is also offered
+  in both takes the table entry, and a checkpoint is only a fallback for a key the table does not name. ``delegated``, ``ask`` and ``none`` are offered by ``approve-plan``; ``none`` is also offered
   by an agent-safe action and a declared module argument that is not owner-run (``levels``); any other key reads a level
   it does not offer as ``block`` with a note.
 * ``caps`` is optional. It holds the owner's value for each loop cap a process module declares.
@@ -53,7 +53,7 @@ _FLOOR_IDS = frozenset(stop.id for stop in floor.FLOOR)
 APPROVE_PLAN = keyset.APPROVE_PLAN
 
 _Settings = collections.namedtuple("_Settings", "checkpoints problems caps levels levels_blocked")
-Effective = collections.namedtuple("Effective", "checkpoints caps notes levels")
+Effective = collections.namedtuple("Effective", "checkpoints caps notes levels translated", defaults=((),))
 
 
 strictest = keyset.strictest
@@ -172,8 +172,8 @@ def effective(loaded, checkpoints, caps, commands=(), agent=True):
     ``levels`` holds a level for every key of ``levels.registry(checkpoints, commands)``, where `commands` is a
     sequence of ``(command name, owner-run arguments)`` or ``(command name, owner-run arguments, all declared
     arguments)`` of the installed commands; with `agent` false the keys of the agent-safe actions are left out (the table
-    a harness renders holds none until one is rendered). A key's level is the stricter of
-    its checkpoint reading and its table entry; an entry for a level the key does not offer reads as ``block`` with
+    a harness renders holds none until one is rendered). A key's level is its table entry,
+    else its checkpoint reading, else its default; an entry for a level the key does not offer reads as ``block`` with
     a note, and an entry for a key that is not in the registry is noted and ignored.
     """
     notes = []
@@ -190,9 +190,9 @@ def effective(loaded, checkpoints, caps, commands=(), agent=True):
             notes.append("settings set the checkpoint %s to delegate; delegation has no effect for it, so it stops"
                          % declarations._shown(name))
     keys = keyset.registry(checkpoints, commands, agent)
-    levels = {}
+    levels, translated = {}, []
     for name, key in keys.items():
-        levels[name] = _level(loaded, key, values, notes)
+        levels[name] = _level(loaded, key, values, notes, translated)
         if name in values:
             values[name] = DELEGATE if levels[name] == DELEGATED else STOP
     for name in sorted(loaded.levels):
@@ -215,31 +215,38 @@ def effective(loaded, checkpoints, caps, commands=(), agent=True):
             numbers[cap.name] = cap.default
             notes.append("settings cap %s is %s; it must be from 1 to %d, so the default %d applies"
                          % (cap.name, given if abs(given) < 10 ** 12 else "out of range", cap.ceiling, cap.default))
-    return Effective(values, numbers, notes, levels)
+    return Effective(values, numbers, notes, levels, tuple(translated))
 
 
-def _level(loaded, key, checkpoint_values, notes):
-    """The level of the registry `key`: the stricter of its checkpoint reading and its table entry.
+def _level(loaded, key, checkpoint_values, notes, translated):
+    """The level of the registry `key`: its table entry if it has one, else its checkpoint reading, else its default.
 
-    A checkpoint set in the file reads ``stop`` as block and ``delegate`` as delegated; the table entry is the
-    owner's level. A level the key does not offer reads as block with a note. With neither set the key reads as
-    its default.
+    The table is the single source of a level (``docs/specs/command-permissions.md``): an entry wins in either direction,
+    whatever the key's checkpoint says. A checkpoint set in a version 1 file is only a fallback for a key the table does
+    not name, and its word is read as a level, ``stop`` as block and ``delegate`` as delegated; the reading is added to
+    `translated` as ``(key, word, level)``, which ``wb settings`` prints, and is not a note because it is not a problem.
+    A level the key does not offer reads as block with a note. A damaged table reads every key as block.
     """
     name = key.name
-    given = []
+    reading = None
     if name in loaded.checkpoints and name in checkpoint_values:
-        given.append(DELEGATED if checkpoint_values[name] == DELEGATE else BLOCK)
+        reading = DELEGATED if checkpoint_values[name] == DELEGATE else BLOCK
     entry = BLOCK if loaded.levels_blocked else loaded.levels.get(name)
     if entry is not None:
         if entry not in key.offers:
             notes.append("settings set the level of %s to %s; that level is not offered for it in this version, "
                          "so it reads as block" % (declarations._shown(name), entry))
             entry = BLOCK
-        if given and given[0] != entry:
-            notes.append("settings give %s the checkpoint reading %s and the level %s; the stricter applies"
-                         % (declarations._shown(name), given[0], entry))
-        given.append(entry)
-    return strictest(*given) if given else key.default
+        if reading is not None and reading != entry:
+            notes.append("settings give %s the checkpoint reading %s and the level %s; the level applies"
+                         % (declarations._shown(name), reading, entry))
+        return entry
+    if reading is not None:
+        word = loaded.checkpoints[name]
+        if not (word == DELEGATE and reading == BLOCK):  # a delegate that cannot take effect has its own note
+            translated.append((name, word, reading))
+        return reading
+    return key.default
 
 
 def initialize(store):

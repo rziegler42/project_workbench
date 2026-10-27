@@ -346,7 +346,8 @@ prose above and this section differ in precision, this section is what the code 
   `"version": 2` with an object `"levels"` (`command-permissions.md`); the file is seeded at version 1. A
   checkpoint name is lowercase kebab-case, at most 64 characters; the names themselves are defined
   by a way of working. A checkpoint that is missing, malformed or not exactly `delegate` reads as
-  `stop`. A damaged file, a wrong version, or a file that is not a regular file is reported on the
+  `stop`. A table entry in a version 2 file sets the level of its key and wins over the checkpoint in either direction;
+  `approve-plan` delegates only while its level reads `delegated` (`command-permissions.md`, "The table"). A damaged file, a wrong version, or a file that is not a regular file is reported on the
   command's output as a `settings:` note and is never overwritten; every checkpoint then stops. The
   `floor` list is a copy for the owner and for harnesses to read: nothing reads it to decide what
   applies.

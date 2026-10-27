@@ -112,8 +112,23 @@ class Printed(Settings):
     def test_the_owners_values_apply(self):
         self.owner({"version": 1, "checkpoints": {"approve-plan": "delegate"}, "caps": {"rounds": 5, "tries": 2}})
         self.assertEqual((0, "checkpoint approve-plan: delegate\ncheckpoint beta: stop\ncap rounds: 5\ncap tries: 2\n"
-                                + level_lines(CHECKPOINTS, approve_plan="delegated"), ""),
+                                + level_lines(CHECKPOINTS, approve_plan="delegated")
+                                + "translated approve-plan: delegate read as delegated\n", ""),
                          self.settings())
+
+    def test_a_checkpoint_word_is_translated_to_a_level_and_a_table_entry_overrides_it(self):
+        self.owner({"version": 2, "checkpoints": {"approve-plan": "delegate", "beta": "stop"},
+                    "levels": {"beta": "block"}})
+        code, out, err = self.settings()
+        self.assertEqual((0, ""), (code, err))
+        self.assertIn("translated approve-plan: delegate read as delegated\n", out)
+        self.assertNotIn("translated beta", out)  # the table names beta, so its checkpoint is not read
+        self.assertEqual(0, problem_lines(out), out)
+
+    def test_nothing_is_translated_when_the_file_sets_no_checkpoint(self):
+        self.owner({"version": 1})
+        code, out, err = self.settings()
+        self.assertNotIn("translated", out)
 
     def test_delegate_takes_effect_for_approve_plan_only(self):
         self.owner({"version": 1, "checkpoints": {"beta": "delegate"}})
@@ -178,7 +193,7 @@ class Printed(Settings):
         _, with_table, _ = self.settings()
         self.assertTrue(plain.startswith(CHECKPOINT_LINES) and with_table.startswith(CHECKPOINT_LINES))
 
-    def test_a_key_in_both_takes_the_stricter_and_says_so(self):
+    def test_a_key_in_both_takes_the_table_entry_and_says_so(self):
         self.owner({"version": 2, "checkpoints": {"approve-plan": "delegate"}, "levels": {"approve-plan": "block"}})
         code, out, err = self.settings()
         self.assertEqual((0, ""), (code, err))

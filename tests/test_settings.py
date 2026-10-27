@@ -375,14 +375,17 @@ class LevelsTest(SettingsBase):
         self.assertEqual(1, len(loaded.problems))
         self.assertIn("levels", loaded.problems[0])
 
-    def test_a_checkpoint_of_delegate_with_a_level_of_none_stays_delegated(self):
+    def test_a_table_entry_wins_over_a_checkpoint_of_delegate_even_when_it_is_less_strict(self):
         loaded, got = self.effective({"version": 2, "checkpoints": {"approve-plan": "delegate"},
                                       "levels": {"approve-plan": "none"}})
-        self.assertEqual(("delegated", "delegate"), (got.levels["approve-plan"], got.checkpoints["approve-plan"]))
+        self.assertEqual(("none", "stop"), (got.levels["approve-plan"], got.checkpoints["approve-plan"]))
+        self.assertEqual([], loaded.problems)
 
-    def test_a_key_in_both_takes_the_stricter_and_the_difference_is_noted(self):
-        cases = (("delegate", "block", "block"), ("stop", "delegated", "block"), ("delegate", "delegated", "delegated"),
-                 ("stop", "block", "block"))
+    def test_a_key_in_both_takes_the_table_entry_and_the_difference_is_noted(self):
+        cases = (("delegate", "block", "block"), ("stop", "delegated", "delegated"),
+                 ("delegate", "delegated", "delegated"), ("stop", "block", "block"),
+                 ("delegate", "none", "none"), ("stop", "none", "none"),
+                 ("delegate", "ask", "ask"), ("stop", "ask", "ask"))
         for checkpoint, level, want in cases:
             with self.subTest(checkpoint=checkpoint, level=level):
                 loaded, got = self.effective({"version": 2, "checkpoints": {"approve-plan": checkpoint},
@@ -392,6 +395,61 @@ class LevelsTest(SettingsBase):
                 self.assertEqual([], loaded.problems)
                 differs = {"delegate": "delegated", "stop": "block"}[checkpoint] != level
                 self.assertEqual(1 if differs else 0, len(got.notes), got.notes)
+                if differs:
+                    self.assertIn("the level applies", got.notes[0])
+
+    def test_a_checkpoint_word_is_read_as_a_level_and_the_translation_is_noted(self):
+        loaded, got = self.effective({"version": 1, "checkpoints": {"approve-plan": "delegate", "beta": "stop"}})
+        self.assertEqual({"approve-plan": "delegated", "beta": "block"}, self.declared(got))
+        self.assertEqual([], loaded.problems + got.notes)  # a translation is reported apart from the problems
+        self.assertEqual(2, len(got.translated), got.translated)
+        self.assertEqual({("approve-plan", "delegate", "delegated"), ("beta", "stop", "block")}, set(got.translated))
+
+    def test_a_checkpoint_the_file_does_not_set_is_read_as_the_default_with_no_note(self):
+        loaded, got = self.effective({"version": 1})
+        self.assertEqual({"approve-plan": "block", "beta": "block"}, self.declared(got))
+        self.assertEqual(([], ()), (loaded.problems + got.notes, got.translated))
+
+    def test_a_table_entry_for_a_key_the_checkpoint_does_not_set_is_not_a_translation_and_has_no_note(self):
+        loaded, got = self.effective({"version": 2, "levels": {"approve-plan": "none"}})
+        self.assertEqual(([], ()), (loaded.problems + got.notes, got.translated))
+
+    def test_a_checkpoint_of_delegate_for_a_key_that_cannot_delegate_is_noted_once(self):
+        loaded, got = self.effective({"version": 1, "checkpoints": {"beta": "delegate"}})
+        self.assertEqual("block", got.levels["beta"])
+        self.assertEqual(1, len(got.notes), got.notes)
+        self.assertIn("beta", got.notes[0])
+
+    def test_a_table_entry_for_a_checkpoint_the_module_does_not_declare_does_not_delegate(self):
+        self.put({"version": 2, "levels": {"approve-plan": "delegated"}})
+        got = settings.effective(settings.load(self.store), (), ())
+        self.assertEqual("delegated", got.levels["approve-plan"])
+        self.assertNotIn("approve-plan", got.checkpoints)
+        self.assertFalse(planapprovals.delegating(self.store, types.SimpleNamespace(checkpoints=())))
+
+    def test_a_damaged_table_blocks_a_checkpoint_of_stop_too(self):
+        for table in (["x"], {"Bad Key": "none"}):
+            with self.subTest(table=table):
+                loaded, got = self.effective({"version": 2, "checkpoints": {"approve-plan": "stop"},
+                                              "levels": table})
+                self.assertEqual(("block", "stop"), (got.levels["approve-plan"], got.checkpoints["approve-plan"]))
+                self.assertEqual((), got.translated)
+
+    def test_a_checkpoint_of_delegate_for_a_key_that_cannot_delegate_does_not_unlock_a_table_entry(self):
+        for level in ("none", "delegated", "ask"):
+            with self.subTest(level=level):
+                loaded, got = self.effective({"version": 2, "checkpoints": {"beta": "delegate"},
+                                              "levels": {"beta": level}})
+                self.assertEqual(("block", "stop"), (got.levels["beta"], got.checkpoints["beta"]))
+                self.assertTrue(any("beta" in note for note in got.notes), got.notes)
+
+    def test_a_damaged_table_still_blocks_a_checkpoint_of_delegate(self):
+        for table in (["x"], "delegated", {"Bad Key": "none"}):
+            with self.subTest(table=table):
+                loaded, got = self.effective({"version": 2, "checkpoints": {"approve-plan": "delegate"},
+                                              "levels": table})
+                self.assertEqual("block", got.levels["approve-plan"])
+                self.assertEqual("stop", got.checkpoints["approve-plan"])
 
     def test_a_key_that_is_not_known_is_noted_and_ignored(self):
         loaded, got = self.effective({"version": 2, "levels": {"nope": "block", "wb run tool nothing": "block"}})
@@ -506,8 +564,8 @@ class LevelsTest(SettingsBase):
         self.assertTrue(self.delegating({"version": 2, "levels": {"approve-plan": "delegated"}}))
         self.assertTrue(self.delegating({"version": 2, "checkpoints": {"approve-plan": "delegate"},
                                          "levels": {"approve-plan": "delegated"}}))
-        # A checkpoint of delegate with a level of none stays delegated: the stricter applies.
-        for level in ("block", "ask", "DELEGATED", "", None, True, ["delegated"]):
+        # The table wins over a checkpoint of delegate: any other level, and any unreadable one, is not delegating.
+        for level in ("block", "ask", "none", "DELEGATED", "", None, True, ["delegated"]):
             with self.subTest(level=level):
                 self.assertFalse(self.delegating({"version": 2, "checkpoints": {"approve-plan": "delegate"},
                                                   "levels": {"approve-plan": level}}))
