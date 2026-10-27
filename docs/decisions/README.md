@@ -92,3 +92,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-26-ask-level-spelling-limit](2026-10-26-ask-level-spelling-limit.md) | At the ask and none levels the harness's rule is the only barrier, and its limit is accepted | Accepted by the owner on 2026-10-26 |
 | [2026-10-26-ask-level-command-gate](2026-10-26-ask-level-command-gate.md) | A command gate stops Bash commands that name a relaxed command unless the ask rule can fire on them | Accepted by the owner on 2026-10-26 |
 | [2026-10-26-permission-levels-as-built](2026-10-26-permission-levels-as-built.md) | The permission levels as built: what stands, what changed and what was not built | Accepted by the owner on 2026-10-26 |
+| [2026-10-26-action-review-reads-the-review-setting](2026-10-26-action-review-reads-the-review-setting.md) | The action-review engine reads `.workbench/review.json`, the review engine's file, where decision 5 names a file per engine | Proposed |

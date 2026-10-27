@@ -447,4 +447,28 @@ The review is not an approval; the plan stays `Proposed` for the owner.
 
 ## Result
 
-Empty until work starts.
+### Increment A — written, awaiting the owner's reading (not committed)
+
+Changed: `docs/specs/action-review.md` only. Added "The rule schema, the module and the checks" (module layout and
+declaration, the call, the rule file and its fields, matching and precedence, flags and positionals, the checks for
+`commit` and `remove` with their error-code mapping, the rubric, the `--log-row` flag, the time budget) and rewrote
+"Settings and the bridge" to name `.workbench/review.json`.
+
+Verification as run on 2026-10-26: `wb check`, `wb run code-work check` (51 plans), `doccheck`, `refcheck` and
+`git diff --check` all clean, before and after the review fixes. Nothing else was run; no code exists yet.
+
+Review: the `reviewer` agent, one exchange, eleven findings, all judged on the evidence.
+- F1 (blocking, applied): decision 5 of `2026-10-22-model-calls-go-through-vendor-bridges` names
+  `.workbench/<engine module>.json`, so the file name is not only a default of the spec. The spec now says it departs
+  from decision 5. **A record that narrows or supersedes decision 5 for this file name is owed and is the owner's to
+  accept; I have not drafted one.**
+- F2 (applied): the kit allows 64 arguments, so positionals are bounded at 61, not 2000. A commit of more than about 50
+  paths is unreviewable.
+- F3, F5, F6, F7, F8, F9, F10, F11 (applied): the null-HEAD rule, the credential-name match, an absent or mistyped
+  fact failing its check, quoted words that begin with `-` refused, the working directory as a requirement on the hook,
+  the unreadable rules directory, null bridge fields for a code-check decline, and the wording of the approval.
+- F4 (applied): a `describe` timeout is a refusal (exit 1) as in Increment E, and the bridge `--timeout` is always 20.
+  The 5-second `describe` budget is the author's guess and is open for the owner.
+
+Not done: B does not start before the owner reads the schema. The error-code-to-check mapping, the flag lists and the
+quoted-word behaviour of the real `safe-git` parser are untested until Increments D to G. No second-model review ran.

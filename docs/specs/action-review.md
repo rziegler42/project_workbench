@@ -6,7 +6,9 @@ after settling the accuracy method, the false-decline bound, the name `describe`
 and `amend-message`. A call marked **(default)** was the author's and is approved with the design but was not
 separately chosen; the owner may still change it. The approval is of the design only and approves no plan. The
 `describe` interface is a decision record of its own, accepted by the owner on 2026-10-25
-(`2026-10-25-describe-interface-for-action-review`). The status stays `Draft` because the engine, its hook and its log are not built; the `describe` side of `safe-git` (for `commit`, `remove` and `push`) and the launcher rule are (plans `2026-10-25-safe-git-describe` and `2026-10-26-safe-git-describe-push`).
+(`2026-10-25-describe-interface-for-action-review`). The rule schema, the module's layout and declaration, the bridge setting and the checks for `commit` and `remove` were
+written on 2026-10-26 by Increment A of plan `2026-10-26-action-review-engine` and wait for the owner's reading
+("The rule schema, the module and the checks"). The status stays `Draft` because the engine, its hook and its log are not built; the `describe` side of `safe-git` (for `commit`, `remove` and `push`) and the launcher rule are (plans `2026-10-25-safe-git-describe` and `2026-10-26-safe-git-describe-push`).
 
 Terms are defined in `terms.md`. The engine sits above the bridge of `model-bridge.md` and beside the engine of
 `review-engine.md`. The decision behind it is `2026-10-22-model-calls-go-through-vendor-bridges` (decisions 3, 6, 7
@@ -85,13 +87,13 @@ rule, runs the module's `describe`, applies the rule's checks, and only if the c
 verdict against the rubric. It prints one verdict object: `verdict` (`approve` or `decline`), `failed_checks` and
 `reason`, the shape of today's verdict schema. It keeps a log of verdicts as hashes, not command text.
 
-- **Rule properties fixed here; the schema is the first deliverable of the engine's plan.** A rule file has a
-  `format` number, and a rule is keyed by one spelling and one subcommand, matched on whole tokens (never a text
+- **Rule properties fixed here; the schema is in "The rule schema, the module and the checks" below.** A rule file has
+  a `format` number, and a rule is keyed by one spelling and one subcommand, matched on whole tokens (never a text
   prefix). Two rules with the same key are both refused, and neither reviews anything. A rule that does not load, or
   is ambiguous, refuses only the commands of its own key. Each flag it declares has a type (value, multi, boolean),
-  and positionals are declared as exactly one named group. The versioned JSON schema, its field types and bounds, the
-  precedence rule and the tests for malformed and overlapping rules are written by the plan that builds the engine,
-  before the engine, and reviewed with it.
+  and positionals are declared as exactly one named group. The versioned schema, its field types and bounds and the
+  precedence rule were written by Increment A of plan `2026-10-26-action-review-engine`; the tests for malformed and
+  overlapping rules are written by that plan's later increments, before the code they test.
 - **Rules are data** (a JSON file per rule: the command spelling, the module and the action that `describe`
   reports on, the checks, the rubric section, the review questions). The module and the action are identifiers
   only: a rule holds no command text and no verb. The engine builds the launcher argument list itself, `wb run
@@ -110,6 +112,170 @@ verdict against the rubric. It prints one verdict object: `verdict` (`approve` o
   vendor to find (the labelled set is stored outside any project, see below), and it does not rely on the model
   ignoring what it reads. A bridge option for a scratch root with no project content would be a change to
   `model-bridge.md`, which the engine's plan may propose; none exists today.
+
+### The rule schema, the module and the checks (specified by plan `2026-10-26-action-review-engine`, Increment A; not built)
+
+Everything here is the author's text for the owner to read; it is a default until the owner has read it and said to go
+on. Marked calls are the author's. Nothing in this section is built.
+
+**The module.** `packages/workbench/action-review/` declares `type` `module`, `provides` `["action-review"]` and
+`requires` `["model-bridge"]`. It ships `helper/action-review`, `rules` (a directory of rule files), `rubric` (a
+directory holding `rubric.md`) and `reply-schema.json`, so they install at `.workbench/<package>/action-review/<path>`
+(`module-contract.md`). It declares one command, `action-review`, with `helper` `helper/action-review`, `runtime`
+`python`, `kit` 1 and `arguments` `["review"]`, and no `owner` list: `review` reads and prints and writes nothing, and
+the owner's hook calls it. The helper finds its rules, rubric and schema beside itself and never takes a path from the
+caller or from a rule. The schema is passed to the bridge as its project-relative installed path, because the bridge
+reads `--schema` from inside the project and the engine writes no file.
+
+**The call.** `wb run action-review review [--log-row] <command text>`. The command text is exactly one argument, the
+raw text the harness is about to run; the launcher allows at most 4,096 characters, so a longer command is
+unreviewable. `--log-row`, if given, comes first. Any other option, a second text, or none is a refusal (exit 1).
+
+**The rule file.** One file per rule in `rules/`, named `<module>-<action>.json` (for example `safe-git-commit.json`),
+UTF-8, strict JSON (a duplicate key, `NaN` or a non-object is an error, as for `.workbench/review.json`), at most 16,384
+bytes; at most 64 files and 262,144 bytes in all, and a file that is not a regular file is an error. The object has
+these fields and no others; a missing required field, an unknown field or a wrong type means the rule does not load.
+
+| Field | Required | Type and bounds |
+|---|---|---|
+| `format` | yes | the whole number 1 |
+| `spelling` | yes | a list of 1 to 4 words, each of the bare-word alphabet of the grammar below, not beginning with `-`, at most 64 characters: the leading words of the prompted command |
+| `subcommand` | yes | `^[a-z][a-z0-9-]*$`, at most 32 characters: the word that follows the spelling |
+| `module` | yes | the name of the command `describe` is asked of: `^[A-Za-z0-9][A-Za-z0-9._+-]*$`, at most 64 characters. `wb run` takes a command name, so this is that name; for a first-party module whose command carries its name (`safe-git`) it is also the module's name. The engine does not look it up: the launcher decides whether an installed, pinned command of that name exists. |
+| `action` | yes | `^[a-z][a-z0-9-]*$`, at most 32 characters: the action `describe` is asked about |
+| `flags` | yes (may be empty) | an object of at most 32 entries; a key is `--` and `^[a-z][a-z0-9-]*$` (at most 32 characters after the dashes); a value is `{"type": "value" \| "multi" \| "boolean", "required": true \| false}` with `required` defaulting to false; nothing else |
+| `positionals` | yes | exactly one group, `{"name": <form of an action>, "separator": true \| false, "min": 0 to 61, "max": 0 to 61}`, `min` at most `max`; `separator` true means the group follows a lone `--` word that is itself required. The 61 is the kit's ceiling of 64 arguments to `run_command` less the fixed `describe` call's three (`<module> describe <action>`); a command whose parsed arguments pass 61 is unreviewable (exit 1), so a commit of more than about 50 paths is never reviewed |
+| `checks` | yes | a list of at most 32 distinct names, each in the engine's fixed list (below); a name not in it means the rule does not load |
+| `rubric` | yes | the name of a section of `rubric.md`, `^[a-z][a-z0-9_]*$`, at most 64 characters; the section must exist |
+| `questions` | yes (may be empty) | a list of at most 16 distinct names, each `^[a-z][a-z0-9_]*$` and at most 64 characters, each a question defined in the named rubric section; a name not defined there means the rule does not load |
+| `lists` | no | an object whose keys are in the engine's fixed list of list names (`credential_names`, `reviewer_facing_paths`) and whose values are lists of at most 256 distinct printable ASCII strings of at most 256 characters; data for the checks that name them, and it is where the approver's credential-name list and its list of reviewer-facing paths move |
+
+A rule holds no command text, no verb and no path to run, and no field has a place for one: the engine builds
+`wb run <module> describe <action> <the parsed arguments>` itself, with the fixed word `describe`, and `spelling` is
+only what the prompted command is matched against and is never executed or passed on. Two loader rules keep the
+reviewed command equal to the one that runs. The `subcommand` must equal the `action` or the rule does not load. And
+where `spelling` begins `wb run`, its last word must equal `module` or the rule does not load. For another spelling
+(`git push`, when a push rule is added) the equivalence is the module's own `describe` contract, which takes the
+arguments of the real command (`describe push` takes those of `git push`, as `safe-git.md` says); that is why a later
+push rule needs no change of this format. The file name must equal `<module>-<action>.json` or the rule does not load.
+
+Example, `rules/safe-git-commit.json` (the checks are those of "The checks", below; the lists are abbreviated here):
+
+```json
+{"format": 1, "spelling": ["wb", "run", "safe-git"], "subcommand": "commit", "module": "safe-git", "action": "commit",
+ "flags": {"--expected-head": {"type": "value", "required": true}, "--subject": {"type": "value", "required": true},
+           "--body": {"type": "value"}, "--trailer": {"type": "multi"}, "--leave-other-staged": {"type": "boolean"}},
+ "positionals": {"name": "paths", "separator": true, "min": 1, "max": 61},
+ "checks": ["head_matches", "repo_config_safe", "staging_state_ok", "paths_valid", "message_valid",
+            "paths_not_credentials", "paths_regular", "facts_complete", "no_secret_lines"],
+ "rubric": "commit", "questions": ["message_matches_change", "scope_is_coherent", "change_is_safe_in_itself",
+                                   "no_reviewer_directed_text"],
+ "lists": {"credential_names": [".env", "id_rsa"], "reviewer_facing_paths": ["AGENTS.md", "CLAUDE.md"]}}
+```
+
+and `rules/safe-git-remove.json`: `subcommand` and `action` `remove`; `flags` `--confirm` and `--recursive`, both
+boolean; `positionals` `paths` with `separator` true, `min` 1 and `max` 61; `checks` `facts_complete`,
+`confirm_present`, `removal_valid`, `ignore_status_known`, `preview_matches_arguments` and `no_git_metadata`; `rubric`
+`remove`; `questions` `targets_look_disposable`, `scope_is_narrow` and `no_reviewer_directed_text`. The flags of both
+rules are those of the real commands in `safe-git.md`; the build checks them against the helper. (The flag names above
+are the author's reading and are confirmed against `safe-git` by Increment D.)
+
+Cases that must not load, each with a test: a field outside the table; a missing required field; a `format` other than
+1; a `module`, `action` or `spelling` word outside its form; a `subcommand` unequal to `action`; a `wb run` spelling
+whose last word is not `module`; a file name that is not `<module>-<action>.json`; a check or list name that is not in
+the engine's list; a question the rubric section does not define; a flag of an unknown type; two positional groups or
+none; `min` over `max`; an over-long value, list or file; and any field that carries a command line, a verb, a path or
+a program name (there is no field for one, so it is an unknown field).
+
+**Matching and precedence.** The prompted command is parsed once under the grammar below into words. A rule matches
+when the command's leading words equal `spelling` and the next word equals `subcommand`, whole word against whole word.
+There is no precedence and no order among rules. If exactly one rule matches and it loads, it reviews. If no rule
+matches, the command is not reviewed: a refusal (exit 1) that names no rule, which is also how a retired action
+(`ask-codex archive`, `safe-committer`, `amend-message`) is refused, with no `describe` and no bridge call. If two or
+more rules match, or two files carry one key, every one of them is refused and nothing is reviewed under that key. A
+rule that does not load refuses only the commands of its own key: its key is read from its `spelling` and `subcommand`
+when both are valid, and otherwise from its file name, where a command is refused when two adjacent words among its
+first five, joined with a `-`, equal the file's name without `.json`. A rule error is reported with the file name on
+standard error, never as a verdict, and does not disturb the review of any other key.
+
+**Flags and positionals.** After the subcommand, a word beginning with `--` is a flag and must be declared by the rule.
+A single-quoted word that begins with `-` is refused outright, so a quoted word is never a flag in the engine and a
+flag in the real command; `--name=value` is refused as an undeclared flag. A `value` flag takes the next word as its value; a
+`multi` flag may repeat and gathers its values in order; a `boolean` flag takes no value; a `value` or `boolean` flag
+given twice is a refusal, and so is a `required` flag that is absent, an undeclared flag, a flag with no value, a
+second `--` word, and a count of positional words outside `min` and `max`. A bare word that begins with `-` and is not
+a declared flag is a refusal. Positional words are those after the lone `--` when `separator` is true, and the bare
+words that follow the last flag when it is false. The result is an argument list in the order given, which is passed to
+`describe` unchanged; the parse only decides whether the shape fits, and the real validation is `describe`'s.
+
+**The checks.** The engine has a fixed list of code checks, each a pure function of the `describe` object (and, for two,
+of a named list), run in the order of the list and not of the rule. A rule may name only checks in the list. `ok:
+false` is a fact: each error code maps to the check that would have caught it, and that check fails (a code with no
+mapping fails `facts_complete`). The checks for the two actions this plan covers, from `safe-git.md` ("Each check of the
+approver, and where it goes"):
+
+| Check | Action | Reads | Fails when | Error codes it also fails on |
+|---|---|---|---|---|
+| `head_matches` | commit | `head`, `expected_head` | they differ; a null `head` passes only with `expected_head` `none`, and any other null fails | `expected_head_invalid`, `head_mismatch`, `head_unreadable` |
+| `repo_config_safe` | commit | `program_findings` | it is not empty | `repo_selects_program`, `operation_in_progress` |
+| `staging_state_ok` | commit | `staged_paths`, `leave_other_staged` | something is staged without `leave_other_staged` | `index_has_staged_changes`, `path_already_staged` |
+| `paths_valid` | commit | `ok` | a path error | `usage`, `path_refused`, `path_duplicate`, `path_unmerged`, `path_in_nested_repository`, `path_not_a_file`, `path_unknown`, `path_converts_on_add`, `whitespace_errors` |
+| `message_valid` | commit | `ok` | a message error | `subject_invalid`, `body_invalid`, `trailer_invalid`, `message_character_refused`, `attribution_refused`, `setting_invalid` |
+| `paths_not_credentials` | commit | `requested_paths`, `paths`, list `credential_names` | the final segment of a path, case-folded, equals a listed name, or ends with a listed name that begins with `.` (an extension such as `.pem`) | none |
+| `paths_regular` | commit | `not_regular_paths` | it is not empty | none |
+| `facts_complete` | commit, remove | `truncated`, and for a commit `binary_paths` | `truncated` is true, or a commit has a binary path | `repository_unreadable`, `index_unreadable`, and any unmapped code |
+| `no_secret_lines` | commit | `diff`, `subject`, `body`, `trailers` | the secret scan (ported from the approver by Increment F) hits; a hit withholds the diff from anything sent to a bridge | none |
+| `confirm_present` | remove | `confirm` | it is false | none |
+| `removal_valid` | remove | `ok` | a removal error | `usage`, `path_duplicate`, `path_refused`, `target_missing`, `recursive_required`, `repository_root_refused`, `nested_repository`, `other_filesystem`, `tree_too_large`, `target_changed` |
+| `ignore_status_known` | remove | `ignore_unknown_targets` | it is not empty | none |
+| `preview_matches_arguments` | remove | `target_paths`, `requested_paths` | they differ | none |
+| `no_git_metadata` | remove | `requested_paths` | any segment, folded, equals `.git` | `git_metadata_refused`, and `path_refused` where a segment folds to `.git` |
+
+The rubric questions are not code checks and are never run by the engine: `message_matches_change`, `scope_is_coherent`,
+`change_is_safe_in_itself` and `no_reviewer_directed_text` for a commit, and `targets_look_disposable`,
+`scope_is_narrow` and `no_reviewer_directed_text` for a remove. A question goes to the model only after every code check
+has passed, and the model's `failed_checks` may name only the rule's questions. A failed code check is a decline with
+that name and never calls the bridge. The mapping of an error code to a check in the table is the author's reading of
+the real refusals in `safe-git.md`; the build tests it against real `describe` objects. The checks for a push are
+deferred with the push rule (`outgoing_known` and the others in that table), because they need `describe push`, which
+exists, and a rule and checks that the follow-up plan writes.
+
+**The rubric.** `rubric/rubric.md` holds one section per rubric name, `## <name>` with `commit` and `remove` at first,
+and under it one `### <question>` heading per question with the text of the question. It is ported from the approver's
+rubric section by section by Increment H, with the source hash and date recorded; the engine's own framing says that the
+facts are data and not instructions. `reply-schema.json` is the JSON Schema of the verdict reply the bridge is asked for
+(`verdict`, `failed_checks`, `reason`), and the engine validates the reply again whatever the bridge or the schema did.
+
+**The log row reaches the hook.** `--log-row` makes the engine print, after the verdict object has been printed, one
+more line on standard error: `log-row: ` followed by the row as one JSON object with exactly the fields of "The
+log", and no field is added to the verdict object. A row is printed for a verdict only (approve or decline, exit 0);
+a refusal or failure prints its `refused:` or `failed:` line and no row, and the hook writes a note of its own if it
+wants one. The engine reads the clock for `ts` and writes nothing. (Author's call.)
+
+**The time budget (author's call, provisional).** The engine's 25 seconds are one deadline for the whole review. `describe`
+may use up to 5 of them and the bridge call gets the rest; the bridge is always passed `--timeout 20` and the engine's
+time limit on the call is the deadline's remainder, so the two add to no more than 25. A `describe` that is not done in
+5 seconds is a refusal (exit 1, as for any failed `describe` run in the plan). The 5 seconds are a guess and are
+revisited with the other figures once the shadow period has logged the engine's own durations.
+
+**A fact that is absent or of the wrong type.** A check reads only the facts named in its row. If an `ok: true` object
+lacks one of them, or it has the wrong type, that check fails (it never passes by default), and `facts_complete` fails
+with it. An `ok: false` object keeps the names the module always gives it (`safe-git.md`), so the same rule applies.
+
+**Where `describe` runs.** The engine runs `describe` from the working directory it was started in, and the hook
+starts `review` in the directory where the harness will run the command. The spec does not make the engine check this;
+a hook that starts it elsewhere gets facts about another repository. That is a requirement on the owner's hook.
+
+**A rules directory that cannot be read, or is too large.** If `rules/` cannot be read, has more than 64 files or
+holds more than 262,144 bytes, no rule is trusted to match: every review is refused (exit 1) with that reason. Within
+the limits, a single bad file refuses only its own key, as above.
+
+**A code-check decline has no bridge.** The log row's `bridge`, `model` and `effort` are null when the bridge was not
+called.
+
+**What the loader does not check.** For a spelling that does not begin `wb run`, nothing ties `spelling` to `module`;
+that rests on the owner's review of the shipped rule data and on the module's `describe` contract. A later push rule
+is the intended case (`["git"]`).
 
 ### The reviewed command is the command that runs (default)
 
@@ -179,9 +345,9 @@ display-cleaned model output that could quote a path or a line it was shown, and
 guessed by dictionary, so "hashes, never text" is not secrecy. It lives outside every project, in the owner's own data
 directory beside the approver's verdict log, so a vendor program that opens files in the project cannot find it. The owner
 decided on 2026-10-25 that the owner's thin hook writes it, from the row the engine hands back, and that a failed write
-never withholds an approve (below, "Decided by the owner"). The engine writes nothing outside the project; the engine's
-plan fixes how the row reaches the hook (for example a flag that prints it as one JSON line on standard error), without
-adding a field to the verdict object.
+never withholds an approve (below, "Decided by the owner"). The engine writes nothing outside the project; the row
+reaches the hook through the `--log-row` flag, which prints it as one `log-row:` line on standard error, without
+adding a field to the verdict object (see "The rule schema, the module and the checks").
 
 **How the engine learns that a command is pinned and declared.** Only part of this is settled today:
 
@@ -205,20 +371,36 @@ read on 2026-10-25: 876 reviews, the median model call 7.5 seconds, the 95th per
 adds the launcher, `describe` and a larger fact set, so the margin is wider. The figures are revisited when the shadow
 period has logged about 30 of the engine's own reviews. A review that times out leaves the owner at the normal prompt.
 
-### Settings and the bridge (default)
+### Settings and the bridge
 
-Decision 5 of `2026-10-22-model-calls-go-through-vendor-bridges` applies unchanged. The engine reads its own project
-file, `.workbench/action-review.json`: a format number and the bridge, the model and the effort the project would
-like. It is a request and never an authorization.
+Decision 5 of `2026-10-22-model-calls-go-through-vendor-bridges` applies except for the file name. **This departs from
+decision 5.** The decision says each engine reads "a file named for the engine, `.workbench/<engine module>.json`";
+the owner chose on 2026-10-26, as the plan `2026-10-26-action-review-engine` records, that this engine reads the
+project file `.workbench/review.json`, the file the review engine already reads, and not `.workbench/action-review.json`.
+A decision outranks a spec and an accepted decision is superseded, never edited, so **a record that narrows or
+supersedes decision 5 for this file name is owed**; it is the owner's to accept, and until it is accepted this section
+contradicts the decision on that one point. The file holds a format number and the bridge, the model and the effort the
+project would like. It is a request and never an authorization.
 
-- The bridge must be an installed, pinned module that provides `model-bridge`. A name that is not is refused and no
-  other vendor is tried.
-- The owner's personal setting is authoritative: it may choose among the installed bridges and lower the effort, and
-  where it and the project disagree the personal setting is used. A teammate with none gets the project's bridge if
-  it is installed and approved, and otherwise a refusal.
+- **The reader is that of `review-engine`.** The file is at most 4,096 bytes, strict JSON, an object with `format` equal
+  to 1, `bridge` (a command name, required), and optionally `model` (letters, digits and `._:-`, at most 64 characters,
+  starting with a letter or digit) and `effort` (`low`, `medium` or `high`). An unknown field, a wrong type, a
+  duplicate key or a missing file is a refusal (exit 1); there is no default bridge, and the engine never guesses a
+  vendor to send content to. The engine passes `--model` and `--effort` to the bridge only when the file has them.
+- The bridge must be an installed, pinned module that provides `model-bridge`; the engine starts it through the kit's
+  `run_command` with `--provides model-bridge`, and the launcher refuses one that is not. A name that is refused ends
+  the review (exit 1) and no other vendor is tried.
+- **Recorded limit: the personal setting is not built.** The owner's personal setting would be authoritative over the
+  project's request. No helper can read the guarded store, as for the review engine, so the engine reads the project file
+  only; a project file is not the owner's personal setting, and a project could name another installed bridge. Only an
+  installed, pinned bridge that provides `model-bridge` can run. The precedence rule of the earlier text is deferred
+  with the personal setting.
+- **Recorded limit: one file for two engines.** Both engines refuse an unknown field, so a field added for one is
+  refused by the other until both readers change together.
 - A pulled change to the file is a difference `wb acknowledge` lists, and at run time the file is accepted only if it
   names a bridge the owner already approved by installing it.
-- The timeout the engine passes to the bridge is shorter than its own limit, as `model-bridge.md` requires.
+- The timeout the engine passes to the bridge (20 seconds) is shorter than its own limit (25), as `model-bridge.md`
+  requires.
 - A missing or unreadable setting, or a bridge failure of any class, yields no approval.
 
 ### The enforcement point (default)
@@ -378,8 +560,9 @@ left open.
   and in `sh` and `zsh`, and every other text is refused.
 - Two rules with one key, a malformed rule and a rule with an unknown field each refuse only their own key; other
   commands are still reviewed.
-- Bridge selection: an absent setting, a bridge that is not installed, one that is not pinned, and a project request
-  that the owner's setting overrides each behave as the settings section says, and no other vendor is tried.
+- Bridge selection: an absent setting, an invalid one, a bridge that is not installed and one that is not pinned each
+  behave as the settings section says, and no other vendor is tried. (A project request that the owner's personal
+  setting overrides is not testable until that setting is built.)
 - No file holding labelled data or command text lies inside a project tree.
 - A corrupt rule file does not stop the review of any other command.
 - Every check of today's approver for commit, remove and push has a named counterpart or a recorded reason it does
