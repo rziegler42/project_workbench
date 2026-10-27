@@ -38,9 +38,12 @@ acceptance criteria P1 to P6 pass, except where "Deferred work" says otherwise.
 
 ## Assumptions and constraints
 
+- Increment I builds the decision `2026-10-27-command-gate-literal-arguments`, which is `Proposed` until the owner accepts it. It was
+  found after F to H were built: relaxing a common-word key blocks every `wb run safe-git commit` whose subject or paths hold the word
+  (`2026-10-27-command-gate-literal-arguments`, "Context").
 - The decision `2026-10-26-a-level-for-every-command` and the spec are accepted and approved by the owner. Where this plan and
   either differs, they win.
-- Increment E builds the decision `2026-10-27-command-gate-command-position`, which is `Proposed` until the owner accepts it. F to I
+- Increment E builds the decision `2026-10-27-command-gate-command-position`, which is `Proposed` until the owner accepts it. F to K
   need it, because the gate as it stands blocks every command that holds a common word such as `install` once its key is relaxed.
 - Only `approve-plan` runs without a terminal today (`planapprovals.py`). Every other owner-run command refuses unless standard
   input and output are terminals, each with its own check (`install.py`, `upgrade.py`, `acknowledge.py`, `recover.py`,
@@ -236,11 +239,43 @@ acknowledgement check is not bypassed.
 **Checkpoint (owner):** this increment lets an agent make code trusted. At its end the agent asks whether to run a security review,
 and does not begin I until the owner answers.
 
-### Increment I — `acknowledge`, `recover`, `release-approvals` and `attach` at `none`
+### Increment I — The command gate leaves a literal `wb run` command and a sibling command name alone
+
+**Outcome:** with single-word keys relaxed (`wb add`, `wb install`, `wb upgrade`, `wb pin`, `wb approve`), the command gate no longer
+blocks `wb run safe-git commit ... --subject 'Add tests' -- tests/test_add.py` or any `wb run <name> <literal arguments>`, no longer
+blocks `wb approve-plan` because `wb approve` is relaxed; the obfuscated and compound forms
+stay blocked as now, and the block message for a key at `none` says what it read. This is the decision
+`2026-10-27-command-gate-literal-arguments` and builds only that.
+**Dependencies:** E, and the owner's acceptance of that decision. If the owner does not accept it, this increment is dropped by a new
+amendment, the keys of F to H stay as built, and the spec and the plan say that relaxing a common-word key blocks commits.
+**Affected areas:** `workbench/command_gate.py`, `tests/test_command_gate.py`, `docs/specs/command-permissions.md` ("The command
+gate"), `docs/development.md`.
+**Steps:**
+1. Write the tests first. For a gate with `wb add`, `wb install` and `wb pin` relaxed: allowed are `wb run safe-git commit
+   --expected-head <40 hex> --subject 'Add tests' -- tests/test_add.py`, the same with `'Fix padding'`, `-- workbench/install.py`,
+   `'pin, mapping, shipping'`, a single-quoted subject that holds a newline, and the same through the store's `bin/wb`; with
+   `wb approve` relaxed, `wb approve-plan docs/plans/a.md`. Blocked are every form the existing tests block, and in addition
+   `wb run x --subject "$(wb install)"`, `wb run x 'a' ; wb install`, `wb run x 'a' | xargs wb`, `wb run x "install"`,
+   `wb run x install; wb install`, a command with a newline outside quotes, `wb run x 'a'<newline>wb install`, `w""b install`,
+   `w\b install`, `w\<newline>b install`, `wb inst\<newline>all`, `wb run wb install`, `wb run workbench install`,
+   `wb run x 'a'x`, `wb run x 'a''b'`, a lookalike launcher, `wb inst""all`, `wb approve${X}`, `wb approve"-plan"`, and
+   `wb run mempalace init` with that key relaxed whatever its arguments. A test pins that the sibling names are those of `rules`.
+2. Change `judge` so that a single-word launcher key skips a command that fully matches the literal `wb run` form on the raw text;
+   remove the exact sibling tokens before the search; and word the message for a `none` key, which needs the level of each
+   relaxed key passed to `judge`.
+3. Update the spec's "The command gate" and `docs/development.md`, and the Result of this plan.
+**Verification:** `python3 -B -W error -m unittest discover -s tests -p 'test_command_gate.py'`, the tests of the rendering and the gate
+hook, a differential run of the old and the new `judge` over a set of spellings that finds none that the old blocked and the new allows,
+except the forms the decision exempts, then the full suite.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#I`.
+**Checkpoint (owner):** this increment changes a permission boundary and a parser of untrusted text. At its end the agent asks whether
+to run a security review with an installed module that provides `security-review`, and does not begin J until the owner answers.
+
+### Increment J — `acknowledge`, `recover`, `release-approvals` and `attach` at `none`
 
 **Outcome:** the same for the remaining installer commands. `acknowledge` is set by the checkpoints `acknowledge-first-tier` and
 `acknowledge-second-tier`; `attach` only loses its `deny`; `release-approvals` loses its `deny` (it never had a terminal test).
-**Dependencies:** D and E.
+**Dependencies:** D and E (I, the gate change, is not required but is better built first).
 **Affected areas:** `workbench/acknowledge.py`, `workbench/recover.py`, `workbench/attach.py`, `workbench/cli.py`,
 `workbench/rules.py`, their tests, `docs/development.md`, `docs/specs/trust-and-approval.md`.
 **Steps:**
@@ -250,9 +285,9 @@ and does not begin I until the owner answers.
 2. Replace the terminal tests with the function from D where one exists.
 3. Update the development table and the specs.
 **Verification:** the affected tests, then the full suite.
-**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#I`.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#J`.
 
-### Increment J — `accept-decision` at `none`, and the documents
+### Increment K — `accept-decision` at `none`, and the documents
 
 **Outcome:** the checkpoint `accept-decision` offers `block` and `none`; the decision-drafting guidance reads it; `wb settings`
 prints it; the specs and `docs/development.md` describe everything built and the spec's status reads as current.
@@ -269,7 +304,7 @@ prints it; the specs and `docs/development.md` describe everything built and the
 4. Move the "Planned" section of the spec into the built sections, leave what is deferred under "Not built", and update the
    acceptance criteria and the review record.
 **Verification:** the levels tests, `wb check`, then the full suite.
-**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#J`.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#K`.
 
 ## Verification for the plan as a whole
 
@@ -278,7 +313,7 @@ prints it; the specs and `docs/development.md` describe everything built and the
 3. `wb settings` with the default personal settings prints every agent-safe key as `none` and every other key as `block`.
 4. A trial in a throwaway project, run by the owner: set `wb install` to `none`, attach, and have the agent run an install with no
    terminal; then set it back to `block` and confirm it refuses. The agent describes the steps and runs none of them.
-5. A security review of the permission boundary, run only if the owner asks at the checkpoints in D, E and H.
+5. A security review of the permission boundary, run only if the owner asks at the checkpoints in D, E, H and I.
 
 ## Risks and sensitive actions
 
@@ -293,7 +328,7 @@ prints it; the specs and `docs/development.md` describe everything built and the
   project that only uses the workbench.
 - **A rendering that denies too much.** Increment C could deny an agent-safe command the agent needs (for example `wb settings`)
   if an owner sets it to `block`. That is the owner's choice and the default is `none`; a test pins the default rendering.
-- Three increments, D, E and H, are checkpoints for a security review; a review runs only when the owner asks.
+- Four increments, D, E, H and I, are checkpoints for a security review; a review runs only when the owner asks.
 - Nothing is pushed, published or installed from outside, and no secret is used.
 
 ## Review record
