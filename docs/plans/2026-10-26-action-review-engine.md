@@ -502,3 +502,52 @@ parser increment; the full suite had not been rerun after the three edits (the s
 ran.
 
 Not done: the grammar, rules, checks and bridge call (C to J); committing; removing the four stale shipped records.
+
+(Increment B is committed as `8078763`, and the decision `2026-10-26-action-review-reads-the-review-setting` as `9d7cec6`.)
+
+### Increment C — built, verified and reviewed (not committed)
+
+Changed: `packages/workbench/action-review/helper/action-review` (`parse_words`, `split_command`, `Unreviewable`, and
+`review` now refuses unreviewable text before its "not built" refusal), `tests/test_actionreview_parse.py` (new) and
+`tests/test_actionreview_module.py` (the import list).
+
+The parser reads the spec's grammar: single-spaced words, each a bare word of `A-Za-z0-9._/:=@%+,-` or a single-quoted
+string; a text of at most 4,096 characters. It also refuses, as the author's additions to the spec text: a bare word that
+begins with `=` (zsh expands `=cmd` to a path), a bare first word that holds an `=` (an environment prefix, `A=1` and
+`A+=1` alike), NUL inside quotes, and a character that cannot be encoded as UTF-8. A bare word beginning with `-` must be
+one the caller declares, and a quoted word beginning with `-` is always refused. `split_command` matches the spelling and
+subcommand whole word to whole word by value. Reserved shell words as a first word (`time`, `if`) are left to rule
+matching in D, which only matches a spelling beginning `wb` or `git`.
+
+Verification as run on 2026-10-27, in a scratch copy and landed with one `cp`: the tests failed first (no parser), then
+52 module tests passed. They include a differential test of the engine against an independent regular-expression reading
+of the grammar (about 9,000 generated and random texts, and every pair of characters), and generated text run through real
+`sh`, `zsh` and `bash` with a fake program that prints its arguments: the engine's words equal the shells' arguments in all
+three, none skipped. Two further shell tests show that `V=1 cmd` and `V+=1 cmd` set the environment and that zsh expands a
+word beginning with `=`, which the parser refuses. A deliberate mutation (adding `$` to the alphabet) made six tests fail
+and was reverted. Full `python3 -B -W error tests/run_all.py` in the scratch copy, three runs: the second passed in full
+(4906 tests); the first and third (4908 tests) had every module root passing and one failure in the root `tests`,
+`test_levellog` `test_parallel_appends_keep_every_line` (200 != 150), which passed alone three times. It is a thread-race
+test in code this increment does not touch; the cause is not found. `wb check`, `wb run code-work check` (51 plans),
+`doccheck`, `refcheck` and `git diff --check` were clean after landing.
+
+Review: the `reviewer` agent, one exchange.
+- Finding 1 (blocking, applied): `x+=1` is an append-assignment prefix in bash and zsh and the first pattern missed it.
+  The parser now refuses any bare first word holding `=`; the unit tests, the reference reading and two shell tests were
+  added with the fix (not run against the unfixed parser). The fix had no second review round.
+- Finding 2 (applied): the shell tests now show the first-word and leading-`=` hazards on the real shells.
+- Finding 3 (applied): the quoted alphabet in the shell tests now includes U+00A0, U+2028, ESC, DEL and the C1 bytes 0x80,
+  0x83 and 0x9f.
+- Finding 4 (recorded): only `/bin/sh`, `zsh -f` and `bash` without rc files were tested, so aliases, global aliases and
+  zsh options from an rc file are not covered. **The grammar cannot defend against them: it is a requirement on the hook
+  that the shell reading the command runs without them.** `LC_ALL=en_US.UTF-8` may not exist on every machine.
+- Finding 5 (owed to Increment L): the spec's grammar bullet does not list the leading `=`, the first-word `=` or NUL
+  rules; and whether the launcher's 4,096 limit counts characters or bytes is unchecked.
+- Finding 6 (for D): `review` parses with no declared flags, so a flag word reports "not declared" until D; the test
+  asserting the "not built" text changes then.
+
+Not done: rules, the command's flag typing, checks and the bridge call (D to J). With the owner's approval the six stale
+shipped records `release-approvals` listed were removed with `claude-workflow remove`, after a preview, and are in this
+commit (it had warned about `0dde3b333a54`, `51d13076423d`, `63d178d2836c`,
+`6d02998747b2`, `77a1f5745fae` and `ffe787e0fa3f`; the third and fourth are approvals Increment B added for a tree that
+has since changed).

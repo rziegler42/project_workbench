@@ -6,22 +6,112 @@ runner with nothing beside it.
 
     action-review review [--log-row] <command text>
 
-The contract is ``docs/specs/action-review.md``. This is the skeleton: it checks its arguments and refuses
-every call, because the grammar, the rules, the checks and the bridge call are later increments of plan
-``2026-10-26-action-review-engine``. A refusal prints one ``refused:`` line on standard error and nothing on
-standard output, and exits 1.
+The contract is ``docs/specs/action-review.md``. The command text is read once, under a grammar so small that
+``sh`` and ``zsh`` read it alike: single-spaced words, each a bare word of a small alphabet or a single-quoted
+string. Anything else is unreviewable. The rules, the checks and the bridge call are later increments of plan
+``2026-10-26-action-review-engine``, so a text inside the grammar is still refused for now. A refusal prints one
+``refused:`` line on standard error and nothing on standard output, and exits 1.
 """
 
+import collections
 import os
 import sys
 
 USAGE = "usage: action-review review [--log-row] <command text>"
+MAX_TEXT = 4096
+BARE = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._/:=@%+,-")
+
+Word = collections.namedtuple("Word", ("text", "quoted"))
+
+
+class Unreviewable(Exception):
+    """The text does not fit the grammar, so it is not reviewed and approves nothing."""
+
+
+def parse_words(text, declared=frozenset()):
+    """The words of `text` as ``Word(text, quoted)``, or raise `Unreviewable`.
+
+    The grammar: one or more words, each followed by exactly one space or the end, no leading or trailing space. A
+    word is a run of bare characters, or ``'`` any characters but ``'``, newline and NUL ``'``. A bare word that
+    begins with ``-`` must be one of `declared` (the words a rule declares, the lone ``--`` among them), and a quoted
+    word never begins with ``-``, so a quoted word is never a flag. A bare word that begins with ``=`` (zsh expands
+    it to a path) is refused, and so is a first word that holds an equals sign (``A=1``, ``A+=1``), which a shell
+    reads as an environment prefix."""
+    if not isinstance(text, str):
+        raise Unreviewable("the command is not text")
+    if not text:
+        raise Unreviewable("the command is empty")
+    if len(text) > MAX_TEXT:
+        raise Unreviewable("the command is longer than %d characters" % MAX_TEXT)
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        raise Unreviewable("the command holds a character that is not text") from None
+    words = []
+    size = len(text)
+    at = 0
+    while True:
+        if at >= size:
+            raise Unreviewable("the command ends with a space")
+        if text[at] == "'":
+            end = text.find("'", at + 1)
+            if end < 0:
+                raise Unreviewable("a single quote is not closed")
+            body = text[at + 1:end]
+            if "\n" in body or "\0" in body:
+                raise Unreviewable("a quoted word holds a newline or a NUL")
+            if body.startswith("-"):
+                raise Unreviewable("a quoted word begins with a dash, so it could be read as a flag")
+            words.append(Word(body, True))
+            at = end + 1
+        else:
+            end = at
+            while end < size and text[end] in BARE:
+                end += 1
+            if end == at:
+                if text[at] == " ":
+                    raise Unreviewable("the command has a leading or doubled space")
+                raise Unreviewable("the character %s is outside the grammar" % ascii(text[at]))
+            body = text[at:end]
+            if body.startswith("="):
+                raise Unreviewable("a word begins with an equals sign")
+            if not words and "=" in body:
+                raise Unreviewable("the command begins with an assignment")
+            if body.startswith("-") and body not in declared:
+                raise Unreviewable("the word %s begins with a dash and is not declared" % ascii(body))
+            words.append(Word(body, False))
+            at = end
+        if at == size:
+            return words
+        if text[at] != " ":
+            raise Unreviewable("the character %s is outside the grammar there" % ascii(text[at]))
+        at += 1
+
+
+def split_command(words, spelling, subcommand):
+    """The words after `spelling` and `subcommand`, or ``None`` when `words` do not begin with them. Words are
+    compared by value, whole word to whole word: a quoted word reaches the program as the same argument."""
+    count = len(spelling)
+    if len(words) <= count:
+        return None
+    if tuple(w.text for w in words[:count]) != tuple(spelling) or words[count].text != subcommand:
+        return None
+    return list(words[count + 1:])
 
 
 def run(argv):
-    """Check the arguments; return the refusal text. Nothing else is done yet."""
+    """Check the arguments and the text; return the refusal text. The rest is not built yet."""
     if not argv or argv[0] != "review":
         return USAGE
+    rest = argv[1:]
+    if rest[:1] == ["--log-row"]:
+        rest = rest[1:]
+    if len(rest) != 1:
+        return USAGE
+    try:
+        parse_words(rest[0])
+    except Unreviewable as exc:
+        return "unreviewable: %s" % exc
     return "the engine is not built yet; " + USAGE
 
 
