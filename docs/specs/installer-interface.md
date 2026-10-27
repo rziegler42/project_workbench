@@ -166,8 +166,8 @@ says so.
 | `adopt` | project | target, a module selection (as `install`) | committed content for the paths that are missing, manifest, the project's store directory; never an existing file and no harness file | yes, owner-run | built (`adopt-existing-repository`) |
 | `attach` | project | target, `--harness` | per-clone harness files, `.git/info/exclude`, the local manifest | no, but owner-run (harness deny rule) | built |
 | `check` | project | target | nothing | no | built |
-| `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run | built |
-| add a module | project | target, a module | the same as `upgrade`, new files and blocks only | yes, owner-run | built |
+| `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run; the owner may set it to `none` | built |
+| add a module | project | target, a module | the same as `upgrade`, new files and blocks only | yes, owner-run; the owner may set `wb add` to `none` | built |
 | `acknowledge` | project | target | the guarded store: the project's acknowledgement baselines | yes, owner-run | built |
 | `recover` | project | target | removes the unfinished-write marker and the empty directories the plan created, nothing else | yes, owner-run | built |
 | `verify` | package | a package directory (`<package>` or `--dir`), `--select`, `--no-harness-required` | nothing | no | built |
@@ -691,7 +691,8 @@ Applies to `install`, `adopt`, `upgrade` and adding a module. The split between 
    An agent therefore cannot make the workbench contact an address it chose, and the approval
    a preview needs always came from the owner *(my call; found in review)*. `wb install`,
    `wb adopt`, `wb upgrade` and `wb add` write, and are owner-run.
-2. **The write commands are owner-run and terminal-only.** They need a terminal on both
+2. **The write commands are owner-run and terminal-only** (at the level `none` of `wb install`, `wb adopt`, `wb upgrade` or
+   `wb add`, the command runs without a terminal; `command-permissions.md`, "`upgrade` and `add` at `none`"). They need a terminal on both
    standard input and standard output, checked on file descriptors as `approve` does, and
    refuse with `refused:` and exit 1 otherwise. They are denied to an agent by the harness,
    exactly as `approve`, `pin` and `attach` are. **rule:** the harness modules render a `deny`

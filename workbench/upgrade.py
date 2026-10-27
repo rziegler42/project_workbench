@@ -21,6 +21,12 @@ replaced (each by a whole-file replace that checks the hash in the plan), the ma
 store's baselines, and last removes the marker. Writing is not atomic: a failure stops at once,
 lists what was written and what was not, leaves the marker and exits 3. Nothing is committed and
 nothing is deleted. Nothing contacts the network.
+
+When the owner has set the key ``wb upgrade`` (or ``wb add``) to ``none`` and the rendering holds (``levelrun.route``, read for
+the project the command is run from), the command also runs without a terminal and asks nothing: it prints the plan and its
+digest, runs every check above (the acknowledgement included) and writes the level log's attempt just before the first write and
+its outcome after the last. The project it acts on must be the one the level was read for. At any other level it refuses
+without a terminal, as above.
 """
 
 import collections
@@ -29,7 +35,7 @@ import shutil
 import stat
 
 from . import (__version__, acknowledgement, approvals, approve, base, confirm, declarations, firstparty,
-               gate, installed, installplan, manifest, pins, preview, projectfs, snapshot, sources, target,
+               gate, installed, installplan, levelrun, manifest, pins, preview, projectfs, snapshot, sources, target,
                unfinished, upgradeplan, verify)
 from .wbkit import display, safefs
 
@@ -410,13 +416,17 @@ def _lines(err, exc):
                   % display.clean(line))
 
 
-def _run(guarded, parsed, stdin, out, err, distribution, version, which, progress, mode):
+def _run(guarded, parsed, stdin, out, err, distribution, version, which, progress, mode, route=None):
+    unattended = route is not None and not route.terminal
     try:
         with target.open_target(parsed.target, guarded.root) as held:
             now = approvals.utc_now()
             done = prepare(guarded, held, parsed.packages, distribution, version, which, mode,
                            parsed.select or (), now)
             plan, existing, selection = done["plan"], done["existing"], done["selection"]
+            if unattended and manifest.project_id(existing.document["seed"]) != route.project_id:
+                return _refuse(err, "the project the level was read for is not the project being %s; nothing was "
+                                    "written" % ("added to" if mode == "add" else "upgraded"))
             for warning in done["warnings"]:
                 err.write("warning: %s\n" % display.clean(warning))
             out.write(upgradeplan.render(plan, existing, selection, held.path, held.identity,
@@ -425,13 +435,17 @@ def _run(guarded, parsed, stdin, out, err, distribution, version, which, progres
                 out.write("nothing to change\n")
                 return 0
             digest = upgradeplan.digest(plan, existing, selection, held.identity)
-            out.write("\nTo %s, type the first %d characters of the digest shown above and "
-                      "press Enter.\nAnything else cancels and writes nothing.\n> "
-                      % (mode, confirm.CONFIRM_CHARS))
-            out.flush()
-            if not confirm.typed_matches(stdin, digest):
-                out.write("cancelled: nothing was written\n")
-                return 1
+            if unattended:
+                out.write("\nThe level of wb %s is none here, so nothing is asked: it is applied now.\n" % mode)
+                out.flush()
+            else:
+                out.write("\nTo %s, type the first %d characters of the digest shown above and "
+                          "press Enter.\nAnything else cancels and writes nothing.\n> "
+                          % (mode, confirm.CONFIRM_CHARS))
+                out.flush()
+                if not confirm.typed_matches(stdin, digest):
+                    out.write("cancelled: nothing was written\n")
+                    return 1
             held.recheck()
             try:
                 again = prepare(guarded, held, parsed.packages, distribution, version, which,
@@ -448,25 +462,31 @@ def _run(guarded, parsed, stdin, out, err, distribution, version, which, progres
                 return _refuse(err, "the plan cannot be recorded in the marker (%s); nothing was "
                                     "written" % exc)
             progress.plan = _shown(plan)
-            try:
-                _write(guarded, held, plan, progress, record)
-            except NotStarted as exc:
-                return _refuse(err, str(exc))
-            except (Exception, KeyboardInterrupt) as exc:
-                cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
-                if progress.writer is None:
-                    raise
-                confirm.report_failure(
-                    progress, cause, err, what=mode,
-                    hint=RECOVERY_FILES_DONE if progress.stage in ("store", "marker")
-                    else RECOVERY)
-                return 3
-            progress.done = True
-            try:
-                _finish(plan, progress, held, out, err)
-            except OSError:
-                pass
-            return 0
+
+            def apply():
+                try:
+                    _write(guarded, held, plan, progress, record)
+                except NotStarted as exc:
+                    return _refuse(err, str(exc))
+                except (Exception, KeyboardInterrupt) as exc:
+                    cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
+                    if progress.writer is None:
+                        raise
+                    confirm.report_failure(
+                        progress, cause, err, what=mode,
+                        hint=RECOVERY_FILES_DONE if progress.stage in ("store", "marker")
+                        else RECOVERY)
+                    return 3
+                progress.done = True
+                try:
+                    _finish(plan, progress, held, out, err)
+                except OSError:
+                    pass
+                return 0
+
+            if not unattended:
+                return apply()
+            return levelrun.apply_logged(guarded, route, "wb " + mode, digest, apply, err, _refuse)
     except target.TargetError as exc:
         return target.write_refusal(err, exc)
     except preview.Refused as exc:
@@ -476,29 +496,31 @@ def _run(guarded, parsed, stdin, out, err, distribution, version, which, progres
         return _refuse(err, str(exc))
 
 
-def require_terminal(stdin, out, err, mode="upgrade"):
-    """True when both streams are terminals; otherwise print the refusal and return False."""
-    if approve.is_terminal(stdin) and approve.is_terminal(out):
-        return True
-    _refuse(err, "%s is owner-run: standard input and output must both be terminals. Run "
-                 "this command yourself, from your own terminal; `preview %s` shows the "
-                 "same plan without writing." % (mode, mode))
-    return False
+def terminal_only(mode):
+    return ("%s is owner-run: standard input and output must both be terminals. Run this command yourself, from your "
+            "own terminal; `preview %s` shows the same plan without writing." % (mode, mode))
 
 
 def run(guarded, parsed, stdin, out, err, distribution=None, version=None, which=shutil.which,
-        mode="upgrade"):
-    """Upgrade or add after the owner types the digest. Returns the exit code: 0 done or nothing to
-    change, 1 refused or cancelled, 3 stopped after writing began, 130 interrupted before it."""
-    if not require_terminal(stdin, out, err, mode):
-        return 1
+        mode="upgrade", cwd=None):
+    """Upgrade or add after the owner types the digest, or, when the level of ``wb <mode>`` is ``none`` here, without a
+    terminal and without it. Returns the exit code: 0 done or nothing to change, 1 refused or cancelled, 3 stopped after
+    writing began (or written, with its outcome not logged), 130 interrupted before it."""
+    # The level is read for the project the command is run from; the plan must be for that project (checked in `_run`).
+    text = terminal_only(mode)
+    try:
+        route = levelrun.route(guarded, cwd if cwd is not None else os.getcwd(), "wb " + mode, stdin, out, text)
+    except levelrun.Refusal as exc:
+        return _refuse(err, str(exc) if str(exc) == text else "%s (%s)" % (text, exc))
+    except OSError as exc:
+        return _refuse(err, "%s (the working directory cannot be read: %s)" % (text, exc.strerror or "unknown error"))
     progress = confirm.Progress()
     progress.warnings = []
     progress.stage = "files"
     progress.done = False
     try:
         return _run(guarded, parsed, stdin, out, err, distribution, version or __version__,
-                    which, progress, mode)
+                    which, progress, mode, route)
     except KeyboardInterrupt:
         if progress.done:
             return 0

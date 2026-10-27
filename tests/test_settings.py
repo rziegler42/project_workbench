@@ -571,13 +571,13 @@ class LevelsTest(SettingsBase):
     def test_a_level_a_key_does_not_offer_reads_as_block_with_a_note(self):
         for level in ("ask", "none", "delegated"):
             with self.subTest(level=level):
-                loaded, got = self.effective({"version": 2, "levels": {"wb upgrade": level}})
-                self.assertEqual("block", got.levels["wb upgrade"])
+                loaded, got = self.effective({"version": 2, "levels": {"wb attach": level}})
+                self.assertEqual("block", got.levels["wb attach"])
                 self.assertEqual(1, len(got.notes))
-                self.assertIn("wb upgrade", got.notes[0])
+                self.assertIn("wb attach", got.notes[0])
 
-    def test_install_and_adopt_offer_none_and_nothing_else(self):
-        for key in ("wb install", "wb adopt"):
+    def test_install_adopt_upgrade_and_add_offer_none_and_nothing_else(self):
+        for key in ("wb install", "wb adopt", "wb upgrade", "wb add"):
             with self.subTest(key=key):
                 self.assertEqual("none", self.effective({"version": 2, "levels": {key: "none"}})[1].levels[key])
                 for level in ("ask", "delegated"):

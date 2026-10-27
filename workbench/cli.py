@@ -179,8 +179,6 @@ def _preview(argv, out, err, store_root, distribution, home=None):
 
 def _upgrade(tokens, out, err, store_root, distribution, stdin, mode="upgrade"):
     stdin = stdin if stdin is not None else sys.stdin
-    if not upgrade.require_terminal(stdin, out, err, mode):
-        return 1
     opened = _project_command(tokens, out, err, store_root, distribution,
                               upgrading=mode == "upgrade")
     if isinstance(opened, int):

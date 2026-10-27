@@ -32,7 +32,7 @@ import os
 import shutil
 import stat
 
-from . import (__version__, approvals, approve, attach, confirm, fetch, installplan, levellog, levelrun, manifest,
+from . import (__version__, approvals, approve, attach, confirm, fetch, installplan, levelrun, manifest,
                preview, projectfs, sources, target, unfinished)
 from .wbkit import display, safefs
 
@@ -280,7 +280,7 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
 
             if not unattended:
                 return apply()
-            return _apply_logged(guarded, route, "wb " + verb, plan, apply, err)
+            return levelrun.apply_logged(guarded, route, "wb " + verb, plan.digest, apply, err, _refuse)
     except target.TargetError as exc:
         return target.write_refusal(err, exc)
     except preview.Refused as exc:
@@ -289,27 +289,6 @@ def _run(guarded, command, stdin, out, err, distribution, seed, version, which, 
         return 1
     except safefs.SafeFsError as exc:
         return _refuse(err, str(exc))
-
-
-def _apply_logged(guarded, route, key, plan, apply, err):
-    """Write the attempt, run `apply` (the writes; it returns the exit code), then write the outcome. If the attempt cannot be
-    written nothing is written. An exit code other than 0 is a ``refused`` outcome: the run did not finish."""
-    try:
-        code, op = levelrun.logged(guarded, key, route.level, apply, "digest:%s" % plan.digest)
-    except levellog.LogError as exc:
-        return _refuse(err, "%s; nothing was written" % exc)
-    try:
-        if code == 0:
-            levelrun.done(guarded, op, "written")
-        else:
-            levellog.finish_refused(guarded, op, "stopped after writing (exit %d)" % code)
-    except levellog.OutcomeError as exc:
-        err.write("the %s was written, but its outcome was not logged: %s\n" % (key[3:], display.clean(str(exc))))
-        return 3
-    except KeyboardInterrupt:
-        err.write("the %s was written, but it was interrupted before its outcome was logged\n" % key[3:])
-        return 3
-    return code
 
 
 def run(guarded, command, stdin, out, err, distribution=None, seed=None, version=None,

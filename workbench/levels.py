@@ -32,7 +32,8 @@ class RegistryError(ValueError):
     """Two declarations give one key, so a level could not say which of them it sets."""
 
 # The levels beyond ``block`` that a key offers in this version, by key.
-_OFFERS = {APPROVE_PLAN: (DELEGATED, ASK, NONE), "wb install": (NONE,), "wb adopt": (NONE,)}
+_OFFERS = {APPROVE_PLAN: (DELEGATED, ASK, NONE), "wb install": (NONE,), "wb adopt": (NONE,), "wb upgrade": (NONE,),
+           "wb add": (NONE,)}
 # The shipped default of a key that is not ``block``; none yet among the owner-run keys.
 _DEFAULTS = {}
 # An agent-safe action, and a declared module argument that is not owner-run, is one an agent may run today, so it

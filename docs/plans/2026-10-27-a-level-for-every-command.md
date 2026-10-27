@@ -525,3 +525,23 @@ Increment D does not apply because the target is never the project the level was
 and a test pins that a new directory inside the project is accepted. Recorded, not changed: (4) the log's reason for exit 3 does not
 tell a failed write from a failed attach (the stderr report does); (5) no test for a broken pipe or an adopt exit 3; the two helpers
 that print after the writes swallow `BrokenPipeError`. The reviewer ran nothing.
+
+### Increment G — built, not committed (2026-10-27)
+
+**Done.** `wb upgrade` and `wb add` offer `block` and `none` (`levels._OFFERS`). `upgrade.run` takes `cwd` and calls `levelrun.route`
+for the key `wb upgrade` or `wb add`; `cli._upgrade` no longer refuses before the store is opened. At `none` the command prints the
+plan and its digest, asks nothing, and runs every check it runs at a terminal (the acknowledgement, the approvals, the second build).
+The plan's project (the manifest seed) must equal `Route.project_id`, or it refuses and writes nothing. The attempt and outcome are
+written by the new `levelrun.apply_logged` (moved out of `install.py`, which now uses it): `done`/`written` for exit 0, `refused` for
+any other exit (`refused before writing` for exit 1, `stopped after writing (exit N)` otherwise). Nothing to change writes no entry.
+
+**Verification as run.** `tests/test_upgrade_levels.py` (35 tests) was written first and failed on the terminal refusal against the
+old code; it passes now. Full suite `python3 -B -W error tests/run_all.py`: `Ran 5035 tests in 10 roots`, `OK` (before the last two
+tests were added; `tests.test_upgrade_levels` alone: 35 OK after); `wb check` and the plan check: no problems. **Not verified:** no
+end-to-end run under a harness (criterion 4).
+
+**Review.** One round by the `reviewer` agent: no blocking findings. Applied: tests for a marker that cannot be made (exit 1, `refused
+before writing`) and for an unapproved module. Recorded, not changed: (1) a usage error without a terminal now exits 2, not 1, and an
+agent's `wb upgrade` at `block` opens the store and writes the launcher wrapper before the refusal, as `install` and `preview` already
+do; (2) no test for a changed second digest, an interrupt, a failure in the file stage, a nothing-to-change `add`, or `apply_logged`
+alone; (3) a failing `finish_refused` inside `levelrun.logged` can replace the original exception (already so for `approve-plan`).

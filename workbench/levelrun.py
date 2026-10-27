@@ -12,14 +12,15 @@ such command, which is what this module is for:
 * ``logged`` and ``done``: the attempt is written after every check and just before the change, the outcome after it,
   and a run that changes nothing writes no entry. If the attempt cannot be written the command does nothing.
 
-``planapprovals.py`` uses both for ``approve-plan``. No other command does yet. Do not call ``rendering.effective_level``
+``planapprovals.py`` uses both for ``approve-plan``; ``apply_logged`` is the same for the writes of ``install``, ``adopt``,
+``upgrade`` and ``add``. Do not call ``rendering.effective_level``
 for an agent-safe key from here: it reads ``block`` for a key the table leaves out at its default.
 """
 
 import collections
 
 from . import approvalcmd, approve, levellog, levels, rendering
-from .wbkit import levels as kit
+from .wbkit import display, levels as kit
 
 
 class Refusal(Exception):
@@ -77,3 +78,28 @@ def done(guarded, op, reason="recorded"):
     change was made."""
     if op is not None:
         levellog.finish(guarded, op, "done", reason)
+
+
+def apply_logged(guarded, route, key, digest, apply, err, refuse):
+    """Run `apply` (the writes of an installer command; it returns the exit code) between an attempt and an outcome, and
+    return the exit code. The evidence is the digest of the plan. If the attempt cannot be written nothing is written
+    (`refuse(err, text)` says so). An exit code other than 0 is a ``refused`` outcome: the run did not finish. If the
+    outcome cannot be written after the writes were made, or the run is interrupted before it is, the exit code is 3."""
+    word = key.split()[-1]
+    try:
+        code, op = logged(guarded, key, route.level, apply, "digest:%s" % digest)
+    except levellog.LogError as exc:
+        return refuse(err, "%s; nothing was written" % exc)
+    try:
+        if code == 0:
+            done(guarded, op, "written")
+        else:
+            levellog.finish_refused(guarded, op, "refused before writing" if code == 1
+                                    else "stopped after writing (exit %d)" % code)
+    except levellog.OutcomeError as exc:
+        err.write("the %s was written, but its outcome was not logged: %s\n" % (word, display.clean(str(exc))))
+        return 3
+    except KeyboardInterrupt:
+        err.write("the %s was written, but it was interrupted before its outcome was logged\n" % word)
+        return 3
+    return code

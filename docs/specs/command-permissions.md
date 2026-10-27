@@ -4,7 +4,7 @@ Status: Current
 
 Written by plan `2026-10-26-command-permission-levels` (Increment H), which built it. It describes the levels table, the keys, the
 log, the rendering record, the command gate and `approve-plan` at the levels `ask` and `none`. One key, `approve-plan`, is built
-beyond `block` (and, from the plan `2026-10-27-a-level-for-every-command`, `wb install` and `wb adopt` offer `none`); every other key offers `block` only. Extending a review (`wb run review-engine extend`) was part of the design,
+beyond `block` (and, from the plan `2026-10-27-a-level-for-every-command`, `wb install`, `wb adopt`, `wb upgrade` and `wb add` offer `none`); every other key offers `block` only. Extending a review (`wb run review-engine extend`) was part of the design,
 was not built, and is listed under "Not built". The design is `docs/decisions/2026-10-26-per-command-permission-levels.md`, as refined by
 `docs/decisions/2026-10-26-permission-levels-as-built.md` (accepted), which states what stands, what changed and what was not built;
 where the two differ on the defaults or the offered levels, this spec follows the later record.
@@ -101,7 +101,7 @@ separated by single spaces, at most 96 characters.
 - `block`: every key.
 - `delegated`: `approve-plan` only, whose gate is a converged, sealed review of the exact bytes (`delegation.py`). The gate must
   pass at the moment of the run, and the run counts only while the table still reads `delegated`.
-- `ask`: `approve-plan` only. `none`: `approve-plan`, `wb install` and `wb adopt` (built by Increment F), every agent-safe action and
+- `ask`: `approve-plan` only. `none`: `approve-plan`, `wb install`, `wb adopt` (built by Increment F), `wb upgrade` and `wb add` (built by Increment G), every agent-safe action and
   every declared module argument that is not owner-run; no other key offers it yet. A key offers a level only from the version that builds it for that command; `accept-decision`
   and every other key offer `block` only.
 
@@ -237,7 +237,7 @@ give one key are a refusal.
 
 ## Planned: a level for every command
 
-Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B, C, D, E and F are
+Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B, C, D, E, F and G are
 built). It is the owner's direction of 2026-10-26, recorded here so a plan can implement it. Calls marked **(call)** are the
 author's and are not the owner's until the owner confirms them.
 
@@ -301,6 +301,18 @@ during those steps is not seen until the next run. The target is never the proje
 that contains it, is accepted: the level is the owner's setting for the project the agent works in. An interrupt after the writes
 exits 3 and says so. The command takes the same arguments and no flag; a run at a terminal is not logged. The harness's `deny` for
 the command is removed only for the `wb` spelling, so `python3 -m workbench install` stays denied.
+
+**`upgrade` and `add` at `none`** (built by Increment G). The keys `wb upgrade` and `wb add` offer `block` and `none`, and the level is read
+as for `install`. Unlike `install`, these commands act on the project the level was read for, so the plan's project (the seed of its
+manifest) must be that project: if it is not, the command refuses and writes nothing. At `none` and with no terminal, the command prints
+the plan and its digest, runs every check it runs at a terminal (the acknowledgement of changed files, the approval of every module, a
+second build of the plan that must give the same digest) and asks nothing. An unacknowledged change is refused as before, with nothing
+written, and the log has no entry; `wb acknowledge` stays owner-run. The attempt (`wb upgrade` or `wb add`, `none`, `digest:<64 hex>`) is
+written just before the first write and the outcome after the last: `done` with `written` for exit 0, `refused` for any other exit
+(`refused before writing`, or `stopped after writing (exit 3)`). A run that has nothing to change writes no entry. If the attempt cannot
+be written, nothing is written; an outcome that cannot be written after the writes exits 3 and says so. The command takes the same
+arguments and no flag, and the `deny` is removed only for the `wb` spelling, as for `install`. `levelrun.apply_logged` is the one place
+that writes the attempt and the outcome for these four commands.
 
 **Out of scope.** The compiled hard-stop floor is unchanged and is not a key (see "Non-goals").
 

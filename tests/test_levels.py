@@ -202,7 +202,7 @@ class OfferedLevelsTest(unittest.TestCase):
 
     # The owner-run keys that offer ``none`` in this version; each increment of the plan ``2026-10-27-a-level-for-every-command``
     # adds the keys it builds.
-    NONE_KEYS = ("approve-plan", "wb install", "wb adopt")
+    NONE_KEYS = ("approve-plan", "wb install", "wb adopt", "wb upgrade", "wb add")
 
     def test_only_approve_plan_offers_ask_among_the_owner_run_keys(self):
         for name, key in self.keys().items():
