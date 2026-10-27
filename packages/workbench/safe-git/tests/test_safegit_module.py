@@ -69,13 +69,13 @@ class Declaration(unittest.TestCase):
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
         self.assertEqual(["safe-git"], list(declaration()["commands"]))
 
-    def test_describe_is_declared_for_the_removal_and_the_commit_and_is_not_owner_run(self):
+    def test_describe_is_declared_for_the_removal_the_commit_and_the_push_and_is_not_owner_run(self):
         command = declaration()["commands"]["safe-git"]
-        self.assertEqual(["remove", "commit"], command["describes"])
+        self.assertEqual(["remove", "commit", "push"], command["describes"])
         self.assertNotIn("owner", command)
         loaded = declarations.load_package(PACKAGE, first_party=True)
         declared = [c for m in loaded.modules if m.name == "safe-git" for c in m.commands][0]
-        self.assertEqual(("remove", "commit"), declared.describes)
+        self.assertEqual(("remove", "commit", "push"), declared.describes)
         self.assertEqual((), declared.owner)
 
     def test_every_file_is_the_declaration_the_helper_or_the_skill(self):
@@ -247,6 +247,34 @@ class Launcher(support_install.InstallBase):
         code, shown, err = self.commit(place, first, "Add the next plan", "docs/plans/2026-10-22-next.md")
         self.assertEqual(("", 0), (err, code), shown)
         self.assertEqual(first, support_git.git(place, "rev-parse", "HEAD~1").stdout.strip())
+
+    def test_describe_push_runs_through_the_launcher_and_describe_of_another_action_is_refused(self):
+        place = self.project_with_identity()
+        self.write_in(place, "docs/plans/2026-10-22-mine.md", "# Mine\n")
+        code, shown, err = self.commit(place, "none", "Add a plan", "docs/plans/2026-10-22-mine.md")
+        self.assertEqual(0, code, err)
+        first = json.loads(shown)["committed"]
+        branch = support_git.git(place, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
+        support_git.git(place, "remote", "add", "origin", "https://example.invalid/x.git")
+        support_git.git(place, "update-ref", "refs/remotes/origin/" + branch, first)
+        support_git.git(place, "config", "push.default", "current")
+        self.write_in(place, "docs/plans/2026-10-22-next.md", "# Next\n")
+        code, shown, err = self.commit(place, first, "Add the next plan", "docs/plans/2026-10-22-next.md")
+        self.assertEqual(("", 0), (err, code), shown)
+        second = json.loads(shown)["committed"]
+        code, shown, err = self.run_helper(place, "describe", "push")
+        self.assertEqual(("", 0), (err, code), shown)
+        built = json.loads(shown)
+        self.assertEqual(("push", True, False), (built["action"], built["ok"], built["truncated"]), built)
+        facts = built["facts"]
+        self.assertEqual((first, 1, [second], ["docs/plans/2026-10-22-next.md"]),
+                         (facts["base"], facts["ahead"], facts["commit_hashes"], facts["changed_paths"]))
+        self.assertIn("+# Next\n", facts["diff"])
+        for action in ("pull", "push-check", "fetch"):
+            code, shown, err = self.run_helper(place, "describe", action)
+            self.assertEqual((1, ""), (code, shown), action)
+            self.assertIn("is not an action that the command safe-git describes", err)
+            self.assertIn("remove, commit, push", err)
 
     def test_a_commit_that_claims_a_branch_without_commits_is_refused_through_the_launcher(self):
         place = self.project_with_identity()

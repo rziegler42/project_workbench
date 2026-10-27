@@ -33,7 +33,7 @@ Non-goals:
 | requires | nothing |
 | fills, writes | nothing |
 | ships | one helper, `helper/safe-git`, and one neutral skill, `commit-changes` |
-| commands | `safe-git`, whose first argument is `commit`, `remove`, `push-check` or `describe` (kit 1), with `describes: ["remove", "commit"]` (see "Describe"). |
+| commands | `safe-git`, whose first argument is `commit`, `remove`, `push-check` or `describe` (kit 1), with `describes: ["remove", "commit", "push"]` (see "Describe"). |
 
 It is run as `wb run safe-git commit`, `wb run safe-git remove`, `wb run safe-git push-check` and `wb run safe-git
 describe commit|remove`. The installer pins the helper when the
@@ -100,14 +100,14 @@ hooks path. A bare `git diff --name-only -z` on a gitlink in the index did start
 This is one nested-repository shape and one Git version, not a security review of `commit`, and no test pins
 the case that only HEAD holds.
 
-## Describe *(built by plan `2026-10-25-safe-git-describe`)*
+## Describe *(built by plans `2026-10-25-safe-git-describe` and, for a push, `2026-10-26-safe-git-describe-push`)*
 
 `wb run safe-git describe commit ...` and `wb run safe-git describe remove ...` take exactly the arguments of the real
 `commit` and `remove` and report what the real command would act on, as the accepted decision
 `2026-10-25-describe-interface-for-action-review` requires. This section is what that decision left to the module:
 the names and types of the facts, the refusals as error codes, the numeric caps with their sources, and the
 counterpart of each check of the owner's approver. The helper builds it, and the command declares `describe` among its
-`arguments` and `describes: ["remove", "commit"]` (`module-boundary.md`, "Declaration schema"). "As built, and its
+`arguments` and `describes: ["remove", "commit", "push"]` (`module-boundary.md`, "Declaration schema"). "As built, and its
 limits" lists where the helper differs from, or adds to, the text below.
 
 **What `describe` does.** It runs the same parsing and validation as the real command, in the same order, up to the
@@ -119,7 +119,7 @@ shapes to the allowlist: `cat-file -s` and `cat-file blob` of `HEAD:<path>`, `ch
 path. A fourth, `check-attr -z filter ident working-tree-encoding`, is also run by the real `commit` (see
 `path_converts_on_add`). They were new surface, and the security pass of the plan covered them. A refusal the real command would give is returned as `ok: false` with an error, and the
 exit status of `describe` is 0. The refusals with exit 1 and no object are a `describe` call whose first argument is
-not `commit` or `remove` (and `push`, once `describe push` is built), and, as built, a refusal that has no code in the table or an `OSError` outside the handled
+not `commit`, `remove` or `push`, and, as built, a refusal that has no code in the table or an `OSError` outside the handled
 sites (an unreadable directory under a removal target, for example), which the real `remove` also ends with exit 1.
 Everything else, a missing repository included, is an object with `ok: false`.
 On such an object `contract` is 1, and every fact the refusal prevented is null (a string, whole number or boolean
@@ -290,14 +290,14 @@ normal prompt). The owner may raise the `diff` cap; the object cap and the rubri
 | `no_git_metadata` | remove | engine: no segment of `requested_paths` is `.git`, folded; also errors `path_refused` and `git_metadata_refused` |
 | `targets_look_disposable`, `scope_is_narrow`, `no_reviewer_directed_text` | remove | rubric over the target lists, the counts and `requested_paths` |
 
-The checks of the approver's rule `git-push`, and where each goes once `describe push` (below) is built. "Engine" is a
+The checks of the approver's rule `git-push`, and where each goes in `describe push` (below). "Engine" is a
 check the engine makes in code over facts; "rubric" is a question the model answers over facts.
 
 | Approver check | Action | Counterpart |
 |---|---|---|
 | `facts_complete` | push | engine: `truncated` is false and `binary_paths` and `submodule_paths` are empty |
 | `outgoing_paths_not_credentials` | push | engine: its credential-name list over `changed_paths`, which includes deleted paths (at most 200; more sets `truncated`) |
-| `no_secret_lines` | push | engine: its secret scan over `diff` and `commit_messages`, before anything goes to a bridge; `findings` (the six narrow patterns of `push-check`, rule names only, read over each commit as well as the net diff, so a secret added and removed inside the range is seen) is also read by the engine, and a non-empty `findings` declines |
+| `no_secret_lines` | push | engine: its secret scan over `diff` and `commit_messages`, before anything goes to a bridge; `findings` (the six narrow patterns of `push-check`, rule names, a line and a path, never the matched text, read over each commit as well as the net diff, so a secret added and removed inside the range is seen) is also read by the engine, and a non-empty `findings` declines |
 | `destination_is_appropriate` | push | rubric over `remote`, `branch`, `default_branch`, `push_updates` and `push_deletes` |
 | `repo_config_safe` | push | engine: `push_config_findings` has no entry of repository scope; also errors `repo_selects_program` and `push_config_refused` |
 | `remote_is_configured` | push | error `remote_unconfigured`; the engine reads `ok` |
@@ -310,21 +310,21 @@ check the engine makes in code over facts; "rubric" is a question the model answ
 | `outgoing_trusted` | push | engine: `tracking_ref_reflog_looks_git_written` is true; a heuristic (below), so a false or null value declines and a true value proves nothing |
 | `commits_match_the_branch_purpose`, `change_is_safe_in_itself`, `no_reviewer_directed_text` | push | rubric over `commit_messages`, `branch` and `diff` |
 
-### `describe push` *(specified, not built)*
+### `describe push`
 
 `wb run safe-git describe push <the arguments that follow git push>` reports what that push would ask the remote to do.
 It departs from the accepted `2026-10-25-describe-interface-for-action-review` in one way, which the record
-`2026-10-26-describe-push-takes-the-push-arguments` (Proposed) narrows for a push only: `safe-git` does not run `git
+`2026-10-26-describe-push-takes-the-push-arguments` (Accepted) narrows for a push only: `safe-git` does not run `git
 push`, so there is no real command in the module to take the arguments of or to share validation with. The arguments are
 those of `git push`, and the validation is the parser below. The rest of the interface is as for `commit` and `remove`:
 one JSON object (`contract`, `action` equal to `push`, `ok`, `truncated`, `errors`, `facts`), exit 0 for an object, the
 types and caps of the decision, and the omission rule below. It reads local refs and configuration only, never contacts
-a remote, runs `git push` or any program the repository selects, and changes nothing. The plan
-`2026-10-26-safe-git-describe-push` builds it.
+a remote, runs `git push` or any program the repository selects, and changes nothing. It is built by the plan
+`2026-10-26-safe-git-describe-push`; "As built, and its limits" says where the helper differs from this text.
 
 **The grammar.** `describe push [<flag>...] [<remote> [<refspec>...]]`, in that order, with no `--`. Anything not listed
-is refused with the code `usage` (and no fact), including an option given twice, a value for a flag that takes none, and
-a short flag combined with another (`-fu`).
+is refused with the code `usage` (and no fact), including an option given twice (but `-f` with `--force-with-lease` is accepted, as git accepts it), a value for a flag
+that takes none, and a short flag combined with another (`-fu`).
 
 - Flags: `-f` and `--force`; `--force-with-lease` (bare: it applies to the destination, and a form with `=` is refused);
   `-d` and `--delete`; `-u` and `--set-upstream`; `--no-verify`; `-n` and `--dry-run`; `--atomic`; `-q` and `--quiet`;
@@ -333,7 +333,8 @@ a short flag combined with another (`-fu`).
   outgoing commits this version does not describe), `--prune`, `--repo`, `-o` and `--push-option`, `--receive-pack` and
   `--exec` (they name a program), `--signed`, `--recurse-submodules`, `--porcelain`, `--force-if-includes`, and any other
   option.
-- Remote: a name matching `[A-Za-z0-9_][A-Za-z0-9._-]{0,63}`. A URL or a path is `usage`; a valid name with no URL is
+- Remote: a name matching `[A-Za-z0-9_][A-Za-z0-9._-]{0,63}` that holds no `..` and does not end in `.` or `.lock` (names git
+  would refuse). A URL or a path is `usage`; a valid name with no URL is
   `remote_unconfigured`. With no remote the remote is the one git would use: `branch.<name>.pushRemote`, then
   `remote.pushDefault`, then `branch.<name>.remote`, then `origin`.
 - Refspec, so that one range of commits is sent: **one update, or deletions only**. An update is one refspec,
@@ -349,11 +350,14 @@ a short flag combined with another (`-fu`).
   reads for a branch is `usage`; a source name that is both a branch and a tag is `target_unresolved`.
 - With no refspec, `remote.<name>.push` decides when it holds exactly one refspec (more than one is `target_unresolved`),
   else `push.default`. The helper resolves a case only where it is sure which ref Git would push and gives
-  `target_unresolved` wherever Git would refuse or the answer needs the remote. As planned, to be fixed by Increment D's
-  tests against Git itself: `current` gives the current branch to the same name; `simple` does the same only when the
-  branch's upstream is configured on this remote under the same name; `upstream` gives `branch.<name>.merge` when it is set
-  on this remote; `nothing` and the unset cases give `target_unresolved`; `matching` is `remote_state_required`.
-  `push.autoSetupRemote` changes the upstream after a push and not the target.
+  `target_unresolved` wherever Git would refuse or the answer needs the remote. As built, checked against `git push
+  --porcelain` to a bare repository: `current` gives the current branch to the same name; `simple` and `upstream` (also
+  `tracking`) need the upstream on the push remote, and when the push remote is not the branch's own (its
+  `branch.<name>.remote`, else `origin`) `simple` acts as `current` (a triangular workflow) and `upstream` is
+  `target_unresolved`; `upstream` gives `branch.<name>.merge` when it is set on this remote; `nothing` and the unset cases
+  give `target_unresolved`; `matching` is `remote_state_required`. `push.autoSetupRemote` changes the upstream after a
+  push and not the target. A bare name in a deletion (`--delete x`, `:x`) is `target_unresolved`, since the remote could
+  read it as a branch or a tag; a bare destination of an update that starts with `heads/`, `tags/` or `remotes/` is too.
 
 **The range.** For an update, `base` is the tracking ref `refs/remotes/<remote>/<destination branch>` when it exists, else
 the tracking ref of the remote's default branch, as `push-check` resolves it (a new branch is therefore compared with the
@@ -370,25 +374,35 @@ its scheme and a boolean are. No `usage` message quotes an argument either, sinc
 credential; a test covers it. A URL that uses a transport helper (`ext::` or any `<helper>::` form) starts a program and is
 `repo_selects_program`, with the finding `remote:helper-transport`. Configuration is read with its scope (`git config
 --list --show-scope -z`, which follows `include.path` as git does); the scopes are system, global, local, worktree and
-command; the helper's scrubbed environment sets no command-scope setting, and worktree counts as repository scope. A setting of
-repository scope that would run a program, redirect or intercept the push (`http.proxy`, `https.proxy`,
-`remote.<name>.proxy`, `ssh.variant`, `core.sshCommand`, `core.gitProxy`, `core.askPass`, a credential helper, a
-receive-pack or vcs setting, a hook, `push.gpgSign`, `push.pushOption`, `remote.<name>.pushOption`,
-`push.recurseSubmodules`, `push.negotiate`) is refused with `repo_selects_program` (the settings `commit` already
-refuses) or `push_config_refused` (the others). The same keys at user or system scope, such as the credential helper of
-the owner's keychain, are only named in `push_config_findings` with their scope, because refusing them would decline every
-push. A key with a subsection (`credential.<url>.helper`, `http.<url>.proxy`) can carry a URL, so it is named without the
-subsection (`credential.*.helper`), in a fact and in any message. `push.followTags` and `remote.<name>.mirror` are
-`remote_state_required`.
+command; the helper's scrubbed environment sets three command-scope keys (`core.fsmonitor`, `maintenance.auto`, `gc.auto`), none of which is read, and worktree counts as repository scope. A setting of
+repository scope that would run a program, redirect, intercept or re-route the credentials of the push is refused with
+`repo_selects_program` (the settings `commit` already refuses: a hook, `core.sshCommand`, `core.gitProxy`, `core.askPass`, a
+credential helper, a file system monitor) or `push_config_refused` (the others): every key of the sections `http`,
+`protocol`, `credential` and `transfer` (a header, a cookie file, a certificate, a resolver, a redirect, a user name, a
+transport allowed), `url.<base>.insteadOf` and `url.<base>.pushInsteadOf`, `remote.<name>.pushurl`, `remote.<name>.proxy`,
+`receivepack`, `vcs` and `pushOption`, `ssh.variant`, `push.gpgSign` (when true), `push.pushOption`, `push.recurseSubmodules` and
+`push.negotiate`. The message names `<scope>:<section>.<variable>` and never a value or a host. The same keys at user or
+system scope, such as the credential helper of the owner's keychain, are only named in `push_config_findings` with their
+scope, because refusing them would decline every push (the scope `unknown` that Apple Git gives its system file is
+therefore trusted; the security pass found no way for a repository to produce it, since an include takes the scope of the file that includes it). A key
+with a subsection (`credential.<url>.helper`, `http.<url>.proxy`, `url.<base>.insteadOf`) can carry a URL, so it is named
+without the subsection (`credential.*.helper`), in a fact and in any message. A repository that sets even a harmless key of
+those sections (`http.postBuffer`, `transfer.fsckObjects`) is refused, with the key named: a push URL or a rewrite belongs
+in the owner's configuration. A remote that only the owner's configuration defines is not one git reads (`get-url` needs
+the remote named in the repository), so such a push URL needs a repository key for the remote too (`remote.<name>.fetch`).
+`push.followTags` and `remote.<name>.mirror` are `remote_state_required`.
 
-**The git shapes it adds** to the allowlist, each with fixed arguments, literal pathspecs, the helper's scrubbed
-environment and `GIT_OPTIONAL_LOCKS=0`: `config --list --show-scope -z`, `remote get-url --push --all <remote>`,
-`rev-parse` and `show-ref --verify --hash` of the refs named above, `symbolic-ref` as `push-check` runs it, `reflog show`
-of the tracking ref with a fixed format, `rev-list --count` and `rev-list --no-merges` of the range, `log` with a fixed
-format for the messages, the `log -p` and `diff` patch shapes that `push-check` already runs (these, and only these, use
-`--text --no-ext-diff --no-textconv --ignore-submodules=all`), and `diff --raw -z` shapes for `changed_paths`,
-`binary_paths` and `submodule_paths`, which do not use `--ignore-submodules` so that a changed gitlink is listed; a test
-needs a changed gitlink. They are new surface for the security pass.
+**The git shapes it adds** to the allowlist, each with fixed arguments, literal pathspecs, and the helper's scrubbed
+environment, which sets `GIT_OPTIONAL_LOCKS=0` for every run: `config --list --show-scope -z`, `remote get-url --push --all
+<remote>`, `rev-parse` and `show-ref --verify --hash` of the refs named above, `symbolic-ref` as `push-check` runs it,
+`reflog show -z --no-show-signature --format=%gs <tracking ref> --`, `rev-list --count` of the range, `log -z --reverse
+--topo-order --no-show-signature --encoding=UTF-8 --format=%H%n%B <base>..HEAD` for the commits and their messages,
+`cat-file commit <40 hex>` (a NUL check, below), `diff --raw -z --no-renames --no-ext-diff --no-textconv
+--ignore-submodules=none <base>..HEAD` for `changed_paths` and `submodule_paths`, and a text patch (`--text --no-ext-diff
+--no-textconv --ignore-submodules=all --no-renames --no-color -U3`) for `diff` and `binary_paths`; the scan for credentials
+runs the `push-check` patch shapes, which gain `--inter-hunk-context=0`. `--ignore-submodules=none` is allowed only on a
+`--raw` diff of a range: `submodule.<name>.ignore` and `diff.ignoreSubmodules` hide a changed gitlink otherwise, and a diff
+of the work tree with it would enter a nested repository and read its configuration. The security pass covered them.
 
 **The engine and the command text.** The engine parses the prompted command once under its own grammar and passes the
 tokens that follow `git push` to `describe push` unchanged, as it does for `commit` (the rule's key is the spelling `git
@@ -407,19 +421,19 @@ what the checks read; the engine's own parse only decides what is passed.
 | `force`, `delete`, `set_upstream`, `no_verify`, `dry_run`, `atomic` | boolean | whether the flag was given (`force` is true for `-f`, `--force` and `--force-with-lease`); all false after a `usage` refusal |
 | `remote_scheme` | string or null | `https`, `http`, `ssh` (also the scp-like form), `git`, `file` (also a path) or `other`; null when there is no URL. `file` does not tell a path from `file://`, and the host is not reported |
 | `remote_url_has_credentials` | boolean | whether the effective push URL has a password, or any user information on `http`, `https` or `ftp`, or user information that matches a pattern of `push-check`; a bare user name on `ssh` or `git` is false. A lower bound: a credential in another form is not seen |
-| `push_config_findings` | array of strings | `<scope>:<key>` of each setting named above, in any scope, a subsectioned key without its subsection; never a value |
+| `push_config_findings` | array of strings | `<scope>:<section>.<variable>` of each setting named above, in any scope, sorted and without repeats, a subsectioned key without its subsection (`credential.*.helper`); never a value |
 | `push_updates` | array of strings | one `<source>:<destination>` for each ref the push asks to update, the source a ref name or a commit hash, the destination a full ref |
 | `push_deletes` | array of strings | the full refs the push asks to delete, by `--delete` or an empty-source refspec |
 | `push_forced` | array of strings | the destinations a force flag or a `+` applies to |
 | `base` | string or null | the full hash of the base of the range (see "The range"); null for a deletion |
 | `ahead` | whole number or null | the commits in `<base>..HEAD`; 0 for a deletion |
-| `tracking_ref_reflog_looks_git_written` | boolean or null | a heuristic: true when every entry of the reflog of the tracking ref has a message beginning `fetch`, `push` or `update by push`; false otherwise; null when there is no reflog. A reflog is local and cannot show who wrote a ref, so a true value is untrusted evidence and a forged reflog passes it |
-| `commit_hashes`, `commit_messages` | arrays of strings | the commits of the range, oldest first, and their messages in the same order; at most 200, each message at most 1,024 bytes |
+| `tracking_ref_reflog_looks_git_written` | boolean or null | a heuristic: true when every entry of the reflog of the tracking ref has a message beginning `fetch`, `push` or `update by push`; false otherwise; null when there is no reflog or one empty entry (a tracking ref written by `clone` or `pull` is false). A reflog is local and cannot show who wrote a ref, so a true value is untrusted evidence and a forged reflog passes it |
+| `commit_hashes`, `commit_messages` | arrays of strings | the commits of the range, oldest first, and their messages in the same order, merges included; at most 200, each message at most 1,024 bytes. Both are left out when a commit object holds a NUL: git's own output stops at it and still ends the record, so bytes after it would be pushed and neither shown nor scanned |
 | `changed_paths` | array of strings | the paths the range changes, deleted paths included, at most 200 |
-| `binary_paths` | array of strings | changed paths whose added or removed content has a NUL or bytes that are not UTF-8; their hunks are not in `diff` |
-| `submodule_paths` | array of strings | changed paths that are a gitlink (mode 160000); `diff` does not enter a submodule |
-| `findings` | array of strings | `<rule> <line or -> <path>` for each credential-looking added line of `push-check`'s six patterns; no matched text |
-| `diff` | string | the unified diff of the range, `a/<path>` against `b/<path>`, of the text paths, built under the limits of `describe commit` and without a filter, text conversion or external diff; a mode change is a line of it. Empty for a deletion |
+| `binary_paths` | array of strings | changed paths whose patch holds a NUL or bytes that are not UTF-8 (context lines included); their hunks are not in `diff` |
+| `submodule_paths` | array of strings | changed paths that are a gitlink (mode 160000); `diff` does not enter a submodule. A gitlink in the index is already `repo_selects_program`, so this is non-empty only where the index no longer holds the link |
+| `findings` | array of strings | `<rule> <line> <path>` for each credential-looking added line of `push-check`'s six patterns, read over each commit and over the net change; no matched text |
+| `diff` | string | the net unified diff of the two trees (`<base>` against HEAD) with three lines of context, which count toward the cap, `a/<path>` against `b/<path>`, of the text paths, built under the limits of `describe commit` and without a filter, text conversion or external diff; a mode change is a line of it. Empty for a deletion |
 | `omitted` | array of strings | as above |
 
 The facts make no claim whether a ref exists on the remote, whether the push would succeed, or what the remote holds.
@@ -451,10 +465,10 @@ cap for messages. The engine treats `truncated: true` as incomplete and declines
 the current branch, a wildcard refspec, `push.default` `matching`, the remote's own refs or several push URLs cannot be
 described and stays at the normal prompt until a later plan adds a defined read of the remote or more than one source.
 The engine's rule for a push is a later plan. Not described either, as limits: the host of the remote; a bare destination
-that the remote would resolve to another ref; the behaviour of Git for each `push.default` case until Increment D's tests
-fix it.
+that the remote would resolve to another ref; the behaviour of Git for each `push.default` case on other versions than
+2.54.0.
 
-**The push gap, as it stood.** `push-check` gives `remote`, `branch`, `target`, `default_branch`, `base`, `ahead`,
+**The push gap, as it stood, now closed by `describe push`.** `push-check` gives `remote`, `branch`, `target`, `default_branch`, `base`, `ahead`,
 `changed_paths`, `findings` and `truncated`. It never saw the flags and refspecs of the push, the push configuration, the
 remote's transport, the outgoing commit messages or the outgoing diff. `describe push` supplies each; the table above
 maps every check of the approver's `git-push` rule to a fact. `push-check` is unchanged and stays for the `push-changes`
@@ -535,7 +549,7 @@ looked at here:
   pass whose findings were fixed and tested. See "Push check" for its limits.
 - Built, from plan `2026-10-25-safe-git-describe`: `describe commit` and `describe remove` as specified in "Describe",
   with the 32 error codes of the table (`path_converts_on_add` was added by the security pass), and the launcher rule for a declared
-  action. The command declares `describes: ["remove", "commit"]`, in that order. Where the helper differs from the
+  action. The command declares `describes: ["remove", "commit", "push"]`, in that order. Where the helper differs from the
   draft text or adds to it:
   - Contents are compared byte for byte, without a filter. A side with a NUL or bytes that are not UTF-8 is listed in
     `binary_paths` and its diff is withheld. A side over 262,144 bytes (the approver's whole-diff bound) is not read:
@@ -552,8 +566,7 @@ looked at here:
     `size_total` are omitted and named, and `tracked_file_total` is null.
   - `expected_head` is the string as given once it is valid (so `none` for `none`) and null before; after a usage
     refusal `subject`, `body`, `trailers` and `expected_head` are null or empty even when given.
-  - The real `commit` runs `git diff --check` with `GIT_OPTIONAL_LOCKS=0`, because it shares that function with
-    `describe`.
+  - The real `commit` runs `git diff --check` with `GIT_OPTIONAL_LOCKS=0` (every git run of the helper has it set now).
 - Limits of `describe`, recorded by the security pass and the reviews of that plan:
   - Attributes other than the three it refuses are not read: `text`, `eol`, `crlf`, `core.autocrlf` and `core.eol`
     change line endings on `git add`, so `describe` shows the work tree's bytes where the real command stores converted
@@ -570,7 +583,48 @@ looked at here:
   - A `describe remove` target that the `check-ignore` shape refuses (a leading colon or a backslash) can be listed in
     `ignore_unknown_targets`, because its ignore status is not asked.
   - Not checked: a full run of 2,000 paths, `wb launch` through a real pin, a SHA-256 repository, and the engine's use of
-    the facts (plan 3 of the split in `action-review.md`). The push gap is specified ("`describe push`") and not built.
+    the facts (plan 3 of the split in `action-review.md`). The push gap is closed by `describe push` (see below).
+- Built, from plan `2026-10-26-safe-git-describe-push` (increments B to F): `describe push` as specified in "`describe push`",
+  with an adversarial security pass (increment F) whose findings were fixed and tested, or recorded below. Where the helper differs from the
+  text first written, or adds to it, and what it does not do:
+  - The target: a first path component `heads`, `tags` or `remotes` in a bare destination, and a bare name in a deletion, are
+    `target_unresolved`; a triangular `simple` acts as `current`; a destination is echoed in the facts (`push_updates`,
+    `push_deletes`, `push_forced`), so no `usage` message quotes an argument but a fact does. `--tags` and `--all` are
+    `usage`, as the grammar says (the plan's wording of increment D lists them differently).
+  - `diff` and `changed_paths` are the net difference of the two trees, with three lines of context that count toward the
+    cap; for a diverged branch they also show the reverse of the commits only the remote holds. `rev-list --no-merges` is
+    not used, so merges are in the commit lists. The binary test covers the whole patch of a file, context included. A diff
+    slower than 20 seconds is `repository_unreadable`, not an omitted diff, and no shared budget spans the calls (up to 200
+    `cat-file` calls for the NUL check). No test covers the 8 MB cut of a read or a timeout of the patch.
+  - Order and shape of the answer: the checks run in this order and the first refusal is the only error: the grammar
+    (`usage`, `remote_state_required` for `--mirror` and `--follow-tags` before the flags are recorded, so `-f --mirror`
+    shows `force` false and `origin --mirror` is `usage`), program settings of the repository, branch, remote, settings that
+    redirect the push, the URL, `push.followTags` and `remote.<name>.mirror`, the targets, the base. A malformed
+    `push.default` or `remote.<name>.push` makes git itself fail, so it is `repository_unreadable`; the `target_unresolved`
+    branch for an unknown `push.default` is a guard that cannot be reached. An empty `pushurl` reads as a path (`file`).
+    `config --list --show-scope` needs Git 2.26. The names in `push_config_findings` are cut (variable 40, scope 20
+    characters). `tracking_ref_reflog_looks_git_written` and the commit lists are left out of the object when their read is
+    cut. If the patch cannot be matched to the raw listing, `diff` and `binary_paths` are omitted and `changed_paths` kept.
+    The shared `show-ref` shape also reads `refs/tags/<name>` now, so `push-check` can run it (its own `--base` still
+    refuses a tag).
+  - `findings` is read over each commit and over the net change with `--inter-hunk-context=0`; a token segment longer than
+    4,096 characters is not seen by the `jwt-shaped` rule.
+  - The reflog fact declines a ref written by `clone` or `pull` and is forgeable by whoever writes the repository.
+  - The deny-list of repository settings is by section and is wider than the first text; it refuses harmless keys of those
+    sections. `remote.<name>.proxyAuthMethod` is not named. `diff.orderFile` (and any setting naming a file git reads) is not
+    refused: a FIFO there stalls a read for the time limit and ends as `repository_unreadable`. Git's own message is no longer
+    repeated in a `repository_unreadable` error (it could quote a repository value), so only the command and exit code show.
+  - A raw control character in a path or message is JSON-escaped, not removed. `describe` runs in the helper's scrubbed
+    environment; a real `git push` runs in the agent's own, so an exported `GIT_DIR`, `GIT_SSH_COMMAND` or `GIT_CONFIG_*`
+    makes the two differ (the engine refuses an inline prefix only).
+  - An `other` scheme can start `git-remote-<scheme>` from the trusted `PATH`; `git+ssh://` is `other` and `SSH://` is `ssh`;
+    a URL with a newline reads as several URLs. `describe commit` shows a subsectioned program key in its
+    `repo_selects_program` message as `repo_program_findings` returns it, which `describe push` redacts.
+  - `push-check` is unchanged except that it shares the credential scan (now with `--inter-hunk-context=0`) and prints a
+    different refusal for a branch name too long to read.
+  - Not checked: a repository of another owner (`safe.directory`), a hostile commit-graph or pack index, a case-folding file
+    system, the engine's own deadline, and the credential flow of a real push. The owner's remaining step after the plan is
+    `wb acknowledge` and `wb upgrade --package packages/workbench`.
 - The shipped approvals (`workbench/shipped_approvals/packages/`) are re-written by the owner's `release-approvals`
   after any change under `packages/workbench/`, and the new records are committed with that change. The edit gate
   refuses every edit until the owner has done so, so a change to the package is built and tested in a copy and landed

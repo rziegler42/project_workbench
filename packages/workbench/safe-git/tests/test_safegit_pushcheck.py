@@ -49,7 +49,7 @@ class Shapes(unittest.TestCase):
     def test_a_ref_a_range_or_a_flag_outside_those_shapes_is_refused(self):
         for argv in (["show-ref", "--verify", "--hash", "refs/remotes/-x/main"],
                      ["show-ref", "--verify", "--hash", "refs/remotes/o/../x"],
-                     ["show-ref", "--verify", "--hash", "refs/tags/v1"],
+                     ["show-ref", "--verify", "--hash", "refs/notes/v1"],     # a tag is read by `describe push` (D)
                      ["show-ref", "--verify", "--hash", "HEAD"],
                      ["show-ref", "--hash", "refs/remotes/origin/main"],
                      ["show-ref", "--verify", "--hash", "refs/remotes/origin/main", "refs/heads/x"],

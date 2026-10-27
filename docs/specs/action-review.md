@@ -6,7 +6,7 @@ after settling the accuracy method, the false-decline bound, the name `describe`
 and `amend-message`. A call marked **(default)** was the author's and is approved with the design but was not
 separately chosen; the owner may still change it. The approval is of the design only and approves no plan. The
 `describe` interface is a decision record of its own, accepted by the owner on 2026-10-25
-(`2026-10-25-describe-interface-for-action-review`). The status stays `Draft` because the engine, its hook and its log are not built; the `describe` side of `safe-git` and the launcher rule are (plan `2026-10-25-safe-git-describe`).
+(`2026-10-25-describe-interface-for-action-review`). The status stays `Draft` because the engine, its hook and its log are not built; the `describe` side of `safe-git` (for `commit`, `remove` and `push`) and the launcher rule are (plans `2026-10-25-safe-git-describe` and `2026-10-26-safe-git-describe-push`).
 
 Terms are defined in `terms.md`. The engine sits above the bridge of `model-bridge.md` and beside the engine of
 `review-engine.md`. The decision behind it is `2026-10-22-model-calls-go-through-vendor-bridges` (decisions 3, 6, 7
@@ -61,7 +61,7 @@ A module that owns an action ships a read-only subcommand `describe` beside the 
 commit <the arguments of commit>` takes exactly the arguments of the real command and prints one JSON object of
 the facts that the real command would act on, running the same validation code the real command runs. It makes no
 commit, stages nothing, writes nothing and runs no program the repository selects. `describe remove` does the same for
-`remove`, extending the `remove` preview it has. `push-check` already has this shape for a push.
+`remove`, extending the `remove` preview it has. `push-check` has part of this shape for a push, and `describe push` the whole of it.
 
 - The object has `contract` (a whole number), `action` (`commit`), `ok`, `truncated` (always present, a boolean),
   `errors` (the refusals the real command would give, as data, not as a failed run) and `facts` (a flat set of named
@@ -275,7 +275,7 @@ not measured.
 |---|---|
 | collectors for commit and remove, via the global program | `safe-git describe commit`, `safe-git describe remove` |
 | collector for a remote job | `remote-runner describe submit`, `describe fetch` of the module, which wraps the owner's global program (M16 and F-C6 apply) |
-| collector for a push | `safe-git describe push` (specified in `safe-git.md`, built by plan `2026-10-26-safe-git-describe-push`); `push-check` stays for the `push-changes` skill |
+| collector for a push | `safe-git describe push` (built by plan `2026-10-26-safe-git-describe-push`; see `safe-git.md`); `push-check` stays for the `push-changes` skill |
 | the rubric, schema and rule files | ported into the engine as data, section by section |
 | `ask-codex-archive` rule | none: the module's `archive` is owner-run and denied (M15) |
 | `safe-committer` agent and the guard's `committer` mode | go with the program (decided by the owner, 2026-10-25): the agent and the mode are removed in the owner's step that removes `claude-workflow`; the guard program stays for its other modes. No module counterpart. |
@@ -298,8 +298,9 @@ Each is a plan of its own, in this order. Plans 3 to 5 do not exist yet, and the
    that rule.
    Between 2 and 3, or alongside 3: **the push gap**, closed by adding `safe-git describe push` (the owner chose this over
    extending `push-check` on 2026-10-26; plan `2026-10-26-safe-git-describe-push`; the design is in `safe-git.md`,
-   "`describe push`", and the narrowing of the accepted `describe` decision is the Proposed record
-   `2026-10-26-describe-push-takes-the-push-arguments`). Until it is built a push stays with the approver.
+   "`describe push`", and the narrowing of the accepted `describe` decision is the accepted record
+   `2026-10-26-describe-push-takes-the-push-arguments`). Built, so the engine's rule for a push has its facts; until that
+   rule exists a push stays with the approver.
 3. **The engine** with its checks, rules, rubric, log and bridge call, tested with a fake bridge. No hook.
 4. **The shadow hook, the labelled set, the test set and the report**, prepared on a scratch copy; the owner installs
    the hook, labels the commands and reviews the test set. The test set is written in plan 3 with the checks.
@@ -363,7 +364,7 @@ left open.
 
 ## Acceptance criteria
 
-- For each action that stays a reviewable module action (commit, remove, a push through `push-check`, and later the
+- For each action that stays a reviewable module action (commit, remove, a push through `describe push`, and later the
   remote actions), a module `describe` command prints an object that obeys the rules above, runs the real command's
   validation, and changes nothing (a test compares the repository before and after).
 - The retired actions have no `describe` provider and no rule: `ask-codex archive`, `safe-committer` and

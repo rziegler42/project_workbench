@@ -1,6 +1,6 @@
 # Build `safe-git describe push` and close the push gap
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-26
 Candidate: none (the push gap between plans 2 and 3 of the split of `docs/specs/action-review.md` for `workbench-v1#action-review-engine`; it builds the facts side for a push only, and the candidate is complete only when the engine is built, so the plan that builds the engine names the candidate)
 Specs: safe-git, action-review
@@ -493,3 +493,198 @@ against a real `git push` (D).
 
 Open for the owner: the two approval directories of the previous commit (`d5ec726b…`, `e216d264…`) are stale again and need
 the owner's approval to remove.
+
+### Increment D — The push target
+
+Done, not yet committed at the time of writing. Changed: `packages/workbench/safe-git/helper/safe-git` (`_refspec`, split out
+of `parse_push`; `config_values`; `remote_state_setting`; `configured_targets`; `_qualified_update`, `_qualified_delete`;
+`push_targets`; the wiring in `describe_push`; `push_base` takes the destination branch and skips a tracking ref too long to
+read; the `show-ref` shape also reads `refs/tags/<name>`), the new `tests/test_safegit_describe_push_target.py` (69 tests),
+`tests/test_safegit_describe_push.py` (the fixture sets `push.default current`; the pins of the three target facts are gone;
+the delete tests use full refs; the no-quote test checks error messages for a destination, which is now a fact),
+`tests/test_safegit_pushcheck.py` (the pinned refusal of `refs/tags/v1` for `show-ref` is now `refs/notes/v1`) and the shipped
+approval records.
+
+The facts: `push_updates` is `<source>:<destination>` with the source as `git push --porcelain` shows it (`HEAD`, or the
+branch as `refs/heads/<name>`) and the destination a full ref; `push_deletes` are full refs; `push_forced` are the
+destinations of a force flag (also on a deletion) or a `+`. The target comes from the refspecs of the command, else from the
+one `remote.<name>.push`, else from `push.default`. `current` pushes the branch to its own name. `simple` and `upstream`
+(also `tracking`) need the upstream on the push remote: when the push remote is not the branch's own remote (its
+`branch.<name>.remote`, else `origin`), `simple` acts as `current` and `upstream` is `target_unresolved`. `matching` and
+`push.followTags` and `remote.<name>.mirror` (any scope, last value) are `remote_state_required`. `base` follows the destination branch;
+a tag destination is compared with the default branch.
+
+Verification as run: the new tests failed first (85 failures), then passed. Each of them that names a real push was checked
+against `git push --porcelain` to a bare repository in a temporary directory (git 2.54.0, Apple Git-157). In the scratch copy
+the whole safe-git directory ran 583 tests OK. After landing and the owner's `release-approvals`: `python3 -B -W error
+tests/run_all.py` 4574 tests in 10 roots OK (4505 before, plus the 69 new), `git diff --check`, `wb check`, `wb run code-work
+check` (51 plans), `doccheck` and `refcheck` clean.
+
+Review: the `reviewer` agent, one exchange, no blocking finding (it read and ran nothing). Applied: none to the code. Recorded:
+- The spec's `push.default` paragraph says "as planned, to be fixed by Increment D's tests" and that `simple` pushes only when
+  the upstream is on this remote under the same name. Git also pushes under `simple` when the push remote is another than the
+  branch's own (a triangular workflow), as the current branch to its own name; the tests show it. Increment G should write this.
+- A bare name in a deletion (`--delete x`, `:x`, or `remote.<name>.push = :x`) is `target_unresolved`: the remote could mean a
+  branch or a tag, and the helper has no source to qualify it from. A bare destination of an update is qualified from its source
+  (a branch) as the spec says; one beginning with `heads/`, `tags/` or `remotes/` is `target_unresolved`, because a remote could read it as
+  another ref.
+- A malformed `push.default` or `remote.<name>.push` (an unknown value, an empty one, none) makes git itself fail to read the
+  repository, so the code is `repository_unreadable`, not `target_unresolved`. The `target_unresolved` branch for an unknown
+  `push.default` is therefore unreachable and kept as a guard. Git's own message, up to 300 characters, is in that error
+  message and can quote the config value; this was so before D and is for the security pass (F).
+- The plan's D step 1 lists `--tags` and `--all`; the spec makes both `usage` (covered in B's tests).
+- A `show-ref` of a tag is now allowed for `push-check` too; its own `--base` still refuses a tag.
+- A bare destination that the remote would resolve to another ref, and the `push.default` behaviour on other git versions, are
+  not covered.
+- A comment on the unreachable `push.default` branch was not added: editing the landed helper would change the bytes the
+  owner's `release-approvals` covered. Add it with the next change to the helper.
+
+Open for the owner: the two approval directories of the previous commit (`1ce32890…`, `546f7ada…`) are stale again and need
+the owner's approval to remove.
+
+### Increment E — The outgoing commits, their trust and the diff
+
+Done, not yet committed at the time of writing. Changed: `packages/workbench/safe-git/helper/safe-git` (new shapes: `log` for
+the messages, `reflog show` of a tracking ref, `diff --raw`, `-U3` and `--ignore-submodules=none`; `push_base_ref`;
+`range_findings`, shared with `push-check`; `reflog_looks_git_written`, `range_commits`, `range_changes`; the wiring in
+`describe_push`; the comment on the unreachable `push.default` branch), `module.json` (`describes` is `remove`, `commit`,
+`push`), the new `tests/test_safegit_describe_push_outgoing.py` (45 tests), `tests/test_safegit_describe_push.py` (the pins of
+the empty later facts are gone), `tests/test_safegit_module.py` (the declaration, and a launcher test of `describe push` and of
+`describe` of another action) and the shipped approval records.
+
+The facts: for an update with commits ahead of the base, `commit_hashes` and `commit_messages` come from one `git log -z`
+(oldest first, merges included, each record a hash and a message, the count equal to `ahead`); `changed_paths`,
+`submodule_paths` from `git diff --raw -z --no-renames --ignore-submodules=none` of `<base>..HEAD`; `diff` and `binary_paths`
+from a text patch (`--text`, no filter, text conversion or external diff, `-U3`) split by file, a file whose patch holds a NUL
+or a byte that is not UTF-8 being binary and having no hunk in `diff`; `findings` as `<rule> <line> <path>` from the same two
+scans as `push-check`. `tracking_ref_reflog_looks_git_written` reads the reflog of the ref that gave the base: true when every
+entry begins `fetch`, `push` or `update by push`, false otherwise, null for none or one empty entry. A range with no commit
+(including a branch behind its base) and a deletion give empty lists and `diff` `""`. A read that is cut, a listing that does not
+add up, more than 200 commits, a path or message over a cap, or a diff over 98,304 bytes leaves the fact out whole and
+`truncated` is true; a read that fails or runs out of time is `repository_unreadable`.
+
+Verification as run: the new tests failed first (31 failures and errors), then passed; eight mutations of the helper (the raw
+diff without `none`, the patch without `--text`, `any` for `all` in the reflog, no empty-range short circuit, binary paths not
+set aside, merges dropped from the log, newest first, findings never cut) each made them fail. After landing and the owner's
+`release-approvals`: `python3 -B -W error tests/run_all.py` 4620 tests in 10 roots OK (4574 before, plus 46), `git diff --check`,
+`wb check`, `wb run code-work check` (51 plans), `doccheck` and `refcheck` clean. Git 2.54.0 (Apple Git-157).
+
+Review: the `reviewer` agent, one exchange, no blocking finding (it ran nothing). Applied: the reflog shape fixes
+`--no-show-signature`; `--ignore-submodules=none` is allowed only on a `--raw` diff of a range. Recorded for Increment G:
+- `--ignore-submodules=none` replaces the spec's "no `--ignore-submodules`": `submodule.<name>.ignore` and
+  `diff.ignoreSubmodules` hide a changed gitlink otherwise (checked). A gitlink in the index is already `repo_selects_program`,
+  so `submodule_paths` is reachable only where the index no longer holds the link.
+- `diff` and `changed_paths` are the net difference of the two trees, with three lines of context that count toward the cap;
+  for a diverged branch they also show the reverse of the remote-only commits. `rev-list --no-merges` is not used.
+- A binary test covers the whole patch of a file, context lines included (stricter than "added or removed content").
+- A diff slower than 20 seconds is `repository_unreadable`, not an omitted diff; the plan's "budget of `describe commit`" is
+  met by the time limit, not by a shared budget. No test covers the 8 MB cut or a timeout.
+- The reflog heuristic declines a tracking ref written by `clone` or `pull`. `GIT_OPTIONAL_LOCKS=0` is not set for these reads
+  (none takes a lock; the tests show the repository unchanged).
+- `push-check` prints the same fields and refuses the same cases; the text of one refusal (a branch name too long to read) differs.
+For the security pass (F): `diff.orderFile` (and other repository settings naming a file git reads) is not refused; a commit
+whose message holds a NUL cannot be made by git's own tools (`hash-object` refuses it) and the code treats a count mismatch as
+unreadable; `run_capped` with no `timeout` argument raises a `TypeError` instead of a refusal when it times out (the new calls
+pass one; `describe commit`'s `cat-file` calls do not).
+
+Open for the owner: the two approval directories of the previous commit (`1a1768c0…`, `45bf7993…`) are stale and need the
+owner's approval to remove.
+
+### Increment F — Security pass and its fixes
+
+Done, not yet committed at the time of writing. The owner was asked whether to run a security review (approval of the plan
+was not taken as the answer) and said yes. Changed: `packages/workbench/safe-git/helper/safe-git`, the new
+`tests/test_safegit_describe_push_security.py` (17 tests), `tests/test_safegit_describe_push.py` and
+`tests/test_safegit_describe_push_target.py` (see below) and the shipped approval records.
+
+The pass: the `security-reviewer` agent, one run, on a copy in a scratch directory with a tracing `git` and fake programs.
+About 65 hostile argument lists, repository configuration that names programs, a repository-hosted nested repository, about 70
+runs with a byte-for-byte snapshot of the repository, the caps, and forged paths and messages. Found sound by test: no hostile
+argument reaches a message; no program a configuration names started (fsmonitor, hooks, external diff, text conversion, ssh
+command, credential helper, `ext::` URLs, included files) and no network command was run; the repository (`.git` included) was
+identical after every run and left no lock; no secret from a URL, a subsection or an included file was printed; a path or message
+cannot forge a patch header, a finding or a record; `.gitattributes` `-diff`/`binary` do not hide content; the caps leave the
+right fact out whole; replace refs, grafts and a shallow file are followed the way `git pack-objects` follows them.
+
+Findings and what was done (each fix has a test that failed first, then passed; the reviewer's experiments are the evidence):
+- **H1 (high)**: a key of the repository's own configuration that redirects, intercepts or routes the owner's credentials
+  (`http.*`, `protocol.*`, `credential.*`, `transfer.*`, `url.*.insteadOf`, `url.*.pushInsteadOf`, `remote.*.pushurl`) gave
+  `ok: true`. Fixed on the owner's choice of a named deny-list: at repository scope each is `push_config_refused`, named by
+  section and variable only (the subsection, value and host are never printed); at the owner's scope it is named in
+  `push_config_findings`. Tests that put a push URL or a rewrite in the repository's configuration now put it in the owner's
+  global configuration, and one stopped treating `http.sslVerify` as unnamed.
+- **M1 (medium)**: `diff.interHunkContext` made the scan for credentials stop at the first context line of a hunk, so a secret
+  added and taken out again inside the range was missed (still in the pushed history). Fixed: `--inter-hunk-context=0` in the
+  patch shape and the allow-lists. This also fixes `push-check`, which shares the scan.
+- **M2 (medium)**: bytes after a NUL in a commit message were neither shown nor scanned, yet pushed (git's own output stops at the
+  NUL and still ends the record, so the count did not catch it). Fixed: a new shape `cat-file commit <40 hex>`, one call for each
+  commit, and `commit_hashes` and `commit_messages` are left out when any commit object holds a NUL or a record is malformed.
+- **M3 (medium-low)**: the `jwt-shaped` pattern took quadratic time (24 s for one 180 KB line). Fixed with `{20,4096}`. A token
+  segment over 4096 characters is no longer seen (recorded).
+- **L1**: `run_capped` with no `timeout` raised `TypeError` at its deadline (reachable in `push-check` with a `diff.orderFile` that
+  is a FIFO). Fixed.
+- **L2**: git's stderr (300 characters) was repeated in `repository_unreadable` messages and could quote a repository value.
+  Fixed: only the command and exit code are given.
+- **L3**: a remote name such as `a..b` or `x.lock` passed the name test and ended as a refusal with no object. Fixed in the name
+  pattern.
+- **L5 (reviewer's second pass)**: `GIT_OPTIONAL_LOCKS=0` is now set for every git run (one line), so the spec's claim is true
+  for the new reads.
+- **L4 (not changed)**: scope `unknown` is treated as trusted. Apple Git's system configuration (with `osxkeychain`) shows as
+  `unknown` on this machine, so refusing it would refuse every push here. The reviewer found no way for a repository to produce
+  that scope (an include takes the scope of its including file). Recorded as a limit.
+
+Verification as run: the new tests failed first against the earlier helper (every one of the 13 H1 keys, the NUL cases, the
+timing, the echo, the names, the shapes and the timeout), then passed. `python3 -B -W error tests/run_all.py`, `wb check`,
+`wb run code-work check`, `doccheck`, `refcheck` and `git diff --check`: 4637 tests in 10 roots OK (4620 before, plus 17), `wb check`, the plan check (51 plans), `doccheck`, `refcheck` and
+`git diff --check` clean, before the owner's `release-approvals`. Git 2.54.0 (Apple Git-157).
+
+Review: the `reviewer` agent, one exchange, no blocking finding (it ran nothing). Applied: records are validated before any
+commit object is read (a malformed record is a left-out fact, not a decline of the action) and `GIT_OPTIONAL_LOCKS=0`
+(above). Not applied: none.
+
+Recorded for Increment G (spec drift and limits): the deny-list is wider than the spec's list (whole sections `http`,
+`protocol`, `credential`, `transfer`, the rewrites and `remote.*.pushurl`), and it refuses a repository that sets a benign key
+such as `http.postBuffer` or `transfer.fsckObjects` locally, with the keys named; a remote that only the owner's configuration
+defines is not one git can read (`get-url` needs the remote in the repository), so a push URL for it needs a repository key too;
+`remote.*.proxyAuthMethod` is not named; `diff.orderFile` naming a FIFO stalls a read for the time limit and is not refused
+(`-O` would override it); no overall deadline spans the calls (up to 200 `cat-file` calls); scope `unknown` is trusted (L4);
+the tracking-ref reflog is forgeable by whoever writes the repository, which the fact already says; a raw escape character in a
+path or message is JSON-escaped, not removed (a channel for prompt injection only); describe sees a scrubbed environment while a
+real push runs in the agent's own (an exported `GIT_DIR`, `GIT_SSH_COMMAND` or `GIT_CONFIG_*` makes them differ); not checked: a
+`safe.directory` repository of another owner, a hostile commit-graph or pack index, a case-folding file system, the engine's own
+deadline, and the real credential flow of a push.
+
+Open for the owner: run `! python3 -m workbench release-approvals` (it writes the approval records for the changed package),
+then approve the removal of the two stale approval directories it names.
+
+### Increment G — The specs say what is built
+
+Done, not yet committed at the time of writing. Changed (documents only; nothing under `packages/` changed):
+`docs/specs/safe-git.md`, `docs/specs/action-review.md`, `docs/development.md`.
+
+`safe-git.md`: the `describe` declaration is `remove`, `commit`, `push`; `describe push` is no longer marked specified, not
+built, and the accepted decision record is named as accepted; the grammar notes the remote-name exclusions and `-f` with
+`--force-with-lease`; the `push.default` paragraph gives the cases as built and checked against `git push --porcelain`
+(triangular `simple` acts as `current`, a bare deletion is `target_unresolved`); the repository settings that are refused are
+the deny-list of increment F by section, with the scope rules, the `unknown` scope and the harmless-key price; the git shapes
+are the ones in the helper, with `GIT_OPTIONAL_LOCKS=0` for every run and the `--ignore-submodules=none` restriction; the fact
+table says what each fact is as built; and "As built, and its limits" has a bullet for the plan with the drift from the first
+text and the limits found by increments B to F and by the pass. `action-review.md` names `describe push` as the collector
+and the accepted record. `development.md` lists `describe push` beside the other two actions.
+
+Verification as run: `git diff --check`, `wb check`, `wb run code-work check` (51 plans), `doccheck` and `refcheck` clean; a
+search of the specs, `docs/development.md` and the README for "not built", "specified, not built", "once `describe push` is
+built" and "Proposed" for this action finds only the engine, which is not built. The full suite was not rerun: no code or
+test changed since the run of increment F (4637 tests in 10 roots OK).
+
+Review: the `reviewer` agent, one exchange, no blocking finding (it ran nothing and could not see the diff). Applied: the
+scrubbed environment sets three command-scope keys; the claim about the `unknown` scope is worded as what the pass found; "fixed
+and tested, or recorded below"; the `findings` wording; `push.gpgSign` counts when true; two places in `action-review.md` and
+the heading of "Describe" that still named only `push-check` or the first plan; the stale reason for `GIT_OPTIONAL_LOCKS=0` in
+`commit`; the order of the checks, the flags that give no fact, the empty `pushurl`, the malformed `push.default`, the Git 2.26
+need, the cut names, the left-out facts and the tag read of `show-ref` were added to the as-built bullet. Not applied: the
+inventory spec `global-config-inventory.md` still names only `push-check` (inventory and history).
+
+The plan is complete once this increment is committed. Owner's remaining steps: `wb acknowledge` (the package changed and
+the review-engine records are untracked), then `wb upgrade --package packages/workbench`; the plan's `Status:` is set to
+`Completed` in the same commit. A push is the owner's word (`main` is 3 commits ahead of `origin/main` before this commit).
