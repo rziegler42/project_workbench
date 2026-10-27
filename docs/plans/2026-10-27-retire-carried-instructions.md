@@ -376,7 +376,7 @@ exit codes and hashes rest on this author.
 **State.** Increment A is committed (`c5cd3fc`). B (M5) and C (M6) are next; D (M7) is held. The scratch directory stays in
 place for reuse.
 
-### Increment B (run recorded; the owner's decision pending)
+### Increment B (run recorded; the owner held M5, commit `ebfeacc`)
 
 **Finding while writing the steps.** `docs/plans/README.md`, the cover for RP1a, is shipped by `code-work`, not `groundwork`
 (`packages/workbench/code-work/module.json`, `writes`). So the M5 gate project needs `groundwork` and `code-work`, and
@@ -493,7 +493,7 @@ is rerun with the Read calls expanded so each trigger shows, and M5 is carried o
 its own candidate or stated reason and the owner's approval. This increment's evidence is the correction above and the recorded run;
 it changes no removal. Hash 3 (end of B): `853a66ee…db1`, unchanged, so nothing changed at the user level.
 
-### Increment C (run recorded; the owner's decision pending)
+### Increment C (run recorded; CI3's covered items removed, the rest held, commit `4f379b0`)
 
 **Provenance.** Read on 2026-10-27 at commit `ebfeacc`. The user-level file has SHA-256 `853a66ee…db1` (the same as at A and B).
 The shipped texts compared are the files in `packages/workbench/`, not this repository's own: `code-work/files/blocks/policy.md`
@@ -614,5 +614,24 @@ lines replaced by two, on both. The mirror's change is in its working tree and u
 also holds earlier uncommitted edits there. Nothing else changed at the user level.
 
 **State.** Increment C is committed with this record. A (`c5cd3fc`) and B (`ebfeacc`, M5 held) precede it. M6 is carried out for
-CI3's covered items only; OP4, OP8, IV1, IV16 and CI4 are held. D (M7) is held until the owner says. Next candidates: a separate
-plan that gives the shipped text the rules M5 found missing, and the memory-wording plan.
+CI3's covered items only; OP4, OP8, IV1, IV16 and CI4 are held. D (M7) was then held until the owner said (see Increment D below).
+Next candidates: a separate plan that gives the shipped text the rules M5 found missing, and the memory-wording plan.
+
+### Increment D (not run; M7 held by the owner's decision)
+
+**Decision, 2026-10-27.** On the owner's "start next increment" this author set out that D, as written, would not test what the
+removal needs, and recommended recording D as held with no gate run. The owner answered "go with your recommendation".
+
+**Reason.** Increment A found that ME2, ME4 and ME5 in the user-level file govern the harness's built-in memory, while the
+`mempalace` policy block and `recall-memory` skill govern searching the palace. D's run (a throwaway project with the module, a
+synthetic note, a task the note contradicts) could show only the palace rules acting. It could not show that built-in memory keeps
+its guard once the three statements are gone, so a pass would not support the removal. The owner's direction also stands: no
+memory system's text names another, and the shared rules belong in a small module each memory system requires, which the
+`mempalace` wording does not yet follow. Until a memory-wording plan exists, ME2, ME4 and ME5 stay in the user-level file.
+
+**Not done.** No owner steps were written, no gate project was attached, no session was run and no removal was made. Nothing at
+the user level or its mirror changed in this increment. The label `D` is used for this record and is not reused. M7 moves to the
+memory-wording plan, which needs a roadmap candidate or a stated reason and the owner's approval; it is not started.
+
+**State.** All four increments are recorded. Carried out: CI3's covered items (C). Held: M5 (B), OP4, OP8, IV1, IV16 and CI4 (C),
+and ME2, ME4 and ME5 (D). The plan's `Status:` line is left for the owner, since the completion criteria are met only in part.

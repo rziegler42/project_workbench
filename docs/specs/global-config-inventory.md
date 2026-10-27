@@ -644,6 +644,8 @@ Carrying plan: `retire-carried-instructions`. Owner step: remove the three parag
 memory system's text names another and the set of systems is open; the shipped `mempalace` block and `recall-memory` skill name
 `graphify`, a knowledge base and built-in memory, so they are themselves to be redesigned. The shared rules are to go in a small
 new module that each memory system requires (provisionally `memory`; a direction, not a plan). Until then ME2, ME4 and ME5 stay.
+*Increment D of that plan, 2026-10-27:* not run, by the owner's decision. A palace run could not show built-in memory keeping its
+guard, so it would not support the removal. ME2, ME4 and ME5 stay `move`, held, for the memory-wording plan.
 
 **M8: the install prompts.** Items: the thirteen `ask` entries for package installs (`pip install`, `pip3 install`,
 `python3 -m pip install`, `npm install`, `npm ci`, `cargo install`, `cargo add`, `brew install`, `apt install`, `apt-get
