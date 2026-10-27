@@ -13,6 +13,7 @@ from workbench import command_gate
 STORE_BIN = "/home/owner/.config/project-workbench/bin/wb"
 APPROVE = "approve-plan"
 DIGEST = "0123456789abcdef0123456789abcdef"
+BS = "\\"
 
 
 def judge(command, keys=(APPROVE,)):
@@ -325,6 +326,156 @@ class SingleWordKeys(unittest.TestCase):
             with self.subTest(key=key):
                 self.assertIsNotNone(self.judge("bash -c '%s'" % key, keys=(key,)))
                 self.assertIsNone(self.judge("echo %s" % command, keys=(key,)))
+
+
+class LiteralRunCommands(unittest.TestCase):
+    """A literal ``wb run <name> <arguments>`` names a word only as data, and a sibling command name is not its prefix key
+    (``2026-10-27-command-gate-literal-arguments``)."""
+
+    KEYS = ("wb add", "wb install", "wb pin")
+    HEAD = "0123456789abcdef0123456789abcdef01234567"
+
+    def judge(self, command, keys=KEYS):
+        return judge(command, keys=keys)
+
+    def commit(self, subject, paths="tests/test_add.py", head="wb"):
+        return "%s run helper commit --expected-head %s --subject '%s' -- %s" % (head, self.HEAD, subject, paths)
+
+    def test_a_commit_through_wb_run_is_allowed_whatever_words_it_holds(self):
+        for command in (self.commit("Add tests"), self.commit("Fix padding"), self.commit("Install docs"),
+                        self.commit("Add tests", "workbench/install.py"), self.commit("pin, mapping, shipping"),
+                        self.commit("Add tests", head=STORE_BIN), self.commit("Add\nmore\r\ntests"),
+                        self.commit("costs $5 and `x` and $(y)"), self.commit("a ; b | c && wb install"),
+                        "wb run checker check --files workbench/install.py", "wb run helper commit",
+                        "wb run helper commit --body 'install' --trailer 'Plan: a#B' -- a b c"):
+            with self.subTest(command=command):
+                self.assertIsNone(self.judge(command))
+
+    def test_any_other_form_is_judged_as_before(self):
+        for command in (
+                'wb run x --subject "$(wb install)"', "wb run x 'a' ; wb install",
+                'wb run x "install"', "wb run x install; wb install", "wb run x 'a'\nwb install",
+                "wb run x 'a' > out; wb install", "wb run x $(wb install)", "wb run x `wb install`",
+                "wb run x 'install'x", "wb run x 'ins''tall'", "wb run x 'a' && wb install", "wb run x 'install'\n",
+                "wb run x 'install' \n", "wb run x " + BS + "'install", "wb run x 'it's install", "wb run x 'a' wb install 'b'; echo",
+                "echo install | xargs wb run x", "bash -c 'wb run x install'", "wb run x 'install' | xargs wb"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command))
+
+    def test_the_name_may_not_be_a_launcher_or_a_verb(self):
+        for command in ("wb run wb install", "wb run workbench install", "wb run install x", "wb run add x",
+                        "wb run python3 install", "wb run -m workbench install"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command))
+
+    def test_a_name_that_is_not_a_name_is_not_exempt(self):
+        for command in ("wb run  x install", "wb run x" + BS + "y install", "wb run " + "a" * 65 + " install", "wb run .x install",
+                        "wb run x/y install", "wb run x\tinstall"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command))
+
+    def test_a_lookalike_launcher_is_not_the_literal_form(self):
+        for launcher in ("\uff57b", "W" + "B", "w\u200bb", "\u0077\u0062\u200d"):
+            with self.subTest(launcher=launcher):
+                self.assertIsNotNone(self.judge("%s run x 'install'" % launcher))
+
+    def test_a_trailing_newline_is_not_the_literal_form(self):
+        self.assertIsNotNone(self.judge(self.commit("Add tests") + "\n"))
+        self.assertIsNotNone(self.judge(self.commit("Add tests") + "\nwb install"))
+
+    def test_the_other_keys_are_not_exempted(self):
+        # `wb run <command> <argument>` keys and approve-plan read their own words, as they did.
+        key = "wb run vault init"
+        self.assertIsNone(self.judge("wb run vault init x", keys=(key,)))
+        self.assertIsNotNone(self.judge("wb run vault init 'x'", keys=(key,)))
+        self.assertIsNotNone(self.judge("wb run helper commit --subject 'vault init'", keys=(key,)))
+        self.assertIsNotNone(self.judge("wb run x 'approve-plan'", keys=("approve-plan",)))
+
+    def test_the_exemption_does_not_lift_the_other_relaxed_keys(self):
+        keys = ("wb install", "wb run vault init")
+        self.assertIsNone(self.judge("wb run helper commit --subject 'install'", keys=keys))
+        self.assertIsNone(self.judge("wb run vault init", keys=keys))  # the exact call the ask rule matches
+        self.assertIsNotNone(self.judge("wb run helper commit --subject 'vault init'", keys=keys))
+
+    def test_a_sibling_command_name_is_not_its_prefix_key(self):
+        self.assertIsNone(self.judge("wb approve-plan docs/plans/a.md", keys=("wb approve",)))
+        self.assertIsNone(self.judge("wb approve-plan docs/plans/a.md --digest " + DIGEST, keys=("wb approve",)))
+        # With approve-plan relaxed too, the sibling is judged by its own key: only its exact forms pass.
+        both = ("wb approve", "approve-plan")
+        self.assertIsNone(self.judge("wb approve-plan docs/plans/a.md", keys=both))
+        self.assertIsNotNone(self.judge("bash -c 'wb approve-plan docs/plans/a.md'", keys=both))
+
+    def test_the_sibling_exemption_does_not_hide_the_word(self):
+        keys = ("wb approve",)
+        self.assertIsNone(self.judge("wb approve /x/pkg", keys=keys))
+        for command in ("bash -c 'wb approve-plan x; wb approve y'",
+                        'wb approve"-plan" x', "wb approve${X} y", "wb approv$'e' x", "echo approve | xargs wb",
+                        "wb approve-plan x && wb approve y", "python3 -m workbench approve x"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command, keys=keys))
+
+    def test_the_siblings_are_the_commands_of_the_rules_that_continue_the_word(self):
+        from workbench import rules
+        found = {key: [name for name in rules.OWNER_RUN + rules.AGENT_SAFE if name.startswith(key + "-")]
+                 for key in ("approve", "install", "add", "pin", "upgrade")}
+        self.assertEqual({"approve": ["approve-plan"], "install": [], "add": [], "pin": [], "upgrade": []}, found)
+        self.assertEqual(("approve-plan",), tuple(command_gate.siblings("wb approve")))
+        self.assertEqual((), tuple(command_gate.siblings("wb install")))
+        self.assertEqual((), tuple(command_gate.siblings("approve-plan")))
+
+    def test_an_exact_form_with_arguments_that_hold_the_word_is_still_allowed(self):
+        self.assertIsNone(self.judge("wb install --dir /x --package a/install"))
+
+    def test_the_message_for_a_key_at_none_does_not_name_an_ask_rule(self):
+        reason = command_gate.judge("bash -c 'wb install'", ["wb install"], STORE_BIN, {"wb install": "none"})
+        self.assertIsNotNone(reason)
+        self.assertNotIn("ask rule", reason)
+        self.assertIn("none", reason)
+        self.assertIn("~", reason)
+        asked = command_gate.judge("bash -c 'wb install'", ["wb install"], STORE_BIN, {"wb install": "ask"})
+        self.assertIn("ask rule", asked)
+        unknown = command_gate.judge("bash -c 'wb install'", ["wb install"], STORE_BIN)
+        self.assertIn("ask rule", unknown)
+
+    def test_the_provides_form_is_not_exempt_and_a_word_in_its_arguments_is(self):
+        self.assertIsNotNone(self.judge("wb run --provides cap helper commit --subject 'install'"))
+        self.assertIsNone(self.judge("wb run helper --provides install"))
+
+    def test_an_option_with_the_quote_after_an_equals_sign_is_not_the_literal_form(self):
+        self.assertIsNotNone(self.judge("wb run helper commit --subject='install'"))
+
+    def test_a_store_path_with_regex_characters_is_matched_literally(self):
+        odd = "/tmp/a b(c)+[x]/bin/wb"
+        self.assertIsNone(command_gate.judge("%s run helper commit --subject 'install'" % odd, ["wb install"], odd))
+        self.assertIsNotNone(command_gate.judge("/tmp/aXb(c)+[x]/bin/wb run helper 'install' ; wb install", ["wb install"], odd))
+        self.assertIsNotNone(command_gate.judge("/tmp/a b(c)+x/bin/wb run helper 'install' | xargs wb", ["wb install"], odd))
+
+    def test_a_very_long_command_is_judged_quickly(self):
+        import time
+        started = time.monotonic()
+        long_run = "wb run helper " + " ".join("'a b c'" for _ in range(8000))
+        self.assertIsNone(self.judge(long_run + " 'install'"))
+        self.assertIsNotNone(self.judge(long_run + " 'install' ; wb install"))
+        self.assertIsNotNone(self.judge(long_run + " 'install"))
+        self.assertLess(time.monotonic() - started, 5)
+
+    def test_the_word_built_from_the_sibling_name_stays_blocked_however_far_apart(self):
+        keys = ("wb approve",)
+        padding = " ".join("filler%d" % n for n in range(40))
+        for command in ("A=approve-plan; wb ${A%-plan} x", "A=approve-plan; wb ${A/-plan} x", "A=approve-plan; wb ${A%%-*} x",
+                        "A=approve-plan; echo %s; wb ${A%%-plan}" % padding, "echo approve-plan | xargs wb",
+                        "python3 -m workbench ${A%-plan}; x=approve-plan"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command, keys=keys))
+        self.assertIsNone(self.judge("python3 -m workbench approve-plan docs/plans/a.md", keys=keys))
+        self.assertIsNone(self.judge("%s approve-plan docs/plans/a.md" % STORE_BIN, keys=keys))
+
+    def test_a_decision_obfuscation_stays_blocked_with_the_exemption_in_place(self):
+        for command in ('w""b install', 'wb inst""all', "wb $'\\x69nstall'", "w" + BS + "b install", "w" + BS + "\nb install",
+                        "wb inst" + BS + "\nall", "echo install | xargs w" + BS + "\nb", "echo install | xargs wb",
+                        "wb inst*", "${X}wb install", "W=w; ${W}b install"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command))
 
 
 def run(payload, prepare=None):

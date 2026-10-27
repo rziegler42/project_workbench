@@ -1,6 +1,6 @@
 # The command gate leaves a literal `wb run` command and a sibling command name alone
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-27
 
 ## Context
 
@@ -29,7 +29,7 @@ an owner-run `wb` verb, and its arguments reach that command's pinned helper as 
 
 ## Decision
 
-Proposed. Nothing here is built.
+Accepted by the owner on 2026-10-27. Nothing here is built; Increment I of the plan `2026-10-27-a-level-for-every-command` builds it.
 
 1. **A literal `wb run` command is not searched for a single-word key.** For a relaxed key of the form `wb <word>` (not
    `approve-plan`, not `wb run <command> <argument>`; the exemption is decided per key and is never an early return for the

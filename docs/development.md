@@ -611,7 +611,9 @@ the records are read from the installed workbench, never copied into the guarded
   A command key that is an ordinary word (`wb install`, `wb add`) is read in command position: only a command that names a
   launcher (`wb`, the store's `bin/wb`, `python3 -m workbench`) and the word, in either order, is blocked, so `npm install`, `git add`
   and a commit message that holds the word are not, and `wb preview <action>` is allowed. A compound command that holds both
-  (`npm install && wb check`) is blocked: run it as two calls.
+  (`npm install && wb check`) is blocked: run it as two calls. A literal `wb run <name> <arguments>` (plain tokens and single-quoted
+  strings) is not read for these words, so `wb run safe-git commit --subject 'Add tests' -- tests/test_add.py` passes; write a commit
+  subject in single quotes. `wb approve-plan` is not taken for `wb approve`.
 - **What it cannot stop.** A script or program that makes the call, a word built from variables or encodings, and a shell that writes
   the guarded store: see "Limits" in the spec. Leave a key at `block` if you do not accept them.
 - **When Bash calls are blocked.** While a key is relaxed, `wb gate-command` runs on every Bash call. If the store, the settings file

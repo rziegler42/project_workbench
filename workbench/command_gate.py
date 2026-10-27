@@ -16,6 +16,13 @@ is decided by the harness's classifier in auto mode. This gate reads one Bash to
   ``$"`` while the word's letters appear in the skeleton in order;
 * blocks on a malformed input, an oversized command, a failure to find the project and any crash or deadline.
 
+* for a key of the form ``wb <word>``, allows a command that is exactly one literal ``wb run <name> <arguments>`` (plain tokens
+  and single-quoted strings only, on the raw text): ``wb run`` dispatches to a declared, pinned module command and never to an
+  owner-run verb, so a word in the arguments (a commit subject, a path) is data
+  (``docs/decisions/2026-10-27-command-gate-literal-arguments.md``);
+* for such a key, does not take a launcher followed by the exact token of a sibling command that continues the word
+  (``wb approve-plan`` for ``wb approve``) for the key's own word; the token alone, as data, is still the word.
+
 It prints nothing and returns 0 to allow, or one ``refused:`` line and 2 to block (the only code a harness takes for a
 block; ``gate_hook.guard`` makes every failure a block). The exact token ``delegate-approve-plan`` is removed before the
 search: it is the agent-safe delegated command.
@@ -44,6 +51,12 @@ EXEMPT = ("delegate-approve-plan",)
 LAUNCHERS = tuple(sorted({spelling.split()[-1] for spelling in rules.SPELLINGS}))
 PREVIEW_ACTIONS = tuple(rules.PREVIEW_ACTIONS)
 _TOKEN = r"[A-Za-z0-9._/:=-]+"
+# The literal ``wb run <name> <arguments>`` form: a name as a pin or a command name is spelled, then plain tokens or
+# single-quoted strings (bash reads those literally, a newline included), each after one space.
+_RUN_NAME = r"[A-Za-z0-9][A-Za-z0-9._+-]{0,63}"
+_RUN_ARGUMENT = r"(?:[A-Za-z0-9._/:=@,+-]+|'[^']*')"
+# A name that is a launcher or a verb is never the module command of a literal call.
+RESERVED_NAMES = frozenset(rules.OWNER_RUN) | frozenset(rules.AGENT_SAFE) | frozenset(LAUNCHERS) | {"python", "python3"}
 _PATH = r"[A-Za-z0-9._/][A-Za-z0-9._/-]*"
 _DIGEST = r"[0-9a-f]{32}"
 
@@ -77,6 +90,23 @@ def alternatives(key):
     if not _by_launcher(key):
         return [found]
     return [[launcher] + found for launcher in LAUNCHERS]
+
+
+def siblings(key):
+    """The commands of ``rules`` whose names continue the word of a single-word key (``approve-plan`` for ``wb approve``): they
+    have their own key or rule, so their exact token is not the key's word."""
+    if not _by_launcher(key):
+        return ()
+    word = words(key)[0]
+    return tuple(name for name in rules.OWNER_RUN + rules.AGENT_SAFE if name.startswith(word + "-"))
+
+
+def literal_run(text, store_bin):
+    """Whether `text`, as written, is exactly one ``wb run <name> <arguments>`` with literal arguments (through ``wb`` or the
+    guarded store's own ``bin/wb``), a name that is not a launcher or a verb, and nothing else."""
+    heads = "|".join(["wb", re.escape(store_bin)])
+    found = re.fullmatch(r"(?:%s) run (%s)(?: %s)*" % (heads, _RUN_NAME, _RUN_ARGUMENT), text)
+    return bool(found) and found.group(1) not in RESERVED_NAMES
 
 
 def forms(key, store_bin):
@@ -223,9 +253,36 @@ def _names(folded, skeleton, pieces):
     return _in_order(folded, pieces) or _in_order(skeleton, [_skeleton(piece) for piece in pieces])
 
 
-def judge(command, keys, store_bin):
-    """``None`` when `command` may go ahead, or the reason it may not. `keys` are the relaxed keys."""
+def _without(views, tokens):
+    """`views` (folded text and skeleton) with each launcher spelling followed by one of the exact `tokens` taken out of the
+    text, as ``preview <action>`` is: the token alone stays where it is data (``A=approve-plan; wb ${A%-plan}`` still holds
+    the word)."""
+    if not tokens:
+        return views
+    launchers = "|".join(re.escape(_folded(launcher)) for launcher in LAUNCHERS)
+    out = []
+    for folded, _ in views:
+        for token in tokens:
+            folded = re.sub(r"(?<![a-z0-9-])(?:%s) %s(?![a-z0-9-])" % (launchers, re.escape(_folded(token))), " ", folded)
+        out.append((folded, _skeleton(folded)))
+    return out
+
+
+def _reason(key, spelling, level):
+    if level == "none":
+        return ("the command names %s, which the owner has set to none here, in a form the gate cannot tell from a call (a "
+                "wrapper, a compound command, or a path with ~ or $VAR); run it as `wb %s ...` on its own, with the path spelled "
+                "out" % (display.ascii_text(" ".join(_folded(word) for word in spelling))[:80], " ".join(words(key))[:60]))
+    return ("the command names %s, which the owner has set to ask or none here, and is not exactly the simple "
+            "command the ask rule matches; run it as `wb %s ...` on its own" % (
+                display.ascii_text(" ".join(_folded(word) for word in spelling))[:80], " ".join(words(key))[:60]))
+
+
+def judge(command, keys, store_bin, levels=None):
+    """``None`` when `command` may go ahead, or the reason it may not. `keys` are the relaxed keys; `levels`, when given, maps
+    each to its level, so that the reason does not name an ``ask`` rule for a key at ``none``."""
     text = command
+    literal = literal_run(text, store_bin)
     if keys and text.count("$'") > MAX_DOLLAR_QUOTES and any(words(key) for key in keys):
         return ("the command holds more than %d $'...' strings, which the gate cannot read while a command is set to "
                 "ask or none here" % MAX_DOLLAR_QUOTES)
@@ -247,7 +304,9 @@ def judge(command, keys, store_bin):
     pattern = any(char in text for char in _PATTERN_CHARS)
     for key in keys:
         # Only a key read as a launcher and a word has a preview that is not the call; a module's command may be named `preview`.
-        seen = previewed if _by_launcher(key) else views
+        if literal and _by_launcher(key):
+            continue
+        seen = _without(previewed, siblings(key)) if _by_launcher(key) else views
         for spelling in alternatives(key):
             # A launcher and a word can reach each other as data (``echo install | xargs wb``), so for a launcher key the two
             # count in either order. A command that holds both is blocked unless it is exactly the call the ask rule matches.
@@ -257,10 +316,7 @@ def judge(command, keys, store_bin):
                 if any(_names(folded, skel, pieces) for folded, skel in seen):
                     if any(form.fullmatch(text) for form in forms(key, store_bin)):
                         break
-                    return ("the command names %s, which the owner has set to ask or none here, and is not exactly the simple "
-                            "command the ask rule matches; run it as `wb %s ...` on its own" % (
-                                display.ascii_text(" ".join(_folded(word) for word in spelling))[:80],
-                                " ".join(words(key))[:60]))
+                    return _reason(key, spelling, (levels or {}).get(key))
                 if pattern and any(_subsequence(wild, _skeleton("".join(pieces))) for wild in wilds):
                     return ("the command uses an expansion, a pattern or an escape and holds the letters of %s in order, so "
                             "it may spell a command that the owner has set to ask or none here"
@@ -289,7 +345,7 @@ def run(stdin, err, prepare, *, deadline=gate_hook.DEADLINE):
         if "\0" in command or len(command) > MAX_COMMAND:
             raise Refusal("the command holds a NUL byte or is longer than %d characters" % MAX_COMMAND)
         relaxed = [key for key, level in table.items() if level in RELAXED]
-        reason = judge(command, relaxed, store_bin)
+        reason = judge(command, relaxed, store_bin, table)
         if reason:
             raise Refusal(reason)
 

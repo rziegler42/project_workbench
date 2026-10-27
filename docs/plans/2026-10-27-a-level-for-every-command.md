@@ -638,3 +638,38 @@ following links). Low, recorded in the spec: the outcome text for a partial appr
 `approve` is machine-wide but its level is read for the working directory's project. Sound (read only): `route` and the rendering
 record, the attempt-before-change order, the `_on_file` shortcut, the digest binding of the pin, `--ref` and source checks, the exact
 project-id comparison. Not tested by the reviewer: any experiment. `tests/test_approve_pin_levels.py` is now 31 tests.
+
+### Increment I — built, not committed (2026-10-27)
+
+**Done.** The gate builds the accepted decision `2026-10-27-command-gate-literal-arguments`. For a single-word launcher key, a command
+that is exactly one literal `wb run <name> <arguments>` (matched in full on the raw text through `wb` or the store's `bin/wb`; a
+name of the pin and command form that is not a launcher, a verb of `rules`, `python` or `python3`; arguments that are plain tokens or
+single-quoted strings, newlines included) is not searched for the word, so a commit subject or a path that holds it passes; the exact
+token of a command that continues the word (`approve-plan` for `wb approve`, from `rules`) is removed before the search; and `judge`
+takes the table, so the reason for a key at `none` does not name an `ask` rule and says that a wrapper, a compound command and a path
+with `~` or `$VAR` are read as a call. `approve-plan` and `wb run <command> <argument>` keys are read as before. The skeleton rule was
+dropped from the decision's first draft after review. The spec ("The command gate") and `docs/development.md` say so.
+
+**Verification as run.** `LiteralRunCommands` in `tests/test_command_gate.py` was written first and failed on the old code; the file
+now has 77 tests, all passing. A differential run of the previous `judge` (from the last commit) against the new one over 11,550
+generated spellings (launchers, spliced words, tails, five command shapes, five keys) found 244 commands that the old blocked and the new
+allows, all of them literal `wb run` forms. Full suite `python3 -B -W error tests/run_all.py`: `Ran 5084 tests in 10 roots`, `OK`
+and again with the five added after the review: `Ran 5089 tests in 10 roots`, `OK`. `wb check` and the plan check: no problems. **Not verified:** nothing
+under a real harness; the owner's trial of this increment (a commit through `wb run` with a key relaxed) is still to do.
+
+**Review.** One round by the `reviewer` agent: no blocking findings. Applied: tests for `--provides`, a quote after `=`, a store path
+with regex characters, a 64 KiB command (judged in well under a second) and the short word built at run time; the spec says `python`
+and `python3` are reserved names, that `--provides` is not exempt, and that the sibling removal widens the accepted run-time limit
+only within the in-order window. Recorded, not changed: the reason text for a `wb run <command> <argument>` key reads `wb <words>`
+(the same expression as before this increment); the pattern-rule message still says "ask or none"; the docstring bullets read as a
+second list.
+
+**Security review (I, read only; the reviewer's probes were refused).** No Critical, High or Medium finding. Low, applied: the sibling
+removal took the bare token `approve-plan` out of the text, so with only `wb approve` relaxed and enough padding between
+`A=approve-plan` and `wb ${A%-plan}` the new gate allowed a spelling the old one blocked (the short spellings were still caught by
+the pattern rule; I ran them to check, and ran the padded one to see it allowed). It now removes a launcher followed by the token,
+as `preview <action>` is, so the token alone is still the word. A test pins the short and the padded forms and the allowed exact
+forms. This is narrower than the decision's wording ("the exact token ... is removed"), so it blocks more, not less; the decision
+is not edited. Sound (read only): the literal regex and its agreement with bash on single quotes, whitespace and prefixes, the
+reserved names, the store head with `re.escape`, linear failure on an unbalanced quote, the other keys still judged, the level table
+and the one-line reason. Not tested by the reviewer: any experiment. `tests/test_command_gate.py` is 77 tests.

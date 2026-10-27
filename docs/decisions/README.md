@@ -94,4 +94,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-26-permission-levels-as-built](2026-10-26-permission-levels-as-built.md) | The permission levels as built: what stands, what changed and what was not built | Accepted by the owner on 2026-10-26 |
 | [2026-10-26-a-level-for-every-command](2026-10-26-a-level-for-every-command.md) | Every command has a permission level, and no level is limited to block | Accepted by the owner on 2026-10-26 |
 | [2026-10-27-command-gate-command-position](2026-10-27-command-gate-command-position.md) | The command gate reads a single-word command in command position, not the word alone | Accepted by the owner on 2026-10-27 |
-| [2026-10-27-command-gate-literal-arguments](2026-10-27-command-gate-literal-arguments.md) | The command gate leaves a literal `wb run` command and a sibling command name alone | Proposed |
+| [2026-10-27-command-gate-literal-arguments](2026-10-27-command-gate-literal-arguments.md) | The command gate leaves a literal `wb run` command and a sibling command name alone | Accepted by the owner on 2026-10-27 |

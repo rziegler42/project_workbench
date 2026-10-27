@@ -208,6 +208,22 @@ so a preview that holds an expansion or a glob (`--dir $PWD`) is blocked and is 
 before it, such as an alias or a script the agent wrote that wraps the call, is not seen; the classifier remains the barrier for
 it, as for the other limits listed under "Limits".
 
+For these keys two more forms are not taken for the word (built by Increment I; decision `2026-10-27-command-gate-literal-arguments`).
+A command that is exactly one literal `wb run <name> <arguments>`, matched in full on the raw text through `wb` or the store's `bin/wb`, with a
+name of the form a pin or a command has that is not a launcher, a verb of `rules`, `python` or `python3`, and arguments that are plain tokens
+(`[A-Za-z0-9._/:=@,+-]+`) or single-quoted strings (any character, a newline included), names the word only as data: `wb run` runs a
+declared, pinned module command and never an owner-run verb. So `wb run safe-git commit --subject 'Add tests' -- tests/test_add.py`
+passes with `wb add` relaxed, whatever words the subject and paths hold. An operator, a substitution, a double-quoted or escaped
+argument, a trailing newline or any other form is judged as before, and the keys `wb run <command> <argument>` and `approve-plan` are
+not exempted, nor is `wb run --provides <capability> <name> ...` (a name does not start with `-`). And a launcher followed by the exact
+token of a command that continues the word (`wb approve-plan` for `wb approve`, taken from `rules`) is removed before the search, as
+`preview <action>` is, so relaxing `wb approve` does not block `wb approve-plan`; the token alone stays, so `A=approve-plan; wb ${A%-plan}`
+is still seen however far apart they are, and the in-order rule still reads the text as written. What stays blocked with such a key relaxed: any other command that holds a launcher and the word
+(`wb check tests/test_install.py`, `git diff workbench/install.py`, whose `workbench` is a launcher), `git commit -m 'add new base'`
+for `wb add` (the skeleton joins `new base`), and a command with `$ ? * [ {` and scattered letters. The reason the gate prints for a
+key at `none` does not name an `ask` rule: it says the form cannot be told from a call and that a path with `~` or `$VAR`, a wrapper or a
+compound command is read that way.
+
 ### The log
 
 Every run at a level other than `block` that goes on without a terminal appends two lines to `level-log` in the guarded store, never rewriting one: the attempt, with
@@ -237,7 +253,7 @@ give one key are a refusal.
 
 ## Planned: a level for every command
 
-Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B, C, D, E, F, G and H are
+Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B, C, D, E, F, G, H and I are
 built). It is the owner's direction of 2026-10-26, recorded here so a plan can implement it. Calls marked **(call)** are the
 author's and are not the owner's until the owner confirms them.
 
