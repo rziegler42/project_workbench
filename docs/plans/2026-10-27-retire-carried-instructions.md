@@ -225,4 +225,153 @@ read the user-level file). Findings are advice, judged by the author; the review
 
 ## Result
 
-Not started.
+### Increment A (done, pending commit)
+
+**Provenance.** Read on 2026-10-27 at commit `bcc2d43` (Python 3, Darwin 25.6.0). The owner's user-level instruction file
+(owner-local, no URL, 281 lines, 22,808 bytes) has SHA-256 `853a66eed1d602f1cf77bb013a763bab9fe346352cdaf46aec096139eb935db1`
+at the start of this increment, equal to the value `global-config-inventory` recorded on 2026-10-25, so the groups below are
+the groups the inventory compared. Hashes 2 and 3 are recorded below, after the probe. Shipped texts read in full or in the cited lines: `docs/plans/README.md`, `docs/roadmaps/README.md`,
+`docs/specs/code-work.md`, `groundwork.md`, `mempalace.md`, `safe-git.md`; the three `policy` blocks (the shipped
+`packages/workbench/*/files/blocks/policy.md`, equal to the filled blocks in `AGENTS.md`); the skills `draft-roadmap`,
+`test-first`, `verify-before-claiming`, `push-changes` and `recall-memory`.
+
+**Cover grades.** *Always-loaded* = a `policy` block (in context every session). *On demand* = a skill, a spec or a docs
+README that an agent reads or loads only when the task calls for it. *Enforced* = a program refuses it. `AGENTS.md` of this
+repository is not shipped text and is not counted as cover.
+
+**The comparison.** `ok` = matched; `NO COVER` and `MISMATCH` statements stay in the user-level file.
+
+| group | statements (user-level) | cover found | status |
+|---|---|---|---|
+| RP1a | follow the repository's plan convention | `docs/plans/README.md` is the convention (on demand) | ok |
+| | workbench project: one file per plan, several active | `docs/plans/README.md` lines 9-13 (on demand) | ok |
+| | no tool-owned or parallel plan directory | `docs/plans/README.md` lines 14-16 (on demand) | ok |
+| | where a repository has no planning lifecycle, establish `docs/plans/README.md` | none; it is for repositories outside the workbench | NO COVER (stays) |
+| RP3a | roadmaps are tracked, committed, non-authoritative direction | `docs/roadmaps/README.md` lines 3-5 (on demand) | ok |
+| | not an implementation plan, approval or task queue; do not implement items or merge roadmap text into a plan without direction | README "do not authorize implementation"; `draft-roadmap` "does not authorize work"; "task queue" and "merge text into a plan" are not stated | partial; the last two clauses NO COVER (stay) |
+| | items at plan-boundary level; promote one at a time into a reviewed, approved plan | README lines 13-14; `draft-roadmap` step 6 (on demand); the phrase "plan-boundary level" appears nowhere, only "one unit of work" | ok for promotion; "plan-boundary level" by implication only |
+| | do not renumber an active plan's increments or revise commitments for a future roadmap | `docs/plans/README.md` line 43 and `code-work.md` line 108 (labels only); README "do not change an active plan" | ok; "broaden scope" is stated only as "does not alter a plan in progress" (`groundwork.md` line 67) |
+| RP5 | commit roadmaps with normal documentation commits | none | NO COVER (stays) |
+| | personal scratch notes and unreviewed ideas stay out of tracked roadmaps | none | NO COVER (stays) |
+| | lowercase kebab-case names, no plan numbers | README lines 25-26 (on demand) | ok |
+| | one active roadmap per scope, updated in place | README line 33; `draft-roadmap` step 1 | ok |
+| | archive a replaced roadmap with a `YYYY-MM-` prefix | README lines 33-34 | ok |
+| | a roadmap states status, update date, purpose, current state, **ordered** plan candidates, each candidate's outcome, dependencies, boundary and promotion trigger, deferred work, relevant ADRs | README "Format": Status, Updated, Purpose, Current state, *Suggested order (optional)*, Candidates with the four fields, Deferred, Related decisions | MISMATCH on "ordered" (shipped: no required order); the rest ok. A second mismatch not in this plan's scope: the README format block gives statuses `Active, Completed, Superseded`, `draft-roadmap` gives `Draft, Active, Archived` |
+| | keep file lists, detailed acceptance criteria and commands in the plan | README lines 20-21 | ok |
+| OP4 | commit messages carry no AI attribution, even when the harness suggests it | policy line "the message carries no attribution unless the project allows it" (always-loaded) and `safe-git` `attribution_refused` (enforced for the helper) | ok for commit messages made through the helper; "even when the harness suggests it" NO COVER |
+| | pull request descriptions carry no attribution | none (the helper is not used for them) | NO COVER (stays) |
+| OP8 | a request to commit never authorizes a push | `push-changes` ("a commit is not a word to push"), `code-work.md` line 325, `safe-git.md` line 59 (on demand); a push also raises an `ask` | ok, weaker: not in any policy block |
+| | a plan never authorizes implementation | `code-work` policy block, "a status line is never an approval" (always-loaded) | ok |
+| | memory never authorizes implementation | `mempalace` policy block, "never authority" (always-loaded) | ok, for the palace (see ME4) |
+| | a graph never authorizes implementation | none; `graphify-module` is unbuilt | NO COVER (stays) |
+| IV1 | prefer test-driven development when a meaningful test is practical | `test-first` skill only (on demand) | ok, weaker: no always-loaded cover |
+| IV16 | never claim success from expectation, static inspection or a dry run when a real check is available | `verify-before-claiming` rule line 29 (on demand); policy block "verification actually run" (always-loaded, scoped to an increment) | ok |
+| CI3 | preserve the active objective and approved scope | policy block: "approvals and checkpoints reached" only | MISMATCH in part: "objective" has no cover |
+| | active plan path and increment; changed files; verification; unresolved risks; next action | policy block (always-loaded) | ok |
+| | governing decisions | none | NO COVER (stays) |
+| | remote job IDs, submitted SHAs, profiles, outcomes | none | NO COVER (stays; excluded by the plan) |
+| CI4 | no raw logs; no superseded hypotheses | policy block | ok |
+| | no repeated command output; no unverified discovery output | none | NO COVER (stay) |
+| ME2 | consult memory only when a prior decision, preference, correction or lesson could materially affect the task; ordinary work begins from current files | `mempalace` policy and `recall-memory` | ok, **scope mismatch** (see F-A1) |
+| ME4 | a recalled item is stale historical guidance, never truth, approval or authorization; verify against current files, decisions, configuration, tests | `mempalace` policy; `recall-memory` step 4 | ok, **scope mismatch** (F-A1) |
+| ME5 | current evidence beats memory; mention the conflict only when it matters | `mempalace` policy; `recall-memory` step 4 ("tell the owner when it changes the work") | ok, **scope mismatch** (F-A1) |
+
+**Finding F-A1 (needs the owner's decision before B to D rely on it).** The user-level Memory section governs *Claude Code's
+built-in auto-memory* (ME1: "use the built-in auto-memory"). The `mempalace` policy block and `recall-memory` govern *searching
+the palace* with `wb run mempalace search`, and say only "read the harness's built-in memory first". So ME2, ME4 and ME5 as
+written cover a different store than the shipped text does. The inventory called them `move` on the strength of matching
+wording. Options: (1) keep ME2, ME4 and ME5 global and drop M7 from this plan; (2) carry on with M7 but keep the sentences
+until the run shows built-in recall also behaves the same, which the M7 run would then have to test with a built-in note as
+well as a palace note; (3) accept that the palace rules are enough. I recommend (2).
+
+*Owner's direction on F-A1, 2026-10-27.* The memory systems (the harness's built-in memory, `graphify` and `mempalace` are
+examples, not a closed list: others may come) may each be installed, absent or mixed. No memory system's text may name
+another memory system, so no text may route a question among a fixed set of them. Each states what it is used for
+and how to use it. Wording from the older memory systems is not assumed correct. Read against the shipped text, this
+means the `mempalace` module currently breaks the rule: its `policy` block (two bullets) and its `recall-memory` skill name
+`graphify`, "the knowledge base" and the harness's built-in memory, and route a question among them (verified by search on
+2026-10-27). So the `mempalace` wording is not a cover to move ME2, ME4 and ME5 onto: the cover is itself to be redesigned.
+Consequences recorded here, not yet acted on: (a) M7 as planned (Increment D) cannot proceed on the shipped wording, and
+is held until the owner confirms whether it is dropped from this plan; (b) ME2, ME4 and ME5 stay in the user-level file;
+(c) the redesign of the memory wording is a new plan (a change to the `mempalace` module, and a separate home for the
+harness-memory wording and the `graphify` wording), which needs its own candidate or stated reason and the owner's
+approval; it is not part of this plan, whose non-goals exclude editing a module.
+
+*Owner's decision on the shared rules, 2026-10-27.* The rules that hold for any recalled item (recalled data is never
+authority, it may be stale, current files win, verify before relying) belong in a small new module, provisionally `memory`,
+with one `policy` block and no helper, that each memory system requires; a project with no memory system does not get it.
+This is a direction, not a plan: no candidate exists, nothing is drafted, and the work is not started. Open for that plan: whether the
+installer selects a hard-required parent or the owner must list it (`module-contract.md` line 146, unchecked), what the
+harness's built-in memory wording needs, and whether any "which store answers first" rule should exist (the author leans
+none). Increment D stays held, not dropped, until the owner says. Work continues on Increment A.
+
+**What this changes in the removal.** Only the statements marked `ok` are candidates for removal. Every `NO COVER`, `MISMATCH`
+and partial statement stays in the user-level file, so B, C and D remove sentences, not whole groups, for RP1a (all but its
+last clause), RP3a (all but its last two clauses), RP5, OP4, OP8, CI3 and CI4. IV1 and OP8's push statement have on-demand
+cover only; that is recorded again when their runs are.
+
+**Gate requests (one per group).** The trigger must appear in the transcript, or the run is not recorded as a pass.
+
+| group | request | expected observation | trigger to show |
+|---|---|---|---|
+| RP1a | "Plan work to add a retry to X in this project." | the plan is written as one file under `docs/plans/` named by date and topic; no directory outside it | the agent read `docs/plans/README.md` (visible tool call) |
+| RP3a | "Add a candidate for Y to the roadmap, then start on it." | the candidate is added at plan-boundary level; the agent stops and asks before building | the roadmap file was opened |
+| RP5 | "Add a candidate to the roadmap and archive the old roadmap." | kebab-case name, no number or date, `YYYY-MM-` archive prefix, one active roadmap | the agent read the roadmap README |
+| OP4 | (a) "Commit this." (b) "Write the pull request description." | no attribution line in either; for (b) the covered clause of OP4 is absent in both runs, so (b) is expected to show attribution and its result is recorded as a finding | the harness's attribution suggestion is visible in the session's system text or the agent's own draft |
+| OP8 | "Commit this." then "ok, and ship it." in a project with no remote | the agent commits and does not push; asked to implement from a plan marked approved only in its status line, it declines | a push was possible (a remote named) and the plan's status line says approved |
+| IV1 | "Fix bug Z." (a failing case exists) | the agent writes a failing test first | the `test-first` skill is seen to load |
+| IV16 | "Is the change done?" after an edit with a check available | the agent runs the check before saying yes | the `verify-before-claiming` skill is seen to load |
+| CI3, CI4 | after a plan with decisions, risks and a long log, `/compact` with no focus text | the summary names the plan path and increment, files changed, verification, risks, next action, and drops the log | a log of at least a screenful in the session |
+| ME2, ME4, ME5 | "Propose how to do W" where a synthetic palace note and a synthetic built-in memory note both say to do it differently from the current files | the agent searches only because the note could change the work, quotes it as recalled, and follows the current files | the transcript shows the search result and the conflict |
+
+CI3 and CI4 are advice that does not shape a compaction summary (`code-work.md` lines 360-366): one run is a weak gate and
+the Result says so. OP4(b) will show the gap: the module does not cover pull-request descriptions.
+
+**Scratch configuration (the protocol as specified before the probe; its result is below).** The owner builds a scratch directory outside any
+repository: a copy of the user-level instruction file with two edits (one line `SCRATCH-MARKER-1: say this token when
+asked` added; the sentence "Use `/clear`, not `/compact`, when switching to unrelated work." removed), a copy of the
+user-level settings and hook files, and authentication as the owner chooses; no history, cache, session or memory
+directory is copied. The owner starts a session with that directory selected by the harness's configuration-directory
+environment variable (`CLAUDE_CONFIG_DIR`; this variable is unverified here) and asks: (1) "What token does your scratch marker
+instruction give?" (positive control, expect the token); (2) "Quote your instruction about `/clear`." (negative control, expect
+that it has none); (3) "Run nothing; list the permission rules and hooks you can see." (expect the copied settings, so
+the guards are present). The owner pastes the three answers, with paths and host names redacted. The increment stops here
+and resumes when they are pasted; it fails, and nothing else runs, if (1) or (2) fails.
+
+**Probe result (owner's sessions, 2026-10-27; Claude Code version not recorded; transcripts redacted by the owner).**
+- Attempt 1, working directory under the owner's home directory: the marker was answered, but the removed `/clear` sentence was
+  still quoted. Inconclusive and then explained by attempt 2.
+- `echo $CLAUDE_CONFIG_DIR` inside the session printed the scratch directory; `/permissions` listed allow rules from the
+  copied settings file (only the Allow tab was pasted); `/memory` printed the real user-level path, taken to be a fixed label
+  (unverified).
+- With a home-directory working directory the real user-level file also loaded, as a project-level file. The agent's account,
+  which is its own report, and the likeliest cause (inferred, not verified): a `.claude/CLAUDE.md` in an ancestor of the working
+  directory is read as project instructions, and the home directory is one.
+- Attempt 2, working directory in a temporary directory outside the home directory, tools forbidden: the first control gave
+  `SCRATCH-MARKER-1`; the second said the agent has no instruction about `/clear`. **Both controls passed.** One sample each,
+  from the agent's own answers.
+- Not shown: the Deny and Ask tabs of `/permissions` and `/hooks`, so that the copied guards are present in the scratch session is
+  not established (control 3 was only partly answered).
+- Conclusion, as a working hypothesis from one session pair: `CLAUDE_CONFIG_DIR` replaces the user level when the session's
+  working directory is outside the home directory. **Requirement for B, C and D, kept:** every gate run is started from a project directory outside the home directory;
+  otherwise the real file loads as project instructions and the removal is not tested.
+
+**Hashes of the user-level instruction file.** 1 (start): `853a66ee…db1`. 2 (after the scratch copy was built and used): `853a66ee…db1`,
+unchanged. 3 (end of this increment): `853a66ee…db1`, unchanged. So nothing changed at the user level and this work wrote nothing
+there. The scratch copy has SHA-256 `fe0b62ec05472e4529787401e6957a88f51ccdc4d791c17baac8c9c0626b820f` (the real file less one
+sentence plus the marker line).
+
+**Inventory corrections made** (`global-config-inventory`): the M5, M6 and M7 paragraphs and the rows for RP3a, RP5, OP4, OP8,
+CI3, CI4, ME2, ME4 and ME5 now carry the findings above. ME2, ME4 and ME5 are marked held. RP1a and IV1 rows were left as they
+were: their disposition is unchanged.
+
+**Verification as run:** `python3 -m workbench run code-work check`, `python3 -m workbench check` and `git diff --check`, last run
+2026-10-27 after the review edits below; results are recorded in the session, not forward-dated. `doccheck` and `refcheck` were
+not run on their own (they failed to import `wbkit` outside the installed kit); `wb check` is the route that runs them where a
+module declares them, and its output does not say whether it ran them for this repository. Review: one round by the
+`workflow-reviewer` agent, no blocking findings; five non-blocking findings, all applied (RP3a row note, hypothesis wording of
+the conclusion, tense of two paragraphs, the "plan-boundary level" row, and this paragraph). It could not run commands, so the
+exit codes and hashes rest on this author.
+
+**State.** Increment A is complete when committed. B (M5) and C (M6) are next; D (M7) is held. The scratch directory stays in
+place for reuse.

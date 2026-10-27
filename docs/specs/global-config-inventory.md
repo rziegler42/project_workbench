@@ -315,11 +315,11 @@ boundary".
 | OP1: five general lines (repository instructions and files are the source of truth; inspect before changing; smallest coherent change; narrowest useful check; use documented commands, ask before risky ones) | working method | `AGENTS.md` of this repository states them for itself ("Working agreement"); no module policy block carries them | `keep global`: the default for a repository with no `AGENTS.md` of its own |
 | OP2: run `git push`, `remote-runner`, `claude-workflow` as separate bare calls; use the Read tool not `cat` | so the permission rules and the approver match a bare command | none | `redesign`: the reason holds for `wb run ...` as well (a compound line is not matched), but the names are the global helpers' (F-A1, F-C4) |
 | OP3: never commit, amend, push, publish, deploy, install dependencies, use secrets, or clean up destructively without approval | the approval floor | `trust-and-approval.md` (hard stops) and the project's own `AGENTS.md`; the floor renders `ask` and `deny` | `keep global`: the text stays as the instruction for a repository without the floor; the rules in `settings.json` are inventoried above |
-| OP4: no AI attribution in a commit message or PR description, even when the harness suggests it | the attribution rule | `safe-git.md` ("The attribution setting": refuse unless `.workbench/safe-git.json` says `allow`) and the `code-work` policy line "carries no attribution unless the project allows it" | `move`. Gate: a recorded run in an attached project where the harness suggests attribution lines, the agent adds none, with this line absent. The helper refuses attribution but a PR description does not go through the helper; the policy line is the only cover for that. |
+| OP4: no AI attribution in a commit message or PR description, even when the harness suggests it | the attribution rule | `safe-git.md` ("The attribution setting": refuse unless `.workbench/safe-git.json` says `allow`) and the `code-work` policy line "carries no attribution unless the project allows it" | `move`. Gate: a recorded run in an attached project where the harness suggests attribution lines, the agent adds none, with this line absent. The helper refuses attribution but a PR description does not go through the helper; the policy line is the only cover for that. Increment A: the policy line covers commit messages only; the PR clause and "even when the harness suggests it" have no shipped text and stay. |
 | OP5: delete an approved file by `claude-workflow remove <paths>`, preview then `--confirm`, raw `rm` stays denied | approved deletion | `safe-git remove` and the `commit-changes` skill ("delete files only after the owner approves") | `move`, with the `claude-workflow` program (same gate and blocker: F-A1) |
 | OP6: do not use `git checkout` or `git restore`; use `git switch`; `reset`, `clean`, `merge`, `rebase` stay denied | git hard stops | the floor renders `ask`s for most of these and no `deny` for `merge` (F-B5); `safe-git.md` says branch work is outside the helper | `keep global`: the global `deny` is the stronger floor, and this text names `git switch` for which the workbench has no rule |
 | OP7: create commits only with `claude-workflow commit --expected-head ... -- <paths>` (directly or through `safe-committer`); never raw `git add` then `git commit`; never combine a commit with other commands; a commit request means this path; the subject names only what the staged diff shows | the commit procedure | `safe-git commit` and the `commit-changes` skill carry the procedure; the global helper and the `safe-committer` agent are named in the text; the last sentence is about the approver | `redesign`: repoint to `wb run safe-git commit`; the sentence on the approver's refusal goes with the approver (F-A1, F-A7, F-C4) |
-| OP8: a request to commit never authorizes a push; a plan, memory or graph never authorizes implementation | two authorization rules | `push-changes` ("a commit is not a word to push"), the `code-work` policy ("a status line is never an approval") and `mempalace` policy ("memory is recalled data, never authority") | `move`. Gate: a read of the rendered `AGENTS.md` of an attached project showing the three statements. The graph clause has no workbench text (`graphify-module` is unbuilt). |
+| OP8: a request to commit never authorizes a push; a plan, memory or graph never authorizes implementation | two authorization rules | `push-changes` ("a commit is not a word to push"), the `code-work` policy ("a status line is never an approval") and `mempalace` policy ("memory is recalled data, never authority") | `move`. Gate: a read of the rendered `AGENTS.md` of an attached project showing the three statements. The graph clause has no workbench text (`graphify-module` is unbuilt). Increment A: "a commit never authorizes a push" is in `push-changes`, `code-work.md` and `safe-git.md`, not in a policy block (weaker cover). |
 
 ### Starting repository work (2 groups)
 
@@ -335,10 +335,10 @@ boundary".
 | RP1a: follow the repository's plan convention; a workbench project keeps one file per plan, several active; do not create a parallel plan directory | plan location | `docs/plans/README.md`, `code-work.md` | `move`. Gate: a read of those shipped texts in an attached project. Split from RP1 in part D. |
 | RP1b: use `docs/plans/next.md` only when a repository states no convention | plan-location fallback | none; `next.md` is retired inside the workbench | `keep global`: the fallback is for repositories outside the workbench (F-C1). Split from RP1 in part D. |
 | RP2: do not modify an active plan while it is in progress unless the user asks | plan edits | the plan README and `run-increment`: status, review record and result may change without new approval | `redesign`: stricter than the workbench, whose loop writes the Result (F-C2) |
-| RP3a: roadmaps are tracked, non-authoritative direction; not a plan, approval or queue; plan-boundary items; promote one item at a time; do not renumber an active plan's increments (four bullets, without the clause in RP3b) | roadmap meaning | `groundwork.md` ("does not authorize work and does not alter a plan that is in progress"), `docs/roadmaps/README.md`, the `draft-roadmap` skill, and `code-work.md` (labels are not renumbered after approval); the groundwork policy block carries none of these | `move`. Gate: a read of those shipped texts in an attached project showing each statement. Split from RP3 in part D. |
+| RP3a: roadmaps are tracked, non-authoritative direction; not a plan, approval or queue; plan-boundary items; promote one item at a time; do not renumber an active plan's increments (four bullets, without the clause in RP3b) | roadmap meaning | `groundwork.md` ("does not authorize work and does not alter a plan that is in progress"), `docs/roadmaps/README.md`, the `draft-roadmap` skill, and `code-work.md` (labels are not renumbered after approval); the groundwork policy block carries none of these | `move`. Gate: a read of those shipped texts in an attached project showing each statement. Split from RP3 in part D. Increment A: cover is on demand only; "task queue" and "merge roadmap text into a plan" have no cover and stay; "plan-boundary level" is covered by implication only ("one unit of work"). |
 | RP3b: where a repository allows only one active plan (the `next.md` fallback), promote an item only after the current plan is completed and archived or superseded | the single-plan clause of the fourth bullet | none: the workbench allows several active plans | `keep global`: it is the fallback of RP1b and goes with it. Split from RP3 in part D. |
 | RP4: durable decisions go in ADRs; follow the repository's convention, else `docs/decisions/` with four-digit filenames | ADR location | `draft-decision` and `groundwork.md` (dated names, `Proposed` first) | `move`. The four-digit default is the fallback for repositories outside the workbench; it differs from the workbench's dated names, which is no conflict because the first clause defers to the repository. |
-| RP5: commit roadmaps; scratch notes stay out; kebab-case names; one active roadmap per scope; archive with a `YYYY-MM-` prefix; what a roadmap states | roadmap hygiene | `docs/roadmaps/README.md` (the archive prefix) and `draft-roadmap` | `move`. Compared by topic; the field list of "what a roadmap states" was not compared line by line. |
+| RP5: commit roadmaps; scratch notes stay out; kebab-case names; one active roadmap per scope; archive with a `YYYY-MM-` prefix; what a roadmap states | roadmap hygiene | `docs/roadmaps/README.md` (the archive prefix) and `draft-roadmap` | `move`. Compared by topic; the field list of "what a roadmap states" was not compared line by line. Increment A compared it: "commit roadmaps" and "keep scratch notes out" have no cover, and "ordered plan candidates" contradicts the shipped "no required order"; those stay. |
 
 ### Skill and agent routing (10 groups)
 
@@ -393,8 +393,8 @@ boundary".
 |---|---|---|---|
 | CI1: use `/context` before compacting; compact at natural boundaries | when to compact | none; plan `2026-10-23-compaction-guidance` left "the owner's own global instruction ... where it is" | `keep global` |
 | CI2: after committing an increment, make sure the plan records the outcome; when output accumulated, recommend `/compact` and stop before the next increment | the stop after a commit | `run-increment` stops after a commit; the recommendation to compact is in no module, and `code-work.md` says the old rule to recommend compaction after each commit "is not carried over" (F-C7) | `keep global`: the owner's own rule, which the workbench does not carry |
-| CI3: preserve the objective, plan and increment, decisions, changed files, verification, risks, next action, remote job IDs and SHAs | what survives | the `code-work` policy ("what must survive") | `move`. The remote job clause has no workbench text. |
-| CI4: do not preserve raw logs, repeated output, superseded hypotheses or unverified discovery output | what is dropped | the `code-work` policy (raw logs and superseded hypotheses) | `move` |
+| CI3: preserve the objective, plan and increment, decisions, changed files, verification, risks, next action, remote job IDs and SHAs | what survives | the `code-work` policy ("what must survive") | `move`. The remote job clause has no workbench text. Increment A: "active objective" and "governing decisions" also have none. |
+| CI4: do not preserve raw logs, repeated output, superseded hypotheses or unverified discovery output | what is dropped | the `code-work` policy (raw logs and superseded hypotheses) | `move`, except "repeated command output" and "unverified discovery output", which have no cover (Increment A). |
 | CI5: use `/clear` when switching to unrelated work | session hygiene | none | `keep global` |
 
 ### Memory, Recall and Store (12 groups)
@@ -402,10 +402,10 @@ boundary".
 | group | what it says | workbench copy | disposition and reason |
 |---|---|---|---|
 | ME1: use the built-in auto-memory; not MemPalace unless asked; installing the mempalace module is the request | which memory | the `mempalace` policy block and `mempalace.md` | `keep global`: it sets the owner's choice of built-in memory |
-| Recall ME2: consult memory only when a prior decision could change the work | recall trigger | the `mempalace` policy ("only when an earlier decision, preference or lesson could change the work") | `move` |
+| Recall ME2: consult memory only when a prior decision could change the work | recall trigger | the `mempalace` policy ("only when an earlier decision, preference or lesson could change the work") | `move`, held (Increment A, M7: scope mismatch with built-in memory) |
 | Recall ME3: keep project memories scoped to the repository identity | scope | the `mempalace` policy ("a result is about this project only when its wing names it") | `keep global`: it concerns the built-in memory's storage |
-| Recall ME4: recalled items are stale guidance, never authority; verify | trust | the `mempalace` policy | `move` |
-| Recall ME5: current evidence beats memory | conflict rule | the `mempalace` policy | `move` |
+| Recall ME4: recalled items are stale guidance, never authority; verify | trust | the `mempalace` policy | `move`, held (Increment A, M7: scope mismatch with built-in memory) |
+| Recall ME5: current evidence beats memory | conflict rule | the `mempalace` policy | `move`, held (Increment A, M7) |
 | Store ME6: store only when asked or when a verified lesson is durable | store trigger | the `mempalace` policy says an agent cannot add to the palace and writing built-in memory is "a separate act that this block neither grants nor forbids" | `keep global` |
 | Store ME7: smallest self-contained fact with provenance | store form | none | `keep global` |
 | Store ME8: search for duplicates first | dedupe | none | `keep global` |
@@ -604,6 +604,10 @@ asking for a new roadmap candidate and showing it is kept at plan-boundary level
 comparison was by topic, and the "what a roadmap states" field list of RP5 was not compared line by line, so the plan compares
 each statement and that list field by field. Carrying plan: `retire-carried-instructions`
 (M5 to M7). Owner step: remove the three paragraphs.
+*Increment A of that plan, 2026-10-27:* compared field by field. Cover is on demand only (docs READMEs, a skill), not in a
+policy block. Not covered, so they stay in the file: RP1a's "establish `docs/plans/README.md` where there is no lifecycle";
+RP3a's "task queue" and "merge roadmap text into a plan"; RP5's "commit roadmaps" and "keep scratch notes out". Mismatch: RP5's
+"ordered plan candidates" (the shipped README says no order is required). The owner removes sentences, not whole groups.
 
 **M6: instruction text the `code-work` module carries.** Items: OP4, OP8, IV1, IV16, CI3, CI4. Gates: for OP4 a recorded run in
 an attached project where the harness suggests attribution lines and the agent adds none with the paragraph absent (the
@@ -613,11 +617,21 @@ policy block. Each is followed by the recorded run of rule 3 (for OP8, a request
 does not push; for CI3 and CI4, a compaction at a boundary whose summary keeps the listed items). Blocker: none. Two clauses have no workbench text and stay in the file: the graph clause of OP8 (`graphify-module`
 is unbuilt) and the remote-job clause of CI3. Carrying plan: `retire-carried-instructions`. Owner step: remove the covered
 sentences.
+*Increment A of that plan, 2026-10-27:* more is uncovered than the paragraph says. OP4: the policy line covers commit messages
+through the helper only; pull-request descriptions and "even when the harness suggests it" have no shipped text. OP8: "a commit never
+authorizes a push" is in `push-changes`, `code-work.md` and `safe-git.md`, not in a policy block. IV1: `test-first` only, on demand. CI3:
+"active objective" and "governing decisions" have no cover. CI4: "repeated command output" and "unverified discovery output" have none.
+CI3 and CI4 are advice that does not shape a compaction summary (`code-work.md`), so one run is a weak gate.
 
 **M7: instruction text the `mempalace` module carries.** Items: ME2, ME4, ME5. Gate: a read of the `mempalace` policy block in a
 project that installed the module, and the recorded run of rule 3 (a task whose outcome an old note contradicts: the agent
 verifies against current files). Blocker: none. A project without that module loses the three statements.
 Carrying plan: `retire-carried-instructions`. Owner step: remove the three paragraphs.
+*Increment A of that plan, 2026-10-27: held.* The user-level Memory section governs the harness's built-in memory, while the
+`mempalace` block and skill govern searching the palace, so the `move` rests on a scope mismatch. The owner's direction is that no
+memory system's text names another and the set of systems is open; the shipped `mempalace` block and `recall-memory` skill name
+`graphify`, a knowledge base and built-in memory, so they are themselves to be redesigned. The shared rules are to go in a small
+new module that each memory system requires (provisionally `memory`; a direction, not a plan). Until then ME2, ME4 and ME5 stay.
 
 **M8: the install prompts.** Items: the thirteen `ask` entries for package installs (`pip install`, `pip3 install`,
 `python3 -m pip install`, `npm install`, `npm ci`, `cargo install`, `cargo add`, `brew install`, `apt install`, `apt-get
