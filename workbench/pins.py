@@ -215,12 +215,19 @@ def _preview(data):
     return "\n".join(shown + ([more] if more else []))
 
 
-def run(store, project_id, name, helper, root, stdin, stdout, err, kit=None):
+TERMINAL_ONLY = ("pinning is owner-run: standard input and output must both be terminals. Run this command "
+                 "yourself, from your own terminal.")
+
+
+def run(store, project_id, name, helper, root, stdin, stdout, err, kit=None, log=None):
     """Pin `helper` (a file inside `root`) under `name`; with `kit`, to run through the kit runner.
-    Returns the exit code."""
-    if not (approve.is_terminal(stdin) and approve.is_terminal(stdout)):
-        return _refuse(err, "pinning is owner-run: standard input and output must both be "
-                            "terminals. Run this command yourself, from your own terminal.")
+    Returns the exit code.
+
+    `log`, given by the command line when the owner has set the level of ``wb pin`` to ``none`` for this project
+    (``levelrun.route``), is ``log(digest, apply) -> exit code``: the command then runs without a terminal and asks
+    nothing, and `log` runs `apply` (the pin) between an attempt and an outcome."""
+    if log is None and not (approve.is_terminal(stdin) and approve.is_terminal(stdout)):
+        return _refuse(err, TERMINAL_ONLY)
     try:
         check_id(project_id)
         check_name(name)
@@ -243,18 +250,30 @@ def run(store, project_id, name, helper, root, stdin, stdout, err, kit=None):
             display.ascii_text(existing.path), existing.sha256, existing.time))
     stdout.write("  beginning of the file:\n%s\n\n" % _preview(data))
     stdout.write("From now on `launch` runs exactly these bytes and refuses any other. Read the "
-                 "file first.\nTo pin it, type the first %d characters of the sha256 shown above "
-                 "and press Enter.\nAnything else cancels and records nothing.\n> " % CONFIRM_CHARS)
-    stdout.flush()
-    if stdin.readline(200).strip() != digest[:CONFIRM_CHARS]:
-        stdout.write("cancelled: nothing was recorded\n")
-        return 1
+                 "file first.\n")
+    if log is not None:
+        stdout.write("The level of wb pin is none here, so nothing is asked: it is pinned now.\n")
+        stdout.flush()
+    else:
+        stdout.write("To pin it, type the first %d characters of the sha256 shown above "
+                     "and press Enter.\nAnything else cancels and records nothing.\n> " % CONFIRM_CHARS)
+        stdout.flush()
+        if stdin.readline(200).strip() != digest[:CONFIRM_CHARS]:
+            stdout.write("cancelled: nothing was recorded\n")
+            return 1
     try:
         if hash_bytes(_read_helper(root_abs, rel)) != digest:
             return _refuse(err, "the helper changed while it was shown; nothing was recorded")
-        pin = set_pin(store, project_id, name, rel, digest, approve.approver_name(), kit=kit)
     except PinError as exc:
         return _refuse(err, str(exc))
-    stdout.write("pinned %s -> %s (sha256 %s)\n" % (display.ascii_text(pin.name),
-                                                    display.ascii_text(pin.path), pin.sha256))
-    return 0
+
+    def apply():
+        try:
+            pin = set_pin(store, project_id, name, rel, digest, approve.approver_name(), kit=kit)
+        except PinError as exc:
+            return _refuse(err, str(exc))
+        stdout.write("pinned %s -> %s (sha256 %s)\n" % (display.ascii_text(pin.name),
+                                                        display.ascii_text(pin.path), pin.sha256))
+        return 0
+
+    return apply() if log is None else log(digest, apply)

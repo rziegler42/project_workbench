@@ -29,8 +29,8 @@ ambiguous blank.
 |---|---|
 | Setup | not applicable (standard library only; nothing to install) |
 | Run locally | `python3 -m workbench verify [<package> \| --dir <path>] [--select <module> ...] [--no-harness-required]` |
-| Owner-run: approve a package or one module (terminal only) | `python3 -m workbench approve (<package> \| --source <url> [--ref <ref>]) [--module <name>]` |
-| Owner-run: pin a helper's content (terminal only) | `python3 -m workbench pin <project-id> <name> <helper> --root <project-dir> [--kit N]` |
+| Owner-run: approve a package or one module (terminal only; at `wb approve` set to `none`, an agent may run it with no terminal, which lets an agent make a package trusted) | `python3 -m workbench approve (<package> \| --source <url> [--ref <ref>]) [--module <name>]` |
+| Owner-run: pin a helper's content (terminal only; at `wb pin` set to `none`, an agent may run it for the project it works in) | `python3 -m workbench pin <project-id> <name> <helper> --root <project-dir> [--kit N]` |
 | Preview an install (read-only) | `python3 -m workbench preview install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Owner-run: install a new project (terminal only; with `wb install` set to `none` in the personal settings and the harness attached afterwards, an agent may run it with no terminal and nothing typed, and each such run is logged) | `python3 -m workbench install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Preview an adoption (read-only) | `python3 -m workbench preview adopt [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |

@@ -11,7 +11,7 @@ import re
 import sys
 
 from . import (acknowledge, agent_gate, approvalcmd, approve, attach, check, command_gate, delegation, firstparty,
-               gate_hook, harnesses, install, launch, levels, pins, planapprovals, preview, recover, rendering,
+               gate_hook, harnesses, install, launch, levelrun, levels, pins, planapprovals, preview, recover, rendering,
                settings, settingscmd, sources, store, target, upgrade, verify)
 from . import commands as module_commands
 from .wbkit import display, safefs
@@ -126,6 +126,37 @@ def _release(distribution, out, err):
     for warning in done.warnings:
         out.write("warning: %s\n" % _clean(warning))
     return 0
+
+
+def _levelled(guarded, key, terminal_only, stdin, out, err, project_id=None, root=None):
+    """``(log, code)`` for an owner-run command whose level the owner may set to ``none`` (``levelrun.route``, read for the
+    project the working directory is in). `log` is None at a terminal, and the command goes on as always; at a verified
+    ``none`` it is ``log(digest, apply)``, which runs `apply` between the attempt and the outcome. `code` is an exit code
+    when the command must stop here. `project_id` and `root` are the project the command acts on, which must be the one the
+    level was read for."""
+    def refuse(text):
+        err.write("refused: %s\n" % _clean(text))
+        return None, 1
+
+    try:
+        route = levelrun.route(guarded, os.getcwd(), key, stdin, out, terminal_only)
+    except levelrun.Refusal as exc:
+        return refuse(str(exc) if str(exc) == terminal_only else "%s (%s)" % (terminal_only, exc))
+    except OSError as exc:
+        return refuse("%s (the working directory cannot be read: %s)" % (terminal_only, exc.strerror or "unknown error"))
+    if route.terminal:
+        return None, None
+    if project_id is not None and project_id != route.project_id:
+        return refuse("the project the level was read for is not the project %s; nothing was recorded" % project_id)
+    # The root is read as the command spells it (`pins.run` takes its absolute path, `..` collapsed before links are followed),
+    # so it must name the project the same way with or without following links.
+    if root is not None and not (os.path.abspath(root) == os.path.realpath(root) == os.path.realpath(route.root)):
+        return refuse("the project the level was read for is not the one at the root given; nothing was recorded")
+
+    def log(digest, apply):
+        return levelrun.apply_logged(guarded, route, key, digest, apply, err, lambda stream, text: refuse(text)[1])
+
+    return log, None
 
 
 def _open_store(store_root, err):
@@ -466,19 +497,26 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
             return 1
         return launch.run(guarded, args.project_id, args.name, args.root, args.args, err)
     notes += launch.install_wrapper(guarded, distribution or firstparty.default_distribution())
+    stdin = stdin if stdin is not None else sys.stdin
     if args.command == "pin":
         for note in notes:
             err.write("warning: %s\n" % _clean(note))
-        return pins.run(guarded, args.project_id, args.name, args.helper, args.root,
-                        stdin if stdin is not None else sys.stdin, out, err, kit=args.kit)
+        log, code = _levelled(guarded, "wb pin", pins.TERMINAL_ONLY, stdin, out, err, args.project_id,
+                               args.root)
+        if code is not None:
+            return code
+        return pins.run(guarded, args.project_id, args.name, args.helper, args.root, stdin, out, err, kit=args.kit,
+                        log=log)
     if args.command == "release-approvals":
         return _release(distribution, out, err)
     if args.command == "approve":
         for note in notes:
             err.write("warning: %s\n" % _clean(note))
-        return approve.run(guarded, args.package, args.module,
-                           stdin if stdin is not None else sys.stdin, out, err, distribution,
-                           args.source, args.ref or "HEAD")
+        log, code = _levelled(guarded, "wb approve", approve.TERMINAL_ONLY, stdin, out, err)
+        if code is not None:
+            return code
+        return approve.run(guarded, args.package, args.module, stdin, out, err, distribution,
+                           args.source, args.ref or "HEAD", log=log)
 
     result = verify.verify_package(path, select=args.select,
                                    harness_required=not args.no_harness_required,

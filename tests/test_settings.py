@@ -576,8 +576,8 @@ class LevelsTest(SettingsBase):
                 self.assertEqual(1, len(got.notes))
                 self.assertIn("wb attach", got.notes[0])
 
-    def test_install_adopt_upgrade_and_add_offer_none_and_nothing_else(self):
-        for key in ("wb install", "wb adopt", "wb upgrade", "wb add"):
+    def test_the_installer_commands_and_approve_and_pin_offer_none_and_nothing_else(self):
+        for key in ("wb install", "wb adopt", "wb upgrade", "wb add", "wb approve", "wb pin"):
             with self.subTest(key=key):
                 self.assertEqual("none", self.effective({"version": 2, "levels": {key: "none"}})[1].levels[key])
                 for level in ("ask", "delegated"):

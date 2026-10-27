@@ -4,7 +4,7 @@ Status: Current
 
 Written by plan `2026-10-26-command-permission-levels` (Increment H), which built it. It describes the levels table, the keys, the
 log, the rendering record, the command gate and `approve-plan` at the levels `ask` and `none`. One key, `approve-plan`, is built
-beyond `block` (and, from the plan `2026-10-27-a-level-for-every-command`, `wb install`, `wb adopt`, `wb upgrade` and `wb add` offer `none`); every other key offers `block` only. Extending a review (`wb run review-engine extend`) was part of the design,
+beyond `block` (and, from the plan `2026-10-27-a-level-for-every-command`, `wb install`, `wb adopt`, `wb upgrade`, `wb add`, `wb approve` and `wb pin` offer `none`); every other key offers `block` only. Extending a review (`wb run review-engine extend`) was part of the design,
 was not built, and is listed under "Not built". The design is `docs/decisions/2026-10-26-per-command-permission-levels.md`, as refined by
 `docs/decisions/2026-10-26-permission-levels-as-built.md` (accepted), which states what stands, what changed and what was not built;
 where the two differ on the defaults or the offered levels, this spec follows the later record.
@@ -101,7 +101,7 @@ separated by single spaces, at most 96 characters.
 - `block`: every key.
 - `delegated`: `approve-plan` only, whose gate is a converged, sealed review of the exact bytes (`delegation.py`). The gate must
   pass at the moment of the run, and the run counts only while the table still reads `delegated`.
-- `ask`: `approve-plan` only. `none`: `approve-plan`, `wb install`, `wb adopt` (built by Increment F), `wb upgrade` and `wb add` (built by Increment G), every agent-safe action and
+- `ask`: `approve-plan` only. `none`: `approve-plan`, `wb install`, `wb adopt` (built by Increment F), `wb upgrade` and `wb add` (built by Increment G), `wb approve` and `wb pin` (built by Increment H), every agent-safe action and
   every declared module argument that is not owner-run; no other key offers it yet. A key offers a level only from the version that builds it for that command; `accept-decision`
   and every other key offer `block` only.
 
@@ -237,7 +237,7 @@ give one key are a refusal.
 
 ## Planned: a level for every command
 
-Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B, C, D, E, F and G are
+Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B, C, D, E, F, G and H are
 built). It is the owner's direction of 2026-10-26, recorded here so a plan can implement it. Calls marked **(call)** are the
 author's and are not the owner's until the owner confirms them.
 
@@ -275,7 +275,7 @@ key the table does not mention, and a table entry wins in either direction, so l
 only the four level names, and a `translated` line says what a checkpoint word was read as. This replaces the rule that a key's level is the stricter of its checkpoint reading and its
 table entry **(call)**.
 
-**One way to run at `none`** (built by Increment D; no command but `approve-plan` uses it yet). Two modules hold what every owner-run
+**One way to run at `none`** (built by Increment D; `approve-plan`, `install`, `adopt`, `upgrade`, `add`, `approve` and `pin` use it). Two modules hold what every owner-run
 command shares. The kit's `wbkit/levels.py` is the part that needs nothing else of the workbench: `may_run(level, terminal)` is true
 at a terminal and, without one, only for the level `none` (a missing, unreadable or unknown level is no level, so only a terminal
 runs), and the log's attempt and outcome lines and their append (`begin`, `finish`, `finish_refused`), which `levellog.py` calls
@@ -313,6 +313,27 @@ written just before the first write and the outcome after the last: `done` with 
 be written, nothing is written; an outcome that cannot be written after the writes exits 3 and says so. The command takes the same
 arguments and no flag, and the `deny` is removed only for the `wb` spelling, as for `install`. `levelrun.apply_logged` is the one place
 that writes the attempt and the outcome for these four commands.
+
+**`approve` and `pin` at `none`** (built by Increment H). The keys `wb approve` and `wb pin` offer `block` and `none`. **At `none` an agent can
+make a package or a helper trusted**, which is what the accepted decision `2026-10-26-a-level-for-every-command` records as the owner's
+choice: an approval is what lets the installer verify and gate a package, and a pin is what lets `launch` run a helper. The level is read
+by the command line for the project the working directory is in (`levelrun.route`); at a terminal nothing is read and the typed
+confirmation applies as before. Without one, `none` holds only while the rendering holds, and any other state refuses with the
+terminal-only message. At `none` the command prints what the owner would have been shown (the request of `approve`, the path, size and
+hash of the helper for `pin`), asks nothing, runs the same checks (the package verifies, or the helper is read inside the project root; a
+second read must give the same hashes) and writes the attempt (`wb approve` or `wb pin`, `none`, `digest:<the full tree hash of the
+package or module, or the sha256 of the helper>`) just before the first record and the outcome after the last. `approve` is machine-wide
+and compares no project; `pin` acts on the project named by its `<project-id>` and its `--root`, which must be the project the level was read for (the
+same id and the same directory), or it refuses and writes nothing. An approval already on file changes nothing and writes no entry. The first-party approvals the installer
+ships are not touched: only the package and module records of the approved content, the pin file and the level log are written. If
+the attempt cannot be written nothing is recorded; an outcome that cannot be written after the records exits 3. `approve --source` fetches
+into the cache before the attempt is written, as an `install` does. An approval that stops part way (a store error) exits 1 and says which
+records it wrote, and its logged outcome reads `refused before writing`, which is then not exact; the stderr report is.
+Limits, accepted for now: the connection and the cache write of `approve --source` happen before the attempt is logged, as for `install`, so
+a fetch that fails or is already approved leaves no entry; `approve` is machine-wide, but the level is read for the project the working
+directory is in, so an agent in any project where the owner set `wb approve` to `none` can approve for every project; and the level is
+read once, before the fetch and the second verification, so a harness edit made in between is seen at the next run. `pin` reads its
+`--root` as spelled and refuses one that names the project only through a link or `..`.
 
 **Out of scope.** The compiled hard-stop floor is unchanged and is not a key (see "Non-goals").
 

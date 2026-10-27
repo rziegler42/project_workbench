@@ -566,3 +566,40 @@ matches", though a `none` key has no `ask` rule, and it does not name `~` or `$V
 
 **Not covered:** `wb upgrade` and `wb add` at `none` were not run by an agent (only `install` was); `approve`, `pin`, `acknowledge`,
 `recover`, `release-approvals`, `attach` and `accept-decision` are not built yet. The trial does not repeat for them unless the owner asks.
+
+### Increment H — built, not committed (2026-10-27)
+
+**Done.** `wb approve` and `wb pin` offer `block` and `none` (`levels._OFFERS`). `cli._levelled` reads the level for the project the
+working directory is in (`levelrun.route`) and gives `approve.run` and `pins.run` a `log(digest, apply)` at a verified `none` (nothing
+at a terminal); these commands cannot import `levelrun` without a cycle, so the command line holds the route. At `none` they print what
+the owner would have been shown, ask nothing, run the same checks (verification and the second verification; the helper read and read
+again) and the attempt (`digest:` the full tree hash, or the helper's sha256) is written just before the records and the outcome after.
+`pin` refuses unless its `<project-id>` and `--root` are the project the level was read for. An approval already on file writes no
+entry. The spec says, in `command-permissions.md` and `trust-and-approval.md`, that at `none` an agent can make a package or a helper
+trusted. Exit codes and the terminal path are unchanged.
+
+**Verification as run.** `tests/test_approve_pin_levels.py` (30 tests) was written first and failed on the terminal refusal against
+the old code; it passes now. The offers tests were updated. Full suite `python3 -B -W error tests/run_all.py`: `Ran 5068 tests in 10
+roots`, `OK` (before the `--root` test and fix; the file alone: 30 OK after); `wb check` and the plan check: no problems.
+**Not verified:** nothing under a real harness for these two keys.
+
+**Review.** One round by the `reviewer` agent: no blocking findings. Applied: `pin` also compares `--root` with the project root the
+level was read for (test added); the stale "no command but approve-plan uses it" sentence in the spec. Recorded, not changed: no test for
+`approve --source` at `none`, a terminal-path run with typed confirmation, or `_record` stopping part way (the logged outcome then
+reads `refused before writing`, which the spec says is not exact).
+
+**Found, not changed (the command gate).** With any of these single-word keys relaxed, the gate blocks every command that holds the
+launcher `wb` and the word, in either order: `wb run safe-git commit --subject 'Add tests'` with `wb add` relaxed, `'Install docs'`
+with `wb install`, `'Upgrade the parser'` with `wb upgrade`, and with `wb pin` also `mapping`, `shipping` or `spinner` (the word is
+matched inside other words, after the punctuation is removed). With `wb approve` relaxed, `wb approve-plan` is blocked too. Found by
+running `judge` on those commands after Increment G; the owner trial did not cover a commit. The owner chose to build H as planned and
+to fix the gate separately; a Proposed decision and a plan amendment are needed.
+
+**Security review (H, read only; the reviewer's probes were refused).** No Critical or High finding. Medium: the fetch of `approve
+--source` and its cache write happen before the attempt is logged, so a failed or already-approved fetch leaves no entry; the same is
+true of `install`, and the spec now says so. Low, applied: `pin --root` spelled through a link and `..` passed the `realpath` check
+while `pins.run` read another directory (reproduced by a test that failed, then fixed: the root must name the project with or without
+following links). Low, recorded in the spec: the outcome text for a partial approval; the level read once before the fetch;
+`approve` is machine-wide but its level is read for the working directory's project. Sound (read only): `route` and the rendering
+record, the attempt-before-change order, the `_on_file` shortcut, the digest binding of the pin, `--ref` and source checks, the exact
+project-id comparison. Not tested by the reviewer: any experiment. `tests/test_approve_pin_levels.py` is now 31 tests.

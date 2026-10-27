@@ -33,7 +33,7 @@ class RegistryError(ValueError):
 
 # The levels beyond ``block`` that a key offers in this version, by key.
 _OFFERS = {APPROVE_PLAN: (DELEGATED, ASK, NONE), "wb install": (NONE,), "wb adopt": (NONE,), "wb upgrade": (NONE,),
-           "wb add": (NONE,)}
+           "wb add": (NONE,), "wb approve": (NONE,), "wb pin": (NONE,)}
 # The shipped default of a key that is not ``block``; none yet among the owner-run keys.
 _DEFAULTS = {}
 # An agent-safe action, and a declared module argument that is not owner-run, is one an agent may run today, so it

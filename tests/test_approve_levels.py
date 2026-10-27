@@ -278,10 +278,11 @@ class OfferedLevels(Ask):
 
     def test_no_other_owner_run_key_offers_ask_or_none(self):
         """An agent-safe key offers `none` (increment A of 2026-10-27-a-level-for-every-command); an owner-run key still
-        offers `block` only until the increment that builds it (`wb install` and `wb adopt` by increment F, `wb upgrade` and `wb add` by increment G)."""
+        offers `block` only until the increment that builds it (`wb install` and `wb adopt` by increment F, `wb upgrade` and `wb add` by increment G, `wb approve` and `wb pin` by increment H)."""
         agent = set(levels.agent_keys())
         built = {"approve-plan": ("block", "delegated", "ask", "none"), "wb install": ("block", "none"),
-                 "wb adopt": ("block", "none"), "wb upgrade": ("block", "none"), "wb add": ("block", "none")}
+                 "wb adopt": ("block", "none"), "wb upgrade": ("block", "none"), "wb add": ("block", "none"),
+                 "wb approve": ("block", "none"), "wb pin": ("block", "none")}
         for name, key in levels.registry(checkpoints=("a", "accept-decision")).items():
             if name not in agent:
                 self.assertEqual(built.get(name, ("block",)), key.offers, name)
