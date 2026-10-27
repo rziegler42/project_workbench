@@ -5,8 +5,10 @@ records, first-party shipped approvals, the approval request and gate, the owner
 commands, the inert download and the launcher are built (`module-approvals`), and "Concrete formats" records what
 the code does. Acknowledgement (the baseline check and `wb acknowledge`) is built (`ownership-and-upgrade`). The rendering into the Claude harness is built (`claude-harness`). Plan approval records (`2026-10-22-plan-approval-records`) are built. The `caps` setting, `wb settings` and the
 edit gate (`2026-10-22-checkpoint-settings-and-caps`) are built. The delegated plan approval
-(`2026-10-23-delegated-approval`) is built in the installer from its increment D; the opencode rendering is not built
-yet, and its record formats and setting names remain proposals. The rules are the substance.
+(`2026-10-23-delegated-approval`) is built in the installer from its increment D. The per-command permission levels
+(`2026-10-26-command-permission-levels`: the `levels` table of the personal settings, `approve-plan` at `ask` and `none`, the log,
+the rendering record and the command gate) are built and specified in `command-permissions.md`. The opencode rendering is not
+built yet, and its record formats and setting names remain proposals. The rules are the substance.
 
 Terms are defined in `terms.md`. Places and manifests are defined in
 `repository-boundary.md`. Declarations are defined in `module-contract.md`.
@@ -217,7 +219,8 @@ Rules:
   A convenience allowance is personal and lives in the owner's own configuration.
 - A rule is rendered into local, uncommitted harness configuration only.
 - A harness that provides `permissions` renders a `deny` for each owner-run command, so an
-  agent cannot run it: `wb install`, `wb adopt`, `wb upgrade`, `wb add`, `wb attach`, `wb acknowledge`,
+  agent cannot run it (except a command the owner has set to `ask` or `none`, which renders as `command-permissions.md`
+  says): `wb install`, `wb adopt`, `wb upgrade`, `wb add`, `wb attach`, `wb acknowledge`,
   `wb recover`, `wb approve`, `wb pin`, `wb release-approvals` and `wb approve-plan`, in the `wb` spelling and
   the four interpreter spellings of `-m workbench` (`rules.SPELLINGS`). The read-only `wb preview` is not denied. The commands
   are listed in `installer-interface.md`. A module command may also declare owner-run arguments
@@ -339,7 +342,8 @@ prose above and this section differ in precision, this section is what the code 
 - **Initialization.** Every command makes sure the store exists, then seeds `settings` if it is
   missing, then makes sure `bin/wb` exists.
 - **Settings.** The file `settings` is strict JSON:
-  `{"checkpoints": {"<name>": "stop" | "delegate"}, "floor": ["<id>", ...], "version": 1}`. A
+  `{"checkpoints": {"<name>": "stop" | "delegate"}, "floor": ["<id>", ...], "version": 1}`. The reader also accepts
+  `"version": 2` with an object `"levels"` (`command-permissions.md`); the file is seeded at version 1. A
   checkpoint name is lowercase kebab-case, at most 64 characters; the names themselves are defined
   by a way of working. A checkpoint that is missing, malformed or not exactly `delegate` reads as
   `stop`. A damaged file, a wrong version, or a file that is not a regular file is reported on the
@@ -405,20 +409,22 @@ prose above and this section differ in precision, this section is what the code 
   since approval` (the region, the process declaration or the helper). Otherwise it is `not approved`. A project
   with no process module that declares `approval`, with more than one, or a command that cannot run, is a
   refusal and not a status.
-- **`approve-plan <plan>`** (owner-run; terminal on both standard input and standard output). One argument and no
-  option, run from anywhere inside the project, with the root and the ID found as `wb run` finds them. `<plan>` is
+- **`approve-plan <plan>`** (owner-run; terminal on both standard input and standard output; the owner may instead set it to
+  `ask` or `none` in the `levels` table, and then it also runs without a terminal, as `command-permissions.md` says). One
+  argument and no option (at `ask` a second form, `<plan> --digest <32 hex>`), run from anywhere inside the project, with the root and the ID found as `wb run` finds them. `<plan>` is
   read relative to the current directory (or absolute) and converted to a path relative to the root; it is
   refused if it is outside the root, empty, holds a NUL or a `..`, or has a link in any component, the last one
   included, or is not a regular file. It shows the root, the plan, the process module, the first 12 characters of
   the declaration and helper hashes, the `unhashed` names and the region hash, and says if an older entry for
   the plan exists. It records only when the first 12 characters of the region hash are typed back, after running
   the command again and finding the two reports equal. Exit codes: 0 recorded or already recorded, 1 refused or
-  cancelled with nothing written, 2 usage error, 130 interrupted. The typed text is friction, not authentication;
-  the barrier is the harness's deny rule.
+  cancelled with nothing written, 2 usage error, 3 recorded but the level log could not take the outcome (only without a
+  terminal), 130 interrupted. The typed text is friction, not authentication; the barrier is the harness's deny rule.
 - **`plan-status <plan>`** (read-only, agent-safe). The same argument and path rules. It writes nothing and prints
   one line on standard output, `approved: <plan>`, `changed since approval: <plan> (<what differs>)` or `not
   approved: <plan>`; a refusal prints a `refused:` line on standard error and nothing on standard output. Exit
-  codes: 0 approved, 1 anything else, 2 usage error.
+  codes: 0 approved, 1 anything else, 2 usage error. `plan-status <plan> --digest` is the read-only preview of
+  `approve-plan` at `ask`: it prints what an approval would bind and a line `digest: <32 hex>`, writes nothing and exits 0.
 - **Limits.** The gate is a command and a rule. Nothing stops an agent that does not ask it. The helper is the
   authority on what the region is, as far as its owner-approved bytes go, and a helper that misreports it defeats
   the approval; the record binds the helper's hash so that an edit of it is a change.

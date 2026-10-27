@@ -40,7 +40,7 @@ or an evidence note.
 | [`action-review.md`](action-review.md) | Draft design of the action-review engine: the `describe` interface of the module that owns an action, the verdict, the thin hook |
 | [`knowledge-tools.md`](knowledge-tools.md) | The three knowledge modules (`mempalace`, `graphify`, the knowledge base): which problem each owns, routing, shared conventions |
 | [`mempalace.md`](mempalace.md) | The module that lets an agent search the owner's MemPalace; owner-run commands build it |
-| [`command-permissions.md`](command-permissions.md) | Draft design of the per-command permission levels (`block`, `delegated`, `ask`, `none`) in the owner's personal settings |
+| [`command-permissions.md`](command-permissions.md) | The per-command permission levels (`block`, `delegated`, `ask`, `none`) in the owner's personal settings: the table, the log, the rendering record, the command gate and `approve-plan` at `ask` and `none` |
 | [`remote-runner.md`](remote-runner.md) | The module that gives a project its remote job profiles and a guarded way to submit, inspect and fetch |
 | [`security-review.md`](security-review.md) | The module that gives a project a security review: one skill and one confined agent, provided as the capability `security-review` |
 | [`harness-modules.md`](harness-modules.md) | How a harness module describes one AI runtime |

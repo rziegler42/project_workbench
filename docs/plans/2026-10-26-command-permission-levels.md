@@ -985,3 +985,27 @@ was by reading, and it listed the strings it would try. The author ran each of t
 
 Verification as run: `python3 -B -W error tests/run_all.py` (4724 tests in 10 roots, OK); `git diff --check` clean;
 `python3 -m workbench check` no problems. The specs and documentation of Increment H are not started.
+
+Committed as `0858b12` (the fixes from that review).
+
+Increment H, steps 1 and 2, 2026-10-26: the specs and documentation, written after the security checkpoint above. Changed:
+`docs/specs/command-permissions.md` rewritten as `Current` (what is built, what is not built, the verified trials, the accepted limits
+and the untested questions, acceptance criteria that match the code); `trust-and-approval.md` (the levels table in the settings, the
+two forms and exit code 3 of `approve-plan`, `plan-status --digest`, the rendering exception); `installer-interface.md` (the command
+table and the sections for `approve-plan`, `plan-status`, `settings` and the new `gate-command`); `code-work.md` (`accept-decision` is
+not delegable; the table of levels); `harness-modules.md` (the layout fields `hooks.command_gate` and `local_settings.shared`, the
+command gate hook, the interactive `ask` statement); `docs/specs/README.md` (the index row); `docs/development.md` (the command table
+rows, a new "Permission levels" section covering turning a level on, what the agent does, what is not stopped, blocked Bash calls,
+the log, and the release step after a module edit). `review-engine.md` is unchanged because Increment G was deferred.
+
+Choices made: the spec lists "Not built" (extend, the other keys, the strictest-of-several-keys rule, a re-render command, a
+provenance check) and "Untested" (the `Monitor` tool and a skill's `!` shell, agent and skill files that set a permission mode,
+user-level `disableAllHooks`, mid-session hook removal, the settings edit, act, restore sequence) so that nothing there reads as
+built or verified. A search of the living documents for the old wording ("Draft design", "does not exist yet", "increments F and
+G", a 12-character digest) found none. The accepted decision `2026-10-26-per-command-permission-levels` was not edited; it still
+says the defaults of `approve-plan` and `extend` become `ask`, that `accept-decision` offers `ask`, that the digest is 12 characters,
+and that `extend` is built, which the build and the later decisions changed; the owner decides whether a new record should supersede
+or clarify it.
+
+Verification as run: `git diff --check` clean; `python3 -m workbench check` and the plan check no problems (the groundwork module's
+`doccheck` and `refcheck` run inside `wb check`). Not run: the owner's document checks (step 3).

@@ -42,7 +42,7 @@ module needs no extra file for it. Field names are proposals.
 | `root` | The root instruction file: its name and how it is built, or `none`. The file and the file it imports are each a plain Markdown name (letters, digits, `-` and `_`, ending `.md`), so the file the installer writes is an instruction file and not a script or configuration file of some other tool. |
 | `kinds` | For each of `skill`, `agent`, `command`: the directory, the file layout, and the field mapping from the neutral front matter. A kind the harness lacks is absent. |
 | `local_settings` | The per-clone file that receives rendered permission rules and hooks, or `none`. Its `path` is a safe path of exactly two segments (not git metadata, not under `.workbench`, not the guarded store): a dot-directory, then a non-blank name ending `.json`; the layout's `exclude` must cover it. The installer cannot know that the harness reads the file, so the owner's approval of the layout is what stops a settings file the tool ignores. |
-| `hooks` | Where hooks are declared, or `none`. |
+| `hooks` | Where hooks are declared, or `none`. With `event`, `timeout` and `block_code` and a `targets` table it describes the edit gate's hook; it may also carry `command_gate`, `{tool, field, timeout}`, the Bash hook that the installer renders when a command is set to `ask` or `none` (`command-permissions.md`, "The command gate"); the timeout must exceed the gate's own 10-second deadline. `local_settings` may carry `shared`, the harness's shared project settings file, which the layout does not write; the installer hashes it and denies edits to it while the command gate is rendered. |
 | `exclude` | The paths to add to `.git/info/exclude` at attach. |
 | `tolerated` | Literal paths, each inside a directory the layout writes into, that the harness or the owner may keep there; `wb check` does not warn about them. Optional, at most 16. |
 | `notes` | Post-install notes for steps the installer cannot perform. |
@@ -265,7 +265,7 @@ carry out each request; the permission results are read from the run's `permissi
 - **A project `deny` held** against the global `allow`, and held with the global default mode `auto`: the command was denied and
   did not run.
 - **A project `ask` held** against the global `allow`, with `auto`, and with `bypassPermissions`: the command did not run. In
-  `-p` mode an `ask` is denied and not prompted, so what an interactive session shows is not established.
+  `-p` mode an `ask` is denied and not prompted; an interactive session was established later (the next section but one).
 - **A global hook ran** for commands the project denied and for commands it asked on, so a project cannot switch one off.
 - **A global skill replaced a project skill of the same name** (two runs). The skill that loaded was the global one.
 - **A project agent replaced a global agent of the same name** (one run).
@@ -462,6 +462,11 @@ hook. The rendered entry is fixed by the layout and not chosen by any module. Th
   verified in the documentation; `notebook_path` is documented for permission rules only and `MultiEdit` is not in
   the current documentation (see "Evidence"), so both are unverified and the gate refuses a call whose field is
   missing. No documented tool names several files.
+- **The command gate** is a second hook in the same event, for the layout's `command_gate.tool` (for Claude, `Bash`), rendered only
+  when a command is set to `ask` or `none` and the harness provides `hooks`: `wb gate-command <harness> || exit <block_code>`
+  with the layout's time limit. It is specified in `command-permissions.md`; its trials are "A Bash hook with an exit code and an `ask`
+  rule" and the repeated spelling probe in the plan `2026-10-26-command-permission-levels`. With either hook the deny below also
+  covers the shared settings file.
 - **The deny.** With a hook, the rendered deny list also covers edits to `.claude/settings.local.json` and
   `.git/info/exclude`, each spelled from the project root and with a `**/` prefix (the owner edits both by hand),
   so an agent cannot delete the hook, and also by the real path of the project (`Edit(//<root>/.claude/settings.local.json)`

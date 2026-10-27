@@ -236,14 +236,17 @@ step without a recorded outcome.
 | submit a remote job on a profile the plan declares | `submit-remote-job` | stop | delegable |
 | fetch the output of a remote job | `fetch-remote-output` | stop | delegable; overwriting an existing or tracked file is a hard stop |
 | change a spec's or roadmap's direction | `change-direction` | stop | delegable |
-| accept a decision | `accept-decision` | stop | delegable |
+| accept a decision | `accept-decision` | stop | not delegable: only the owner accepts a decision (`AGENTS.md`); it offers `block` only in the levels table |
 | acknowledge changes made by someone else, first tier | `acknowledge-first-tier` | stop | only by explicit setting |
 | acknowledge changes made by someone else, second tier | `acknowledge-second-tier` | stop | delegable |
 
 The setting names are what the module declares in `checkpoints` and what the owner writes under `checkpoints` in
 the personal settings (`trust-and-approval.md`). Setting `delegate` takes effect for `approve-plan` only
 (built by `delegated-approval`, increment D); every other checkpoint stops, whatever the setting says. `wb settings`
-reports the effective values.
+reports the effective values. The owner may also set a key, `approve-plan` among them, to `ask` or `none` in the `levels` table
+(`command-permissions.md`); the checkpoint names are the keys of that table, and only `approve-plan` offers a level beyond `block`.
+The `delegable` marks above describe what a way of working may allow; they do not make a checkpoint delegable until the installer
+builds it, and the installer builds `approve-plan` only.
 
 Delegability *(built by plan `2026-10-23-delegated-approval`, increment C; the installer's use of it is increment D)*.
 The module's helper has a read-only subcommand, `delegable <plan>`, that tells the installer whether a plan may be

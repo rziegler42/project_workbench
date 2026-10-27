@@ -175,12 +175,13 @@ says so.
 | `pin` | package | a project id, a name, a helper, `--root` | the guarded store: a pin (the installer pins declared helpers itself; this is for any other) | yes | built |
 | `launch` | package | a project id, a name, `--root`, arguments after `--` | a private copy of the pinned helper under `bin/run/` while it runs, removed afterwards | no | built |
 | `release-approvals` | package | nothing | the shipped first-party records in the workbench distribution | no | built |
-| `approve-plan` | project | a plan path | the guarded store: a plan approval record | yes, owner-run | built |
-| `plan-status` | project | a plan path | nothing | no | built |
+| `approve-plan` | project | a plan path, and at `ask` `--digest <32 hex>` | the guarded store: a plan approval record, and the level log when it runs without a terminal | yes, owner-run; the owner may set it to `ask` or `none` | built |
+| `plan-status` | project | a plan path, optionally `--digest` | nothing | no | built |
 | `delegate-approve-plan` | project | a plan path | the guarded store: a delegated plan approval record | no, agent-run | built |
 | `settings` | project | nothing | nothing | no | built |
 | `gate` | project | a harness name, and the hook's JSON on standard input | nothing | no | built |
 | `agent-gate` | project | a harness name, an agent name, and the hook's JSON on standard input | nothing | no | built |
+| `gate-command` | project | a harness name, and the hook's JSON on standard input | nothing | no | built |
 
 - `verify --no-harness-required` turns off the rule that a selection needs a harness module
   (`module-contract.md`). It is a check option and installs nothing, so it does not weaken a
@@ -590,11 +591,13 @@ plan made and the owner may still change.
 
 ### `approve-plan` and `plan-status` (built by plan `2026-10-22-plan-approval-records`, increment C)
 
-`wb approve-plan <plan>` and `wb plan-status <plan>` take exactly one argument and no option, and run from
+`wb approve-plan <plan>` and `wb plan-status <plan>` take exactly one argument and no option (`approve-plan <plan> --digest <32
+hex>` and `plan-status <plan> --digest` are the two forms of the permission levels, in `command-permissions.md`), and run from
 anywhere inside a project. They do not take the target options: the root and the ID come from the finder that `wb run`
 uses, with the same refusals. The behaviour, the path rules, the record, the output and the exit codes are in
 `trust-and-approval.md`, "Plan approval records". `approve-plan` is owner-run and terminal-only and a harness
-denies it to the agent; `plan-status` is read-only and agent-safe. Neither commits, pushes or edits a plan, and
+denies it to the agent, unless the owner sets it to `ask` or `none` (`command-permissions.md`); `plan-status` is read-only and
+agent-safe. Neither commits, pushes or edits a plan, and
 neither reads a plan itself: the process module's declared, pinned command does.
 
 ### `delegate-approve-plan` *(built by plan `2026-10-23-delegated-approval`, increment D)*
@@ -612,7 +615,8 @@ itself: the process module's declared, pinned commands do.
 `wb settings` takes no argument and no option and runs from anywhere inside a project, with the root and the ID
 found as `wb run` finds them. It resolves exactly one process module, none or more than one being a refusal, reads
 its verified declaration and prints, on standard output, one line per declared checkpoint, `checkpoint <name>:
-stop` or `checkpoint <name>: delegate`, then one line per declared cap, `cap <name>: <n>`, then one `settings:
+stop` or `checkpoint <name>: delegate`, then one line per declared cap, `cap <name>: <n>`, then one `level <key>: <level>`
+line per key it knows (`command-permissions.md`, "`wb settings`"), then one `settings:
 <text>` line per problem in the owner's settings. It is read-only and agent-safe. Exit codes: 0 printed, 1 refused
 (a `refused:` line on standard error and nothing on standard output), 2 usage error.
 
@@ -624,6 +628,12 @@ name that is not a known harness whose layout declares that table is a refusal. 
 prints nothing, and exits 0 to allow and 2 to refuse; any usage error is also 2, because the hook treats exit 2
 alone as a block. The rules, the deadline and the refusals are in `trust-and-approval.md`, "Checkpoint and cap
 settings, and the edit gate". Neither command writes in the project, and neither writes in the store beyond the bootstrap above.
+
+`wb gate-command <harness>` takes exactly one argument, the name of a first-party harness whose layout describes `hooks.command_gate`,
+and reads the harness's Bash hook JSON from standard input. It is the command the second rendered hook runs when a key is set to
+`ask` or `none`. The tool and the field that holds the command text are the layout's data. It is read-only and agent-safe, prints
+nothing, and exits 0 to allow and 2 to block; every failure is a block, because the hook treats exit 2 alone as a block. The rules
+are in `command-permissions.md`, "The command gate".
 
 ## The existing commands
 

@@ -55,10 +55,11 @@ ambiguous blank.
 | Show a project's remote job profiles | `python3 -m workbench run remote-runner profiles` (the `remote-runner` module's command; reads `.workbench/remote-runner.toml`, starts no program; `wb check` also reports a refused file and a leftover `.claude/remote-runner.toml`; see `docs/specs/remote-runner.md`) |
 | Fetch a finished job's files into the project | `python3 -m workbench run remote-runner fetch <job> <path> ... [--dest <folder>] [--as <name>]` (1 to 16 paths; refuses a target that exists or goes through a link; never overwrites; fetched files are untrusted). `fetch-overwrite` (same arguments, passes the program's `--force`) is owner-run only and is denied to the agent in the rendered Claude settings |
 | Ask for runners, check a job, list its artifacts, submit a declared profile | `python3 -m workbench run remote-runner recommend --profile <name>`, `... status <job> [--expect <40 hex>]`, `... artifacts <job>`, `... submit (--remote <name> \| --best) --profile <name> [--ref <ref> \| --snapshot]` (starts only the external `remote-runner` program, found in an absolute `PATH` entry outside the project; prints one JSON line; submit only on the owner's word; tests use a fake program) |
-| Owner-run: approve a plan (terminal only) | `python3 -m workbench approve-plan <plan>` from anywhere in the project: one argument, no option; runs the project's declared approval command and records the plan's path and region hash after the owner types back the first 12 characters |
-| Is a plan approved (read-only) | `python3 -m workbench plan-status <plan>`: prints `approved:`, `changed since approval:` or `not approved:` and exits 0 only for the first (agent-safe) |
-| Show the checkpoint and cap values that apply (read-only) | `python3 -m workbench settings` from anywhere in the project: no argument, no option; prints `checkpoint <name>: stop\|delegate` and `cap <name>: <n>` lines for what the process module declares, then a `settings:` line per problem in the owner's settings (agent-safe) |
+| Owner-run: approve a plan (terminal only) | `python3 -m workbench approve-plan <plan>` from anywhere in the project: one argument, no option; runs the project's declared approval command and records the plan's path and region hash after the owner types back the first 12 characters. With the key `approve-plan` set to `ask` in the personal settings (`levels`, version 2; attach the harness again afterwards) an agent may run `approve-plan <plan> --digest <32 hex>` with the digest `plan-status <plan> --digest` printed; at `none` it runs with no digest. Exit codes: 0 recorded, 1 refused, 2 usage, 3 recorded but the level log could not take the outcome, 130 interrupted. See `docs/specs/command-permissions.md` |
+| Is a plan approved (read-only) | `python3 -m workbench plan-status <plan>`: prints `approved:`, `changed since approval:` or `not approved:` and exits 0 only for the first (agent-safe). `plan-status <plan> --digest` prints what an approval would bind and a line `digest: <32 hex>`, writes nothing and exits 0 |
+| Show the checkpoint and cap values that apply (read-only) | `python3 -m workbench settings` from anywhere in the project: no argument, no option; prints `checkpoint <name>: stop\|delegate` and `cap <name>: <n>` lines for what the process module declares, then a `level <key>: <level>` line for every key it knows (the declared checkpoints, the installer's owner-run commands, and `wb run <command> <argument>` for the installed modules' owner-run arguments), then a `settings:` line per problem in the owner's settings (agent-safe). The settings file is seeded at version 1; change `version` to 2 by hand to add a `levels` object |
 | Decide one call of a confined agent (read-only; the agent's hook runs it) | `python3 -m workbench agent-gate <harness> <agent>` with the hook's JSON on standard input: no output and exit 0 to allow; one `refused:` line on standard error and exit 2 to refuse, for a write outside the scratch directory or a command no pinned pattern matches ("The agent gate" in `docs/specs/harness-modules.md`); run by hand it is `echo '{...}' \| python3 -m workbench agent-gate <harness> <agent>` from inside a project (agent-safe) |
+| Decide one Bash command (read-only; the harness's second hook runs it when a key is set to `ask` or `none`) | `python3 -m workbench gate-command <harness>` with the hook's JSON on standard input: no output and exit 0 to allow; one `refused:` line on standard error and exit 2 to block, for a command that names the relaxed command and is not exactly the simple command the `ask` rule matches, and for every failure (agent-safe; see `docs/specs/command-permissions.md`, "The command gate") |
 | Decide one edit (read-only; the harness's hook runs it) | `python3 -m workbench gate <harness>` with the hook's JSON on standard input: no output and exit 0 to allow; one `refused:` line on standard error and exit 2 to refuse, for an edit while a plan under way is not approved; run by hand it is `echo '{...}' \| python3 -m workbench gate <harness>` from inside a project (agent-safe) |
 | Release time: write the approvals shipped with first-party packages | `python3 -m workbench release-approvals` |
 | Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
@@ -592,6 +593,31 @@ the records are read from the installed workbench, never copied into the guarded
   and exits 0.
 - A first-party package changed since release has no shipped approval for its new hashes,
   so its modules are checked against the guarded store like any other package.
+
+## Permission levels
+
+`docs/specs/command-permissions.md` is the specification. In practice:
+
+- **Turning a level on.** Back up `~/.config/project-workbench/settings`, change `"version"` to 2 and add `"levels": {"approve-plan": "ask"}`
+  (or `"none"`). Nothing changes in a project until the harness is attached again, which writes the rendering record and the harness
+  files; `wb attach` refuses a clone that already records a harness, so use a new clone. `wb settings` prints a `level <key>:
+  <level>` line for every key. Every default is `block`.
+- **What it asks of the agent.** The agent runs `wb plan-status <plan> --digest`, shows you the preview, and runs
+  `wb approve-plan <plan> --digest <digest>` as one simple command on its own; the harness then prompts you. A command that wraps or
+  rewrites it (`bash -c`, `env`, a quote splice, an escape, an expansion) is blocked by `wb gate-command`, and a command that only
+  names `approve-plan` (a `grep`, a commit message) is blocked too while the level is relaxed; run those yourself.
+- **What it cannot stop.** A script or program that makes the call, a word built from variables or encodings, and a shell that writes
+  the guarded store: see "Limits" in the spec. Leave a key at `block` if you do not accept them.
+- **When Bash calls are blocked.** While a key is relaxed, `wb gate-command` runs on every Bash call. If the store, the settings file
+  or the installed modules cannot be read, it blocks every call, `wb check` included. Fix it from your own terminal. "Yes, and don't
+  ask again" in the prompt writes an allow rule into `.claude/settings.local.json`; the changed file makes the keys read `block`
+  until the harness is attached again in a new clone.
+- **The level log.** `~/.config/project-workbench/level-log` is plain text, one line per attempt and one per outcome. It is not
+  pruned; it holds about 4 MiB, and a full log refuses runs above `block`, so rotate it by hand.
+- **After editing a first-party module.** Any change under `packages/workbench/<module>/`, its `tests/` included, changes the
+  module's hash and stales its shipped approvals. The project's own edit gate then refuses file edits until the owner runs
+  `python3 -m workbench release-approvals` and removes the obsolete records it warns about with
+  `python3 -m workbench run safe-git remove --recursive -- <paths>`.
 
 ## The approval request
 
