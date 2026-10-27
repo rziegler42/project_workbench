@@ -1,8 +1,8 @@
 """The real `action-review` module in `packages/workbench/`: its declaration, its file list and what the skeleton
 helper refuses (`docs/specs/action-review.md`, "The rule schema, the module and the checks").
 
-Plan `2026-10-26-action-review-engine`, increment B. The package tree hash changes with this module, so the shipped
-approvals are stale until the owner runs `release-approvals`."""
+Plan `2026-10-26-action-review-engine`, increment B, and increment D for the shipped rules. The package tree hash changes
+with this module, so the shipped approvals are stale until the owner runs `release-approvals`."""
 
 import io
 import json
@@ -18,6 +18,7 @@ ROOT = support_install.ROOT
 PACKAGE = os.path.join(ROOT, "packages", "workbench")
 MODULE = os.path.join(PACKAGE, "action-review")
 HELPER = "helper/action-review"
+RULES = ("rules/safe-git-commit.json", "rules/safe-git-remove.json")
 
 
 def declaration():
@@ -42,7 +43,8 @@ class Declaration(unittest.TestCase):
         self.assertEqual("module", document["type"])
         self.assertEqual(["action-review"], document["provides"])
         self.assertEqual(["model-bridge"], document["requires"])
-        self.assertEqual([HELPER], document["ships"])
+        # The files are listed, not their directory: a shipped item named `rules` is a word the installer may not use.
+        self.assertEqual([HELPER, *RULES], document["ships"])
         for field in ("writes", "fills", "checks", "helpers", "blocks", "slots", "layout"):
             self.assertNotIn(field, document)
 
@@ -59,14 +61,14 @@ class Declaration(unittest.TestCase):
         self.assertEqual((), parsed.owner)
         self.assertEqual([], rules.command_owner_patterns("action-review", parsed.owner))
 
-    def test_every_file_is_the_declaration_or_the_helper(self):
+    def test_every_file_is_the_declaration_the_helper_or_a_shipped_rule(self):
         found = []
         for base, dirs, files in os.walk(MODULE):
             if base == MODULE:
                 dirs.remove("tests")  # the module's own tests are not part of what it installs
             for name in files:
                 found.append(os.path.relpath(os.path.join(base, name), MODULE))
-        self.assertEqual(sorted(["module.json", HELPER]), sorted(found))
+        self.assertEqual(sorted(["module.json", HELPER, *RULES]), sorted(found))
 
     def test_the_package_lists_it(self):
         with open(os.path.join(PACKAGE, "package.json"), encoding="utf-8") as handle:
@@ -90,14 +92,14 @@ class Helper(unittest.TestCase):
             self.assertTrue(err.startswith("refused: usage: action-review review"), (argv, err))
             self.assertEqual(1, len(err.splitlines()), argv)
 
-    def test_the_known_argument_is_still_refused_because_the_engine_is_not_built(self):
+    def test_a_command_outside_a_project_is_refused_for_want_of_rules(self):
         code, out, err = self.call("review", "wb run safe-git commit")
         self.assertEqual((1, ""), (code, out))
-        self.assertIn("not built", err)
+        self.assertIn("no rule is trusted", err)
 
     def test_it_imports_only_the_standard_library_and_the_kit(self):
         imported = set(re.findall(r"^(?:import|from) ([a-z_.]+)", self.text(), re.M))
-        self.assertEqual({"collections", "os", "sys"}, imported)
+        self.assertEqual({"collections", "os", "re", "sys", "wbkit"}, imported)
 
     def test_it_starts_no_process_and_opens_no_connection(self):
         text = self.text()

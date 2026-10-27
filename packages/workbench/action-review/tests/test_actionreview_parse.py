@@ -202,10 +202,13 @@ class Review(unittest.TestCase):
             self.assertEqual((1, ""), (code, out), argv)
             self.assertTrue(err.startswith("refused: usage: action-review review"), (argv, err))
 
-    def test_a_text_inside_the_grammar_is_still_refused_because_no_rule_is_loaded_yet(self):
-        code, out, err = self.call("review", "wb run safe-git commit 'x y' a")
-        self.assertEqual((1, ""), (code, out))
-        self.assertIn("not built", err)
+    def test_a_text_inside_the_grammar_is_refused_for_want_of_rules_outside_a_project(self):
+        with tempfile.TemporaryDirectory() as scratch:
+            out, err = io.StringIO(), io.StringIO()
+            code = HELPER.main(["review", "wb run safe-git commit 'x y' a"], io.BytesIO(b""), out, err,
+                               os.path.realpath(scratch))
+        self.assertEqual((1, ""), (code, out.getvalue()))
+        self.assertTrue(err.getvalue().startswith("refused: no rule is trusted: "), err.getvalue())
 
 
 def reference_accepts(text, declared=DECLARED):

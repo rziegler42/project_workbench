@@ -1,0 +1,54 @@
+{
+  "format": 1,
+  "spelling": [
+    "wb",
+    "run",
+    "safe-git"
+  ],
+  "subcommand": "commit",
+  "module": "safe-git",
+  "action": "commit",
+  "flags": {
+    "--expected-head": {
+      "type": "value",
+      "required": true
+    },
+    "--subject": {
+      "type": "value",
+      "required": true
+    },
+    "--body": {
+      "type": "value"
+    },
+    "--trailer": {
+      "type": "multi"
+    },
+    "--leave-other-staged": {
+      "type": "boolean"
+    }
+  },
+  "positionals": {
+    "name": "paths",
+    "separator": true,
+    "min": 1,
+    "max": 61
+  },
+  "checks": [
+    "head_matches",
+    "repo_config_safe",
+    "staging_state_ok",
+    "paths_valid",
+    "message_valid",
+    "paths_not_credentials",
+    "paths_regular",
+    "facts_complete",
+    "no_secret_lines"
+  ],
+  "rubric": "commit",
+  "questions": [
+    "message_matches_change",
+    "scope_is_coherent",
+    "change_is_safe_in_itself",
+    "no_reviewer_directed_text"
+  ]
+}

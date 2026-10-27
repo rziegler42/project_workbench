@@ -15,17 +15,58 @@ string. Anything else is unreviewable. The rules, the checks and the bridge call
 
 import collections
 import os
+import re
 import sys
+
+from wbkit import jsonstrict, project, safefs
 
 USAGE = "usage: action-review review [--log-row] <command text>"
 MAX_TEXT = 4096
+# The installed place of the rule files, below the project root. The helper runs as a private copy with nothing beside
+# it, so it cannot find them "beside itself"; like the review setting, they are read from the project.
+RULES_DIR = ".workbench/workbench/action-review/rules"
+MAX_RULE = 16384
+MAX_RULES = 64
+MAX_RULES_BYTES = 262144
+MAX_ARGUMENTS = 61
+FORMAT = 1
+FIELDS = ("format", "spelling", "subcommand", "module", "action", "flags", "positionals", "checks", "rubric",
+          "questions", "lists")
+OPTIONAL = frozenset(("lists",))
+# The engine's fixed list of code checks. A rule may name only these; the functions arrive with the checks.
+CHECKS = ("head_matches", "repo_config_safe", "staging_state_ok", "paths_valid", "message_valid",
+          "paths_not_credentials", "paths_regular", "facts_complete", "no_secret_lines", "confirm_present",
+          "removal_valid", "ignore_status_known", "preview_matches_arguments", "no_git_metadata")
+LIST_NAMES = ("credential_names", "reviewer_facing_paths")
+FLAG_TYPES = ("value", "multi", "boolean")
+SPELLING_WORD = re.compile(r"[A-Za-z0-9._/:=@%+,-]{1,64}")
+MODULE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,63}")
+ACTION = re.compile(r"[a-z][a-z0-9-]{0,31}")
+FLAG = re.compile(r"--[a-z][a-z0-9-]{0,31}")
+NAME = re.compile(r"[a-z][a-z0-9_]{0,63}")
 BARE = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._/:=@%+,-")
 
 Word = collections.namedtuple("Word", ("text", "quoted"))
 
 
 class Unreviewable(Exception):
-    """The text does not fit the grammar, so it is not reviewed and approves nothing."""
+    """The text does not fit the grammar or a rule, so it is not reviewed and approves nothing."""
+
+
+class RulesUnavailable(Exception):
+    """The rules directory cannot be used at all, so no rule is trusted to match and every review is refused."""
+
+
+class RuleError(Exception):
+    """One rule file does not load. The reason is fixed text and never quotes the file."""
+
+
+class AnyWord:
+    """The `declared` set of the first parse, which finds the rule: every dash word passes, and the second parse,
+    with the rule's own flags, refuses the ones it does not declare."""
+
+    def __contains__(self, word):
+        return True
 
 
 def parse_words(text, declared=frozenset()):
@@ -99,8 +140,254 @@ def split_command(words, spelling, subcommand):
     return list(words[count + 1:])
 
 
-def run(argv):
-    """Check the arguments and the text; return the refusal text. The rest is not built yet."""
+Flag = collections.namedtuple("Flag", ("type", "required"))
+Group = collections.namedtuple("Group", ("name", "separator", "min", "max"))
+Rule = collections.namedtuple("Rule", ("file", "spelling", "subcommand", "module", "action", "flags", "positionals",
+                                       "checks", "rubric", "questions", "lists"))
+# A file that did not load, or shares its key: `key` is its spelling and subcommand words when both are valid, else
+# None, and then `stem` (the file name without ``.json``) is matched against the command's first words.
+Blocked = collections.namedtuple("Blocked", ("file", "key", "stem"))
+Loaded = collections.namedtuple("Loaded", ("rules", "errors", "blocked"))
+
+
+def _text(value, pattern):
+    if not isinstance(value, str) or not pattern.fullmatch(value):
+        raise RuleError("a field is not in its form")
+    return value
+
+
+def _names(value, limit, pattern=None, allowed=None):
+    """A list of at most `limit` distinct strings, each in `pattern` or in `allowed`."""
+    if not isinstance(value, list) or len(value) > limit:
+        raise RuleError("a list is not a list of at most %d entries" % limit)
+    for item in value:
+        if allowed is not None:
+            if item not in allowed:
+                raise RuleError("a list names something that is not in the engine's fixed list")
+        else:
+            _text(item, pattern)
+    if len(set(value)) != len(value):
+        raise RuleError("a list repeats an entry")
+    return tuple(value)
+
+
+def _spelling(value):
+    if not isinstance(value, list) or not 1 <= len(value) <= 4:
+        raise RuleError("the spelling is not a list of one to four words")
+    for index, word in enumerate(value):
+        _text(word, SPELLING_WORD)
+        if word.startswith(("-", "=")) or (index == 0 and "=" in word):
+            raise RuleError("the spelling holds a word that could be read as a flag or an assignment")
+    return tuple(value)
+
+
+def _key(body):
+    """The spelling and subcommand of a rule document as one tuple, or None when either is not valid."""
+    try:
+        return _spelling(body.get("spelling")) + (_text(body.get("subcommand"), ACTION),)
+    except RuleError:
+        return None
+
+
+def _flags(value):
+    if not isinstance(value, dict) or len(value) > 32:
+        raise RuleError("the flags are not an object of at most 32 entries")
+    flags = {}
+    for name, spec in value.items():
+        _text(name, FLAG)
+        if not isinstance(spec, dict) or not set(spec) <= {"type", "required"} or spec.get("type") not in FLAG_TYPES:
+            raise RuleError("a flag is not a type of value, multi or boolean, with an optional required")
+        required = spec.get("required", False)
+        if type(required) is not bool:
+            raise RuleError("a flag's required is not true or false")
+        flags[name] = Flag(spec["type"], required)
+    return flags
+
+
+def _positionals(value):
+    if not isinstance(value, dict) or set(value) != {"name", "separator", "min", "max"}:
+        raise RuleError("the positionals are not exactly one group of name, separator, min and max")
+    low, high = value["min"], value["max"]
+    for number in (low, high):
+        if type(number) is not int or not 0 <= number <= MAX_ARGUMENTS:
+            raise RuleError("a count of positionals is not a whole number from 0 to %d" % MAX_ARGUMENTS)
+    if low > high or type(value["separator"]) is not bool:
+        raise RuleError("the group's min exceeds its max, or its separator is not true or false")
+    return Group(_text(value["name"], ACTION), value["separator"], low, high)
+
+
+def _lists(value):
+    if not isinstance(value, dict):
+        raise RuleError("the lists are not an object")
+    lists = {}
+    for name, items in value.items():
+        if name not in LIST_NAMES or not isinstance(items, list) or len(items) > 256:
+            raise RuleError("a list is not one the engine knows, of at most 256 entries")
+        for item in items:
+            if not isinstance(item, str) or not 1 <= len(item) <= 256 or not all(" " <= c <= "~" for c in item):
+                raise RuleError("a list entry is not printable ASCII of 1 to 256 characters")
+        if len(set(items)) != len(items):
+            raise RuleError("a list repeats an entry")
+        lists[name] = tuple(items)
+    return lists
+
+
+def build_rule(name, body):
+    """The `Rule` that the document `body` of the file `name` describes, or `RuleError`."""
+    if not set(body) <= set(FIELDS):
+        raise RuleError("it has a field that is not in the schema")
+    for field in FIELDS:
+        if field not in body and field not in OPTIONAL:
+            raise RuleError("the field %s is missing" % field)
+    if type(body["format"]) is not int or body["format"] != FORMAT:
+        raise RuleError("the format is not %d" % FORMAT)
+    spelling = _spelling(body["spelling"])
+    subcommand, module, action = (_text(body["subcommand"], ACTION), _text(body["module"], MODULE),
+                                  _text(body["action"], ACTION))
+    if subcommand != action:
+        raise RuleError("the subcommand is not the action")
+    if spelling[:2] == ("wb", "run") and spelling[-1] != module:
+        raise RuleError("a wb run spelling does not end with the module")
+    if name != "%s-%s.json" % (module, action):
+        raise RuleError("the file name is not <module>-<action>.json")
+    return Rule(name, spelling, subcommand, module, action, _flags(body["flags"]), _positionals(body["positionals"]),
+                _names(body["checks"], 32, allowed=CHECKS), _text(body["rubric"], NAME),
+                _names(body["questions"], 16, NAME), _lists(body["lists"]) if "lists" in body else None)
+
+
+def load_rules(root):
+    """Every rule file under `root`: a `Loaded` of the rules that load, the errors by file name, and the keys that no
+    command may use because a file for them does not load or two files share them. `RulesUnavailable` when the
+    directory cannot be read or holds too much."""
+    rules, errors, blocked = [], [], []
+    try:
+        with safefs.Root(root, "project root") as tree:
+            entries = tree.list_dir(RULES_DIR, lenient=True)
+            if entries is None:
+                raise RulesUnavailable("the rules directory is missing")
+            if len(entries) > MAX_RULES:
+                raise RulesUnavailable("the rules directory holds more than %d files" % MAX_RULES)
+            total = 0
+            for name, kind in entries:
+                if not name.endswith(".json"):
+                    continue
+                key = None
+                try:
+                    if kind != "file":
+                        raise RuleError("it is not a regular file")
+                    try:
+                        data = tree.read_if_present(RULES_DIR + "/" + name, MAX_RULE)
+                    except safefs.SafeFsError:
+                        raise RuleError("it cannot be read, has another link or is larger than %d bytes"
+                                        % MAX_RULE) from None
+                    if data is None:
+                        raise RuleError("it disappeared while it was read")
+                    total += len(data)
+                    if total > MAX_RULES_BYTES:
+                        raise RulesUnavailable("the rules hold more than %d bytes" % MAX_RULES_BYTES)
+                    try:
+                        body = jsonstrict.parse_object(data, MAX_RULE)
+                    except ValueError:
+                        raise RuleError("it is not strict JSON") from None
+                    key = _key(body)
+                    rules.append(build_rule(name, body))
+                except RuleError as exc:
+                    errors.append((name, str(exc)))
+                    blocked.append(Blocked(name, key, name[:-len(".json")]))
+    except safefs.SafeFsError:
+        raise RulesUnavailable("the rules directory cannot be read") from None
+    taken = collections.Counter(rule.spelling + (rule.subcommand,) for rule in rules)
+    kept = []
+    for rule in rules:
+        key = rule.spelling + (rule.subcommand,)
+        if taken[key] > 1:
+            errors.append((rule.file, "another rule has the same command"))
+            blocked.append(Blocked(rule.file, key, rule.file[:-len(".json")]))
+        else:
+            kept.append(rule)
+    return Loaded(kept, sorted(errors), blocked)
+
+
+def _blocks(entry, words):
+    texts = [w.text for w in words]
+    if entry.key is not None:
+        return split_command(words, entry.key[:-1], entry.key[-1]) is not None
+    return any("-".join(pair) == entry.stem for pair in zip(texts[:5], texts[1:5]))
+
+
+def find_rule(loaded, words):
+    """The one rule that reviews `words`, or `Unreviewable`. A file that does not load, or shares its key, refuses
+    the commands of its key; two rules that both match refuse the command."""
+    stuck = sorted(entry.file for entry in loaded.blocked if _blocks(entry, words))
+    if stuck:
+        raise Unreviewable("the rule file%s %s cannot be used, so the command is not reviewed"
+                           % ("" if len(stuck) == 1 else "s", ", ".join(ascii(name) for name in stuck)))
+    hits = [rule for rule in loaded.rules if split_command(words, rule.spelling, rule.subcommand) is not None]
+    if len(hits) > 1:
+        raise Unreviewable("more than one rule matches (%s), so the command is not reviewed"
+                           % ", ".join(ascii(rule.file) for rule in sorted(hits, key=lambda r: r.file)))
+    if not hits:
+        raise Unreviewable("no rule matches this command")
+    return hits[0]
+
+
+def parse_arguments(rule, rest):
+    """Check that the `Word`s `rest`, after the rule's spelling and subcommand, fit its flags and positionals, and
+    return them as texts in the order given. The shape only: the real validation is `describe`'s."""
+    if len(rest) > MAX_ARGUMENTS:
+        raise Unreviewable("the command has more than %d arguments" % MAX_ARGUMENTS)
+    group, seen, at = rule.positionals, set(), 0
+    while at < len(rest):
+        word = rest[at]
+        if not word.quoted and word.text == "--":
+            break
+        if word.quoted or not word.text.startswith("-"):
+            if group.separator:
+                raise Unreviewable("the word %s is where a flag is expected" % ascii(word.text)[:80])
+            break
+        flag = rule.flags.get(word.text)
+        if flag is None:
+            raise Unreviewable("the flag %s is not declared" % ascii(word.text)[:80])
+        if flag.type != "multi" and word.text in seen:
+            raise Unreviewable("the flag %s is given more than once" % word.text)
+        seen.add(word.text)
+        at += 1
+        if flag.type != "boolean":
+            if at >= len(rest) or (not rest[at].quoted and rest[at].text.startswith("-")):
+                raise Unreviewable("the flag %s needs a value" % word.text)
+            at += 1
+    for name in sorted(rule.flags):
+        if rule.flags[name].required and name not in seen:
+            raise Unreviewable("the flag %s is required" % name)
+    if group.separator:
+        if at >= len(rest):
+            raise Unreviewable("the separator -- is missing")
+        at += 1
+    positional = rest[at:]
+    for word in positional:
+        if not word.quoted and word.text == "--":
+            raise Unreviewable("a second -- word is not allowed")
+        if not word.quoted and word.text in rule.flags:
+            raise Unreviewable("a flag word comes after the positional words begin")
+    if len(positional) < group.min:
+        raise Unreviewable("the command needs at least %d %s" % (group.min, group.name))
+    if len(positional) > group.max:
+        raise Unreviewable("the command takes at most %d %s" % (group.max, group.name))
+    return [word.text for word in rest]
+
+
+def read_command(loaded, text):
+    """``(rule, arguments)`` for the command `text`, or `Unreviewable`. The text is parsed twice: once to find the rule,
+    letting any dash word through, and again with only the rule's own flags (and the separator) declared."""
+    rule = find_rule(loaded, parse_words(text, AnyWord()))
+    declared = frozenset(rule.flags) | ({"--"} if rule.positionals.separator else frozenset())
+    words = parse_words(text, declared)
+    return rule, parse_arguments(rule, split_command(words, rule.spelling, rule.subcommand))
+
+
+def run(argv, cwd, notes):
+    """Check the arguments and the text; return the refusal text and append the rule errors to `notes`. The rest is
+    not built yet."""
     if not argv or argv[0] != "review":
         return USAGE
     rest = argv[1:]
@@ -109,7 +396,20 @@ def run(argv):
     if len(rest) != 1:
         return USAGE
     try:
-        parse_words(rest[0])
+        parse_words(rest[0], AnyWord())
+    except Unreviewable as exc:
+        return "unreviewable: %s" % exc
+    try:
+        try:
+            root = project.find_root(cwd)
+        except project.ProjectError:
+            raise RulesUnavailable("the command is not run inside a workbench project") from None
+        loaded = load_rules(root)
+    except RulesUnavailable as exc:
+        return "no rule is trusted: %s" % exc
+    notes.extend("rule error: %s: %s" % (ascii(name), why) for name, why in loaded.errors)
+    try:
+        read_command(loaded, rest[0])
     except Unreviewable as exc:
         return "unreviewable: %s" % exc
     return "the engine is not built yet; " + USAGE
@@ -117,7 +417,11 @@ def run(argv):
 
 def main(argv, stdin, out, err, cwd):
     """Run one command from `cwd`. Returns the exit code."""
-    err.write("refused: %s\n" % run(argv))
+    notes = []
+    refusal = run(argv, cwd, notes)
+    for line in notes:
+        err.write(line + "\n")
+    err.write("refused: %s\n" % refusal)
     return 1
 
 

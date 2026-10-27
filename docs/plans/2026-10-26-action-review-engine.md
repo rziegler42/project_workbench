@@ -473,7 +473,7 @@ Review: the `reviewer` agent, one exchange, eleven findings, all judged on the e
 Not done: B does not start before the owner reads the schema. The error-code-to-check mapping, the flag lists and the
 quoted-word behaviour of the real `safe-git` parser are untested until Increments D to G. No second-model review ran.
 
-### Increment B — built, verified and reviewed (not committed)
+### Increment B — committed as `8078763`
 
 Changed: `packages/workbench/action-review/` (new: `module.json`, `helper/action-review`, `tests/test_actionreview_module.py`)
 and `packages/workbench/package.json` (`action-review` after `review-engine`). The declaration is the spec's: `provides`
@@ -505,7 +505,7 @@ Not done: the grammar, rules, checks and bridge call (C to J); committing; remov
 
 (Increment B is committed as `8078763`, and the decision `2026-10-26-action-review-reads-the-review-setting` as `9d7cec6`.)
 
-### Increment C — built, verified and reviewed (not committed)
+### Increment C — committed as `caf7518`
 
 Changed: `packages/workbench/action-review/helper/action-review` (`parse_words`, `split_command`, `Unreviewable`, and
 `review` now refuses unreviewable text before its "not built" refusal), `tests/test_actionreview_parse.py` (new) and
@@ -551,3 +551,66 @@ shipped records `release-approvals` listed were removed with `claude-workflow re
 commit (it had warned about `0dde3b333a54`, `51d13076423d`, `63d178d2836c`,
 `6d02998747b2`, `77a1f5745fae` and `ffe787e0fa3f`; the third and fourth are approvals Increment B added for a tree that
 has since changed).
+
+### Increment D — built, verified and reviewed (not committed)
+
+Changed: `packages/workbench/action-review/helper/action-review` (the loader `load_rules`, `build_rule`, `find_rule`,
+`parse_arguments`, `read_command`; `run` now loads the rules and reads the command before its "not built" refusal),
+`module.json` (`ships` now lists the two rule files), `rules/safe-git-commit.json` and `rules/safe-git-remove.json` (new),
+`tests/test_actionreview_rules.py` (new, 63 tests) and edits to `tests/test_actionreview_module.py` and
+`tests/test_actionreview_parse.py` (file list, ships, imports, and the two tests that asserted the "not built" text).
+The helper now imports `re` and the kit (`jsonstrict`, `project`, `safefs`).
+
+What it does: a rule file under `.workbench/workbench/action-review/rules/` loads only if it fits the schema of Increment A
+(format 1, the fixed fields and forms, a `subcommand` equal to the `action`, a `wb run` spelling ending in the module, the
+file name `<module>-<action>.json`, only checks from the engine's fixed list of 14). A rule error is reported on standard
+error as `rule error: <file name>: <fixed reason>` and never quotes the file; it refuses only its own key (read from the
+spelling and subcommand, else from the file name against the first five words). Two files with one key, and two rules that
+both match one command, refuse every file involved. The command is parsed twice: once letting dash words through to find
+the rule, once with only the rule's flags (and `--`) declared. Flags follow their types; an undeclared flag, a repeated
+single-valued flag, a missing required flag, a flag with no value or a flag as a value, a missing or second `--`, a flag
+word after `--`, a count outside `min`/`max` and more than 61 arguments are refused. A directory that cannot be read, has
+more than 64 entries or holds more than 262,144 bytes refuses every review. The shipped flags match `parse_commit` and
+`parse_remove` of `safe-git` (read, not run against them).
+
+Deviations from the spec, to be written into it by Increment L:
+- The helper runs as a private copy with nothing beside it, so it cannot read its rules "beside itself". It reads them from
+  the installed path below the project root found with `project.find_root(cwd)`, like the review setting. The package name
+  `workbench` is fixed in that path.
+- `ships` lists the two rule files, not a `rules` directory: a shipped item named `rules` is a word the installer's boundary
+  test forbids it to use (`tests/test_boundary.py`, with the words read from the module declarations). Adding a shipped rule
+  therefore means adding it to `ships`.
+- A rule's `rubric` and `questions` are checked for form only. That a question is defined in its rubric section waits for
+  Increment H, when `rubric.md` exists. The shipped rules carry no `lists`; the credential-name list arrives with F.
+- A rule file read through a second hard link, a link, or a non-regular file is a rule error for its own key.
+
+Verification as run on 2026-10-27, in a scratch copy and landed with one `cp`: the new tests failed first (41 errors, no
+`load_rules`), then passed. Full `python3 -B -W error tests/run_all.py` in the scratch copy, two runs. The first (started before
+the review fixes) failed twice: `test_boundary` (the `rules` word above, a real failure of this increment, fixed by listing
+the files) and the known `test_levellog` flake. The last run, on the final tree, passed in every root and exited 0: 2942 root tests
+(4 skipped), and 115 in `action-review`. After landing, in the real tree: `wb check`,
+`wb run code-work check` (51 plans), `doccheck`, `refcheck` and `git diff --check` clean; the 115 module tests, `test_boundary`,
+`test_run` and `test_firstparty` pass. The tests were not run against the real `safe-git describe` (that is Increment E),
+and the new regression tests for the review fixes below were not run against the unfixed code.
+
+Review: the `reviewer` agent, one exchange, seven findings.
+- Finding 1 (blocking, applied): a `lists` entry that is not hashable (`[[1]]`, `[{}]`) raised `TypeError` in the loader and
+  ended the whole run, so one bad file disturbed every key. Entries are now checked before the distinctness test; a test
+  loads such a file next to a good rule. The fix had no second review round.
+- Finding 2 (applied): a rule file with a second hard link was read; it is now read with the kit's no-hard-link reader and
+  is a rule error. Tested.
+- Finding 3 (applied): file names were echoed raw, so a name with a newline could forge a stderr line. Names are now
+  printed with `ascii()`. Tested.
+- Finding 4 (applied): the module and action form tests were refused by other checks, so they could not fail. They now use
+  a matching file name and spelling, and the size limits are tested at the limit as well as over it.
+- Finding 5 (applied): two assertions that accepted almost any message now name "separator".
+- Finding 6 (recorded): the rubric and question check, and the `lists` for `commit`, belong to H and F (above). A rule that
+  names `paths_not_credentials` with no `credential_names` list must fail that check, never pass it; F must test that.
+- Finding 7 (recorded): `find_root(cwd)` takes the nearest project, so a nested project under the working directory would
+  supply its own rules. Whether `wb check` drift or `acknowledge` covers the installed rule files was not checked and is for
+  the security pass (K). The hook must start `review` in the directory where the command will run.
+
+Not done: `describe`, the checks, the rubric and the bridge call (E to J); a second-model review; committing. `release-approvals`
+was run by the owner (11 approvals written); it warned that the two records added in Increment C (`3aa496ba0dba` and
+`f7b67a17cd4e`) are not part of this release. They are tracked and stale, and removing them needs the owner's word. Two new
+untracked approval directories (`715ab071…`, `ac14b22f…`) belong in this commit.
