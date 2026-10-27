@@ -654,7 +654,7 @@ shipped approval records for the module will be stale after landing; the owner r
 Not done: the checks, the rubric and the bridge call (F to J); a second-model review; committing; running the shipped rules
 against the real launcher end to end (the real `safe-git` is only read through its helper, not through `wb run`).
 
-### Increment F — built, verified and reviewed (not committed)
+### Increment F — committed as `80041f7`
 
 Changed: `packages/workbench/action-review/helper/action-review` (the secret scan, `diff_secret_kind`, `credential_path`,
 `ERROR_CHECKS`, `CHECK_FUNCTIONS`, `run_checks`; `math` is a new import; `run` is not changed and does not call the
@@ -708,3 +708,45 @@ constant, and K should look at it).
 Not done: the checks for `remove` (G), the rubric and the bridge call (H), the output (I); wiring the checks into `run`; a
 second-model review; a security pass (K asks the owner); committing. The shipped approval records for the module will be
 stale after landing; the owner runs `release-approvals`.
+
+### Increment G — built, verified and reviewed (not committed)
+
+Changed: `packages/workbench/action-review/helper/action-review` (`ERROR_CHECKS` gains a `remove` map; the five functions
+`_confirm_present`, `_ignore_status_known`, `_preview_matches_arguments`, `_no_git_metadata` and the shared
+`_errors_decide` for `removal_valid` are in `CHECK_FUNCTIONS`; `_facts_complete` reads `binary_paths` only for a commit, so a
+removal is complete when it is not truncated), and `tests/test_actionreview_remove_checks.py` (new, 34 tests). `run_checks`
+and the shipped rule `safe-git-remove.json` are unchanged (the rule already named the six checks).
+
+What it does: for a removal, `confirm_present` fails when `confirm` is false; `ignore_status_known` when
+`ignore_unknown_targets` is not empty; `preview_matches_arguments` when `target_paths` is not equal to `requested_paths` (same
+order and repeats); `no_git_metadata` when any `/`-segment of a requested path, case-folded, is `.git`. The error codes of
+`describe remove` map as the spec's table says (`git_metadata_refused` to `no_git_metadata`; `repository_unreadable` to
+`facts_complete`; the other ten to `removal_valid`); a plain `.git` segment is refused by `describe` as `path_refused` and so
+fails `removal_valid` and, from `requested_paths`, `no_git_metadata`. A commit-only code on a removal is unmapped and fails
+`facts_complete`. Look-alike spellings (`.git.`, `git~1`) are `describe`'s refusals and reach the checks as error codes.
+
+Observed on the real command: every refusal of `describe remove` gives `ok: false`, `truncated: true`, an empty
+`target_paths` and the arguments as given, so each refusal also fails `facts_complete` and `preview_matches_arguments`
+besides the check its code names. Extra names in `failed_checks`; the decline is the same.
+
+Verification as run on 2026-10-27, in a scratch copy: the new tests failed first (21 failures, each from a check with no
+function), then passed; eleven mutations were applied one at a time (confirm, ignore, preview, case folding, segment
+split, binary read, truncated read, two error-code map entries, order-insensitive preview, the `repository_unreadable`
+entry): ten were caught; the eleventh is equivalent (an unmapped code and a truncated object each fail `facts_complete`
+already). Real `safe-git describe remove` objects were checked for a confirmed file, a tracked and an ignored file, a
+recursive directory, no `--confirm`, a directory without `--recursive`, a missing target, a repeated and an overlapping target,
+refused spellings, `.git` in several cases and places, `.GITx` (not a hit) and an object truncated by 10,001 entries. The
+module's 257 tests pass (223 before). Full `python3 -B -W error tests/run_all.py` in the scratch copy, after the last change:
+5113 tests in 11 roots, all pass.
+
+Review: the `reviewer` agent, one exchange, no blocking finding, four notes. Recorded, none applied: (1) no real
+`ignore_unknown_targets` case is tested, because the one cause the spec names (a colon or backslash target) is refused as
+`path_refused` before the ignore status is asked, and the other (a git timeout) cannot be forced; the check is tested on
+hand-built objects only; (2) the `repository_unreadable` map entry is equivalent to the unmapped case and documents the
+spec row; (3) an `ok: true` object with empty `requested_paths` and `target_paths` passes `preview_matches_arguments` and
+`no_git_metadata`; the real command cannot print it (no path is a usage error with `ok: false`), and the spec asks for no
+guard; (4) `no_git_metadata` does only the spec's segment test and relies on `describe` for look-alikes, by design.
+
+Not done: the rubric and the bridge call (H), the output (I); wiring the checks into `run`; a second-model review; a
+security pass (K asks the owner); committing. The shipped approval records for the module will be stale after landing; the
+owner runs `release-approvals`.

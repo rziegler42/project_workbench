@@ -707,8 +707,8 @@ def credential_path(path, names):
     return False
 
 
-# The check each error code of `describe commit` fails (spec, "The checks"). A code that is not here fails
-# `facts_complete`, and so does a code whose check the rule does not name.
+# The check each error code of `describe commit` and of `describe remove` fails (spec, "The checks"). A code that is not
+# here for the action fails `facts_complete`, and so does a code whose check the rule does not name.
 ERROR_CHECKS = {"commit": dict(
     [(code, "head_matches") for code in ("expected_head_invalid", "head_mismatch", "head_unreadable")]
     + [(code, "repo_config_safe") for code in ("repo_selects_program", "operation_in_progress")]
@@ -719,7 +719,12 @@ ERROR_CHECKS = {"commit": dict(
     + [(code, "message_valid") for code in (
         "subject_invalid", "body_invalid", "trailer_invalid", "message_character_refused", "attribution_refused",
         "setting_invalid")]
-    + [(code, "facts_complete") for code in ("repository_unreadable", "index_unreadable")])}
+    + [(code, "facts_complete") for code in ("repository_unreadable", "index_unreadable")]),
+    "remove": dict(
+        [(code, "removal_valid") for code in (
+            "usage", "path_duplicate", "path_refused", "target_missing", "recursive_required",
+            "repository_root_refused", "nested_repository", "other_filesystem", "tree_too_large", "target_changed")]
+        + [("git_metadata_refused", "no_git_metadata"), ("repository_unreadable", "facts_complete")])}
 
 
 class Absent(Exception):
@@ -773,13 +778,35 @@ def _paths_regular(rule, document):
 
 
 def _facts_complete(rule, document):
-    return not document["truncated"] and not _fact(document, "binary_paths", "texts")
+    """Only a commit holds `binary_paths`; a removal is complete when it is not truncated."""
+    if document["truncated"]:
+        return False
+    return rule.action != "commit" or not _fact(document, "binary_paths", "texts")
 
 
 def _no_secret_lines(rule, document):
     subject, body = _fact(document, "subject", "text"), _fact(document, "body", "text?")
     trailers, diff = _fact(document, "trailers", "texts"), _fact(document, "diff", "text")
     return not (secret_kind("\n".join([subject, body or "", *trailers])) or diff_secret_kind(diff))
+
+
+def _confirm_present(rule, document):
+    return _fact(document, "confirm", "flag")
+
+
+def _ignore_status_known(rule, document):
+    return not _fact(document, "ignore_unknown_targets", "texts")
+
+
+def _preview_matches_arguments(rule, document):
+    return _fact(document, "target_paths", "texts") == _fact(document, "requested_paths", "texts")
+
+
+def _no_git_metadata(rule, document):
+    """Whether no segment of any requested path is `.git`, in any case. The other spellings of Git metadata are refused by
+    `describe` itself, with an error code that this check also maps."""
+    return not any(segment.casefold() == ".git" for path in _fact(document, "requested_paths", "texts")
+                   for segment in path.split("/"))
 
 
 def _errors_decide(rule, document):
@@ -792,6 +819,8 @@ CHECK_FUNCTIONS = {
     "head_matches": _head_matches, "repo_config_safe": _repo_config_safe, "staging_state_ok": _staging_state_ok,
     "paths_valid": _errors_decide, "message_valid": _errors_decide, "paths_not_credentials": _paths_not_credentials,
     "paths_regular": _paths_regular, "facts_complete": _facts_complete, "no_secret_lines": _no_secret_lines,
+    "confirm_present": _confirm_present, "removal_valid": _errors_decide, "ignore_status_known": _ignore_status_known,
+    "preview_matches_arguments": _preview_matches_arguments, "no_git_metadata": _no_git_metadata,
 }
 
 
