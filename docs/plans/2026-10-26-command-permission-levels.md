@@ -7,10 +7,10 @@ Specs: command-permissions, trust-and-approval, code-work, installer-interface, 
 
 ## Goal
 
-The owner can approve a plan and extend a review from a session with no terminal, by choosing the level of those two actions
-in the personal settings, without weakening anything else. When the plan is done, the owner's table of levels exists and
-is read safely, `approve-plan` and `wb run review-engine extend` can be set to `ask`, a harness renders what the table says,
-every run at a level other than `block` is logged, and the specs say so.
+The owner can approve a plan from a session with no terminal, by choosing the level of that action in the personal settings,
+without weakening anything else. When the plan is done, the owner's table of levels exists and is read safely,
+`approve-plan` can be set to `ask`, a harness renders what the table says, every run at a level other than `block` is logged,
+and the specs say so. (Extending a review the same way was part of the plan and is deferred: Revision 4, below.)
 
 ## Scope
 
@@ -18,7 +18,8 @@ every run at a level other than `block` is logged, and the specs say so.
   `docs/specs/command-permissions.md`.
 - `approve-plan` at `ask`, with its digest, and at `none`, with no digest and no preview; and `delegated` as it already
   works, now logged.
-- `wb run review-engine extend` at `ask`, with a digest of the review's `status`, and at `none`, with no digest.
+- ~~`wb run review-engine extend` at `ask` and `none`~~ Deferred by Revision 4 (Increment G): it needs a change to the module
+  declaration contract that this plan does not authorize.
 - Rendering of `ask` and no rule in a harness that provides `permissions`, and the check that reports a table that differs
   from the rendered rules.
 - The append-only log.
@@ -39,7 +40,7 @@ every run at a level other than `block` is logged, and the specs say so.
 - Any trust-changing command (`install`, `adopt`, `add`, `upgrade`, `attach`, `approve`, `pin`). They stay `block` by
   default and offer only `block` in this plan. A key offers another level only from the version that builds it
   (`command-permissions.md`, "Which levels a key offers"), and each of these keys is for a later plan. The owner wants every
-  command to offer every sensible level; this plan builds that for the two keys of F and G and for the table, the log and
+  command to offer every sensible level; this plan builds that for `approve-plan` (F) and for the table, the log and
   the rendering that the rest will use.
 - Anything on the compiled floor, `safe-git commit` and `remove`, and push.
 - A command that edits the table. The owner edits it by hand, as for checkpoints today.
@@ -54,7 +55,7 @@ every run at a level other than `block` is logged, and the specs say so.
   `workbench/harnessplan.py` and `workbench/harnessstage.py` (rendering), `workbench/commands.py` (`owner_refusal`),
   `workbench/planapprovals.py` and `workbench/delegation.py` (plan approval), `workbench/settingscmd.py`,
   `docs/development.md` and the specs named above, on 2026-10-26 at `36c0970`. The module code of `review-engine` was not read
-  yet; Increment G begins with reading it, and the plan is revised if it disagrees.
+  yet; Increment G began with reading it (Result of G) and then stopped.
 - The workbench is standard library only (`2026-10-19-implementation-language`). A module's code lives in the module
   (`2026-10-21-module-code-lives-in-modules`), so the `extend` digest is built in `review-engine`, not in the installer.
 - Rendered rules change only at an attach, which is owner-run. Changing the table is therefore a terminal act, rarely done;
@@ -83,7 +84,7 @@ every run at a level other than `block` is logged, and the specs say so.
   that merely contains the word (a `grep`, a commit message) is blocked until the owner runs it; a hook is not a boundary.
   After the design review (Result of Increment J) the owner chose the cheap hardening of the review's ranked remedies, the
   default left at `block`, and the remaining limits accepted in writing; the provenance check in `approve-plan` was not tried.
-  Increments G and H (the review engine's `extend`, and the specs) wait for I and J.
+  Increment H (the specs) waits for I and J; Increment G (the review engine's `extend`) is deferred by Revision 4.
 - Every increment is one verified, reviewed local commit made through the project's commit helper, and the commit message
   carries the trailer `Plan: 2026-10-26-command-permission-levels#<label>`.
 
@@ -92,13 +93,12 @@ every run at a level other than `block` is logged, and the specs say so.
 1. `command-permissions.md` is `Current`, matches the code, and the edits to the other specs listed in Increment H exist.
 2. With no settings or a version 1 file, no action that an agent cannot run today becomes runnable, and `wb settings`
    prints the same checkpoint lines as before; a test shows this.
-3. At `ask`, `wb approve-plan <plan> --digest <32>` and `wb run review-engine extend <document> <n> --digest <32>` run without a
-   terminal only when the digest matches, the rendered `ask` rule is present and the log entry is written; each is refused
-   otherwise, with nothing written. At `none` each runs without a terminal and without a digest only when the rendering
-   record shows no rule for it and the log entry is written, and is refused otherwise. A delegated plan approval writes its
-   log entry first and is refused when it cannot. At `ask` and `none` the harness file must also hash to the rendering
+3. At `ask`, `wb approve-plan <plan> --digest <32>` runs without a terminal only when the digest matches, the rendered `ask`
+   rule is present and the log entry is written; it is refused otherwise, with nothing written. At `none` it runs without a
+   terminal and without a digest only when the rendering record shows no rule for it and the log entry is written, and is
+   refused otherwise. A delegated plan approval writes its log entry first and is refused when it cannot. At `ask` and `none` the harness file must also hash to the rendering
    record's hash.
-4. At `block` both still refuse without a terminal.
+4. At `block` it still refuses without a terminal.
 5. The log is appended and never rewritten, holds at most 4 MiB, and a full log refuses runs above `block` with a message that
    names it. The rendering record lists every key and a key it does not list reads as `block`. A key that is not a valid name
    blocks the whole table. The registry refuses two declarations of one key.
@@ -259,7 +259,10 @@ the digest (`plan-status` or a sibling), `workbench/levels.py` (offer `ask` and 
 Result.
 **Evidence:** the one local commit, with the trailer `Plan: 2026-10-26-command-permission-levels#F`.
 
-### Increment G — `wb run review-engine extend` at `ask` and `none`
+### Increment G — `wb run review-engine extend` at `ask` and `none` (deferred by Revision 4; not built)
+
+*Deferred, 2026-10-26, at the owner's choice (option 3). Step 1 read the module and step 4's stop condition was met: the declaration
+schema has no field for the levels an owner-run argument offers. The text below is kept as the design for a later plan.*
 
 **Outcome:** the owner can extend a review that reached its bound from a prompt, bound to the review's state.
 **Dependencies:** F, and Increments I and J (the command gate and its repeated probe), and so the accepted decisions on the
@@ -285,14 +288,14 @@ HIGH-1 residual risk. G enables `ask` and `none` for `extend` only behind the co
 ### Increment H — Specs and documentation
 
 **Outcome:** the specs say what is built.
-**Dependencies:** G, I and J, and the owner's recorded answer to the second security question, asked before this increment on the
+**Dependencies:** I and J, and the owner's recorded answer to the second security question, asked before this increment on the
 built code (the decision is already Accepted).
 **Affected areas:** `docs/specs/command-permissions.md` (`Current`), `trust-and-approval.md`, `code-work.md` (the checkpoint
 table, and `accept-decision` no longer listed as delegable), `installer-interface.md` (the `approve-plan` grammar and
-`wb settings`), `harness-modules.md`, `review-engine.md`, `docs/specs/README.md`, `docs/development.md`.
+`wb settings`), `harness-modules.md`, `docs/specs/README.md`, `docs/development.md`. `review-engine.md` is unchanged.
 **Steps:**
 1. Edit each spec in place to match the code, and record in `command-permissions.md` which keys are built.
-2. Update the command table in `development.md` for `approve-plan`, `extend` and `settings`.
+2. Update the command table in `development.md` for `approve-plan`, `plan-status`, `gate-command` and `settings`.
 3. Ask the owner to run the document checks. (The status line of `2026-10-23-delegated-plan-approval` was changed on
    2026-10-26 at the owner's request, in the commit that recorded the decision; nothing more is edited there.)
 **Verification:** the owner runs the document checks; a search for the old wording finds none in a living document.
@@ -395,19 +398,19 @@ the Result.
 
 `python3 -B -W error tests/run_all.py`; `python3 -m workbench check`; the plan check
 (`python3 -m workbench run code-work check`); `git diff --check`; and the owner's document checks. The trial of A is
-repeated against the finished code in a throwaway project: approve a plan and extend a review from the remote channel, and
-see each refuse with a wrong digest; and the spelling probe of Increment F (it is part of F, not repeated here).
+repeated against the finished code in a throwaway project: approve a plan from the remote channel, and see it refuse
+with a wrong digest; and the spelling probe of Increment F (it is part of F, not repeated here).
 
 ## Risks and sensitive actions
 
-- **Authorization and the guarded store.** The work changes who can approve a plan and extend a review, and adds a file to
+- **Authorization and the guarded store.** The work changes who can approve a plan, and adds a file to
   the guarded store. The owner decides whether to run a security review. The plan stops to ask at Increment D, step 1,
   and again before H, records each answer in the Result, and runs no review itself.
 - **`ask` approves a command and a digest.** A hurried answer becomes an approval. The residual risk is accepted in the
   decision, and the preview must be shown in the conversation first.
 - **The prompt may not work remotely.** If A fails, the plan stops.
 - **A table that loosens a default.** The shipped defaults stay `block` in B to E, and `ask` ships only for the two keys
-  of F and G.
+  of F (`approve-plan`).
 - **`ask` is bypassable by spelling (HIGH-1).** The probe after F showed it: `bash -c` approved a plan in auto mode. The
   mitigations are now the live-file hash check, the `bin/wb` pattern and the command gate of Increments I and J, which stops a
   Bash command that names a relaxed command unless the `ask` rule can fire on it. The remainder is a stated limit that the
@@ -465,8 +468,18 @@ deny and hash for every settings file, the `delegate-approve-plan` exemption, a 
 the probe, to leave the default at `block`, and to accept the remaining limits in writing. This text has not been reviewed by a
 second reviewer, and the owner has not approved Revision 3.
 
+Revision 4 (2026-10-26): the owner chose to defer Increment G (option 3 of the report after the stop in its step 4). The Goal, the
+scope, the completion criteria, the dependencies of H, the plan-wide verification and the risks no longer name `extend`; G's
+body is kept as the design for a later plan, and the Deferred work lists what it needs. This text has not been reviewed by a
+second reviewer, and the owner has not approved Revision 4.
+
 ## Deferred work
 
+- Increment G, `wb run review-engine extend` at `ask` and `none`. It needs a field in the module declaration (for example
+  `levels` on a command, mapping an owner-run argument to the levels it offers beyond `block`), a decision for that change to the
+  module contract, a helper that prints a digest of the review's `status` and `n` (the read-only `status` can carry one for each
+  `n` from 1 to 5) and refuses a different digest, and the installer's log attempt written before the helper is launched. The
+  command gate already guards the key's two words. The default stays `block`.
 - A provenance check inside `approve-plan` (refuse unless its ancestor shell's `-c` payload is exactly one simple command): it would
   close the script, splice and eval classes, needs the harness's spawn format inspected, and reverses an alternative the earlier
   decision rejected. A trial first.
@@ -913,3 +926,25 @@ this gate does not control. The shipped default of `approve-plan` stays `block`,
 
 Review: the code was reviewed in two rounds (above). Not run: the security review of the built code, asked again before
 Increment H.
+
+Committed as `b2c5dfd` (the probe record).
+
+### Increment G — `wb run review-engine extend` at `ask` and `none` (stopped at step 4; no code written)
+
+2026-10-26, at the owner's word to start G and leave the default at `block`. Step 1, read: the module's declaration
+(`packages/workbench/review-engine/module.json`: command `review-engine`, arguments including `extend`, owner-run `amend`,
+`extend`, `reset`, `archive`, `prune`), its helper (`extend` takes `<document> <1 to 5>`, raises the window's bound under the
+ceiling of 5, and prints the review; `status <document>` prints the review and its request standing; nothing prints a digest),
+`docs/specs/review-engine.md` ("Owner-run commands": the installer renders a deny for each owner-run argument) and
+`commands.owner_refusal` (the installer's generic terminal test for any command's declared owner-run argument). They agree with
+the plan.
+
+Step 4's stop condition is met: the declaration schema (`declarations.py`, `commands`: `helper`, `runtime`, `kit`, `arguments`,
+`owner`, `describes`) has no field that says which levels an owner-run argument offers, and the installer may not name
+`review-engine`. Adding one changes the declaration contract, which this plan does not authorize, so G stops here to be revised
+and re-approved. Two further findings for that revision: (1) the digest of the review's `status` and `n` must be built in the
+module (`2026-10-21-module-code-lives-in-modules`), so the helper needs to print it (the existing read-only `status` can
+carry one digest for each `n` from 1 to 5) and to refuse an `extend` whose `--digest` differs; (2) the installer runs the
+helper and cannot know whether it will change anything, so for a module command the log attempt is written before the helper is
+launched and the outcome from its exit code, which differs from `approve-plan` (attempt after every check, none for a run that
+changes nothing). The owner's decision for the default stands: `extend` stays at `block`, `ask` and `none` are the owner's opt-in.
