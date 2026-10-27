@@ -5,7 +5,13 @@ Status: Current
 Written by plan `2026-10-26-command-permission-levels` (Increment H), which built it. It describes the levels table, the keys, the
 log, the rendering record, the command gate and `approve-plan` at the levels `ask` and `none`. One key, `approve-plan`, is built
 beyond `block`; every other key offers `block` only. Extending a review (`wb run review-engine extend`) was part of the design,
-was not built, and is listed under "Not built". The design is `docs/decisions/2026-10-26-per-command-permission-levels.md`.
+was not built, and is listed under "Not built". The design is `docs/decisions/2026-10-26-per-command-permission-levels.md`, as refined by
+`docs/decisions/2026-10-26-permission-levels-as-built.md` (accepted), which states what stands, what changed and what was not built;
+where the two differ on the defaults or the offered levels, this spec follows the later record.
+
+The owner has since directed that every `wb` command has a level, with a default that suits that command and no key limited to
+`block`. That direction is written under "Planned: a level for every command" and is not built; the sections before it describe the
+code as it is. The decisions it supersedes are named there and are not yet superseded: only the owner accepts a replacement.
 
 ## Scope
 
@@ -20,7 +26,8 @@ a harness renders it, and the command gate that protects the rendering.
 - The actions governed by action review, `safe-git commit` and `remove`, and the push check
   (`2026-10-25-module-commands-and-the-approver`, `action-review.md`).
 - A command that builds a table for the owner. The owner edits the personal settings by hand, as for checkpoints today.
-- Changing who accepts a decision or what an approval means. Only the owner's act makes a decision `Accepted`.
+- Changing what an approval means. As built, only the owner's act makes a decision `Accepted`; the planned revision lets the owner
+  loosen that through the `accept-decision` key.
 
 ## Assumptions and constraints
 
@@ -49,6 +56,9 @@ a harness renders it, and the command gate that protects the rendering.
 | `delegated` | the agent | a gate the command declares has passed |
 | `ask` | the agent | the owner confirms a harness prompt, and the command carries the digest of its preview |
 | `none` | the agent | nothing |
+
+`none` is a level and not the absence of one: it means that the command needs no confirmation and no gate, and its run is still
+logged. `delegated` sits in the order by convention; it is a gate the command declares and not a step between `ask` and `none`.
 
 Strictness, from strictest to least strict: `block`, `ask`, `delegated`, `none`. A key's level is the stricter of its checkpoint
 reading and its table entry.
@@ -189,6 +199,65 @@ declared checkpoints, then the installer's owner-run commands, then `wb run <com
 owner-run arguments, with the defaults and the table applied. Problems and notes print as `settings:` lines. Two declarations that
 give one key are a refusal.
 
+## Planned: a level for every command
+
+Not built. It is the owner's direction of 2026-10-26, recorded here so a plan can implement it. Calls marked **(call)** are the
+author's and are not the owner's until the owner confirms them.
+
+**Intent.** The owner chooses their own risk appetite, command by command, and may loosen any protection that is theirs to loosen.
+A state in which an owner has set every key to `none`, and so has no protections left on the commands, is an outcome of that
+freedom and not a feature: there is no master switch, profile or command that sets it.
+
+**Coverage.** Every command and subcommand that `cli.py` routes has a key, the agent-safe ones included (`verify`, `preview install`,
+`preview adopt`, `launch`, `check`, `run`, `plan-status`, `settings`), so the owner can tighten a command that is always allowed
+today. The hook entry points `gate`, `agent-gate` and `gate-command` are the exception: the harness runs them, they are not keys and
+they stay always allowed (the owner's decision). A test fails when `cli.py` routes any other command or subcommand with no key, as the test
+in `rules.py` does for the owner-run and agent-safe split. A subcommand has a key when it is a different action (`wb preview
+install`, `wb preview adopt`, `wb run <command> <argument>`). A word that only dispatches (`wb run`, `wb preview`) is not a key, and each action reaches
+one key, so no parent can tighten or bypass an action beneath it; `delegate-approve-plan` reaches the key `approve-plan`. A flag that
+changes only how a command reports, such as `--digest`, belongs to its command's key. Each argument a module declares for a command has a key, derived from the declaration with no new field
+**(call)**: an owner-run argument defaults to `block`, any other declared argument to `none`, as an agent may run it today. The
+contract has no read-only declaration, so none is used. An undeclared command or argument is refused and has no key.
+
+**Defaults.** A default is what the command does today **(call)**. An agent-safe command, which only reads or runs a helper that
+checks its own pin, defaults to `none`. The owner-run commands, the checkpoints and the owner-run module arguments keep their
+default of `block`. `approve-plan` stays `block`; the default is not raised to `ask` (see "Shipped defaults").
+
+**Levels offered.** Every key offers `block` and `none`. `delegated` stays `approve-plan` only, and `ask` is offered by a key once
+that key has a preview digest of its own, built as `approve-plan`'s is. Until then a key is never limited to `block`, because it
+offers `none`. The order of building the digests is for a plan **(call)**: `install` and `adopt` first, because they already have a
+preview, then the module arguments and `extend` (the deferred Increment G). At `none` an owner-run command runs without a terminal
+and without a harness `deny`; the command's own checks of its input and its log entry apply, and the terminal prompt does not.
+`accept-decision` offers the same levels, and `AGENTS.md` says that the owner decides who accepts a decision.
+
+**One table.** The `levels` table is the only place a level is set. A version 1 file's `checkpoints` are read as a fallback for a
+key the table does not mention, and a table entry wins in either direction, so loosening a key is one edit. The checkpoint words
+`stop` and `delegate` are aliases, read from a version 1 file, for `block` and `delegated`; `wb settings` prints only the four level
+names and notes a word it translated. This replaces the rule that a key's level is the stricter of its checkpoint reading and its
+table entry **(call)**.
+
+**Out of scope.** The compiled hard-stop floor is unchanged and is not a key (see "Non-goals").
+
+**Decision.** `2026-10-26-a-level-for-every-command` (accepted by the owner on 2026-10-26) refines
+`2026-10-26-per-command-permission-levels` and `2026-10-26-permission-levels-as-built` on the offered levels, the shipped defaults
+and the checkpoint rule, and the note that `accept-decision` offers `block` only. `2026-10-19-restrictive-only-permissions` is not
+changed: a level of `none` renders no rule, so the neutral rule list still holds only `ask` and `deny`.
+
+**Left to the builder.** The order of the increments, each key's digest content, the wording of the notes, and the layout of
+`wb settings` output, which is grouped by command.
+
+### Planned acceptance criteria
+
+P1. Every command and subcommand `cli.py` routes has a key, except `gate`, `agent-gate` and `gate-command`, and the drift test fails
+when any other has none.
+P2. With no settings, every agent-safe command reads `none` and every other key reads as it does today, `block`.
+P3. A table entry sets the level of its key in either direction, whatever the key's checkpoint says; a version 1 `stop` or
+`delegate` for a key the table does not mention reads as `block` or `delegated`, with a note.
+P4. Every key accepts `block` and `none`, and a level a key does not yet offer reads as `block` with a note.
+P5. With every key set to `none`, no command refuses for want of a terminal or a harness `deny`, the floor still applies, and each
+run is logged.
+P6. `accept-decision` set to `none` lets an agent accept a decision, and at `block` it does not.
+
 ## Not built
 
 - `wb run review-engine extend` at `ask` and `none` (Increment G of the plan). The declaration schema (`declarations.py`) has no
@@ -196,7 +265,7 @@ give one key are a refusal.
   such as `levels` on a command, a decision for that change to the module contract, a helper that prints and checks a digest of the
   review's `status` and `n`, and the log attempt written before the helper is launched.
 - The keys `reset`, `archive`, `prune`, `amend`, `acknowledge-second-tier`, `submit-remote-job` and `push-shared-branch`: each needs
-  its own preview digest and offers `block` only. `accept-decision` offers `block` only because only the owner accepts a decision.
+  its own preview digest and offers `block` only. `accept-decision` offers `block` only; the planned revision above changes that.
 - The rule that a command reaching more than one key takes the strictest level of them: each command reaches one key today.
 - A command that re-renders an attached clone, so a table or module change leaves `ask` and `none` reading `block` until a new clone
   is attached.
@@ -263,9 +332,16 @@ agent in rounds for each increment and by the `security-reviewer` agent for the 
 the built code; none of the security reviews could run an experiment, and the strings they proposed were run by the author. See the
 plan's Result.
 
+The section "Planned: a level for every command" was reviewed on 2026-10-26 by the review engine (spec review `spec-5bcae25932e2d2fa`,
+`ask-codex`, model `gpt-5.6-terra`, effort medium): one round of the bound of 3, one finding (a decision missing from the governing
+list), applied. The owner approved that section on 2026-10-26 as the direction for a plan. The approval does not accept the
+decisions it proposes to supersede, does not approve a plan and authorises no implementation. The author's calls marked **(call)**
+were approved with it except where the owner says otherwise.
+
 ## Governing decisions and references
 
 - Decisions: [2026-10-26-per-command-permission-levels](../decisions/2026-10-26-per-command-permission-levels.md),
+  [2026-10-26-permission-levels-as-built](../decisions/2026-10-26-permission-levels-as-built.md),
   [2026-10-26-ask-level-spelling-limit](../decisions/2026-10-26-ask-level-spelling-limit.md),
   [2026-10-26-ask-level-command-gate](../decisions/2026-10-26-ask-level-command-gate.md),
   [2026-10-23-delegated-plan-approval](../decisions/2026-10-23-delegated-plan-approval.md),
