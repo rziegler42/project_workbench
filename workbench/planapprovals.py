@@ -33,7 +33,7 @@ import os
 import re
 import stat
 
-from . import __version__, approvalcmd, approvals, approve, levellog, levels, rendering, settings
+from . import __version__, approvalcmd, approvals, approve, levellog, levelrun, levels, settings
 from .wbkit import display, jsonstrict, safefs
 
 FORMAT = 2
@@ -378,10 +378,9 @@ def _approve_without_terminal(guarded, argument, given, out, err, cwd):
     except OSError as exc:
         return _refuse(err, "the working directory cannot be read: %s" % (exc.strerror or "unknown error"))
     try:
-        table, root, ident = rendering.current_table(guarded, start)
-    except (approvalcmd.ApprovalError, levels.RegistryError) as exc:
+        level, ident, _ = levelrun.level_now(guarded, start, settings.APPROVE_PLAN)
+    except levelrun.Refusal as exc:
         return _refuse(err, str(exc))
-    level = rendering.effective_level(guarded, ident, root, table, settings.APPROVE_PLAN)
     if level == levels.NONE and given is not None:
         return _refuse(err, "approve-plan takes no digest at the level none: unknown argument --digest")
     if given is not None and level != levels.ASK:
@@ -390,7 +389,6 @@ def _approve_without_terminal(guarded, argument, given, out, err, cwd):
                             "from a terminal")
     if level not in (levels.ASK, levels.NONE) or (level == levels.ASK and given is None):
         return _refuse(err, TERMINAL_ONLY)
-    op = None
     try:
         resolved, plan, report = _current(guarded, argument, cwd)
         if resolved.project_id != ident:
@@ -406,15 +404,10 @@ def _approve_without_terminal(guarded, argument, given, out, err, cwd):
                                 "checked, so it no longer holds; nothing was recorded")
         entry = Approval(plan, report.region_hash, resolved.declaration, resolved.helper_sha256,
                          approve.approver_name(), approvals.utc_now(), __version__)
-        if not any(_same(item, entry) for item in load(guarded, resolved.project_id)):
-            op = levellog.begin(guarded, settings.APPROVE_PLAN, level, "digest:%s" % given if given else "")
-        written = False
-        try:
-            written = add(guarded, resolved.project_id, entry)
-        except BaseException as exc:
-            if op is not None:
-                levellog.finish_refused(guarded, op, str(exc) if isinstance(exc, Exception) else type(exc).__name__)
-            raise
+        written, op = levelrun.logged(
+            guarded, settings.APPROVE_PLAN, level, lambda: add(guarded, resolved.project_id, entry),
+            "digest:%s" % given if given else "",
+            needed=not any(_same(item, entry) for item in load(guarded, resolved.project_id)))
     except levellog.LogError as exc:
         return _refuse(err, "%s; nothing was recorded" % exc)
     except (PlanApprovalError, approvalcmd.ApprovalError) as exc:
@@ -424,12 +417,11 @@ def _approve_without_terminal(guarded, argument, given, out, err, cwd):
         return 130
     out.write("%s: %s (region %s)\n" % ("approved" if written else "already approved", display.ascii_text(plan),
                                         report.region_hash))
-    if op is not None:
-        try:
-            levellog.finish(guarded, op, "done", "recorded")
-        except levellog.OutcomeError as exc:
-            err.write("the approval was recorded, but its outcome was not logged: %s\n" % display.clean(str(exc)))
-            return 3
+    try:
+        levelrun.done(guarded, op)
+    except levellog.OutcomeError as exc:
+        err.write("the approval was recorded, but its outcome was not logged: %s\n" % display.clean(str(exc)))
+        return 3
     return 0
 
 

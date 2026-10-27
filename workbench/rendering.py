@@ -32,19 +32,31 @@ LOCAL_MANIFEST = localmanifest.PATH
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
 RULES = ("deny", "ask", "none", "unruled")
 
-Plan = collections.namedtuple("Plan", "keys ask open")
+Plan = collections.namedtuple("Plan", "keys ask open deny", defaults=((),))
+
+# The single-word agent-safe actions that have a key (``levels.agent_keys``), as the word after ``wb``.
+_AGENT_WORDS = frozenset(key[3:] for key in levels.agent_keys() if " " not in key[3:])
 
 
 def key_patterns(key):
-    """The shell patterns that deny the command `key` names (every spelling), or ``[]`` for a key with no command."""
+    """The shell patterns that deny the command `key` names (every spelling), or ``[]`` for a key with no command.
+
+    A key is an owner-run command, an agent-safe action (``wb check``, ``wb preview install``) or an argument a module
+    declares (``wb run <command> <argument>``). A hook entry point, a dispatcher word and a checkpoint that is not a
+    command have no patterns."""
     if key == levels.APPROVE_PLAN:
         return rules.owner_run_command_patterns(key)
+    if key in levels.COMMAND_OF_CHECKPOINT:
+        return rules.owner_run_command_patterns(levels.COMMAND_OF_CHECKPOINT[key])
     if key.startswith("wb run "):
         parts = key.split(" ")
         if len(parts) >= 4:
             return rules.command_owner_patterns(parts[2], [" ".join(parts[3:])])
         return []
-    if key.startswith("wb ") and key[3:] in rules.OWNER_RUN:
+    if key.startswith("wb preview "):
+        action = key[len("wb preview "):]
+        return rules.owner_run_command_patterns("preview " + action) if action in rules.PREVIEW_ACTIONS else []
+    if key.startswith("wb ") and (key[3:] in rules.OWNER_RUN or key[3:] in _AGENT_WORDS):
         return rules.owner_run_command_patterns(key[3:])
     return []
 
@@ -59,7 +71,7 @@ def plan(table, gated=True):
     """The ``Plan`` for the effective `table` (key to level): the rule each key renders, the patterns to ask and the
     patterns not to deny (those at ``ask`` and ``none``, and only their ``wb`` spellings). With `gated` false the harness
     cannot render the command gate, so no key is relaxed and every command renders a ``deny``."""
-    keys, ask, opened = {}, [], []
+    keys, ask, opened, denied = {}, [], [], []
     for key in table:
         patterns = key_patterns(key)
         level = table[key]
@@ -74,7 +86,8 @@ def plan(table, gated=True):
             opened.extend(_wb_forms(patterns))
         else:
             keys[key] = "deny"
-    return Plan(keys, ask, opened)
+            denied.extend(patterns)
+    return Plan(keys, ask, opened, denied)
 
 
 def digest(table):
@@ -85,8 +98,15 @@ def digest(table):
 
 def table_of(guarded, checkpoints, commands):
     """The effective table (key to level) for the owner's settings, the declared `checkpoints` and the installed
-    `commands` (``(name, owner-run arguments)``)."""
-    return dict(settings.effective(settings.load(guarded), checkpoints, (), commands).levels)
+    `commands` (``(name, owner-run arguments, all declared arguments)``, the last optional).
+
+    An agent-safe key, and a declared argument that is not owner-run, is in it only when its level is not its default
+    ``none``: a key at ``none`` renders nothing, so it must not change the digest a record says it rendered from, and the
+    command gate must not count it as relaxed. The default table is therefore the one it was before those keys had a
+    level, and a key the owner sets to ``block`` is in it and renders a ``deny``."""
+    keys = levels.registry(checkpoints, commands)
+    table = settings.effective(settings.load(guarded), checkpoints, (), commands).levels
+    return {name: level for name, level in table.items() if not (keys[name].agent and level == levels.NONE)}
 
 
 def current_table(guarded, start):
@@ -99,7 +119,7 @@ def current_table(guarded, start):
     table = table_of(
         guarded,
         tuple(name for item in found if item.module.type == "process" for name in item.module.checkpoints),
-        [(command.name, command.owner) for item in found for command in item.module.commands])
+        [(command.name, command.owner, command.arguments) for item in found for command in item.module.commands])
     return table, root, ident
 
 
@@ -196,7 +216,11 @@ def _attached_harness(root):
 
 
 def effective_level(guarded, project_id, root, table, key):
-    """The level of `key` now: its level in `table` unless that is ``ask`` or ``none``, which hold only while the
+    """Not for an agent-safe key or a declared module argument that is not owner-run: ``table_of`` leaves such a key out
+    while it is at its default ``none``, and a key missing from `table` reads as ``block`` here, so asking would read
+    ``block`` for a command that is allowed.
+
+    The level of `key` now: its level in `table` unless that is ``ask`` or ``none``, which hold only while the
     record exists and is sound, names the attached harness, says it provides permissions and rendered the command gate,
     was rendered from this table, lists the key with the matching rule, and the harness file and the shared settings
     file now hash to the record's hashes. Anything else, and a key or level that is not known, reads as ``block``."""

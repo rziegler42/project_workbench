@@ -2,10 +2,15 @@
 
 Status: Current
 
-Written by plan `2026-10-26-command-permission-levels` (Increment H), which built it. It describes the levels table, the keys, the
-log, the rendering record, the command gate and `approve-plan` at the levels `ask` and `none`. One key, `approve-plan`, is built
-beyond `block`; every other key offers `block` only. Extending a review (`wb run review-engine extend`) was part of the design,
-was not built, and is listed under "Not built". The design is `docs/decisions/2026-10-26-per-command-permission-levels.md`.
+Written by plan `2026-10-26-command-permission-levels` (Increment H), which built the levels table, the keys, the log, the
+rendering record, the command gate and `approve-plan` at the levels `ask` and `none`, and extended by plan
+`2026-10-27-a-level-for-every-command`, which built a level for every command (the section "A level for every command"): a key for
+every command and subcommand the owner can govern, the agent-safe ones included, a default that suits each, and `none` for every
+owner-run installer command and for `accept-decision`. `approve-plan` alone offers `ask` and `delegated`. The keys that still offer
+`block` only are listed under "Not built". The design is `docs/decisions/2026-10-26-per-command-permission-levels.md`, as refined by
+`docs/decisions/2026-10-26-permission-levels-as-built.md` and `docs/decisions/2026-10-26-a-level-for-every-command.md` (all accepted),
+which state what stands, what changed and what was not built; where they differ on the defaults or the offered levels, this spec
+follows the later record.
 
 ## Scope
 
@@ -20,7 +25,8 @@ a harness renders it, and the command gate that protects the rendering.
 - The actions governed by action review, `safe-git commit` and `remove`, and the push check
   (`2026-10-25-module-commands-and-the-approver`, `action-review.md`).
 - A command that builds a table for the owner. The owner edits the personal settings by hand, as for checkpoints today.
-- Changing who accepts a decision or what an approval means. Only the owner's act makes a decision `Accepted`.
+- Changing what an approval means. Only the owner's act makes a decision `Accepted`, unless the owner loosens that through the
+  `accept-decision` key.
 
 ## Assumptions and constraints
 
@@ -50,15 +56,22 @@ a harness renders it, and the command gate that protects the rendering.
 | `ask` | the agent | the owner confirms a harness prompt, and the command carries the digest of its preview |
 | `none` | the agent | nothing |
 
-Strictness, from strictest to least strict: `block`, `ask`, `delegated`, `none`. A key's level is the stricter of its checkpoint
-reading and its table entry.
+`none` is a level and not the absence of one: it means that the command needs no confirmation and no gate, and its run is still
+logged. `delegated` sits in the order by convention; it is a gate the command declares and not a step between `ask` and `none`.
+
+Strictness, from strictest to least strict: `block`, `ask`, `delegated`, `none`. It orders the levels and settles nothing between a
+checkpoint and the table: a key's level is its table entry, else its checkpoint reading, else its shipped default (see "The table").
 
 ### The table
 
 The personal settings accept `version` 1 and 2. Version 2 may hold an object `levels`, from a key to a level; in a version 1 file
 `levels` is an unknown entry and is ignored. A new file is seeded at version 1, so the owner changes `version` to 2 by hand to
-use `levels`. A version 1 file reads its `checkpoints` as `stop` = `block` and `delegate` = `delegated`. When a key is in both,
-the stricter applies and `wb settings` notes a difference.
+use `levels`. The table is the single source of a level: an entry wins over the key's checkpoint in either direction, so loosening
+a key is one edit. A `checkpoints` entry in the file is only a fallback for a key the table does not name, and its word is read as a
+level, `stop` as `block` and `delegate` as `delegated`; `wb settings` prints a `translated <key>: <word> read as <level>` line for
+each such reading (it is not a problem, so it is not a `settings:` line). When a key is in both and they differ, `wb settings`
+notes that the level applies. `delegate` still takes effect for `approve-plan` only; a `delegate` that cannot take effect has its own note
+and no `translated` line.
 
 A key is a process module's declared checkpoint name (`approve-plan`, `accept-decision` and the others), or the command in the `wb`
 spelling: `wb install`, `wb adopt`, `wb add`, `wb upgrade`, `wb attach`, `wb approve`, `wb pin`, `wb recover`,
@@ -71,10 +84,13 @@ separated by single spaces, at most 96 characters.
 ### Reading rules
 
 1. A missing file is seeded as today. A damaged file, an unsupported version, a duplicated key or a `levels` that is not an object
-   reads as `block` for the whole table. A value that is not one of the four levels reads as `block` for that key. A key that is
-   not a valid name blocks the whole table, because a mistyped key must never leave a default of `ask` in force. `wb settings`
-   reports each.
-2. A key with no entry reads as its shipped default (below).
+   reads as `block` for the whole table, except for the agent-safe keys and the declared module arguments that are not owner-run: they
+   keep their default `none`, so that the agent can still run `wb settings` and `wb check` to report the damage (the owner's decision,
+   Increment C). An explicit `block` the owner wrote for such a key is therefore not honored while the file or the table is
+   damaged, even when the damage is one mistyped key elsewhere; it applies again once the file is repaired and the harness is
+   attached again, and a `deny` already rendered into an attached clone stays until then. A value that is not one of the four levels reads as `block` for that key. A key that is not a valid name blocks
+   the whole table, because a mistyped key must never leave a default of `ask` in force. `wb settings` reports each.
+2. A key with no table entry reads as its checkpoint reading if the file sets one, and otherwise as its shipped default (below).
 3. A level the key does not offer reads as `block` with a note.
 4. A key on the compiled floor is refused, with a problem, and ignored. A valid key that no installed module or the installer
    declares is noted and ignored.
@@ -84,12 +100,14 @@ separated by single spaces, at most 96 characters.
 - `block`: every key.
 - `delegated`: `approve-plan` only, whose gate is a converged, sealed review of the exact bytes (`delegation.py`). The gate must
   pass at the moment of the run, and the run counts only while the table still reads `delegated`.
-- `ask` and `none`: `approve-plan` only. A key offers a level only from the version that builds it for that command; `accept-decision`
-  and every other key offer `block` only.
+- `ask`: `approve-plan` only. `none`: `approve-plan`, `wb install`, `wb adopt` (built by Increment F), `wb upgrade` and `wb add` (built by Increment G), `wb approve` and `wb pin` (built by Increment H), `acknowledge-first-tier`, `acknowledge-second-tier`, `wb recover`, `wb attach` and `wb release-approvals` (built by Increment J), `accept-decision` (built by Increment K), every agent-safe action and
+  every declared module argument that is not owner-run; the keys under "Not built" offer `block` only. A key offers a level only
+  from the version that builds it for that command.
 
 ### Shipped defaults
 
-Every default is `block`. The mechanism for another default exists (`levels._DEFAULTS`), and the default of `approve-plan` was
+Every default is `block`, except the agent-safe actions and the declared module arguments that are not owner-run, which default to
+`none` because an agent may run them today. The mechanism for another default exists (`levels._DEFAULTS`), and the default of `approve-plan` was
 meant to become `ask` once a probe passed. The probe (below) showed that `ask` is bypassable by a script the agent writes and
 runs, which the owner accepted in writing, and the owner left the default at `block`: `ask` and `none` are the owner's opt-in.
 
@@ -132,6 +150,14 @@ spellings (`python3 -m workbench …`) stay denied, because an `ask` for them wo
 The floor's `ask` rules and the deny on the guarded store are unchanged. If the harness cannot render the command gate (it must
 provide `hooks` and its layout must describe `hooks.command_gate`), no key is relaxed and every key renders a `deny`.
 
+An agent-safe key and a declared module argument that is not owner-run (Increment C) render a `deny`, in every spelling, bare and
+with arguments, only when the owner has set the key to `block`; at its default `none` it renders nothing. Such a key is in the
+rendered table, in the record's `keys` (as `deny`) and in the table digest only while it is not at its default, so the default table,
+its digest and the command gate (which counts only keys at `ask` and `none`) are what they were before these keys had a level, and a
+clone attached earlier keeps its record. Setting an agent-safe key to `block` after attach changes the digest, so a relaxed key then
+reads `block` until the harness is attached again, as for any change to the table. The hook entry points `gate`, `agent-gate` and
+`gate-command` are not keys, so a `deny` for another key never stops a rendered hook.
+
 **The rendering record.** At attach, before the files, the installer writes `projects/<id>/rendering` in the guarded store, strict
 JSON, format 2: `harness` (the module name), `permissions`, `gate`, `table_digest` (of the effective table rendered from), `file` and
 `file_hash` (the permissions file), `shared` (`path` and `hash`: the shared project settings file the layout names, `null` if it
@@ -169,9 +195,37 @@ escape sequence, a glob character or an expansion standing for a letter, and the
 to nothing). A command with more than 64 `$'…'` strings is blocked. The agent-safe `delegate-approve-plan` is exempt from the
 word test, but not from the in-order rule.
 
+A key whose command is an ordinary word (`wb install`, `wb adopt`, `wb add`, `wb pin` and the other single-word owner-run keys,
+as opposed to `approve-plan` and `wb run <command> <argument>`) is read in command position (built by Increment E; decision
+`2026-10-27-command-gate-command-position`): the gate counts a command as naming it only when it holds a launcher and the word, in either order
+(`echo install | xargs wb` passes the word to the launcher as data), where the launchers are `wb` (also the end of the store's `bin/wb`) and `workbench` (of `python3 -m workbench`; the last
+words of `rules.SPELLINGS`). The folding, the skeleton, the decoding of `$'…'` and the in-order rule for expansions, globs and
+escapes are applied to the pair, so `w""b install`, `wb inst""all` and `wb $'\x69nstall'` are blocked, and `npm install`, `git add`, a
+commit message or a path that holds the word are allowed. The exact pair `preview <action>` for each action of
+`rules.PREVIEW_ACTIONS` is removed before the search, as `delegate-approve-plan` is, for these keys only; the pattern rule still reads the text as written,
+so a preview that holds an expansion or a glob (`--dir $PWD`) is blocked and is run with the path spelled out. A command that names the word with no launcher
+before it, such as an alias or a script the agent wrote that wraps the call, is not seen; the classifier remains the barrier for
+it, as for the other limits listed under "Limits".
+
+For these keys two more forms are not taken for the word (built by Increment I; decision `2026-10-27-command-gate-literal-arguments`).
+A command that is exactly one literal `wb run <name> <arguments>`, matched in full on the raw text through `wb` or the store's `bin/wb`, with a
+name of the form a pin or a command has that is not a launcher, a verb of `rules`, `python` or `python3`, and arguments that are plain tokens
+(`[A-Za-z0-9._/:=@,+-]+`) or single-quoted strings (any character, a newline included), names the word only as data: `wb run` runs a
+declared, pinned module command and never an owner-run verb. So `wb run safe-git commit --subject 'Add tests' -- tests/test_add.py`
+passes with `wb add` relaxed, whatever words the subject and paths hold. An operator, a substitution, a double-quoted or escaped
+argument, a trailing newline or any other form is judged as before, and the keys `wb run <command> <argument>` and `approve-plan` are
+not exempted, nor is `wb run --provides <capability> <name> ...` (a name does not start with `-`). And a launcher followed by the exact
+token of a command that continues the word (`wb approve-plan` for `wb approve`, taken from `rules`) is removed before the search, as
+`preview <action>` is, so relaxing `wb approve` does not block `wb approve-plan`; the token alone stays, so `A=approve-plan; wb ${A%-plan}`
+is still seen however far apart they are, and the in-order rule still reads the text as written. What stays blocked with such a key relaxed: any other command that holds a launcher and the word
+(`wb check tests/test_install.py`, `git diff workbench/install.py`, whose `workbench` is a launcher), `git commit -m 'add new base'`
+for `wb add` (the skeleton joins `new base`), and a command with `$ ? * [ {` and scattered letters. The reason the gate prints for a
+key at `none` does not name an `ask` rule: it says the form cannot be told from a call and that a path with `~` or `$VAR`, a wrapper or a
+compound command is read that way.
+
 ### The log
 
-Every run at a level other than `block` appends two lines to `level-log` in the guarded store, never rewriting one: the attempt, with
+Every run at a level other than `block` that goes on without a terminal appends two lines (except `attach` and `release-approvals` where no level can be read, a run that changes nothing, and `accept-decision`, which no command runs; see their paragraphs above) to `level-log` in the guarded store, never rewriting one: the attempt, with
 a random operation identifier, the time, the key, the level and the evidence (`digest:<d>` at `ask`, `converged-<n>-of-<bound>` for a
 delegated approval, empty at `none`); then the outcome, with the same identifier, the time, `done` or `refused`, and a reason of at
 most 200 printable ASCII characters. Lines are tab-separated, at most 1,024 bytes, and written by one `write` to a descriptor opened
@@ -185,18 +239,204 @@ list the operations and the attempts with no outcome as unfinished (a killed pro
 ### `wb settings`
 
 It prints the `checkpoint` and `cap` lines it always printed, then one `level <key>: <level>` line for every key it knows: the
-declared checkpoints, then the installer's owner-run commands, then `wb run <command> <argument>` for the installed modules'
-owner-run arguments, with the defaults and the table applied. Problems and notes print as `settings:` lines. Two declarations that
+declared checkpoints, then the installer's owner-run commands, then the agent-safe actions (`wb verify`, `wb preview install`,
+`wb preview adopt`, `wb preview upgrade`, `wb preview add`, `wb launch`, `wb check`, `wb plan-status`, `wb settings`), then `wb run
+<command> <argument>` for each argument the installed modules declare (an owner-run argument first), with the defaults and the
+table applied. An agent-safe key and a declared argument that is not owner-run default to `none`; every other key defaults to `block`.
+The hook entry points, the dispatcher words and `delegate-approve-plan` are not keys. As built by Increments A and C of the plan, a
+`block` set on an agent-safe key is rendered as a `deny` at the next attach ("Rendering"); the table a harness renders and digests holds
+an agent-safe key only when it is not at its default, so an attached clone's record is unchanged. After the `level` lines it prints one `translated <key>:
+<word> read as <level>` line for each checkpoint word it read as a level because the table does not name the key (Increment B).
+Problems and notes print as `settings:` lines. Two declarations that
 give one key are a refusal.
+
+## A level for every command
+
+Built by the plan `2026-10-27-a-level-for-every-command`, Increments A to K, and described here as built. It is the owner's direction
+of 2026-10-26. Calls marked **(call)** were approved with the section on 2026-10-26. Where a paragraph says "built by Increment ...",
+that increment of the plan built it; the keys it did not build are under "Not built".
+
+**Intent.** The owner chooses their own risk appetite, command by command, and may loosen any protection that is theirs to loosen.
+A state in which an owner has set every key to `none`, and so has no protections left on the commands, is an outcome of that
+freedom and not a feature: there is no master switch, profile or command that sets it.
+
+**Coverage.** Every command and subcommand that `cli.py` routes has a key, the agent-safe ones included (`verify`, `preview install`,
+`preview adopt`, `launch`, `check`, `run`, `plan-status`, `settings`), so the owner can tighten a command that is always allowed
+today. The hook entry points `gate`, `agent-gate` and `gate-command` are the exception: the harness runs them, they are not keys and
+they stay always allowed (the owner's decision). A test fails when `cli.py` routes any other command or subcommand with no key, as the test
+in `rules.py` does for the owner-run and agent-safe split. A subcommand has a key when it is a different action (`wb preview
+install`, `wb preview adopt`, `wb run <command> <argument>`). A word that only dispatches (`wb run`, `wb preview`) is not a key, and each action reaches
+one key, so no parent can tighten or bypass an action beneath it; `delegate-approve-plan` reaches the key `approve-plan`. A flag that
+changes only how a command reports, such as `--digest`, belongs to its command's key. Each argument a module declares for a command has a key, derived from the declaration with no new field
+**(call)**: an owner-run argument defaults to `block`, any other declared argument to `none`, as an agent may run it today. The
+contract has no read-only declaration, so none is used. An undeclared command or argument is refused and has no key.
+
+**Defaults.** A default is what the command does today **(call)**. An agent-safe command, which only reads or runs a helper that
+checks its own pin, defaults to `none`. The owner-run commands, the checkpoints and the owner-run module arguments keep their
+default of `block`. `approve-plan` stays `block`; the default is not raised to `ask` (see "Shipped defaults").
+
+**Levels offered.** Every key offers `block` and `none`, except the owner-run arguments of module commands (`wb run <command>
+<argument>` where the argument is owner-run), which offer `block` only until a later plan gives the module contract a way to pass a
+level to a helper (the clarification note of `2026-10-26-a-level-for-every-command`, and "Not built"). `delegated` stays `approve-plan` only, and `ask` is offered by a key once
+that key has a preview digest of its own, built as `approve-plan`'s is. Every key built by the plan offers `none`; the keys that still offer `block` only are listed under "Not built". The order of building the digests is for a plan **(call)**: `install` and `adopt` first, because they already have a
+preview, then the module arguments and `extend` (the deferred Increment G). At `none` an owner-run command runs without a terminal
+and without a harness `deny`; the command's own checks of its input and its log entry apply, and the terminal prompt does not.
+`accept-decision` offers `block` and `none`, and `AGENTS.md` says that the owner decides who accepts a decision.
+
+**One table** (built by Increment B). The `levels` table is the only place a level is set. A version 1 file's `checkpoints` are read as a fallback for a
+key the table does not mention, and a table entry wins in either direction, so loosening a key is one edit. The checkpoint words
+`stop` and `delegate` are aliases, read from a version 1 file, for `block` and `delegated`; the `level` lines of `wb settings` print
+only the four level names, and a `translated` line says what a checkpoint word was read as. This replaces the rule that a key's level is the stricter of its checkpoint reading and its
+table entry **(call)**.
+
+**One way to run at `none`** (built by Increment D; `approve-plan`, `install`, `adopt`, `upgrade`, `add`, `approve` and `pin` use it). Two modules hold what every owner-run
+command shares. The kit's `wbkit/levels.py` is the part that needs nothing else of the workbench: `may_run(level, terminal)` is true
+at a terminal and, without one, only for the level `none` (a missing, unreadable or unknown level is no level, so only a terminal
+runs), and the log's attempt and outcome lines and their append (`begin`, `finish`, `finish_refused`), which `levellog.py` calls
+so that the installer and a helper write one format. Adding it did not change a kit function, so `wbkit.API` stays 1. The
+installer's `levelrun.py` adds what needs the rendering record: `route` goes on at a terminal without reading anything, and
+otherwise reads the key's level as `approve-plan`'s is read (`rendering.effective_level`: the record, the hashes and the gate must
+hold) and refuses with the caller's text unless `may_run` says the command may go on; `logged` and `done` write the attempt after
+every check and just before the change and the outcome after it, and write nothing for a run that changes nothing. `approve-plan`
+uses `level_now`, `logged` and `done`, and its behavior is unchanged.
+
+**`install` and `adopt` at `none`** (built by Increment F). The keys `wb install` and `wb adopt` offer `block` and `none`. The level is read
+for the project the command is run from (the directory the agent works in, not the target, which is a new or adoptable directory), as
+`levelrun.route` reads it: at a terminal nothing is read and the command asks for the digest as before; without one, `none` holds only
+while the rendering record, the live hashes and the gate hold, and any other state refuses with the terminal-only message (and, when the
+level could not be read at all, the reason). At `none` the command prints the plan and its digest, runs the same reads and checks (the
+target, each source, the approval of every module, a second build of the plan that must give the same digest) and asks nothing; it
+writes the attempt (`wb install` or `wb adopt`, `none`, `digest:<the 64 hexadecimal characters>`) just before the first write and the
+outcome after the last, `done` with `written` for exit 0 and `refused` with the exit code when it stopped after writing (exit 3,
+including a failed attach). If the attempt cannot be written, nothing is written. An outcome that cannot be written after the writes
+exits 3 and says so. The level is read once, before the sources are fetched and the plan is built twice, as `approve-plan` reads it; a level or harness edit made
+during those steps is not seen until the next run. The target is never the project the level was read for (a directory that holds
+`.workbench` is refused), so there is no second project to compare it with, but a new directory inside that project, or a repository
+that contains it, is accepted: the level is the owner's setting for the project the agent works in. An interrupt after the writes
+exits 3 and says so. The command takes the same arguments and no flag; a run at a terminal is not logged. The harness's `deny` for
+the command is removed only for the `wb` spelling, so `python3 -m workbench install` stays denied.
+
+**`upgrade` and `add` at `none`** (built by Increment G). The keys `wb upgrade` and `wb add` offer `block` and `none`, and the level is read
+as for `install`. Unlike `install`, these commands act on the project the level was read for, so the plan's project (the seed of its
+manifest) must be that project: if it is not, the command refuses and writes nothing. At `none` and with no terminal, the command prints
+the plan and its digest, runs every check it runs at a terminal (the acknowledgement of changed files, the approval of every module, a
+second build of the plan that must give the same digest) and asks nothing. An unacknowledged change is refused as before, with nothing
+written, and the log has no entry; `wb acknowledge` stays owner-run. The attempt (`wb upgrade` or `wb add`, `none`, `digest:<64 hex>`) is
+written just before the first write and the outcome after the last: `done` with `written` for exit 0, `refused` for any other exit
+(`refused before writing`, or `stopped after writing (exit 3)`). A run that has nothing to change writes no entry. If the attempt cannot
+be written, nothing is written; an outcome that cannot be written after the writes exits 3 and says so. The command takes the same
+arguments and no flag, and the `deny` is removed only for the `wb` spelling, as for `install`. `levelrun.apply_logged` is the one place
+that writes the attempt and the outcome for these four commands.
+
+**`approve` and `pin` at `none`** (built by Increment H). The keys `wb approve` and `wb pin` offer `block` and `none`. **At `none` an agent can
+make a package or a helper trusted**, which is what the accepted decision `2026-10-26-a-level-for-every-command` records as the owner's
+choice: an approval is what lets the installer verify and gate a package, and a pin is what lets `launch` run a helper. The level is read
+by the command line for the project the working directory is in (`levelrun.route`); at a terminal nothing is read and the typed
+confirmation applies as before. Without one, `none` holds only while the rendering holds, and any other state refuses with the
+terminal-only message. At `none` the command prints what the owner would have been shown (the request of `approve`, the path, size and
+hash of the helper for `pin`), asks nothing, runs the same checks (the package verifies, or the helper is read inside the project root; a
+second read must give the same hashes) and writes the attempt (`wb approve` or `wb pin`, `none`, `digest:<the full tree hash of the
+package or module, or the sha256 of the helper>`) just before the first record and the outcome after the last. `approve` is machine-wide
+and compares no project; `pin` acts on the project named by its `<project-id>` and its `--root`, which must be the project the level was read for (the
+same id and the same directory), or it refuses and writes nothing. An approval already on file changes nothing and writes no entry. The first-party approvals the installer
+ships are not touched: only the package and module records of the approved content, the pin file and the level log are written. If
+the attempt cannot be written nothing is recorded; an outcome that cannot be written after the records exits 3. `approve --source` fetches
+into the cache before the attempt is written, as an `install` does. An approval that stops part way (a store error) exits 1 and says which
+records it wrote, and its logged outcome reads `refused before writing`, which is then not exact; the stderr report is.
+Limits, accepted for now: the connection and the cache write of `approve --source` happen before the attempt is logged, as for `install`, so
+a fetch that fails or is already approved leaves no entry; `approve` is machine-wide, but the level is read for the project the working
+directory is in, so an agent in any project where the owner set `wb approve` to `none` can approve for every project; and the level is
+read once, before the fetch and the second verification, so a harness edit made in between is seen at the next run. `pin` reads its
+`--root` as spelled and refuses one that names the project only through a link or `..`.
+
+**`acknowledge`, `recover`, `attach` and `release-approvals` at `none`** (built by Increment J). The keys `acknowledge-first-tier`,
+`acknowledge-second-tier`, `wb recover`, `wb attach` and `wb release-approvals` offer `block` and `none`; the shipped defaults stay
+`block`. The command line reads the level for the project the working directory is in (`levelrun.route`), as for the commands above.
+*`acknowledge`* is governed by the checkpoint `acknowledge-first-tier` (the owner's choice): every path the command can list has a
+baseline, so it is the manifest, a file under `.workbench/`, `AGENTS.md` or a seeded file, which are first-tier material, and the
+real direction documents (roadmaps, specs, plans, decisions) are not baselined. The checkpoint stands for the command, so at `none`
+the `wb acknowledge` `deny` is not rendered (the interpreter spellings stay denied) and the command gate guards the word
+`acknowledge` in command position. **At `none` an agent can accept changes someone else made to the files that instruct and run
+it, and move the pin of a helper whose file was edited, so that the launcher runs the new bytes (the same trust as `wb pin` at `none`).** `acknowledge-second-tier` offers `none` as the plan lists it, but `wb acknowledge` never lists a second-tier file, so it governs
+no installer command today; it matters only to the agent's own checkpoint behavior. At `none` the command prints the same list and
+digest, asks nothing, examines the project again (the digest must be the same) and writes the attempt (`acknowledge-first-tier`,
+`none`, `digest:<64 hex>`) just before the baselines and the outcome after; the project listed must be the one the level was read
+for, and nothing in the project is written. A run with nothing to acknowledge writes no entry. *`recover`* at `none` prints the same
+examination and digest, asks nothing, examines again, and writes the attempt (`wb recover`, `none`, `digest:<64 hex>`) just before the
+first removal and the outcome after; the same states are cleared and the same ones refused. The marker's record is unauthenticated
+text and the marker of a failed `install` or `adopt` names no project and is in a new directory, so such a target is not compared with
+the project the level was read for (the level is the owner's setting for the project the agent works in, as for `install`); a marker
+that names a project (an unfinished `upgrade` or `add`) must name that one, which stops a mistake and not a forged marker. `attach`
+acts on its target as `install` does and compares nothing; its log entry records the level of the project the command was run from. *`attach` and `release-approvals`* have no
+terminal test and no digest, so at `none` the only change is that the `deny` is not rendered. A run without a terminal at a verified
+`none` is logged (the attempt before the command is run, the outcome after: `done` with `written` for exit 0 and `refused` with
+the exit code otherwise, a refusal included, because the command makes its own checks); a run at a terminal, at another level, or
+where no level can be read (a directory that is no project) goes on exactly as before and writes no entry, so an agent that
+runs from a directory where the level cannot be read (a directory with no project, a decoy `.git` with an unreadable manifest, a deleted
+working directory) is not logged: the log is a record and not a control, and the owner who wants these runs refused where no level
+is readable asks for that as a separate change; at a verified `none`
+an attempt that cannot be written refuses the run and nothing is done, which these two commands did not do before. The attempt is
+written after the launcher wrapper under `bin/` is refreshed, which every command does first, at a terminal or not. A refusal for a
+level that could not be read carries the reason after the terminal-only text. `release-approvals`
+writes the approvals shipped with the first-party packages, so at `none` an agent can make the first-party packages trusted.
+
+**`accept-decision` at `none`** (built by Increment K). The checkpoint `accept-decision`, which the process module declares, offers `block` and
+`none` and defaults to `block`. It governs no command of the installer: an agent accepts a decision by editing the record, so the
+level is read by the guidance. The `draft-decision` skill tells the agent to run the one read-only command `wb settings` and to mark a
+record it drafted `Accepted`, in its status line and in its index row, only while the output holds the line `level accept-decision:
+none`; on any other line, when the line is missing or when the command fails, it stops at `Proposed` and asks the owner, and a file, a
+review or a reply is never that level. This repository's `AGENTS.md` says the same; the managed block that the groundwork module writes into other projects still says that only the
+owner accepts a decision, which is stricter and wins there, so the skill's exception reaches a project only through its own `AGENTS.md`. **At `none` an agent can accept a decision,
+and an accepted decision outranks the code** (`## Source of truth` in `AGENTS.md`); that is the owner's choice and it is not
+logged. Nothing in the installer enforces the level, because accepting is an edit to a tracked file; the barrier is the guidance and
+the owner's review of the commit.
+
+**Out of scope.** The compiled hard-stop floor is unchanged and is not a key (see "Non-goals").
+
+**Decision.** `2026-10-26-a-level-for-every-command` (accepted by the owner on 2026-10-26) refines
+`2026-10-26-per-command-permission-levels` and `2026-10-26-permission-levels-as-built` on the offered levels, the shipped defaults
+and the checkpoint rule, and the note that `accept-decision` offers `block` only. `2026-10-19-restrictive-only-permissions` is not
+changed: a level of `none` renders no rule, so the neutral rule list still holds only `ask` and `deny`.
+
+**Left to the builder.** The order of the increments, each key's digest content, the wording of the notes, and the layout of
+`wb settings` output, which is grouped by command.
+
+### Acceptance criteria of the plan
+
+P1. Every command and subcommand `cli.py` routes has a key, except `gate`, `agent-gate` and `gate-command`, and the drift test fails
+when any other has none.
+P2. With no settings, every agent-safe command reads `none` and every other key reads as it does today, `block`.
+P3. A table entry sets the level of its key in either direction, whatever the key's checkpoint says; a version 1 `stop` or
+`delegate` for a key the table does not mention reads as `block` or `delegated`, with a note.
+P4. Every key except the owner-run arguments of module commands accepts `block` and `none`, and a level a key does not yet offer
+reads as `block` with a note.
+P5. With every such key set to `none`, no command refuses for want of a terminal or a harness `deny`, the floor still applies, and
+each run that changes something is logged.
+P6. `accept-decision` set to `none` lets an agent accept a decision, and at `block` it does not.
+
+As built: P1 is the drift test of `rules`/`levels` and the tests of the agent-safe keys (Increment A); P2 and P3 are the tests of the
+registry, the settings and `wb settings` (Increments A and B); P4 is the offers tests of `test_levels`, `test_settings` and
+`test_approve_levels`; P5 is `tests/test_install_levels.py`, `test_upgrade_levels.py`, `test_approve_pin_levels.py`,
+`test_ack_recover_levels.py` and the command-gate tests, with the owner's trials in the plan's Result (Increments D to J); P6 is the
+offers test for the key and the draft-decision skill test of the groundwork module (Increment K). P5 holds for every key that offers
+`none`; it does not hold for the keys under "Not built", which offer `block` only. P6 is guidance, not enforcement: the test pins
+what the skill says.
 
 ## Not built
 
+- `none` for the owner-run arguments of module commands (`wb run mempalace init`, `mine`, `wb run remote-runner fetch-overwrite`
+  and the review engine's `reset`, `archive`, `prune`, `amend`, `extend`). The helper checks its own terminal and the contract has no
+  way to pass it a level. A later plan, after a decision on the module contract, would let the launcher pass the level and have the
+  helper use the kit's level function. Until then these keys offer `block` only.
 - `wb run review-engine extend` at `ask` and `none` (Increment G of the plan). The declaration schema (`declarations.py`) has no
   field for the levels an owner-run argument offers, and the installer may not name a module's command. A later plan needs: a field
   such as `levels` on a command, a decision for that change to the module contract, a helper that prints and checks a digest of the
   review's `status` and `n`, and the log attempt written before the helper is launched.
-- The keys `reset`, `archive`, `prune`, `amend`, `acknowledge-second-tier`, `submit-remote-job` and `push-shared-branch`: each needs
-  its own preview digest and offers `block` only. `accept-decision` offers `block` only because only the owner accepts a decision.
+- The keys `submit-remote-job` and `push-shared-branch`, and the review engine's `wb run review-engine reset`, `archive`, `prune` and
+  `amend` (already in the first item): each needs its own preview digest for `ask` and offers `block` only. The checkpoints `fetch-remote-output` and `change-direction` also offer `block` only: the plan
+  built `none` for the installer commands and for `accept-decision`, and these two are agent checkpoints that no command of the
+  installer runs, so a `none` for them has nothing to change. The accepted decision says no key should be limited to `block`; this
+  list is the gap, and the owner decides whether a later plan closes it.
 - The rule that a command reaching more than one key takes the strictest level of them: each command reaches one key today.
 - A command that re-renders an attached clone, so a table or module change leaves `ask` and `none` reading `block` until a new clone
   is attached.
@@ -234,7 +474,8 @@ clarification note) and are tested where a test can show them (`tests/test_comma
 
 ## Acceptance criteria
 
-1. With no settings, or with a version 1 file, every key reads `block`, and the safety controls are unchanged: the floor, the
+1. With no settings, or with a version 1 file, every key reads `block` except the agent-safe actions and the declared module
+   arguments that are not owner-run, which read `none`, and the safety controls are unchanged: the floor, the
    harness `deny` rules, the guarded store and the terminal tests. `wb settings` prints the same checkpoint lines as before.
 2. A table with an unknown key, a level that is not offered, a floor key, a duplicate key, a key that is not a valid name or a value of
    the wrong type is reported, and the affected key (or the whole table, for a bad key name) reads as `block`.
@@ -263,11 +504,21 @@ agent in rounds for each increment and by the `security-reviewer` agent for the 
 the built code; none of the security reviews could run an experiment, and the strings they proposed were run by the author. See the
 plan's Result.
 
+The section "A level for every command" (then called "Planned: a level for every command") was reviewed on 2026-10-26 by the review engine (spec review `spec-5bcae25932e2d2fa`,
+`ask-codex`, model `gpt-5.6-terra`, effort medium): one round of the bound of 3, one finding (a decision missing from the governing
+list), applied. The owner approved that section on 2026-10-26 as the direction for a plan. The approval does not accept the
+decisions it proposes to supersede, does not approve a plan and authorises no implementation. The author's calls marked **(call)**
+were approved with it except where the owner says otherwise.
+
 ## Governing decisions and references
 
 - Decisions: [2026-10-26-per-command-permission-levels](../decisions/2026-10-26-per-command-permission-levels.md),
+  [2026-10-26-permission-levels-as-built](../decisions/2026-10-26-permission-levels-as-built.md),
   [2026-10-26-ask-level-spelling-limit](../decisions/2026-10-26-ask-level-spelling-limit.md),
   [2026-10-26-ask-level-command-gate](../decisions/2026-10-26-ask-level-command-gate.md),
+  [2026-10-26-a-level-for-every-command](../decisions/2026-10-26-a-level-for-every-command.md),
+  [2026-10-27-command-gate-command-position](../decisions/2026-10-27-command-gate-command-position.md),
+  [2026-10-27-command-gate-literal-arguments](../decisions/2026-10-27-command-gate-literal-arguments.md),
   [2026-10-23-delegated-plan-approval](../decisions/2026-10-23-delegated-plan-approval.md),
   [2026-10-19-mandatory-review-personal-delegation](../decisions/2026-10-19-mandatory-review-personal-delegation.md),
   [2026-10-19-compiled-hard-stop-floor](../decisions/2026-10-19-compiled-hard-stop-floor.md),
@@ -275,4 +526,5 @@ plan's Result.
   [2026-10-20-preview-then-owner-run-write](../decisions/2026-10-20-preview-then-owner-run-write.md),
   [2026-10-24-project-guarantees-a-floor](../decisions/2026-10-24-project-guarantees-a-floor.md).
 - Specs: `trust-and-approval.md`, `code-work.md`, `installer-interface.md`, `harness-modules.md`.
-- Plan: `docs/plans/2026-10-26-command-permission-levels.md`. References: none.
+- Plans: `docs/plans/2026-10-26-command-permission-levels.md`, `docs/plans/2026-10-27-a-level-for-every-command.md`.
+  References: none.

@@ -346,7 +346,8 @@ prose above and this section differ in precision, this section is what the code 
   `"version": 2` with an object `"levels"` (`command-permissions.md`); the file is seeded at version 1. A
   checkpoint name is lowercase kebab-case, at most 64 characters; the names themselves are defined
   by a way of working. A checkpoint that is missing, malformed or not exactly `delegate` reads as
-  `stop`. A damaged file, a wrong version, or a file that is not a regular file is reported on the
+  `stop`. A table entry in a version 2 file sets the level of its key and wins over the checkpoint in either direction;
+  `approve-plan` delegates only while its level reads `delegated` (`command-permissions.md`, "The table"). A damaged file, a wrong version, or a file that is not a regular file is reported on the
   command's output as a `settings:` note and is never overwritten; every checkpoint then stops. The
   `floor` list is a copy for the owner and for harnesses to read: nothing reads it to decide what
   applies.
@@ -591,8 +592,10 @@ in `module-contract.md`; the decision that the installer owns the gate is
 
 `approve (<package> | --source <url> [--ref <ref>]) [--module <name>]` is run by the owner.
 
-- It refuses unless standard input and output are both terminals, tested on the file descriptors.
-  There is no `--yes` option.
+- It refuses unless standard input and output are both terminals, tested on the file descriptors,
+  unless the owner has set the key `wb approve` to `none` and the rendering holds: then it runs without a terminal and
+  asks nothing, and the level log records it (`command-permissions.md`, "`approve` and `pin` at `none`"). **At `none` an
+  agent can make a package trusted**; that is the owner's choice. There is no `--yes` option.
 - It verifies the package and refuses on any problem, recording nothing.
 - It prints the request and asks the owner to type the first 12 characters of the tree hash shown:
   the package's, or with `--module` that module's. Anything else cancels.
@@ -683,7 +686,8 @@ A package is brought into `cache/<id>/` as data only: the files under `package/`
   lowercase hex digits. A helper name is letters, digits and `._+-`, at most 64 characters, starting
   with a letter or digit. The path is relative to the project root and passes the path validator, so
   clones at different locations share a pin. Reading fails closed.
-- **`pin <id> <name> <helper> --root <dir> [--kit N]`** is owner-run with the same terminal test as `approve`.
+- **`pin <id> <name> <helper> --root <dir> [--kit N]`** is owner-run with the same terminal test as `approve`. At the level `none` of `wb pin` it runs
+  without a terminal for the project the level was read for (`command-permissions.md`, "`approve` and `pin` at `none`").
   It refuses a helper outside the root, a symbolic link, or a file that is not regular; shows the
   path, size, hash and the start of the file, and says if it replaces a pin; and records only when the
   first 12 characters of the SHA-256 are typed, after checking the file again. With `--kit N` the pin also

@@ -276,10 +276,20 @@ class OfferedLevels(Ask):
     def test_approve_plan_offers_block_delegated_ask_and_none(self):
         self.assertEqual(("block", "delegated", "ask", "none"), levels.registry()["approve-plan"].offers)
 
-    def test_no_other_key_offers_ask_or_none(self):
+    def test_no_other_owner_run_key_offers_ask_or_none(self):
+        """An agent-safe key offers `none` (increment A of 2026-10-27-a-level-for-every-command); an owner-run key still
+        offers `block` only until the increment that builds it (`wb install` and `wb adopt` by increment F, `wb upgrade` and `wb add` by increment G, `wb approve` and `wb pin` by increment H, the acknowledge checkpoints, `wb recover`, `wb attach` and
+        `wb release-approvals` by increment J)."""
+        agent = set(levels.agent_keys())
+        built = {"approve-plan": ("block", "delegated", "ask", "none"), "wb install": ("block", "none"),
+                 "wb adopt": ("block", "none"), "wb upgrade": ("block", "none"), "wb add": ("block", "none"),
+                 "wb approve": ("block", "none"), "wb pin": ("block", "none"),
+                 "acknowledge-first-tier": ("block", "none"), "acknowledge-second-tier": ("block", "none"),
+                 "wb recover": ("block", "none"), "wb attach": ("block", "none"), "wb release-approvals": ("block", "none"),
+                 "accept-decision": ("block", "none")}
         for name, key in levels.registry(checkpoints=("a", "accept-decision")).items():
-            if name != "approve-plan":
-                self.assertEqual(("block",), key.offers, name)
+            if name not in agent:
+                self.assertEqual(built.get(name, ("block",)), key.offers, name)
 
     def test_the_shipped_default_is_block_until_the_probe_is_recorded(self):
         self.assertEqual("block", levels.registry()["approve-plan"].default)

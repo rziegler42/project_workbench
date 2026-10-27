@@ -29,20 +29,20 @@ ambiguous blank.
 |---|---|
 | Setup | not applicable (standard library only; nothing to install) |
 | Run locally | `python3 -m workbench verify [<package> \| --dir <path>] [--select <module> ...] [--no-harness-required]` |
-| Owner-run: approve a package or one module (terminal only) | `python3 -m workbench approve (<package> \| --source <url> [--ref <ref>]) [--module <name>]` |
-| Owner-run: pin a helper's content (terminal only) | `python3 -m workbench pin <project-id> <name> <helper> --root <project-dir> [--kit N]` |
+| Owner-run: approve a package or one module (terminal only; at `wb approve` set to `none`, an agent may run it with no terminal, which lets an agent make a package trusted) | `python3 -m workbench approve (<package> \| --source <url> [--ref <ref>]) [--module <name>]` |
+| Owner-run: pin a helper's content (terminal only; at `wb pin` set to `none`, an agent may run it for the project it works in) | `python3 -m workbench pin <project-id> <name> <helper> --root <project-dir> [--kit N]` |
 | Preview an install (read-only) | `python3 -m workbench preview install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
-| Owner-run: install a new project (terminal only) | `python3 -m workbench install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
+| Owner-run: install a new project (terminal only; with `wb install` set to `none` in the personal settings and the harness attached afterwards, an agent may run it with no terminal and nothing typed, and each such run is logged) | `python3 -m workbench install [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Preview an adoption (read-only) | `python3 -m workbench preview adopt [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
-| Owner-run: adopt a repository that has content (terminal only) | `python3 -m workbench adopt [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
-| Owner-run: accept changes made to a project (terminal only) | `python3 -m workbench acknowledge [<target> \| --dir <path>]` |
-| Owner-run: clear the marker of an unfinished write (terminal only) | `python3 -m workbench recover [<target> \| --dir <path>]` |
-| Owner-run: attach the harness to a clone (terminal only) | `python3 -m workbench attach [<target> \| --dir <path>] --harness <package>/<module>` |
+| Owner-run: adopt a repository that has content (terminal only; at `wb adopt` set to `none`, as for install) | `python3 -m workbench adopt [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
+| Owner-run: accept changes made to a project (terminal only; with the checkpoint `acknowledge-first-tier` set to `none`, an agent may run it with no terminal, which lets an agent accept changes to instruction-bearing and executable files) | `python3 -m workbench acknowledge [<target> \| --dir <path>]` |
+| Owner-run: clear the marker of an unfinished write (terminal only; at `wb recover` set to `none`, an agent may run it with no terminal) | `python3 -m workbench recover [<target> \| --dir <path>]` |
+| Owner-run: attach the harness to a clone (no terminal test, denied to the agent by the harness; at `wb attach` set to `none` the `deny` is not rendered and an unattended run is logged) | `python3 -m workbench attach [<target> \| --dir <path>] --harness <package>/<module>` |
 | Check a clone (read-only) | `python3 -m workbench check [<target> \| --dir <path>]` |
 | Preview an upgrade (read-only) | `python3 -m workbench preview upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
-| Owner-run: upgrade a project (terminal only) | `python3 -m workbench upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
+| Owner-run: upgrade a project (terminal only; at `wb upgrade` set to `none`, as for install, with the plan for the project it is run from) | `python3 -m workbench upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
 | Preview adding a module (read-only) | `python3 -m workbench preview add [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
-| Owner-run: add a module (terminal only) | `python3 -m workbench add [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
+| Owner-run: add a module (terminal only; at `wb add` set to `none`, as for install) | `python3 -m workbench add [<target> \| --dir <path>] --package <source> [--ref <ref>] ... --select <module> ...` |
 | Run a pinned helper | `python3 -m workbench launch <project-id> <name> --root <project-dir> -- <args>` (an owner-run argument of a declared command, here and in `run`, is refused unless standard input and output are both terminals) |
 | Run a module command | `python3 -m workbench run [--provides <capability>] <command> [<argument> ...]` from anywhere in the project (agent-safe; the command must be installed and pinned; with `--provides` its module must provide the capability; the arguments after the first reach the helper unchanged) |
 | Check, list or report the plans | `python3 -m workbench run code-work check\|plans\|report` (the `code-work` module's command; the installer pinned the helper when the install was confirmed) |
@@ -58,11 +58,11 @@ ambiguous blank.
 | Ask for runners, check a job, list its artifacts, submit a declared profile | `python3 -m workbench run remote-runner recommend --profile <name>`, `... status <job> [--expect <40 hex>]`, `... artifacts <job>`, `... submit (--remote <name> \| --best) --profile <name> [--ref <ref> \| --snapshot]` (starts only the external `remote-runner` program, found in an absolute `PATH` entry outside the project; prints one JSON line; submit only on the owner's word; tests use a fake program) |
 | Owner-run: approve a plan (terminal only) | `python3 -m workbench approve-plan <plan>` from anywhere in the project: one argument, no option; runs the project's declared approval command and records the plan's path and region hash after the owner types back the first 12 characters. With the key `approve-plan` set to `ask` in the personal settings (`levels`, version 2; attach the harness again afterwards) an agent may run `approve-plan <plan> --digest <32 hex>` with the digest `plan-status <plan> --digest` printed; at `none` it runs with no digest. Exit codes: 0 recorded, 1 refused, 2 usage, 3 recorded but the level log could not take the outcome, 130 interrupted. See `docs/specs/command-permissions.md` |
 | Is a plan approved (read-only) | `python3 -m workbench plan-status <plan>`: prints `approved:`, `changed since approval:` or `not approved:` and exits 0 only for the first (agent-safe). `plan-status <plan> --digest` prints what an approval would bind and a line `digest: <32 hex>`, writes nothing and exits 0 |
-| Show the checkpoint and cap values that apply (read-only) | `python3 -m workbench settings` from anywhere in the project: no argument, no option; prints `checkpoint <name>: stop\|delegate` and `cap <name>: <n>` lines for what the process module declares, then a `level <key>: <level>` line for every key it knows (the declared checkpoints, the installer's owner-run commands, and `wb run <command> <argument>` for the installed modules' owner-run arguments), then a `settings:` line per problem in the owner's settings (agent-safe). The settings file is seeded at version 1; change `version` to 2 by hand to add a `levels` object |
+| Show the checkpoint and cap values that apply (read-only) | `python3 -m workbench settings` from anywhere in the project: no argument, no option; prints `checkpoint <name>: stop\|delegate` and `cap <name>: <n>` lines for what the process module declares, then a `level <key>: <level>` line for every key it knows (the declared checkpoints, the installer's owner-run commands, the agent-safe actions, and `wb run <command> <argument>` for each argument the installed modules declare), then a `translated <key>: <word> read as <level>` line for each checkpoint word it read as a level, then a `settings:` line per problem in the owner's settings (agent-safe). The settings file is seeded at version 1; change `version` to 2 by hand to add a `levels` object |
 | Decide one call of a confined agent (read-only; the agent's hook runs it) | `python3 -m workbench agent-gate <harness> <agent>` with the hook's JSON on standard input: no output and exit 0 to allow; one `refused:` line on standard error and exit 2 to refuse, for a write outside the scratch directory or a command no pinned pattern matches ("The agent gate" in `docs/specs/harness-modules.md`); run by hand it is `echo '{...}' \| python3 -m workbench agent-gate <harness> <agent>` from inside a project (agent-safe) |
 | Decide one Bash command (read-only; the harness's second hook runs it when a key is set to `ask` or `none`) | `python3 -m workbench gate-command <harness>` with the hook's JSON on standard input: no output and exit 0 to allow; one `refused:` line on standard error and exit 2 to block, for a command that names the relaxed command and is not exactly the simple command the `ask` rule matches, and for every failure (agent-safe; see `docs/specs/command-permissions.md`, "The command gate") |
 | Decide one edit (read-only; the harness's hook runs it) | `python3 -m workbench gate <harness>` with the hook's JSON on standard input: no output and exit 0 to allow; one `refused:` line on standard error and exit 2 to refuse, for an edit while a plan under way is not approved; run by hand it is `echo '{...}' \| python3 -m workbench gate <harness>` from inside a project (agent-safe) |
-| Release time: write the approvals shipped with first-party packages | `python3 -m workbench release-approvals` |
+| Release time: write the approvals shipped with first-party packages (no terminal test; at `wb release-approvals` set to `none` the `deny` is not rendered and an unattended run is logged) | `python3 -m workbench release-approvals` |
 | Verify the sample package | `python3 -m workbench verify tests/fixtures/sample-package --select sample-harness sample-notes` |
 | One focused test file | `python3 -m unittest discover -s tests -p 'test_approvals.py'` (a test module that imports `support` only loads under `discover -s tests`); for a module's own tests, `python3 -B -m unittest discover -s packages/<package>/<module>/tests -t packages/<package>/<module>/tests` from the repository root |
 | Full tests | `python3 -B -W error tests/run_all.py` (runs `tests/` and every `packages/*/*/tests/`, each as its own root) |
@@ -301,7 +301,9 @@ the `--package` before it. Options are not abbreviated.
   (directories, files with class, mode, size and hash, the `.git`), the store entries and each pin it will make
   for a declared helper, and ends `preview only: nothing was written`. It uses a fresh seed each time, so its digest is
   not shown and differs from one run to the next.
-- **`install`** is owner-run: it refuses unless standard input and output are terminals. It
+- **`install`** is owner-run: it refuses unless standard input and output are terminals, unless the owner has set the key `wb install`
+  to `none` and the rendering holds (`command-permissions.md`, "`install` and `adopt` at `none`"): then it runs without a terminal and
+  asks nothing, and logs an attempt and an outcome. At a terminal it
   prints the same plan with its digest and asks for the first 12 characters of the digest.
   Anything else, an empty answer included, prints `cancelled: nothing was written` and exits 1.
   Input typed ahead is discarded and the answer is read to at most 200 characters. The typed
@@ -632,11 +634,17 @@ the records are read from the installed workbench, never copied into the guarded
 - **Turning a level on.** Back up `~/.config/project-workbench/settings`, change `"version"` to 2 and add `"levels": {"approve-plan": "ask"}`
   (or `"none"`). Nothing changes in a project until the harness is attached again, which writes the rendering record and the harness
   files; `wb attach` refuses a clone that already records a harness, so use a new clone. `wb settings` prints a `level <key>:
-  <level>` line for every key. Every default is `block`.
+  <level>` line for every key. The default is `block`, except for an agent-safe action and a declared module argument that is not owner-run, which default to `none`. A `block` set on an agent-safe action or a declared module argument is rendered as a `deny` at the next attach; at its default `none` nothing is rendered. A damaged settings file blocks every owner-run key and leaves the agent-safe ones at `none`, so `wb settings` and `wb check` still run to report it; an explicit `block` on an agent-safe key is not honored until the file is repaired. The checkpoint `accept-decision` offers `block` (the default) and `none`: at `none`, `wb settings` prints `level accept-decision: none` and the `draft-decision` skill lets an agent mark a decision it drafted `Accepted`; otherwise only the owner accepts a decision (`AGENTS.md`). Not every key offers `none`: the owner-run arguments of module commands, `push-shared-branch`, `submit-remote-job`, `fetch-remote-output` and `change-direction` offer `block` only (`docs/specs/command-permissions.md`, "Not built").
 - **What it asks of the agent.** The agent runs `wb plan-status <plan> --digest`, shows you the preview, and runs
   `wb approve-plan <plan> --digest <digest>` as one simple command on its own; the harness then prompts you. A command that wraps or
   rewrites it (`bash -c`, `env`, a quote splice, an escape, an expansion) is blocked by `wb gate-command`, and a command that only
   names `approve-plan` (a `grep`, a commit message) is blocked too while the level is relaxed; run those yourself.
+  A command key that is an ordinary word (`wb install`, `wb add`) is read in command position: only a command that names a
+  launcher (`wb`, the store's `bin/wb`, `python3 -m workbench`) and the word, in either order, is blocked, so `npm install`, `git add`
+  and a commit message that holds the word are not, and `wb preview <action>` is allowed. A compound command that holds both
+  (`npm install && wb check`) is blocked: run it as two calls. A literal `wb run <name> <arguments>` (plain tokens and single-quoted
+  strings) is not read for these words, so `wb run safe-git commit --subject 'Add tests' -- tests/test_add.py` passes; write a commit
+  subject in single quotes. `wb approve-plan` is not taken for `wb approve`.
 - **What it cannot stop.** A script or program that makes the call, a word built from variables or encodings, and a shell that writes
   the guarded store: see "Limits" in the spec. Leave a key at `block` if you do not accept them.
 - **When Bash calls are blocked.** While a key is relaxed, `wb gate-command` runs on every Bash call. If the store, the settings file
@@ -645,6 +653,11 @@ the records are read from the installed workbench, never copied into the guarded
   until the harness is attached again in a new clone.
 - **The level log.** `~/.config/project-workbench/level-log` is plain text, one line per attempt and one per outcome. It is not
   pruned; it holds about 4 MiB, and a full log refuses runs above `block`, so rotate it by hand.
+- **Where the level code lives.** The level log's line format and its append, and the rule that a verified level of `none` runs
+  without a terminal, are in the kit (`workbench/wbkit/levels.py`); `workbench/levellog.py` reads the log and calls the kit to write
+  it, and `workbench/levelrun.py` adds the check of the rendering record for an owner-run command (`approve-plan` uses it; the other
+  owner-run commands come with later increments of the plan `2026-10-27-a-level-for-every-command`). Tests: `tests/test_wbkit_levels.py`,
+  `tests/test_levelrun.py`.
 - **After editing a first-party module.** Any change under `packages/workbench/<module>/`, its `tests/` included, changes the
   module's hash and stales its shipped approvals. The project's own edit gate then refuses file edits until the owner runs
   `python3 -m workbench release-approvals` and removes the obsolete records it warns about with
@@ -721,7 +734,8 @@ other than `0700` (group or other access, setgid, sticky) is refused with exit c
 `-h` does not create it.
 
 - The personal settings are the file `settings` in the store: strict JSON with a
-  `version`, a `checkpoints` object (`stop` or `delegate` per checkpoint name) and a
+  `version`, a `levels` table (a level per key; version 2) or, in a version 1 file, a `checkpoints` object
+  (`stop` or `delegate` per checkpoint name; read as the aliases `block` and `delegated`) and a
   copy of the hard-stop floor's ids. A missing file is created. With no settings, or with
   any entry that is missing or not exactly `delegate`, a checkpoint stops. A damaged file
   is never overwritten: the command prints a `settings:` warning and everything stops

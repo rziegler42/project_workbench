@@ -46,6 +46,8 @@ except ImportError:  # not POSIX; the safe filesystem layer refuses to run there
 
 CONFIRM_CHARS = 12
 MAX_ANSWER = 200
+TERMINAL_ONLY = ("approval is owner-run: standard input and output must both be terminals. Run this command "
+                 "yourself, from your own terminal.")
 
 
 def is_terminal(stream):
@@ -113,16 +115,20 @@ def build(path, module_name, distribution=None, origin=None):
 
 
 def run(store, path, module_name, stdin, stdout, err, distribution=None, source=None,
-        ref="HEAD"):
+        ref="HEAD", log=None):
     """Approve the package at `path`, or one of its modules. Returns the exit code.
+
+    `log`, given by the command line when the owner has set the level of ``wb approve`` to ``none`` for this project
+    (``levelrun.route``), is ``log(digest, apply) -> exit code``: the command then runs without a terminal and asks
+    nothing, and `log` runs `apply` (the records) between an attempt and an outcome. An approval already on file
+    changes nothing and is not logged.
 
     With `source` (a URL or a local repository) the package is first downloaded inertly into
     the guarded store's cache (``fetch.py``), and the request, the typed hash and the record
     all come from that cached copy. The first approval pins the resolved commit.
     """
-    if not (is_terminal(stdin) and is_terminal(stdout)):
-        return _refuse(err, "approval is owner-run: standard input and output must both be "
-                            "terminals. Run this command yourself, from your own terminal.")
+    if log is None and not (is_terminal(stdin) and is_terminal(stdout)):
+        return _refuse(err, TERMINAL_ONLY)
     fetched = origin = None
     if source is not None:
         stdout.write("Downloading %s (ref %s) into the cache. Nothing is executed or "
@@ -150,15 +156,19 @@ def run(store, path, module_name, stdin, stdout, err, distribution=None, source=
         return 1
 
     stdout.write(text + "\n\n")
-    stdout.write("To approve this %s, type the first %d characters of the tree hash shown "
-                 "above and press Enter.\nAnything else cancels and records nothing.\n> "
-                 % (what, CONFIRM_CHARS))
-    stdout.flush()
-    answer = stdin.readline(MAX_ANSWER)
-    if answer.strip() != token:
-        stdout.write("cancelled: nothing was recorded\n")
-        kept()
-        return 1
+    if log is not None:
+        stdout.write("The level of wb approve is none here, so nothing is asked: it is recorded now.\n")
+        stdout.flush()
+    else:
+        stdout.write("To approve this %s, type the first %d characters of the tree hash shown "
+                     "above and press Enter.\nAnything else cancels and records nothing.\n> "
+                     % (what, CONFIRM_CHARS))
+        stdout.flush()
+        answer = stdin.readline(MAX_ANSWER)
+        if answer.strip() != token:
+            stdout.write("cancelled: nothing was recorded\n")
+            kept()
+            return 1
 
     again = _verify(path, distribution)
     if not again.accepted or _snapshot(again) != _snapshot(result):
@@ -166,8 +176,26 @@ def run(store, path, module_name, stdin, stdout, err, distribution=None, source=
         return _refuse(err, "the package changed while it was shown; nothing was recorded")
 
     (info,) = result.packages
-    return _record(store, info, {m.name: m for m in result.modules}, module_name, stdout, err,
-                   fetched.commit if fetched is not None else None)
+    hashes = {m.name: m for m in result.modules}
+    commit = fetched.commit if fetched is not None else None
+
+    def apply():
+        return _record(store, info, hashes, module_name, stdout, err, commit)
+
+    if log is None or _on_file(store, info, hashes, module_name):
+        return apply()
+    return log(info.tree_hash if module_name is None else hashes[module_name].tree_hash, apply)
+
+
+def _on_file(store, info, hashes, module_name):
+    """True when every record this approval would write is already on file, so it would change nothing."""
+    try:
+        names = [module_name] if module_name is not None else sorted(hashes)
+        return all(_existing(store, "module", "%s/%s" % (info.name, name), hashes[name].declaration_hash,
+                             hashes[name].tree_hash) for name in names) and (
+            module_name is not None or _existing(store, "package", info.name, info.declaration_hash, info.tree_hash))
+    except (approvals.ApprovalError, safefs.SafeFsError):
+        return False
 
 
 def _existing(store, kind, subject, declaration_hash, tree_hash):

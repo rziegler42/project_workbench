@@ -32,12 +32,21 @@ Nothing else is written or removed: no file is restored or deleted, the store is
 directory that holds anything is removed and the target directory itself is never removed. The
 typed text is friction, not authentication; what stops an agent is the deny rule a harness renders
 for this command and for the guarded store.
+
+When the owner has set the key ``wb recover`` to ``none`` and the rendering holds (the command line reads it,
+``levelrun.route``), the command also runs without a terminal and asks nothing: it prints the same examination and digest,
+examines again, and writes the level log's attempt just before the first removal and its outcome after. The level is the
+owner's setting for the project the command is run from. A marker that names a project (an unfinished ``upgrade`` or ``add``)
+must name that one; the marker of a failed ``install`` or ``adopt`` names none and is in a new directory, so the target is not
+compared. The record is unauthenticated text, so this stops a mistake and not a forged marker. A run with no marker writes no entry.
 """
 
 from . import acknowledge, approve, confirm, installplan, projectfs, target, unfinished
 from .wbkit import display, safefs
 
 MAX_LISTED = 500
+TERMINAL_ONLY = ("recover is owner-run: standard input and output must both be terminals. Run this command yourself, "
+                 "from your own terminal.")
 
 _LOCAL = ".workbench/local"
 _BEFORE, _AFTER, _UNSTORED, _PARTIAL = "before", "after", "unstored", "partial"
@@ -232,27 +241,39 @@ def _clear(writer, review, out, err):
     return 0
 
 
-def _run(guarded, spelling, stdin, out, err):
+def _run(guarded, spelling, stdin, out, err, log=None):
     try:
         with target.open_target(spelling, guarded.root, marked=True) as held:
             if not held.has_incomplete_marker():
                 out.write("no unfinished write here; nothing to recover\n")
                 return 0
             review = examine(guarded, held)
+            named = review.found.record.project
+            if log is not None and named is not None and named != log.project_id:
+                return _refuse(err, "the marker names another project than the one the level was read for; nothing was "
+                                    "removed")
             out.write(render(review, held.path))
-            out.write("\nTo clear the marker, type the first %d characters of the digest shown "
-                      "above and press Enter.\nAnything else cancels and removes nothing.\n> "
-                      % confirm.CONFIRM_CHARS)
-            out.flush()
-            if not confirm.typed_matches(stdin, review.digest):
-                out.write("cancelled: nothing was removed\n")
-                return 1
+            if log is not None:
+                out.write("\nThe level of wb recover is none here, so nothing is asked: the marker is cleared now.\n")
+                out.flush()
+            else:
+                out.write("\nTo clear the marker, type the first %d characters of the digest shown "
+                          "above and press Enter.\nAnything else cancels and removes nothing.\n> "
+                          % confirm.CONFIRM_CHARS)
+                out.flush()
+                if not confirm.typed_matches(stdin, review.digest):
+                    out.write("cancelled: nothing was removed\n")
+                    return 1
             held.recheck()
             again = examine(guarded, held)
             if again.digest != review.digest:
                 return _refuse(err, "the project changed while the list was shown; nothing was "
                                     "removed")
-            return _clear(projectfs.Writer(held), again, out, err)
+
+            def apply():
+                return _clear(projectfs.Writer(held), again, out, err)
+
+            return apply() if log is None else log(again.digest, apply)
     except Refused as exc:
         for index, line in enumerate(exc.lines):
             err.write(("refused: %s\n" if not line.startswith("  ") or not index else "%s\n")
@@ -268,18 +289,20 @@ def require_terminal(stdin, out, err):
     """True when both streams are terminals; otherwise print the refusal and return False."""
     if approve.is_terminal(stdin) and approve.is_terminal(out):
         return True
-    _refuse(err, "recover is owner-run: standard input and output must both be terminals. Run "
-                 "this command yourself, from your own terminal.")
+    _refuse(err, TERMINAL_ONLY)
     return False
 
 
-def run(guarded, spelling, stdin, out, err):
+def run(guarded, spelling, stdin, out, err, log=None):
     """Clear the marker after the owner types the digest. Returns the exit code: 0 done or
-    nothing to recover, 1 refused or cancelled, 3 removal failed, 130 interrupted."""
-    if not require_terminal(stdin, out, err):
+    nothing to recover, 1 refused or cancelled, 3 removal failed, 130 interrupted.
+
+    `log`, given by the command line when the level of ``wb recover`` is ``none`` here, is ``log(digest, apply)``: the command
+    then runs without a terminal and asks nothing."""
+    if log is None and not require_terminal(stdin, out, err):
         return 1
     try:
-        return _run(guarded, spelling, stdin, out, err)
+        return _run(guarded, spelling, stdin, out, err, log)
     except KeyboardInterrupt:
         try:
             out.write("\ncancelled: nothing was removed\n")

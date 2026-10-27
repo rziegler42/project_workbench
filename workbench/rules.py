@@ -22,6 +22,15 @@ OWNER_RUN = ("install", "adopt", "upgrade", "add", "attach", "acknowledge", "rec
 # Commands an agent may run: they only read, or run a helper that checks its own pin.
 AGENT_SAFE = ("verify", "preview", "launch", "check", "run", "plan-status", "settings", "gate",
               "agent-gate", "gate-command", "delegate-approve-plan")
+# Of the agent-safe words, those that are not a key of the owner's ``levels`` table
+# (``docs/specs/command-permissions.md``, "A level for every command"): the hook entry points, which the
+# harness runs and the owner does not; the words that only dispatch to an action; and the action that reaches another
+# action's key, so that no action reaches two keys.
+HOOK_ENTRY_POINTS = ("gate", "agent-gate", "gate-command")
+DISPATCHERS = ("preview", "run")
+REACHES_ANOTHER_KEY = {"delegate-approve-plan": "approve-plan"}
+# The actions ``wb preview`` dispatches to; each has a key.
+PREVIEW_ACTIONS = ("install", "adopt", "upgrade", "add")
 # `python3 -B -m workbench` is how this repository's own checks are run; the flags a rule can name
 # are limited to this one. Other interpreter spellings, a path-qualified `wb`, `env` and `bash -c`
 # are not matched (a Bash deny is not a security boundary).

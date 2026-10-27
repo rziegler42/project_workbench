@@ -12,7 +12,7 @@ import shutil
 import unittest
 import unittest.mock
 
-from tests import support_harness, test_attach
+from tests import support_harness, support_project, test_attach
 from workbench import harnessplan, levels, rendering, rules, settings
 
 SETTINGS_FILE = ".fixture/settings.local.json"
@@ -58,6 +58,166 @@ class Rendered(test_attach.Base):
     def level(self, key, table=None):
         table = table if table is not None else self.levels_now()
         return rendering.effective_level(self.guarded, self.project_id, self.place, table, key)
+
+
+class TableTest(Rendered):
+    def test_the_default_table_holds_no_agent_safe_key(self):
+        """Plan 2026-10-27-a-level-for-every-command, increment C: an agent-safe key is in the table a harness renders
+        only when it differs from its default `none`, so the default table, its digest and the command gate are what
+        they were before the agent-safe keys existed."""
+        table = self.levels_now()
+        for name in levels.agent_keys():
+            self.assertNotIn(name, table)
+        self.assertEqual(sorted(table), sorted(levels.registry(agent=False)))
+
+    def test_an_agent_safe_key_set_to_block_is_in_the_table_and_one_set_to_its_default_is_not(self):
+        self.ready()
+        self.table(wb_check="block", wb_verify="none", wb_settings="block")
+        table = self.levels_now()
+        self.assertEqual("block", table["wb check"])
+        self.assertEqual("block", table["wb settings"])
+        self.assertNotIn("wb verify", table)
+        self.assertNotIn("wb launch", table)
+
+    def test_a_digest_does_not_change_when_an_agent_safe_key_is_set_to_its_default(self):
+        self.ready()
+        self.table()
+        plain = rendering.digest(self.levels_now())
+        self.table(wb_check="none", wb_verify="none")
+        self.assertEqual(plain, rendering.digest(self.levels_now()))
+        self.table(wb_check="block")
+        self.assertNotEqual(plain, rendering.digest(self.levels_now()))
+
+    def test_a_damaged_table_adds_no_agent_safe_key_to_the_table(self):
+        self.ready()
+        self.guarded.write("settings", b"{")
+        table = self.levels_now()
+        for name in levels.agent_keys():
+            self.assertNotIn(name, table)
+        self.assertEqual({"block"}, set(table.values()))
+
+    def test_the_digest_of_the_default_table_is_the_digest_it_was_before_the_agent_safe_keys(self):
+        table = self.levels_now()
+        # The keys of the table as it was before the agent-safe keys existed, written out so the test pins them.
+        before = {name: "block" for name in (
+            "approve-plan", "wb install", "wb adopt", "wb upgrade", "wb add", "wb attach", "wb recover", "wb approve",
+            "wb pin", "wb release-approvals")}
+        self.assertEqual(rendering.digest(before), rendering.digest(table))
+
+    def test_a_declared_argument_that_is_not_owner_run_stays_out_of_the_table_even_when_given(self):
+        table = rendering.table_of(self.guarded, (), [("tool", ("go",), ("go", "look"))])
+        self.assertIn("wb run tool go", table)
+        self.assertNotIn("wb run tool look", table)
+
+
+class AgentSafePatternsTest(unittest.TestCase):
+    def test_every_agent_safe_key_has_patterns_in_each_spelling_bare_and_with_arguments(self):
+        for key in levels.agent_keys():
+            with self.subTest(key=key):
+                patterns = rendering.key_patterns(key)
+                words = key[3:]
+                for spelling in rules.SPELLINGS:
+                    self.assertIn("%s %s" % (spelling, words), patterns)
+                    self.assertIn("%s %s *" % (spelling, words), patterns)
+
+    def test_a_preview_key_names_only_its_own_action(self):
+        patterns = rendering.key_patterns("wb preview install")
+        self.assertIn("wb preview install", patterns)
+        self.assertFalse([p for p in patterns if "adopt" in p or p.endswith(" preview") or p.endswith(" preview *")])
+
+    def test_a_module_argument_key_is_denied_bare_with_arguments_and_through_provides(self):
+        patterns = rendering.key_patterns("wb run tool look")
+        for pattern in ("wb run tool look", "wb run tool look *", "wb run --provides * tool look"):
+            self.assertIn(pattern, patterns)
+
+    def test_a_dispatcher_hook_entry_point_and_unknown_word_have_no_patterns(self):
+        for key in ("wb preview", "wb run", "wb gate", "wb agent-gate", "wb gate-command", "wb delegate-approve-plan",
+                    "wb nothing", "accept-decision"):
+            with self.subTest(key=key):
+                self.assertEqual([], rendering.key_patterns(key))
+
+    def test_the_owner_run_patterns_are_unchanged(self):
+        self.assertEqual(rules.owner_run_command_patterns("pin"), rendering.key_patterns("wb pin"))
+        self.assertEqual(rules.owner_run_command_patterns("approve-plan"), rendering.key_patterns("approve-plan"))
+
+
+class AgentSafeRulesTest(Rendered):
+    def deny_texts(self):
+        return self.permissions()["deny"]
+
+    def test_a_default_clone_denies_no_agent_safe_command(self):
+        self.attached()
+        for text in self.deny_texts():
+            for word in ("check", "verify", "settings", "plan-status", "launch", "preview"):
+                self.assertNotRegex(text, r"^Bash\((wb|python3?( -B)? -m workbench) %s" % word)
+
+    def test_an_agent_safe_key_set_to_block_is_denied_in_every_spelling_and_not_asked(self):
+        self.attached(wb_check="block")
+        permissions = self.permissions()
+        for spelling in rules.SPELLINGS:
+            for tail in ("", " *"):
+                rule = "Bash(%s check%s)" % (spelling, tail)
+                self.assertIn(rule, permissions["deny"], rule)
+                self.assertNotIn(rule, permissions["ask"], rule)
+
+    def test_only_the_key_set_to_block_is_denied(self):
+        self.attached(wb_preview_install="block")
+        deny = self.deny_texts()
+        self.assertIn("Bash(wb preview install)", deny)
+        self.assertNotIn("Bash(wb preview adopt)", deny)
+        self.assertNotIn("Bash(wb verify)", deny)
+
+    def test_an_agent_safe_key_set_to_none_renders_exactly_what_the_default_renders(self):
+        self.attached()
+        plain = self.read(SETTINGS_FILE)
+        record_plain = self.record()["table_digest"]
+        self.table(wb_check="none", wb_settings="none")
+        self.assertEqual(record_plain, rendering.digest(self.levels_now()))
+        self.assertEqual(plain, self.read(SETTINGS_FILE))
+
+    def test_the_record_lists_a_blocked_agent_safe_key_as_deny_and_a_default_one_not_at_all(self):
+        self.attached(wb_check="block")
+        keys = self.record()["keys"]
+        self.assertEqual("deny", keys["wb check"])
+        self.assertNotIn("wb verify", keys)
+
+    def test_tightening_an_agent_safe_key_after_attach_makes_a_relaxed_key_read_block(self):
+        self.attached(wb_pin="none")
+        self.assertEqual("none", self.level("wb pin"))
+        self.table(wb_pin="none", wb_check="block")
+        self.assertEqual("block", self.level("wb pin"))
+
+    def test_an_agent_safe_key_never_counts_as_relaxed_for_the_command_gate(self):
+        from workbench import command_gate
+        self.attached(wb_pin="none", wb_check="block")
+        relaxed = [key for key, level in self.levels_now().items() if level in command_gate.RELAXED]
+        self.assertEqual(["wb pin"], relaxed)
+
+    def test_a_blocked_agent_safe_key_does_not_deny_the_hooks_or_the_gate_commands(self):
+        self.attached(wb_check="block", wb_settings="block", wb_verify="block")
+        deny = self.deny_texts()
+        for word in ("gate", "agent-gate", "gate-command"):
+            self.assertNotIn("Bash(wb %s)" % word, deny)
+            self.assertNotIn("Bash(wb %s *)" % word, deny)
+
+
+class ModuleArgumentRulesTest(Rendered):
+    """A project whose installed module declares the arguments `check` and `report`, neither owner-run."""
+
+    MODULES = {"h": (test_attach.HARNESS, {}), "tool": support_project.tool()}
+
+    def test_a_module_argument_that_is_not_owner_run_is_denied_when_set_to_block(self):
+        self.attached(wb_run_tool_check="block")
+        deny = self.permissions()["deny"]
+        for rule in ("Bash(wb run tool check)", "Bash(wb run tool check *)", "Bash(wb run --provides * tool check)"):
+            self.assertIn(rule, deny)
+        self.assertNotIn("Bash(wb run tool report)", deny)
+        self.assertEqual("deny", self.record()["keys"]["wb run tool check"])
+
+    def test_a_module_argument_at_its_default_is_not_in_the_table_or_the_record(self):
+        self.attached()
+        self.assertNotIn("wb run tool check", self.levels_now())
+        self.assertNotIn("wb run tool check", self.record()["keys"])
 
 
 class RulesTest(Rendered):
@@ -126,7 +286,7 @@ class RecordTest(Rendered):
 
     def test_the_record_lists_every_key_of_the_registry(self):
         self.attached()
-        self.assertEqual(sorted(levels.registry()), sorted(self.record()["keys"]))
+        self.assertEqual(sorted(levels.registry(agent=False)), sorted(self.record()["keys"]))
 
     def test_a_key_whose_command_is_not_matched_is_recorded_as_unruled(self):
         self.ready()
