@@ -78,7 +78,8 @@ class Shipped(unittest.TestCase):
 
     def test_the_package_is_the_claude_code_work_and_groundwork_modules(self):
         self.assertEqual(sorted(os.listdir(PACKAGE)),
-                         ["ask-codex", "claude", "code-work", "groundwork", "mempalace", "package.json", "remote-runner",
+                         ["action-review", "ask-codex", "claude", "code-work", "groundwork", "mempalace", "package.json",
+                          "remote-runner",
                           "review-engine", "safe-git", "security-review"])
         self.assertEqual(sorted(os.listdir(CLAUDE_DIR)), ["module.json", "tests"])
 

@@ -447,7 +447,7 @@ The review is not an approval; the plan stays `Proposed` for the owner.
 
 ## Result
 
-### Increment A — written, awaiting the owner's reading (not committed)
+### Increment A — committed as `8369cba`
 
 Changed: `docs/specs/action-review.md` only. Added "The rule schema, the module and the checks" (module layout and
 declaration, the call, the rule file and its fields, matching and precedence, flags and positionals, the checks for
@@ -472,3 +472,33 @@ Review: the `reviewer` agent, one exchange, eleven findings, all judged on the e
 
 Not done: B does not start before the owner reads the schema. The error-code-to-check mapping, the flag lists and the
 quoted-word behaviour of the real `safe-git` parser are untested until Increments D to G. No second-model review ran.
+
+### Increment B — built, verified and reviewed (not committed)
+
+Changed: `packages/workbench/action-review/` (new: `module.json`, `helper/action-review`, `tests/test_actionreview_module.py`)
+and `packages/workbench/package.json` (`action-review` after `review-engine`). The declaration is the spec's: `provides`
+`action-review`, `requires` `model-bridge`, one command `action-review` with `review` as its only argument and no owner
+list. The helper imports `os` and `sys`, starts no process, and refuses every call with one `refused:` line on standard
+error, nothing on standard output, exit 1. The module ships only the helper for now; `rules`, `rubric` and
+`reply-schema.json` arrive with their increments, and the file-list and import tests change then.
+
+Also changed, outside the plan's list of affected areas: the hard-coded package-list assertions in
+`claude/tests/test_claude_module.py`, `code-work/tests/test_codework_module.py` and
+`groundwork/tests/test_groundwork_module.py` now include `action-review`. Adding a module to `package.json` breaks them,
+so the change follows from the step.
+
+Built and tested in a scratch copy, landed with one `cp`. The owner ran `release-approvals` (11 approvals written for 1
+package); it warned that four old shipped records are not part of this release and must be removed by hand, which is the
+owner's.
+
+Verification as run on 2026-10-26: the new tests failed first (module absent, not listed), then 11 passed. The first full
+`python3 -B -W error tests/run_all.py` in the scratch copy ran 4867 tests; only the three package-list assertions failed.
+After updating them, those three roots and the new one passed. `wb check`, `wb run code-work check` (51 plans), `doccheck`,
+`refcheck` and `git diff --check` were clean. A second full run in the scratch copy after the edits passed: 4867 tests in 11 roots, OK.
+
+Review: the `reviewer` agent, one exchange, no blocking findings. Non-blocking, noted: the file-list and import tests
+fail by design when later increments add files; no test covers `review --log-row` without text, which belongs to the
+parser increment; the full suite had not been rerun after the three edits (the second run above). No second-model review
+ran.
+
+Not done: the grammar, rules, checks and bridge call (C to J); committing; removing the four stale shipped records.

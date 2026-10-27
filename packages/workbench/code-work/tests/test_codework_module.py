@@ -128,7 +128,7 @@ class Declaration(unittest.TestCase):
     def test_the_package_lists_it_between_the_other_two(self):
         with open(os.path.join(PACKAGE, "package.json"), encoding="utf-8") as handle:
             self.assertEqual(["ask-codex", "claude", "code-work", "groundwork", "safe-git", "review-engine",
-                              "mempalace", "remote-runner", "security-review"],
+                              "action-review", "mempalace", "remote-runner", "security-review"],
                              json.load(handle)["modules"])
 
     def test_the_readme_states_the_format_the_labels_and_the_status_values(self):

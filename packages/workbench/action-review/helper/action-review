@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+"""The action-review helper: reviews one command the harness is about to run.
+
+It is one file that imports the standard library; the launcher runs a private copy of it through the kit
+runner with nothing beside it.
+
+    action-review review [--log-row] <command text>
+
+The contract is ``docs/specs/action-review.md``. This is the skeleton: it checks its arguments and refuses
+every call, because the grammar, the rules, the checks and the bridge call are later increments of plan
+``2026-10-26-action-review-engine``. A refusal prints one ``refused:`` line on standard error and nothing on
+standard output, and exits 1.
+"""
+
+import os
+import sys
+
+USAGE = "usage: action-review review [--log-row] <command text>"
+
+
+def run(argv):
+    """Check the arguments; return the refusal text. Nothing else is done yet."""
+    if not argv or argv[0] != "review":
+        return USAGE
+    return "the engine is not built yet; " + USAGE
+
+
+def main(argv, stdin, out, err, cwd):
+    """Run one command from `cwd`. Returns the exit code."""
+    err.write("refused: %s\n" % run(argv))
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:], sys.stdin.buffer, sys.stdout, sys.stderr, os.getcwd()))

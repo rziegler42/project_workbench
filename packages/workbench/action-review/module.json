@@ -1,0 +1,25 @@
+{
+  "name": "action-review",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Reviews one command the harness is about to run: applies fixed checks to the facts its module reports and asks a model bridge for a verdict.",
+  "provides": [
+    "action-review"
+  ],
+  "requires": [
+    "model-bridge"
+  ],
+  "ships": [
+    "helper/action-review"
+  ],
+  "commands": {
+    "action-review": {
+      "helper": "helper/action-review",
+      "runtime": "python",
+      "kit": 1,
+      "arguments": [
+        "review"
+      ]
+    }
+  }
+}
