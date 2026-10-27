@@ -601,7 +601,7 @@ the records are read from the installed workbench, never copied into the guarded
 - **Turning a level on.** Back up `~/.config/project-workbench/settings`, change `"version"` to 2 and add `"levels": {"approve-plan": "ask"}`
   (or `"none"`). Nothing changes in a project until the harness is attached again, which writes the rendering record and the harness
   files; `wb attach` refuses a clone that already records a harness, so use a new clone. `wb settings` prints a `level <key>:
-  <level>` line for every key. The default is `block`, except for an agent-safe action and a declared module argument that is not owner-run, which default to `none`. A `block` set on an agent-safe action is read and printed but is not yet enforced: a later increment of the plan renders its `deny`.
+  <level>` line for every key. The default is `block`, except for an agent-safe action and a declared module argument that is not owner-run, which default to `none`. A `block` set on an agent-safe action or a declared module argument is rendered as a `deny` at the next attach; at its default `none` nothing is rendered. A damaged settings file blocks every owner-run key and leaves the agent-safe ones at `none`, so `wb settings` and `wb check` still run to report it; an explicit `block` on an agent-safe key is not honored until the file is repaired.
 - **What it asks of the agent.** The agent runs `wb plan-status <plan> --digest`, shows you the preview, and runs
   `wb approve-plan <plan> --digest <digest>` as one simple command on its own; the harness then prompts you. A command that wraps or
   rewrites it (`bash -c`, `env`, a quote splice, an escape, an expansion) is blocked by `wb gate-command`, and a command that only

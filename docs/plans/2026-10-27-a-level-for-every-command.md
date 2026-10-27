@@ -367,3 +367,39 @@ not diff against HEAD.
 **Carried forward.** A new loosening path exists by design: a `stop` checkpoint with a table entry of `delegated` now delegates, where
 the old rule gave block. It requires the owner to write `delegated`. Rendering reads the same table, so a table `none` or `ask` on a
 key whose version 2 checkpoint says `stop` now renders looser than before; that is the decision.
+
+### Increment C — built, not committed (2026-10-27)
+
+**Owner decision, 2026-10-27.** A damaged or unreadable settings file or table reads every owner-run key as block and leaves the
+agent-safe keys, and the declared module arguments that are not owner-run, at their default `none`, so `wb settings` and `wb check`
+still run to report the damage (option 1 of the question put at the end of Increment B). An explicit `block` on such a key is not
+honored while the file is damaged; the spec and `docs/development.md` say so.
+
+**Done.** `rendering.key_patterns` has patterns for each agent-safe key (`wb check` and the other single words, and `wb preview
+<action>`) and for a declared module argument; `rendering.plan` returns the patterns of every key it renders as `deny` in a new
+`Plan.deny`; `harnessstage.stage` passes them to `render_permissions` as neutral `deny` rules beside the module rules; `rendering.table_of`
+takes the three-element command form and leaves out a key marked `agent` (`levels.Key.agent`) while its level is its default `none`,
+so the default table, its digest, the rendering record and the command gate's relaxed list are unchanged for a default clone and for a
+clone attached earlier; `settings._level` keeps an `agent` key at its default when the table is blocked. The spec ("Rendering",
+"Reading rules", "wb settings") and `docs/development.md` say so. `docs/specs/harness-modules.md` and `workbench/harnessplan.py` need no
+change: the first points to `command-permissions.md` for the rendering rules and the second already accepts the extra rules.
+
+**Verification as run.** Tests first: the new tests failed for the right reasons (no patterns, keys missing from the table, damaged
+tables still blocking). Then `python3 -B -W error tests/run_all.py`: `Ran 4915 tests in 10 roots`, `OK`; `wb check` and `wb run
+code-work check`: no problems. New tests: `tests/test_rendering.py` (the table, the digest, the patterns, the deny in every spelling,
+the record, a table changed after attach, the command gate's relaxed list, a module argument in a project that installs one),
+`tests/test_settings.py` and `tests/test_settingscmd.py` (damaged files and tables), `tests/test_command_gate.py` (no agent-safe command is blocked).
+**Not verified:** this repository's own attached clone has no rendering record, so its stored digest could not be compared with the
+one computed now; the tests pin the property for a clone attached in a test.
+
+**Review.** One round by the `reviewer` agent (3 of 6 exchanges this run): no blocking findings, four not blocking, all recorded or
+applied. (1) The loss of an explicit `block` while the file is damaged was implied and is now stated in the spec and development.md.
+(2) `effective_level` reads `block` for a key missing from the table, and an agent-safe key at its default is missing on purpose;
+a docstring now says not to ask it, and **Increments D to I must not call `effective_level` on an agent-safe key**. (3) The deny
+patterns of a module argument use the existing `run --provides *` head, whose glob can also match another module's command whose name
+and arguments coincide; it is the shape the owner-run deny rules already have, argument names cannot carry a space or a glob, and a
+deny never un-denies, so it is accepted. (4) The plan lists `test_command_gate.py`, `harness-modules.md` and `harnessplan.py`: a gate
+test was added; the other two needed no change (above). The reviewer read no test bodies and ran nothing.
+
+**Carried forward.** A deny rendered for an agent-safe key takes effect at the next attach, and `wb attach` refuses a clone that
+already records a harness, so tightening an agent-safe key in an attached clone needs a new clone (the known limit in "Not built").

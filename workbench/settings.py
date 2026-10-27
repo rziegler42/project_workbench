@@ -225,9 +225,13 @@ def _level(loaded, key, checkpoint_values, notes, translated):
     whatever the key's checkpoint says. A checkpoint set in a version 1 file is only a fallback for a key the table does
     not name, and its word is read as a level, ``stop`` as block and ``delegate`` as delegated; the reading is added to
     `translated` as ``(key, word, level)``, which ``wb settings`` prints, and is not a note because it is not a problem.
-    A level the key does not offer reads as block with a note. A damaged table reads every key as block.
+    A level the key does not offer reads as block with a note. A damaged file or table reads every key as block except the
+    keys of what an agent may run today (``key.agent``), which keep their default: the agent must still be able to run
+    ``wb settings`` and ``wb check`` to report the damage (the owner's decision for increment C of the plan).
     """
     name = key.name
+    if key.agent and loaded.levels_blocked:
+        return key.default
     reading = None
     if name in loaded.checkpoints and name in checkpoint_values:
         reading = DELEGATED if checkpoint_values[name] == DELEGATE else BLOCK

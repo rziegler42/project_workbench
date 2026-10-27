@@ -21,7 +21,7 @@ BLOCK, ASK, DELEGATED, NONE = "block", "ask", "delegated", "none"
 LEVELS = (BLOCK, ASK, DELEGATED, NONE)  # strictest first
 APPROVE_PLAN = "approve-plan"
 
-Key = collections.namedtuple("Key", "name offers default")
+Key = collections.namedtuple("Key", "name offers default agent", defaults=(False,))
 
 # Owner-run commands whose levels the declared checkpoints set, so the command spelling is not a key of its own: a
 # checkpointed action uses its checkpoint's name (the first and second tier of ``acknowledge``).
@@ -48,7 +48,7 @@ def strictest(*given):
 
 def _key(name, agent=False):
     if agent:
-        return Key(name, (BLOCK,) + _AGENT_OFFERS, NONE)
+        return Key(name, (BLOCK,) + _AGENT_OFFERS, NONE, True)
     return Key(name, (BLOCK,) + _OFFERS.get(name, ()), _DEFAULTS.get(name, BLOCK))
 
 

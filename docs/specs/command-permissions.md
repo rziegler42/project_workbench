@@ -85,9 +85,12 @@ separated by single spaces, at most 96 characters.
 ### Reading rules
 
 1. A missing file is seeded as today. A damaged file, an unsupported version, a duplicated key or a `levels` that is not an object
-   reads as `block` for the whole table. A value that is not one of the four levels reads as `block` for that key. A key that is
-   not a valid name blocks the whole table, because a mistyped key must never leave a default of `ask` in force. `wb settings`
-   reports each.
+   reads as `block` for the whole table, except for the agent-safe keys and the declared module arguments that are not owner-run: they
+   keep their default `none`, so that the agent can still run `wb settings` and `wb check` to report the damage (the owner's decision,
+   Increment C). An explicit `block` the owner wrote for such a key is therefore not honored while the file or the table is
+   damaged, even when the damage is one mistyped key elsewhere; it applies again once the file is repaired and the harness is
+   attached again, and a `deny` already rendered into an attached clone stays until then. A value that is not one of the four levels reads as `block` for that key. A key that is not a valid name blocks
+   the whole table, because a mistyped key must never leave a default of `ask` in force. `wb settings` reports each.
 2. A key with no table entry reads as its checkpoint reading if the file sets one, and otherwise as its shipped default (below).
 3. A level the key does not offer reads as `block` with a note.
 4. A key on the compiled floor is refused, with a problem, and ignored. A valid key that no installed module or the installer
@@ -148,6 +151,14 @@ spellings (`python3 -m workbench …`) stay denied, because an `ask` for them wo
 The floor's `ask` rules and the deny on the guarded store are unchanged. If the harness cannot render the command gate (it must
 provide `hooks` and its layout must describe `hooks.command_gate`), no key is relaxed and every key renders a `deny`.
 
+An agent-safe key and a declared module argument that is not owner-run (Increment C) render a `deny`, in every spelling, bare and
+with arguments, only when the owner has set the key to `block`; at its default `none` it renders nothing. Such a key is in the
+rendered table, in the record's `keys` (as `deny`) and in the table digest only while it is not at its default, so the default table,
+its digest and the command gate (which counts only keys at `ask` and `none`) are what they were before these keys had a level, and a
+clone attached earlier keeps its record. Setting an agent-safe key to `block` after attach changes the digest, so a relaxed key then
+reads `block` until the harness is attached again, as for any change to the table. The hook entry points `gate`, `agent-gate` and
+`gate-command` are not keys, so a `deny` for another key never stops a rendered hook.
+
 **The rendering record.** At attach, before the files, the installer writes `projects/<id>/rendering` in the guarded store, strict
 JSON, format 2: `harness` (the module name), `permissions`, `gate`, `table_digest` (of the effective table rendered from), `file` and
 `file_hash` (the permissions file), `shared` (`path` and `hash`: the shared project settings file the layout names, `null` if it
@@ -205,16 +216,16 @@ declared checkpoints, then the installer's owner-run commands, then the agent-sa
 `wb preview adopt`, `wb preview upgrade`, `wb preview add`, `wb launch`, `wb check`, `wb plan-status`, `wb settings`), then `wb run
 <command> <argument>` for each argument the installed modules declare (an owner-run argument first), with the defaults and the
 table applied. An agent-safe key and a declared argument that is not owner-run default to `none`; every other key defaults to `block`.
-The hook entry points, the dispatcher words and `delegate-approve-plan` are not keys. As built by Increment A of the plan, a
-`block` set on an agent-safe key is read and printed and is not yet enforced, and the table a harness renders and digests holds
-none of the agent-safe keys, so an attached clone's record is unchanged. After the `level` lines it prints one `translated <key>:
+The hook entry points, the dispatcher words and `delegate-approve-plan` are not keys. As built by Increments A and C of the plan, a
+`block` set on an agent-safe key is rendered as a `deny` at the next attach ("Rendering"); the table a harness renders and digests holds
+an agent-safe key only when it is not at its default, so an attached clone's record is unchanged. After the `level` lines it prints one `translated <key>:
 <word> read as <level>` line for each checkpoint word it read as a level because the table does not name the key (Increment B).
 Problems and notes print as `settings:` lines. Two declarations that
 give one key are a refusal.
 
 ## Planned: a level for every command
 
-Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A and B are
+Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B and C are
 built). It is the owner's direction of 2026-10-26, recorded here so a plan can implement it. Calls marked **(call)** are the
 author's and are not the owner's until the owner confirms them.
 

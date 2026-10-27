@@ -296,5 +296,23 @@ class Protocol(unittest.TestCase):
                     "Bash", "command", {"approve-plan": level}, STORE_BIN))[0])
 
 
+class AgentSafeCommandsTest(unittest.TestCase):
+    """Increment C of plan 2026-10-27-a-level-for-every-command: the agent-safe keys never make the gate block a command."""
+
+    COMMANDS = ("wb check", "wb verify docs", "wb settings", "wb launch p n --root r", "wb plan-status docs/plans/a.md",
+                "wb preview install --dir x", "wb preview adopt --dir x", "wb run tool check")
+
+    def test_no_agent_safe_command_is_blocked_when_no_key_is_relaxed(self):
+        for command in self.COMMANDS:
+            with self.subTest(command=command):
+                self.assertIsNone(command_gate.judge(command, (), STORE_BIN))
+
+    def test_no_agent_safe_command_is_blocked_by_a_relaxed_owner_run_key(self):
+        for command in self.COMMANDS:
+            with self.subTest(command=command):
+                self.assertIsNone(command_gate.judge(command, ("wb pin",), STORE_BIN))
+                self.assertIsNone(command_gate.judge(command, (APPROVE,), STORE_BIN))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -267,6 +267,11 @@ class LevelsTest(SettingsBase):
         loaded = settings.load(self.store)
         return loaded, settings.effective(loaded, checkpoints, ())
 
+    def owner_run_levels(self, got):
+        """The set of levels of every key that is not an agent-run key."""
+        agent = set(levels.agent_keys())
+        return {level for name, level in got.levels.items() if name not in agent}
+
     def declared(self, got):
         """The levels of the two checkpoints these tests declare."""
         return {name: got.levels[name] for name in ("approve-plan", "beta")}
@@ -350,6 +355,32 @@ class LevelsTest(SettingsBase):
                 self.assertEqual({"approve-plan": "block", "beta": "block"}, self.declared(got))
                 self.assertEqual("stop", got.checkpoints["approve-plan"])
                 self.assertEqual(1, len(loaded.problems))
+                self.assertEqual({"block"}, self.owner_run_levels(got))
+
+    def test_a_damaged_table_leaves_the_agent_run_keys_at_their_default_so_the_agent_can_report_it(self):
+        """The owner's decision for increment C: a damaged file or table blocks every owner-run key and no agent-safe
+        one, so `wb settings` and `wb check` still run to report the damage."""
+        tables = ({"version": 2, "levels": ["x"]}, {"version": 2, "levels": {"Bad Key": "block"}},
+                  {"version": 2, "levels": {"wb check": "block", "Bad Key": "block"}})
+        for document in tables:
+            with self.subTest(document=document):
+                loaded, got = self.effective(document)
+                agent = set(levels.agent_keys())
+                self.assertEqual({"none"}, {got.levels[name] for name in agent})
+                self.assertEqual({"block"}, self.owner_run_levels(got))
+        for data in (b"{", b"[]", b'{"version": 3}', b'{"version": 2, "levels": {"a": "block", "a": "block"}}'):
+            with self.subTest(data=data):
+                self.put(data)
+                got = settings.effective(settings.load(self.store), ("approve-plan",), ())
+                self.assertEqual({"none"}, {got.levels[name] for name in levels.agent_keys()})
+                self.assertEqual({"block"}, {level for name, level in got.levels.items()
+                                             if name not in levels.agent_keys()})
+
+    def test_a_single_bad_value_blocks_only_its_own_agent_key(self):
+        loaded, got = self.effective({"version": 2, "levels": {"wb check": "nonsense", "wb verify": "block"}})
+        self.assertEqual(("block", "block", "none"), (got.levels["wb check"], got.levels["wb verify"],
+                                                      got.levels["wb settings"]))
+        self.assertEqual(1, len(loaded.problems))
 
     def test_a_duplicate_key_damages_the_file_so_every_key_blocks(self):
         for data in (b'{"version": 2, "levels": {"beta": "block", "beta": "block"}}',
@@ -463,7 +494,7 @@ class LevelsTest(SettingsBase):
                                               "levels": {key: "block", "approve-plan": "delegated"}})
                 self.assertEqual(self.declared(got), {"approve-plan": "block", "beta": "block"})
                 self.assertEqual("stop", got.checkpoints["approve-plan"])
-                self.assertEqual({"block"}, set(got.levels.values()))
+                self.assertEqual({"block"}, self.owner_run_levels(got))
                 self.assertEqual(1, len(loaded.problems))
 
     def test_a_known_key_that_no_checkpoint_declares_has_a_level(self):

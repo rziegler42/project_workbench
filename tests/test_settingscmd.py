@@ -36,13 +36,6 @@ def level_lines(declared, **levels):
                    for name in names + agent)
 
 
-def all_block():
-    """`level_lines` keywords that read every agent-safe key as `block`, as a damaged file does."""
-    from workbench import levels as keyset
-    names = list(keyset.agent_keys()) + ["wb run tool check", "wb run tool report"]
-    return {name.replace(" ", "_").replace("-", "_"): "block" for name in names}
-
-
 def problem_lines(out):
     """How many `settings: <text>` problem lines `out` holds (the key `level wb settings: none` is not one)."""
     return sum(1 for line in out.splitlines() if line.startswith("settings: "))
@@ -168,10 +161,9 @@ class Printed(Settings):
                 self.guarded.write("settings", data)
                 code, out, err = self.settings()
                 self.assertEqual((0, ""), (code, err))
-                # A damaged file reads the whole table as block, the agent-safe keys included.
-                every_key_blocked = (CHECKPOINT_LINES + "cap rounds: 3\ncap tries: 1\n"
-                                     + level_lines(CHECKPOINTS, **all_block()))
-                self.assertTrue(out.startswith(every_key_blocked), out)
+                # A damaged file reads every owner-run key as block and leaves the agent-safe keys at their default
+                # `none`, so the agent can still run `wb settings` and `wb check` to report the damage.
+                self.assertTrue(out.startswith(DEFAULTS), out)
                 self.assertTrue(problem_lines(out), out)
                 self.assertEqual(data, self.guarded.read("settings"))
 
