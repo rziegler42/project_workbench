@@ -751,7 +751,7 @@ Not done: the rubric and the bridge call (H), the output (I); wiring the checks 
 security pass (K asks the owner); committing. The shipped approval records for the module will be stale after landing; the
 owner runs `release-approvals`.
 
-### Increment H — built, verified and reviewed (not committed)
+### Increment H — committed as `5fd7818`
 
 Changed: `packages/workbench/action-review/helper/action-review` (a new block: `read_setting`, `read_rubric`, `facts_text`,
 `build_prompt`, `read_answer`, `parse_verdict`, `ask_bridge`, `judge`, with the exceptions `SettingError`, `RubricError`,
@@ -813,3 +813,52 @@ introduction is not tested.
 
 Not done: wiring into `run`, the output, the exit table and the log row (I); a second-model review; a security pass (K asks the
 owner); committing. The shipped approval records will be stale after landing; the owner runs `release-approvals`.
+
+### Increment I — built, verified and reviewed (not committed)
+
+Changed: `packages/workbench/action-review/helper/action-review` (the skeleton `run` and `main` are replaced by `parse_call`,
+`review`, `verdict_line`, `log_row`, `main`, `code_decline` and `utc_now`, with the exceptions `Refused` and `Failed`; `judge`
+uses `code_decline`), `tests/test_actionreview_output.py` (new, 40 tests), `tests/test_actionreview_module.py` (the import
+allow-list gains `time`) and `tests/test_actionreview_rules.py` (one test rewritten: `main` now reviews a command that fits a
+rule and, with an object that lacks the facts, declines). No shipped data changed.
+
+What it does: `main` prints the verdict object (`verdict`, `failed_checks`, `reason`, compact ASCII JSON, one line) and exits 0
+for an approve or a decline; a refusal (`Unreviewable`, no trusted rules, a `describe` that failed or is malformed, a bad
+setting or rubric, a bridge that was not run) prints one `refused:` line and exits 1; a failure (the bridge's failure, timeout
+or unusable reply, a malformed verdict, any other exception) prints one `failed:` line and exits 2; neither prints anything on
+standard output. The reason on standard error is display-cleaned and cut to 500 characters; an unexpected exception gets fixed
+text and is never quoted. `verdict_line` re-checks the object before it is printed (an approve names no failed check and a
+decline one to 32, distinct names of the `NAME` form, a reason of 1 to 300 printable ASCII characters), so a malformed one is
+exit 2. A failed code check is a decline decided before the setting and the rubric are read, so it needs neither; otherwise the
+setting and the rubric are read and the bridge is given the time left of the 25 seconds as measured from the start of the
+review. `--log-row` adds, after the verdict object, one `log-row:` line on standard error with the twelve fields in the spec's
+order: `rule` is the rule file's name without `.json` (`safe-git-commit`); `command_sha256` is over the JSON of
+`[module, "describe", action, *arguments]`; `facts_sha256` is over the `describe` object as received with sorted keys and
+ASCII escapes; `rubric_sha256` is that of the rubric text sent; `bridge`, `model` and `effort` are the setting's, all null (with
+`rubric_sha256`) when the bridge was not called; `ts` is UTC to the second; `format` is 1. No row is printed for a refusal or a
+failure. The engine writes no file.
+
+Choices to record: the order of the checks, the setting and the rubric (above); `model` in the row is the requested model, not
+the one the bridge reports (the answer's model is read and dropped); `rule` is the file stem, which the loader forces to equal
+`<module>-<action>`, and not the spelling-plus-subcommand key; the bridge's time limit is read once before `judge`, so
+the arithmetic is `25 - elapsed` with `describe` taking at most its own 5 seconds.
+
+Verification as run on 2026-10-27, in a scratch copy: the 38 first tests failed (errors, `time` and the new functions missing),
+then passed; an ordering test was added (40). Twenty mutations were applied one at a time (decline exit, the approve and
+failed-check rule, reason length and ASCII, name form and count, the row without the flag, dropped rule errors, both exit
+codes, an escaping internal error, the time left, the `describe` word and key order in the hashes, the setting read before the
+checks, a raw stderr reason, the format number, the row before the verdict, a bridge refusal as a failure, an extra
+printed field): nineteen were caught at once and the row order after a test was added. The module's 386 tests pass (346
+before). Full `python3 -B -W error tests/run_all.py` in the scratch copy: 5242 tests in 11 roots, all pass.
+
+Review: the `reviewer` agent, one exchange, no blocking finding, six notes. Recorded, none applied: (1) `model` in the row
+is the requested value (above); (2) `rule` is the file stem (above), and the spec's "the rule's key" may be clarified in L; (3)
+the rule-error notes on standard error are `ascii()`-escaped file names and fixed text but are not passed through the
+500-character cut; (4) the refusal text can quote an escaped offending character or flag word of the command and up to 40
+characters of a number literal of the `describe` output (from `jsonstrict`), on standard error only, never in the row; for K;
+(5) a `KeyboardInterrupt`, a `SystemExit` or a failed write on standard output or error is not caught or tested: the hook
+allows only an object with exit 0, and a write failure leaves a non-zero exit, so none approves; (6) `review` and `judge` both
+run the checks, harmlessly.
+
+Not done: a second-model review; a security pass (K asks the owner); the dangerous cases end to end (J); the specs (L).
+Committing. The shipped approval records will be stale after landing; the owner runs `release-approvals`.

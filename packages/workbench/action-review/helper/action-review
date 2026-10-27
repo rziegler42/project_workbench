@@ -24,6 +24,7 @@ import os
 import re
 import secrets
 import sys
+import time
 
 from wbkit import call, jsonstrict, project, safefs
 
@@ -1161,7 +1162,7 @@ def judge(root, rule, document, setting, rubric, seconds):
     `BridgeRefused` and `BridgeFailed` mean no verdict, and so no approval."""
     failed = run_checks(rule, document)
     if failed:
-        return Judgement("decline", failed, "The fixed checks failed: %s." % ", ".join(failed), None, None, None, None)
+        return code_decline(failed)
     try:
         prompt = build_prompt(rule, rubric, document)
     except PromptTooLarge:
@@ -1172,20 +1173,54 @@ def judge(root, rule, document, setting, rubric, seconds):
                      setting.effort, rubric.sha256)
 
 
-def run(argv, cwd, notes):
-    """Check the arguments and the text, find the rule and ask for `describe`; return the refusal text and append the
-    rule errors to `notes`. The checks and the bridge are not built yet."""
+LOG_FORMAT = 1
+MAX_FAILED = 32
+MAX_STDERR_REASON = 500
+ReviewDone = collections.namedtuple("ReviewDone", ("rule", "judgement", "command_sha256", "facts_sha256"))
+
+
+class Refused(Exception):
+    """The review did not run or cannot be trusted to have run: exit 1, a ``refused:`` line, nothing on standard output."""
+
+
+class Failed(Exception):
+    """The review ran and found nothing usable (the bridge, an internal error): exit 2, a ``failed:`` line, nothing on
+    standard output."""
+
+
+def utc_now():
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _sha256(value):
+    return hashlib.sha256(json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+                          .encode("utf-8")).hexdigest()
+
+
+def parse_call(argv):
+    """``(log_row, text)`` from the arguments after the program name: ``review [--log-row] <command text>``, or
+    `Refused`."""
     if not argv or argv[0] != "review":
-        return USAGE
+        raise Refused(USAGE)
     rest = argv[1:]
-    if rest[:1] == ["--log-row"]:
+    log_row = rest[:1] == ["--log-row"]
+    if log_row:
         rest = rest[1:]
     if len(rest) != 1:
-        return USAGE
+        raise Refused(USAGE)
+    return log_row, rest[0]
+
+
+def review(text, cwd, notes):
+    """The `ReviewDone` for the command `text`, run from `cwd`, or `Refused` or `Failed`. The order: the text is read once
+    under the grammar, the rule is found, `describe` is asked, the code checks run; a failed check is a decline that needs
+    neither the setting nor the bridge, and otherwise the setting and the rubric are read and the bridge is asked, within
+    the 25 seconds of the whole review. The rule errors are appended to `notes`."""
+    started = time.monotonic()
     try:
-        parse_words(rest[0], AnyWord())
+        parse_words(text, AnyWord())
     except Unreviewable as exc:
-        return "unreviewable: %s" % exc
+        raise Refused("unreviewable: %s" % exc) from None
     try:
         try:
             root = project.find_root(cwd)
@@ -1193,27 +1228,93 @@ def run(argv, cwd, notes):
             raise RulesUnavailable("the command is not run inside a workbench project") from None
         loaded = load_rules(root)
     except RulesUnavailable as exc:
-        return "no rule is trusted: %s" % exc
+        raise Refused("no rule is trusted: %s" % exc) from None
     notes.extend("rule error: %s: %s" % (ascii(name), why) for name, why in loaded.errors)
     try:
-        rule, arguments = read_command(loaded, rest[0])
+        rule, arguments = read_command(loaded, text)
     except Unreviewable as exc:
-        return "unreviewable: %s" % exc
+        raise Refused("unreviewable: %s" % exc) from None
     try:
-        describe(root, rule, arguments, cwd)
+        document = describe(root, rule, arguments, cwd)
     except DescribeFailed as exc:
-        return "describe: %s" % exc
-    return "the engine is not built yet; " + USAGE
+        raise Refused("describe: %s" % exc) from None
+    try:
+        failed = run_checks(rule, document)
+        if failed:
+            judgement = code_decline(failed)
+        else:
+            setting = read_setting(root)
+            rubric = read_rubric(root, rule)
+            judgement = judge(root, rule, document, setting, rubric, REVIEW_SECONDS - (time.monotonic() - started))
+    except (SettingError, RubricError) as exc:
+        raise Refused(str(exc)) from None
+    except BridgeRefused as exc:
+        raise Refused("bridge: %s" % exc) from None
+    except BridgeFailed as exc:
+        raise Failed("bridge: %s" % exc) from None
+    return ReviewDone(rule.file[:-len(".json")], judgement,
+                      _sha256([rule.module, "describe", rule.action] + list(arguments)), _sha256(document))
+
+
+def verdict_line(judgement):
+    """The verdict object as one line of JSON, or `Failed` when it is not exactly what the spec allows: an approve names no
+    failed check and a decline at least one, at most 32 distinct names of the form ``[a-z][a-z0-9_]*`` of at most 64
+    characters, and a reason of at most 300 printable ASCII characters. A malformed object is never printed."""
+    verdict, failed, reason = judgement.verdict, judgement.failed_checks, judgement.reason
+    if not isinstance(verdict, str) or verdict not in VERDICTS or not isinstance(failed, (tuple, list)) \
+            or not all(isinstance(name, str) and NAME.fullmatch(name) for name in failed) \
+            or len(set(failed)) != len(failed) or len(failed) > MAX_FAILED or (verdict == "approve") != (not failed) \
+            or not isinstance(reason, str) or not 1 <= len(reason) <= MAX_REASON \
+            or not all(" " <= char <= "~" for char in reason):
+        raise Failed("the verdict is not one the engine may print")
+    return json.dumps({"verdict": verdict, "failed_checks": list(failed), "reason": reason},
+                      ensure_ascii=True, separators=(",", ":")) + "\n"
+
+
+def log_row(done):
+    """The row for the owner's hook, as one line of JSON: exactly the fields of the spec's log, in its order, and no
+    command text, fact or diff. Only the hashes and the bounded reason carry anything of the input."""
+    judgement = done.judgement
+    return json.dumps({
+        "ts": utc_now(), "rule": done.rule, "verdict": judgement.verdict, "failed_checks": list(judgement.failed_checks),
+        "reason": judgement.reason, "command_sha256": done.command_sha256, "facts_sha256": done.facts_sha256,
+        "rubric_sha256": judgement.rubric_sha256, "bridge": judgement.bridge, "model": judgement.model,
+        "effort": judgement.effort, "format": LOG_FORMAT}, ensure_ascii=True, separators=(",", ":"))
 
 
 def main(argv, stdin, out, err, cwd):
-    """Run one command from `cwd`. Returns the exit code."""
+    """Run one command from `cwd` and return the exit code: 0 with the verdict object on standard output (an approve or a
+    decline), 1 for a refusal and 2 for a failure, each with one ``refused:`` or ``failed:`` line on standard error and
+    nothing on standard output. With ``--log-row`` a verdict is followed by one ``log-row:`` line on standard error. The
+    engine writes nothing else."""
     notes = []
-    refusal = run(argv, cwd, notes)
-    for line in notes:
-        err.write(line + "\n")
-    err.write("refused: %s\n" % refusal)
-    return 1
+    try:
+        wants_row, text = parse_call(argv)
+        done = review(text, cwd, notes)
+        line = verdict_line(done.judgement)
+        row = log_row(done) if wants_row else None
+    except Refused as exc:
+        label, reason, code = "refused", str(exc), 1
+    except Failed as exc:
+        label, reason, code = "failed", str(exc), 2
+    except Exception:
+        label, reason, code = "failed", "an internal error stopped the review", 2
+    else:
+        for note in notes:
+            err.write(note + "\n")
+        out.write(line)
+        if row is not None:
+            err.write("log-row: %s\n" % row)
+        return 0
+    for note in notes:
+        err.write(note + "\n")
+    err.write("%s: %s\n" % (label, _plain(reason, MAX_STDERR_REASON) or "no reason is given"))
+    return code
+
+
+def code_decline(failed):
+    """The decline for the code checks `failed`, which never needs the bridge."""
+    return Judgement("decline", failed, "The fixed checks failed: %s." % ", ".join(failed), None, None, None, None)
 
 
 if __name__ == "__main__":

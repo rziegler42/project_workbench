@@ -100,7 +100,8 @@ class Helper(unittest.TestCase):
 
     def test_it_imports_only_the_standard_library_and_the_kit(self):
         imported = set(re.findall(r"^(?:import|from) ([a-z_.]+)", self.text(), re.M))
-        self.assertEqual({"collections", "fnmatch", "hashlib", "json", "math", "os", "re", "secrets", "sys", "wbkit"},
+        self.assertEqual({"collections", "fnmatch", "hashlib", "json", "math", "os", "re", "secrets", "sys", "time",
+                          "wbkit"},
                          imported)
 
     def test_it_starts_no_process_and_opens_no_connection(self):

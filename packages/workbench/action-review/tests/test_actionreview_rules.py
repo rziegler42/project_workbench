@@ -486,7 +486,7 @@ class Keys(Base):
         self.assertTrue(err.getvalue().startswith("refused: "), err.getvalue())
         self.assertEqual(1, len(err.getvalue().splitlines()))
 
-    def test_main_still_does_not_review_a_command_that_fits_a_rule(self):
+    def test_main_asks_describe_for_a_command_that_fits_a_rule_and_declines_an_object_that_lacks_the_facts(self):
         root = self.project({n: read_shipped(n) for n in ("safe-git-commit.json", "safe-git-remove.json")})
         out, err = io.StringIO(), io.StringIO()
         described = []
@@ -497,8 +497,9 @@ class Keys(Base):
 
         with unittest.mock.patch.object(self.helper.call, "run_command", fake):
             code = self.helper.main(["review", self.text(self.COMMAND)], io.BytesIO(b""), out, err, root)
-        self.assertEqual((1, ""), (code, out.getvalue()))
-        self.assertIn("not built", err.getvalue())
+        self.assertEqual(0, code)
+        self.assertEqual("decline", json.loads(out.getvalue())["verdict"])
+        self.assertEqual("", err.getvalue())
         self.assertEqual(1, len(described))
 
 
