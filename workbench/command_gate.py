@@ -33,6 +33,7 @@ from .wbkit import display
 
 USAGE = "usage: wb gate-command <harness>\n"
 MAX_COMMAND = 64 * 1024
+MAX_DOLLAR_QUOTES = 64  # decoding tries every ``$'``, so a command full of them costs time and memory
 RELAXED = ("ask", "none")
 # The agent-safe command whose name contains the word of ``approve-plan``.
 EXEMPT = ("delegate-approve-plan",)
@@ -115,6 +116,7 @@ _GLOB_STAR = 3  # a ``*`` can stand for many letters; this many are allowed for 
 # Characters that let a command spell a word without writing it: parameter and command expansion, and the glob and
 # brace characters. When one is present the letters of a guarded word are looked for in order.
 _PATTERN_CHARS = "$?*[{`"
+_SUBSTITUTION_WILDS = 8  # an expansion can stand for many letters; its own text is dropped, as it may expand to nothing
 # The letters of a guarded word must fall within this many times the word's length, so a long command that happens to
 # hold the letters scattered through it is not taken for a spelling of the word.
 _WINDOW = 3
@@ -135,16 +137,60 @@ def _in_order(text, pieces):
     return True
 
 
+def _collapse(text):
+    """`text` with the inside of every ``$(...)``, ``${...}`` and backtick pair replaced by wildcards. What is inside an
+    expansion can expand to nothing (``$(true padding)``, ``${unset:+padding}``), so it is not part of the spelling; what
+    the expansion yields can be letters, so it stands for up to ``_SUBSTITUTION_WILDS`` of them. Nesting is balanced as far
+    as the text allows; an unclosed one runs to the end."""
+    out, at = [], 0
+    while at < len(text):
+        two = text[at:at + 2]
+        if two in ("$(", "${"):
+            close = ")" if two == "$(" else "}"
+            depth, end = 1, at + 2
+            while end < len(text) and depth:
+                depth += (text[end] == two[1]) - (text[end] == close)
+                end += 1
+            out.append(_WILD * _SUBSTITUTION_WILDS)
+            at = end
+        elif text[at] == "`":
+            end = at + 1
+            while end < len(text) and text[end] != "`":
+                end += 2 if text[end] == "\\" else 1
+            out.append(_WILD * _SUBSTITUTION_WILDS)
+            at = end + 1
+        else:
+            out.append(text[at])
+            at += 1
+    return "".join(out)
+
+
+def _literals(window, letters):
+    """The most characters of `letters` that a stretch of text can supply as themselves when it holds all of them in order
+    (a ``\0`` supplies any one), or ``-1`` when it does not hold them."""
+    best = [-1] * (len(letters) + 1)
+    best[0] = 0
+    for char in window:
+        for at in range(len(letters), 0, -1):
+            if best[at - 1] >= 0 and (char == _WILD or char == letters[at - 1]):
+                best[at] = max(best[at], best[at - 1] + (0 if char == _WILD else 1))
+    return best[len(letters)]
+
+
 def _subsequence(text, letters):
     """Whether the characters of `letters` occur in `text` in order, not necessarily next to each other, all within a
-    stretch of ``_WINDOW`` times their number. A ``\0`` in `text` (an escape sequence or a glob character, which can
-    stand for any letter) matches any character."""
+    stretch of ``_WINDOW`` times their number, with at least a third of them written out and not supplied by wildcards. A
+    ``\0`` in `text` (an escape sequence, a glob character or an expansion, which can stand for any letter) matches any
+    character; without the third, two expansions side by side would read as any word."""
     width = _WINDOW * len(letters)
+    need = len(letters) // 3
     for start in range(len(text)):
         if text[start] != letters[0] and text[start] != _WILD:
             continue
-        chars = iter(text[start:start + width])
-        if all(any(char == wanted or char == _WILD for char in chars) for wanted in letters):
+        window = text[start:start + width]
+        chars = iter(window)
+        if all(any(char == wanted or char == _WILD for char in chars) for wanted in letters) \
+                and _literals(window, letters) >= need:
             return True
     return False
 
@@ -156,16 +202,22 @@ def _names(folded, skeleton, pieces):
 
 def judge(command, keys, store_bin):
     """``None`` when `command` may go ahead, or the reason it may not. `keys` are the relaxed keys."""
-    text = command.strip()
+    text = command
+    if keys and text.count("$'") > MAX_DOLLAR_QUOTES and any(words(key) for key in keys):
+        return ("the command holds more than %d $'...' strings, which the gate cannot read while a command is set to "
+                "ask or none here" % MAX_DOLLAR_QUOTES)
     views = []
     for version in decoded_views(text):
         folded = _folded(version)
         for token in EXEMPT:
             folded = re.sub(r"(?<![a-z0-9-])%s(?![a-z0-9-])" % re.escape(_folded(token)), " ", folded)
         views.append((folded, _skeleton(folded)))
-    spelled = _ESCAPE_TOKEN.sub(_WILD, views[0][0])
-    spelled = _GLOB_CLASS.sub(_WILD, spelled).replace("?", _WILD).replace("*", _WILD * _GLOB_STAR)
-    wild = "".join(char for char in spelled if char.isalnum() or char == _WILD)
+    # The in-order rule reads the text as written, the exempt command included: `${A#delegate-}` can make the word out of it.
+    wilds = []
+    for version in (_folded(text), _collapse(_folded(text))):
+        spelled = _ESCAPE_TOKEN.sub(_WILD, version)
+        spelled = _GLOB_CLASS.sub(_WILD, spelled).replace("?", _WILD).replace("*", _WILD * _GLOB_STAR)
+        wilds.append("".join(char for char in spelled if char.isalnum() or char == _WILD))
     pattern = any(char in text for char in _PATTERN_CHARS)
     for key in keys:
         pieces = [_folded(word) for word in words(key)]
@@ -177,20 +229,23 @@ def judge(command, keys, store_bin):
             return ("the command names %s, which the owner has set to ask or none here, and is not exactly the simple "
                     "command the ask rule matches; run it as `wb %s ...` on its own" % (
                         display.ascii_text(" ".join(pieces))[:80], " ".join(pieces)[:60]))
-        if pattern and _subsequence(wild, _skeleton("".join(pieces))):
+        if pattern and any(_subsequence(wild, _skeleton("".join(pieces))) for wild in wilds):
             return ("the command uses an expansion, a pattern or an escape and holds the letters of %s in order, so it "
                     "may spell a command that the owner has set to ask or none here"
                     % display.ascii_text(" ".join(pieces))[:80])
     return None
 
 
-def run(stdin, err, prepare, tool, field, *, deadline=gate_hook.DEADLINE):
-    """Decide the tool call on `stdin`. `tool` and `field` come from the harness's layout. `prepare(cwd)` returns
-    ``(table, store bin path)`` or raises ``Refusal``. Returns 0 to allow; otherwise one ``refused:`` line and 2."""
+def run(stdin, err, prepare, *, deadline=gate_hook.DEADLINE):
+    """Decide the tool call on `stdin`. `prepare(cwd)` returns ``(tool, field, table, store bin path)``, the tool and the
+    field of its input that hold the command coming from the harness's layout, or raises ``Refusal``; it runs under the
+    deadline and the guard, so a failure or a stall in it is a block. Returns 0 to allow; otherwise one ``refused:`` line
+    and 2."""
 
     def body(limit):
         cwd, name, given, _ = gate_hook._read(stdin)
         gate_hook.check_cwd(cwd)
+        tool, field, table, store_bin = prepare(cwd)
         if name != tool:
             raise Refusal("the tool %s is not the one this gate reads" % display.ascii_text(name)[:40])
         command = given.get(field)
@@ -198,7 +253,6 @@ def run(stdin, err, prepare, tool, field, *, deadline=gate_hook.DEADLINE):
             raise Refusal("the %s call has no %s to read" % (display.ascii_text(name)[:40], field))
         if "\0" in command or len(command) > MAX_COMMAND:
             raise Refusal("the command holds a NUL byte or is longer than %d characters" % MAX_COMMAND)
-        table, store_bin = prepare(cwd)
         relaxed = [key for key, level in table.items() if level in RELAXED]
         reason = judge(command, relaxed, store_bin)
         if reason:

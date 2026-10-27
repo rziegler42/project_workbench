@@ -346,9 +346,12 @@ def _gate_command(tokens, err, store_root, distribution, stdin):
     if len(tokens) != 1 or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", tokens[0]):
         err.write(command_gate.USAGE)
         return 2
-    holder = {}
 
     def prepare(cwd):
+        facts = harnesses.known(distribution).get(tokens[0])
+        gate = facts["command_gate"] if facts else ()
+        if not gate:
+            raise gate_hook.Refusal("%s is not a known harness whose layout describes the command gate" % _clean(tokens[0]))
         said = io.StringIO()
         opened = _open_store(store_root, said)
         if opened is None:
@@ -365,14 +368,9 @@ def _gate_command(tokens, err, store_root, distribution, stdin):
             for key, rule in record["keys"].items():
                 if rule in command_gate.RELAXED and table.get(key) not in command_gate.RELAXED:
                     table[key] = rule
-        return table, os.path.join(os.path.realpath(opened[0].root), "bin", "wb")
+        return gate[0], gate[1], table, os.path.join(os.path.realpath(opened[0].root), "bin", "wb")
 
-    facts = harnesses.known(distribution).get(tokens[0])
-    gate = facts["command_gate"] if facts else ()
-    if not gate:
-        err.write("refused: %s is not a known harness whose layout describes the command gate\n" % _clean(tokens[0]))
-        return 2
-    return command_gate.run(stdin if stdin is not None else sys.stdin, err, prepare, gate[0], gate[1])
+    return command_gate.run(stdin if stdin is not None else sys.stdin, err, prepare)
 
 
 def _agent_gate(tokens, err, distribution, stdin):

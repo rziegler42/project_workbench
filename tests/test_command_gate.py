@@ -23,8 +23,7 @@ class Allowed(unittest.TestCase):
     def test_the_exact_forms_the_ask_rule_matches(self):
         for command in ("wb approve-plan docs/plans/2026-10-26-a.md",
                         "wb approve-plan docs/plans/2026-10-26-a.md --digest " + DIGEST,
-                        "%s approve-plan docs/plans/a.md --digest %s" % (STORE_BIN, DIGEST),
-                        "  wb approve-plan docs/plans/a.md --digest %s\n" % DIGEST):
+                        "%s approve-plan docs/plans/a.md --digest %s" % (STORE_BIN, DIGEST)):
             with self.subTest(command=command):
                 self.assertIsNone(judge(command))
 
@@ -136,6 +135,47 @@ class BlockedWhenAPatternBreaksTheWord(unittest.TestCase):
                 self.assertIsNone(judge(command))
 
 
+class BlockedAfterTheReviewOfTheBuiltCode(unittest.TestCase):
+    """Findings M1, M2, L2 and L4 of the review of the built code; every string was run through ``judge`` first."""
+
+    def test_the_exemption_cannot_be_turned_into_the_word(self):
+        for command in ("A=delegate-approve-plan; wb ${A#delegate-} docs/plans/x.md",
+                        'A=delegate-approve-plan; wb "${A##*delegate-}" docs/plans/x.md'):
+            with self.subTest(command=command):
+                self.assertIsNotNone(judge(command))
+
+    def test_the_delegated_command_stays_allowed_without_a_pattern_character(self):
+        self.assertIsNone(judge("wb delegate-approve-plan docs/plans/x.md"))
+        self.assertIsNotNone(judge("wb delegate-approve-plan docs/plans/*.md"))
+
+    def test_padding_inside_an_expansion_that_expands_to_nothing_does_not_hide_the_word(self):
+        pad = "x" * 31
+        for command in ("wb appr$(true %s)ove-plan docs/plans/x.md" % pad,
+                        "wb appr`: %s`ove-plan docs/plans/x.md" % pad,
+                        "wb appr${u:+%s}ove-plan docs/plans/x.md" % pad,
+                        "wb $'\\x61pprove-p'\"$(true %s)\"$'\\x6c\\x61n' docs/plans/x.md" % pad):
+            with self.subTest(command=command):
+                self.assertIsNotNone(judge(command))
+
+    def test_an_expansion_around_a_long_ordinary_command_is_not_a_spelling(self):
+        self.assertIsNone(judge("git commit -m \"$(cat <<'EOF'\nFix the parser\nEOF\n)\""))
+        self.assertIsNone(judge("echo $(date) && ls ${HOME}"))
+
+    def test_whitespace_around_the_exact_form_is_not_the_exact_form(self):
+        """The rule sees the raw text; the gate must not allow what the rule would not match."""
+        for command in ("\nwb approve-plan docs/plans/x.md\n", "\twb approve-plan docs/plans/x.md",
+                        "wb approve-plan docs/plans/x.md ", " wb approve-plan docs/plans/x.md"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(judge(command))
+
+    def test_a_command_full_of_dollar_quotes_is_refused_quickly(self):
+        import time
+        began = time.monotonic()
+        self.assertIsNotNone(judge("$'a'" * 16000))
+        self.assertLess(time.monotonic() - began, 2.0)
+        self.assertIsNone(judge("echo " + "$'a' " * 10))
+
+
 class WhatTheTextCannotSee(unittest.TestCase):
     """The stated limits of the decision. These pass the gate; the tests pin that they are known, not that they are fine."""
 
@@ -148,6 +188,10 @@ class WhatTheTextCannotSee(unittest.TestCase):
         for command in ("a=approve b=plan; wb $a-$b x", "wb $(printf 'approve\\055plan') x"):
             with self.subTest(command=command):
                 self.assertIsNotNone(judge(command))
+
+    def test_a_variable_far_from_the_rest_of_the_word_passes(self):
+        """The window is cosmetic against a variable (review S3); the decision accepts a word built at run time."""
+        self.assertIsNone(judge("A=approve; : " + "x" * 40 + "; wb $A-plan docs/plans/x.md"))
 
     def test_a_script_file_passes_because_the_command_names_no_word(self):
         self.assertIsNone(judge("bash ./x.sh"))
@@ -169,15 +213,15 @@ class OtherKeys(unittest.TestCase):
 
 
 def run(payload, prepare=None):
-    """The gate on `payload`; `prepare(cwd)` gives ``(table, store bin path)``."""
+    """The gate on `payload`; `prepare(cwd)` gives ``(tool, field, table, store bin path)``."""
     err = io.StringIO()
     text = payload if isinstance(payload, str) else json.dumps(payload)
-    code = command_gate.run(io.StringIO(text), err, prepare or _prepare, "Bash", "command")
+    code = command_gate.run(io.StringIO(text), err, prepare or _prepare)
     return code, err.getvalue()
 
 
 def _prepare(cwd):
-    return {"approve-plan": "ask"}, STORE_BIN
+    return "Bash", "command", {"approve-plan": "ask"}, STORE_BIN
 
 
 class Constants(unittest.TestCase):
@@ -217,6 +261,15 @@ class Protocol(unittest.TestCase):
         code, err = self.call("echo " + "x" * (command_gate.MAX_COMMAND + 1))
         self.assertEqual(2, code)
 
+    def test_the_tool_and_field_come_from_prepare_inside_the_guard(self):
+        """Finding L3: the harness lookup runs under the deadline and the guard, so its failure is a block."""
+        def broken(cwd):
+            raise OSError("cannot hash the packages")
+        payload = {"cwd": "/tmp", "tool_name": "Bash", "tool_input": {"command": "wb check"}}
+        self.assertEqual(2, run(payload, broken)[0])
+        self.assertEqual(2, run(payload, lambda cwd: ("Write", "command", {"approve-plan": "ask"}, STORE_BIN))[0])
+        self.assertEqual(2, run(payload, lambda cwd: ("Bash", "cmd", {"approve-plan": "ask"}, STORE_BIN))[0])
+
     def test_a_failure_to_prepare_is_a_block(self):
         def broken(cwd):
             raise command_gate.gate_hook.Refusal("no project")
@@ -233,13 +286,14 @@ class Protocol(unittest.TestCase):
 
     def test_no_relaxed_key_allows_everything(self):
         payload = {"cwd": "/tmp", "tool_name": "Bash", "tool_input": {"command": "bash -c 'wb approve-plan x'"}}
-        self.assertEqual(0, run(payload, lambda cwd: ({"approve-plan": "block"}, STORE_BIN))[0])
+        self.assertEqual(0, run(payload, lambda cwd: ("Bash", "command", {"approve-plan": "block"}, STORE_BIN))[0])
 
     def test_relaxed_means_ask_or_none_in_the_table(self):
         payload = {"cwd": "/tmp", "tool_name": "Bash", "tool_input": {"command": "bash -c 'wb approve-plan x'"}}
         for level in ("ask", "none"):
             with self.subTest(level=level):
-                self.assertEqual(2, run(payload, lambda cwd, level=level: ({"approve-plan": level}, STORE_BIN))[0])
+                self.assertEqual(2, run(payload, lambda cwd, level=level: (
+                    "Bash", "command", {"approve-plan": level}, STORE_BIN))[0])
 
 
 if __name__ == "__main__":

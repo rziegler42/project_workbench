@@ -948,3 +948,40 @@ carry one digest for each `n` from 1 to 5) and to refuse an `extend` whose `--di
 helper and cannot know whether it will change anything, so for a module command the log attempt is written before the helper is
 launched and the outcome from its exit code, which differs from `approve-plan` (attempt after every check, none for a run that
 changes nothing). The owner's decision for the default stands: `extend` stays at `block`, `ask` and `none` are the owner's opt-in.
+
+Committed as `ffc2711` (Revision 4, Increment G deferred).
+
+### Increment H — security checkpoint on the built code (step before the specs)
+
+2026-10-26: the owner was asked whether to run a security review of the built code and answered yes. The `security-reviewer` agent
+read the committed code (HEAD `ffc2711`); it could run nothing (its scratch write and Bash were refused again), so every verdict
+was by reading, and it listed the strings it would try. The author ran each of those strings through `command_gate.judge`:
+
+- **Confirmed bypasses (single command, gate allows, no `ask` rule fires), now fixed:**
+  M2, `A=delegate-approve-plan; wb ${A#delegate-} …`, the exemption removed the very text that `${A#delegate-}` rebuilds the word
+  from; M1, padding inside an expansion that expands to nothing (`wb appr$(true xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx)ove-plan …`, a
+  backtick form, and two ANSI-C strings around a substitution), which the 33-character window did not span. Both contradicted the
+  decision's clarification note, which says static splices are stopped.
+- **Fixes:** the in-order rule reads the text as written (the exempt command included) and also with the inside of every `$( )`,
+  `${ }` and backtick pair replaced by eight wildcards; the aligned match must write out at least a third of the word's letters
+  itself, so two expansions side by side do not read as any word; the exact form is matched on the raw text, because the rule sees the
+  raw text (leading and trailing whitespace made it allow what the rule would not match, finding L4); a command with more than 64
+  `$'…'` strings is blocked before any decoding (finding L2: 16,000 of them took 20 seconds and 2.3 GB; now 0.00 s); the harness
+  lookup in `gate-command` runs inside the guard and the deadline (L3); `approve-plan` refuses if the project the level was read for
+  is not the project the plan belongs to (L7). Tests for each. Every string of the review is blocked now except S3.
+- **Accepted limit, unchanged and pinned by a test:** S3, a word built from a variable whose parts sit more than the window apart
+  (`A=approve; : <40 filler>; wb $A-plan …`), like the script file and base64 cases.
+- **Not fixed, recorded:** M3, the `Monitor` tool and a skill's `!` shell may run commands outside the `Bash` matcher and the
+  `Bash(...)` ask rule, unverified (the owner's trial); M4, a project-defined subagent or skill file with a permission mode that
+  overrides an `ask` rule, and user-level settings with `disableAllHooks`, outside the hashes, unverified (the owner's trial); M5,
+  a hostile approved harness module can declare a non-blocking `block_code` or another tool for the command gate and the record
+  still says `gate: true` (needs an approved hostile module; the first-party layout the gate reads at run time is what runs);
+  M6, in this self-hosted repository the code the launcher runs is in the agent's write scope, so the review applies to a project
+  where workbench is installed elsewhere; L1, a one-time nonce between the allowing gate and the approving command would turn the
+  script-file limit into a refusal but is weak with a shell-writable store; L5, an owner approval at `ask` or `none` reports
+  "already approved" when a withdrawn delegated entry has the same four fields; L6, attach hashes an existing shared settings file
+  without telling the owner what it contains. A key rendered when the shared settings file cannot be read still guards what was
+  rendered.
+
+Verification as run: `python3 -B -W error tests/run_all.py` (4724 tests in 10 roots, OK); `git diff --check` clean;
+`python3 -m workbench check` no problems. The specs and documentation of Increment H are not started.

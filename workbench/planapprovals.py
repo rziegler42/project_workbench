@@ -393,6 +393,9 @@ def _approve_without_terminal(guarded, argument, given, out, err, cwd):
     op = None
     try:
         resolved, plan, report = _current(guarded, argument, cwd)
+        if resolved.project_id != ident:
+            return _refuse(err, "the project the level was read for is not the project the plan belongs to; nothing was "
+                                "recorded")
         if level == levels.ASK and given != digest_of(resolved, plan, report):
             return _refuse(err, "the digest does not match the plan as it is now; preview it again with "
                                 "`wb plan-status <plan> --digest`; nothing was recorded")
