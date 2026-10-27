@@ -57,6 +57,7 @@ class Base(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.helper = support_helpers.load("action-review")
+        cls.helper.pinned = lambda relative, data: True  # own data; the pin is tested in test_actionreview_pins
 
     def project(self, files):
         scratch = tempfile.TemporaryDirectory()

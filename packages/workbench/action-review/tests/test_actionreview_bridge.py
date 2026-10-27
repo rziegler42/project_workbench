@@ -78,6 +78,7 @@ class Base(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.helper = support_helpers.load("action-review")
+        cls.helper.pinned = lambda relative, data: True  # own data; the pin is tested in test_actionreview_pins
         cls.commit = load_rule("safe-git-commit.json")
         cls.remove = load_rule("safe-git-remove.json")
 
@@ -96,7 +97,8 @@ class Base(unittest.TestCase):
         if text is None:
             with open(os.path.join(MODULE, "rubric", "rubric.md"), "rb") as handle:
                 text = handle.read()
-        files = {SECTION + "/rubric/rubric.md": text}
+        with open(os.path.join(MODULE, "reply-schema.json"), "rb") as handle:
+            files = {SECTION + "/rubric/rubric.md": text, SECTION + "/reply-schema.json": handle.read()}
         files.update(more)
         return self.project(files)
 
@@ -507,7 +509,8 @@ class Recording:
 
 
 class Asking(Base):
-    ROOT = "/p/root"
+    def setUp(self):
+        self.ROOT = self.with_rubric()
 
     def ask(self, answer=None, setting=None, prompt=b"the prompt", seconds=20.0):
         fake = Recording(answer if answer is not None else result(envelope(reply())))
@@ -577,13 +580,15 @@ class Judging(Base):
     SETTING = None
 
     def judge(self, document, rule=None, answer=None, seconds=20.0, setting=None):
+        """The paths the command names are the ones the object says were requested: the honest case."""
         rule = rule or self.commit
+        positionals = document["facts"].get("requested_paths")
         root = self.with_rubric()
         rubric = self.helper.read_rubric(root, rule)
         setting = setting or self.helper.Setting("ask-codex", "gpt-x", "low")
         fake = Recording(answer if answer is not None else result(envelope(reply())))
         with unittest.mock.patch.object(self.helper.call, "run_command", fake):
-            got = self.helper.judge(root, rule, document, setting, rubric, seconds)
+            got = self.helper.judge(root, rule, document, setting, rubric, seconds, positionals)
         return fake, got, rubric
 
     def fails_with(self, exception, document, **kwargs):
@@ -594,7 +599,7 @@ class Judging(Base):
         fake, got, rubric = self.judge(commit_doc())
         self.assertEqual(1, len(fake.calls))
         self.assertEqual(("approve", (), "The change is plain."), (got.verdict, got.failed_checks, got.reason))
-        self.assertEqual(("ask-codex", "gpt-x", "low", rubric.sha256), (got.bridge, got.model, got.effort,
+        self.assertEqual(("ask-codex", "m", "low", rubric.sha256), (got.bridge, got.model, got.effort,
                                                                          got.rubric_sha256))
 
     def test_the_bridge_is_sent_the_prompt_with_the_rubric_the_questions_and_the_facts(self):
@@ -609,6 +614,15 @@ class Judging(Base):
         _, got, _ = self.judge(commit_doc(), answer=result(envelope(reply("decline", ["scope_is_coherent"], "Mixed."))))
         self.assertEqual(("decline", ("scope_is_coherent",), "Mixed."), (got.verdict, got.failed_checks, got.reason))
         self.assertEqual("ask-codex", got.bridge)
+
+    def test_the_model_is_the_one_the_bridge_reports_and_the_request_only_when_it_reports_none(self):
+        # Security pass, finding 6: the row said `as used` but carried the model the repository's setting asked for.
+        reported = result(envelope(reply(), model="tiny-actual"))
+        _, got, _ = self.judge(commit_doc(), answer=reported)
+        self.assertEqual(("tiny-actual", "low"), (got.model, got.effort))
+        unreported = result(envelope(reply(), model=None))
+        _, got, _ = self.judge(commit_doc(), answer=unreported)
+        self.assertEqual("gpt-x", got.model)
 
     def test_a_remove_is_judged_by_its_own_rule(self):
         fake, got, _ = self.judge(remove_doc(), rule=self.remove)
@@ -685,6 +699,7 @@ class RealLauncher(support_project.Project):
     def setUp(self):
         support_project.Project.setUp(self)
         self.helper = support_helpers.load("action-review")
+        self.helper.pinned = lambda relative, data: True  # own data; the pin is tested in test_actionreview_pins
         self.rule = load_rule("safe-git-commit.json")
         holder = tempfile.TemporaryDirectory()
         self.addCleanup(holder.cleanup)
@@ -715,6 +730,8 @@ class RealLauncher(support_project.Project):
         self.addCleanup(capability.stop)
         self.write(".workbench/review.json", '{"format": 1, "bridge": "bridge", "model": "m1", "effort": "low"}')
         self.write(SECTION + "/rubric/rubric.md", self.rubric_bytes())
+        with open(os.path.join(MODULE, "reply-schema.json"), "rb") as handle:
+            self.write(SECTION + "/reply-schema.json", handle.read())
 
     def write(self, rel, data):
         path = os.path.join(self.place, *rel.split("/"))

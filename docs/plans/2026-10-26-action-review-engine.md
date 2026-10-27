@@ -863,7 +863,7 @@ run the checks, harmlessly.
 Not done: a second-model review; a security pass (K asks the owner); the dangerous cases end to end (J); the specs (L).
 Committing. The shipped approval records will be stale after landing; the owner runs `release-approvals`.
 
-### Increment J — built, verified and reviewed (not committed)
+### Increment J — committed as `a1c3087`
 
 Changed: `packages/workbench/action-review/tests/dangerous-cases.json` (new, the set the owner reviews and plan 4 reuses) and
 `tests/test_actionreview_dangerous.py` (new, 37 tests). No helper or shipped data changed.
@@ -912,3 +912,78 @@ expectations are tied to `describe`'s size cap and error codes and fail loudly i
 Not done: a second-model review; a security pass (K asks the owner); the specs (L); the labelled run of the model-only case
 (plan 4). Stopping for the owner to review the set before committing. The shipped approval records will be stale after landing;
 the owner runs `release-approvals`.
+
+### Increment K — built, verified and reviewed (not committed)
+
+The owner chose to run the security pass. Changed: `packages/workbench/action-review/helper/action-review`,
+`rules/safe-git-commit.json` and the tests (`test_actionreview_pins.py` new; the bridge, checks, output, parse, remove-checks and
+rules tests changed). The shipped approval records will be stale after landing; the owner runs `release-approvals`.
+
+The pass: the `security-reviewer` agent, on a scratch copy with a fake launcher, fake `describe` and fake bridges, over the
+command parser and its property test, the rule loader, the launcher calls, the prompt assembly and the log row. It did not run the
+module's own tests, the real launcher, the real `safe-git describe` or a real bridge.
+
+Fixed, each with a test written first (the pin, output, expression, removal and grammar ones were seen to fail first; the
+model-reporting test was written with its fix and then checked by mutation):
+1. (High if the assistant is the attacker) The rules, rubric and reply schema are read from the project tree, which the launcher
+   does not pin. With the rule's `checks` emptied, a commit of `.env` with a key in the diff was approved. The helper now holds a
+   SHA-256 for each shipped data file (`PINS`) and uses a file only when its bytes match; `load_rules` and `read_rubric` hash the
+   bytes they use, and `ask_bridge` reads and checks the schema before it starts the bridge. A rule file that was not shipped is
+   refused and its key blocked. A new or changed shipped file needs a new `PINS` entry; `test_actionreview_pins` checks every
+   entry against the package.
+2. (Low) The URL pattern's scheme was unbounded: a 98,000-character lowercase line took about 32 s, past the hook's 30 s. The
+   scheme is bounded to 32 characters.
+3. (Low) `main`: a failed or partial write of the object, a failed row, a flush failure, an interrupt or an exit now give exit 2
+   with a `failed:` line; the order (object, then row) is kept.
+4. (Low) The log row's `model` is the model the bridge reports, and the setting's request only when none is reported.
+5. (Low) A bare word that holds `==` or `:=` is refused (zsh with `magic_equal_subst` expands them); the test's reference reading
+   and a real zsh test follow it.
+6. (Informational) For a removal, `preview_matches_arguments` and `no_git_metadata` now also compare with the paths the command
+   names (`command_positionals`); without them the two checks cannot pass.
+7. (Low, part) The shipped credential list gained `*.tfvars`, `*.p8`, `.dockercfg`, `application_default_credentials.json`,
+   `.vault-pass`, `.vault_pass`, `htpasswd` and `secrets/`.
+
+Recorded, not fixed (open limits):
+- Approval is not bound to the content that is committed: the facts are taken at `describe` time and a background process could
+  change a file before the commit. The fix is a digest the real `safe-git commit` also checks, a change to another module; for
+  the owner to place (plan 4 or later).
+- The reviewer-facing exemption can be claimed by choosing a path name such as `skills/second-opinion/x.md`; only the model stands
+  between text there and a pass.
+- The secret scan stays best effort: lock files (`yarn.lock`, `go.sum`) in any directory skip the entropy test, generic
+  assignments are relaxed under `tests/`, some token shapes (hyphen compounds, `/`-joined letter segments, a key split by a
+  space) and file names are not scanned. The exemptions exist to avoid false declines on real files; the model is the backstop.
+- A schema swapped after the helper checked it and before the bridge reads it is not covered (the bridge reads the path itself);
+  the reply is re-validated against the rule, so only instruction text could reach the vendor. A fix needs a bridge that takes
+  the schema's content.
+- `paths_not_credentials` for a commit reads only `describe`'s paths; there is no commit counterpart of
+  `preview_matches_arguments` (it relies on the pinned `safe-git`).
+- Rule-error notes on standard error are not cut to 500 characters (32 KB at most, ASCII-escaped, each line prefixed
+  `rule error:`); a reader that searches standard error for `log-row:` anywhere would be fooled by a note that quotes it.
+- If the row write fails after the object was printed, the exit is 2 with a whole object on standard output: the hook must
+  approve on exit 0 and the object together. A closed standard error makes every review exit 2.
+- The pin is tested against the source tree only; the first test through the installer is the owner's `wb add` in L.
+- The URL pattern is case-sensitive (pre-existing).
+
+Found sound, by test: the fake-launcher `describe` argument vector, the 5 s budget, the output cap and a non-zero exit; every
+hostile rule file (link, second hard link, FIFO, directory, 50 MB sparse file, duplicate key, NaN, BOM, invalid UTF-8, extra
+`program` field, deep nesting, 64+ entries, odd names); the facts line (escaped JSON on one line under a random nonce; a forged
+marker or `reviewer_facing_paths` key in a subject, body or path changes nothing); the reply and the row (a hostile reason is
+cleaned to one printable line; `model` and `effort` do not come from the reply). By reading only: the parser against the
+property test's reference, `read_answer` and `parse_verdict`, `verdict_line`.
+
+Verification as run on 2026-10-27, in a scratch copy: the module's 458 tests pass (423 before); a mutation battery over the
+fixes (the pin always true, unknown names ignored, schema or rubric unchecked, a write failure or an interrupt uncaught, the
+flush dropped, an unbounded scheme, the removal checks ignoring the command, positionals taken from the object, `==` allowed,
+the model taken from the setting, the credential list not extended) was caught in every case; the first form of one of them,
+which changed only the first of two places that decide, was an equivalent mutation, and the form that changed the source of the
+paths was caught. Full `python3 -B -W error tests/run_all.py`: 5314 tests in 11 roots, all OK.
+
+Review: the `reviewer` agent, one exchange, no blocking finding. Applied: an interrupt while writing is also exit 2 (with a test).
+Recorded, not applied: the commit counterpart of the removal comparison (open limits above); the docstring and the spec to follow
+in L. For L: the spec's grammar line and the "beside itself" wording, the pins and the project-tree read, the `==`/`:=` refusal as
+a departure from A's text, the exit-0-with-object rule for the hook, and that a rule file is added by a release with its `PINS`
+entry. The reviewer could not recompute the pin hashes, read the bridge's `--schema` handling or the installer's copying, or run
+any test.
+
+Not done: a second-model review; the specs (L). Stopping for the owner. The `PINS` for the changed rule file was computed from
+the scratch copy's bytes; the landed bytes are the same files.

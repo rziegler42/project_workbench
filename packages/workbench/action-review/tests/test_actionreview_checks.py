@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 import unittest.mock
 
@@ -109,6 +110,19 @@ class SecretScan(Base):
         for text in ("", "Change a", "the quick brown fox", "a" * 40, "0123456789abcdef0123456789abcdef01234567",
                      "see docs/specs/action-review.md for the details", "test_observation_includes_public_history"):
             self.assertIsNone(self.kind(text))
+
+    def test_a_long_line_of_a_scheme_like_run_is_scanned_in_linear_time(self):
+        # Security pass, finding 4: the scheme part of the URL pattern was unanchored, so a 98,000 character lowercase
+        # line took about 30 seconds, past the hook's limit.
+        for unit in ("z", "q1", "q.", "q-", "q+"):
+            diff = section("a.txt", (unit * 98000)[:98000])
+            started = time.monotonic()
+            self.assertIsNone(self.helper.diff_secret_kind(diff), unit)
+            self.assertLess(time.monotonic() - started, 5, unit)
+
+    def test_a_credential_in_a_url_is_seen_after_a_long_run_and_after_a_digit(self):
+        for text in ("z" * 40 + "://u:p@host.invalid/", "1https://u:p@host.invalid/"):
+            self.assertEqual("pattern", self.kind(text), text)
 
     def test_a_marker_of_a_diff_line_does_not_hide_a_secret(self):
         self.assertEqual("pattern", self.kind("+" + AWS + "\n"))
@@ -214,6 +228,18 @@ class CredentialNames(Base):
 
     def test_no_list_matches_nothing(self):
         self.assertFalse(self.hit(".env", ()))
+
+    def test_the_shipped_list_also_covers_the_names_the_security_pass_found_missing(self):
+        path = os.path.join(support_install.ROOT, "packages", "workbench", "action-review", "rules",
+                            "safe-git-commit.json")
+        with open(path, encoding="utf-8") as handle:
+            names = json.load(handle)["lists"]["credential_names"]
+        for credential in ("prod.tfvars", "infra/terraform.tfvars", "AuthKey.p8", ".dockercfg",
+                           "application_default_credentials.json", ".vault-pass", ".vault_pass", "htpasswd",
+                           "secrets/db.yaml", "deploy/secrets/prod.env.txt"):
+            self.assertTrue(self.hit(credential, names), credential)
+        for ordinary in ("a.tfvars.md", "docs/p8.md", "secretsanta/a.txt", "htpasswd.md"):
+            self.assertFalse(self.hit(ordinary, names), ordinary)
 
     def test_the_shipped_list_covers_what_the_approver_covered(self):
         path = os.path.join(support_install.ROOT, "packages", "workbench", "action-review", "rules",

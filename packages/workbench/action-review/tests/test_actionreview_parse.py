@@ -229,7 +229,7 @@ def reference_accepts(text, declared=DECLARED):
         if each.startswith("'"):
             if each[1:2] == "-":
                 return False
-        elif each.startswith("="):
+        elif each.startswith("=") or "==" in each or ":=" in each:
             return False
         elif each.startswith("-") and each not in declared:
             return False
@@ -393,6 +393,25 @@ class Shells(unittest.TestCase):
         self.assertNotEqual(["=wbenv"], got["argv"])
         with self.assertRaises(HELPER.Unreviewable):
             HELPER.parse_words("wbenv =wbenv")
+
+    def test_zsh_with_magic_equal_subst_expands_an_equals_sign_after_an_equals_sign_or_a_colon(self):
+        # Security pass, finding 8: with the option on, `x==cmd` and `a=b:=cmd` become paths, so the words the engine
+        # reviewed are not the arguments the program gets. The option is off by default; the owner's rc file may set it.
+        zsh = shutil.which("zsh")
+        if zsh is None:
+            self.skipTest("zsh is not installed on this machine")
+        for word in ("x==wbenv", "a=b:=wbenv", "p=/usr:=wbenv"):
+            got = self.shell_output([zsh, "-f", "-c"], "setopt magic_equal_subst\nwbenv %s" % word)
+            self.assertNotEqual([word], got["argv"], word)
+            with self.assertRaises(HELPER.Unreviewable):
+                HELPER.parse_words("wbenv " + word)
+
+    def test_an_equals_sign_inside_a_word_is_still_accepted_where_no_shell_expands_it(self):
+        for word in ("a=b", "a.b=c.d", "x:y", "a=b:c", "key=value/with/path", "a=", "a:"):
+            self.assertEqual([word], values(HELPER.parse_words("wb " + word)[1:]), word)
+        for word in ("a==b", "a:=b", "a=b:=c", "==", ":="):
+            with self.assertRaises(HELPER.Unreviewable):
+                HELPER.parse_words("wb " + word)
 
 
 if __name__ == "__main__":

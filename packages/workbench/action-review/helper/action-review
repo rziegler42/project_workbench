@@ -33,6 +33,17 @@ MAX_TEXT = 4096
 # The installed place of the rule files, below the project root. The helper runs as a private copy with nothing beside
 # it, so it cannot find them "beside itself"; like the review setting, they are read from the project.
 RULES_DIR = ".workbench/workbench/action-review/rules"
+# The launcher pins this helper's bytes but not the data it reads from the project tree, which a repository (or the
+# assistant under review) can edit. So the helper holds the SHA-256 of each data file this release ships, keyed by its
+# path below the installed module, and uses a file only when its bytes are exactly those. A rule, the rubric or the
+# schema that differs, and a rule file that was not shipped, are refused. A new or changed shipped file means a new
+# entry here, which `test_actionreview_pins` checks against the files in the package.
+PINS = {
+    "rules/safe-git-commit.json": "41870b2e6b9d5b822c284fde8ccad43c549f11cb2f7785a83f9be45e46abf482",
+    "rules/safe-git-remove.json": "dd1ce89e628c0eaef5967aa01202f9f2e94da3490b89c3887f87160aec3af917",
+    "rubric/rubric.md": "5ac359f2eaf51fa3895b57f41d51f932c2fa810db508320db9580aef17c4ddbe",
+    "reply-schema.json": "ead8d9b7c80e962ad890685ef6c0c054bf10bb5b0796374c02cc59e336d3570a",
+}
 MAX_RULE = 16384
 MAX_RULES = 64
 MAX_RULES_BYTES = 262144
@@ -98,8 +109,9 @@ def parse_words(text, declared=frozenset()):
     word is a run of bare characters, or ``'`` any characters but ``'``, newline and NUL ``'``. A bare word that
     begins with ``-`` must be one of `declared` (the words a rule declares, the lone ``--`` among them), and a quoted
     word never begins with ``-``, so a quoted word is never a flag. A bare word that begins with ``=`` (zsh expands
-    it to a path) is refused, and so is a first word that holds an equals sign (``A=1``, ``A+=1``), which a shell
-    reads as an environment prefix."""
+    it to a path) is refused, and so is a bare word that holds ``==`` or ``:=`` (zsh with
+    `magic_equal_subst` expands the equals sign there), and a first word that holds an equals sign (``A=1``, ``A+=1``),
+    which a shell reads as an environment prefix."""
     if not isinstance(text, str):
         raise Unreviewable("the command is not text")
     if not text:
@@ -138,6 +150,8 @@ def parse_words(text, declared=frozenset()):
             body = text[at:end]
             if body.startswith("="):
                 raise Unreviewable("a word begins with an equals sign")
+            if "==" in body or ":=" in body:
+                raise Unreviewable("a word holds an equals sign after an equals sign or a colon")
             if not words and "=" in body:
                 raise Unreviewable("the command begins with an assignment")
             if body.startswith("-") and body not in declared:
@@ -254,6 +268,12 @@ def _lists(value):
     return lists
 
 
+def pinned(relative, data):
+    """True only when `data` is byte-for-byte the file this release ships at `relative` (a key of `PINS`)."""
+    expected = PINS.get(relative)
+    return expected is not None and hashlib.sha256(data).hexdigest() == expected
+
+
 def build_rule(name, body):
     """The `Rule` that the document `body` of the file `name` describes, or `RuleError`."""
     if not set(body) <= set(FIELDS):
@@ -312,6 +332,8 @@ def load_rules(root):
                     except ValueError:
                         raise RuleError("it is not strict JSON") from None
                     key = _key(body)
+                    if not pinned("rules/" + name, data):
+                        raise RuleError("it is not the file this release ships")
                     rules.append(build_rule(name, body))
                 except RuleError as exc:
                     errors.append((name, str(exc)))
@@ -396,6 +418,21 @@ def parse_arguments(rule, rest):
     if len(positional) > group.max:
         raise Unreviewable("the command takes at most %d %s" % (group.max, group.name))
     return [word.text for word in rest]
+
+
+def command_positionals(rule, arguments):
+    """The texts of the positional words among `arguments` (as `parse_arguments` returned them): the words after the
+    separator, or, for a rule with none, after the flags. A flag that takes a value takes the next word as its value."""
+    at = 0
+    while at < len(arguments):
+        word = arguments[at]
+        if word == "--" and rule.positionals.separator:
+            return arguments[at + 1:]
+        flag = rule.flags.get(word)
+        if flag is None:
+            break
+        at += 2 if flag.type != "boolean" else 1
+    return [] if rule.positionals.separator else arguments[at:]
 
 
 def read_command(loaded, text):
@@ -517,7 +554,7 @@ SECRET_PATTERNS = tuple(re.compile(pattern) for pattern in (
     r"(?i)(password|passwd|secret|api[_-]?key|token)\s*[:=]\s*['\"][^'\"\s]{8,}['\"]",
     r"(?i)(password|passwd|pwd|secret|token|api[_-]?key)[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9+/=_-]{12,}(?![A-Za-z0-9+/=_.(-])",
     r"(?i)(aws_secret_access_key|secret_access_key|client_secret|private_key)\s*[:=]\s*\S{8,}",
-    r"[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@",
+    r"[a-z][a-z0-9+.-]{0,31}://[^/\s:@]+:[^/\s@]+@",  # a bounded scheme: an unbounded run was quadratic
 ))
 GENERIC_ASSIGNMENT_PATTERNS = frozenset(SECRET_PATTERNS[11:13])  # password|secret|token|api_key = "value"
 TOKEN_RE = re.compile(r"[A-Za-z0-9+/=_-]{24,}")
@@ -757,21 +794,21 @@ def _fact(document, name, kind):
     return value
 
 
-def _head_matches(rule, document):
+def _head_matches(rule, document, positionals):
     head, expected = _fact(document, "head", "text?"), _fact(document, "expected_head", "text?")
     return expected == "none" if head is None else head == expected
 
 
-def _repo_config_safe(rule, document):
+def _repo_config_safe(rule, document, positionals):
     return not _fact(document, "program_findings", "texts")
 
 
-def _staging_state_ok(rule, document):
+def _staging_state_ok(rule, document, positionals):
     staged, leave = _fact(document, "staged_paths", "texts"), _fact(document, "leave_other_staged", "flag")
     return not staged or leave
 
 
-def _paths_not_credentials(rule, document):
+def _paths_not_credentials(rule, document, positionals):
     names = (rule.lists or {}).get("credential_names")
     paths = _fact(document, "requested_paths", "texts") + _fact(document, "paths", "texts")
     if names is None:
@@ -779,43 +816,54 @@ def _paths_not_credentials(rule, document):
     return not any(credential_path(path, names) for path in paths)
 
 
-def _paths_regular(rule, document):
+def _paths_regular(rule, document, positionals):
     return not _fact(document, "not_regular_paths", "texts")
 
 
-def _facts_complete(rule, document):
+def _facts_complete(rule, document, positionals):
     """Only a commit holds `binary_paths`; a removal is complete when it is not truncated."""
     if document["truncated"]:
         return False
     return rule.action != "commit" or not _fact(document, "binary_paths", "texts")
 
 
-def _no_secret_lines(rule, document):
+def _no_secret_lines(rule, document, positionals):
     subject, body = _fact(document, "subject", "text"), _fact(document, "body", "text?")
     trailers, diff = _fact(document, "trailers", "texts"), _fact(document, "diff", "text")
     return not (secret_kind("\n".join([subject, body or "", *trailers])) or diff_secret_kind(diff))
 
 
-def _confirm_present(rule, document):
+def _confirm_present(rule, document, positionals):
     return _fact(document, "confirm", "flag")
 
 
-def _ignore_status_known(rule, document):
+def _ignore_status_known(rule, document, positionals):
     return not _fact(document, "ignore_unknown_targets", "texts")
 
 
-def _preview_matches_arguments(rule, document):
-    return _fact(document, "target_paths", "texts") == _fact(document, "requested_paths", "texts")
+def _command_paths(positionals):
+    """The paths the command names, or `Absent` when the caller did not give them: a check that compares the object with
+    the command cannot pass without the command."""
+    if positionals is None:
+        raise Absent()
+    return positionals
 
 
-def _no_git_metadata(rule, document):
-    """Whether no segment of any requested path is `.git`, in any case. The other spellings of Git metadata are refused by
-    `describe` itself, with an error code that this check also maps."""
-    return not any(segment.casefold() == ".git" for path in _fact(document, "requested_paths", "texts")
-                   for segment in path.split("/"))
+def _preview_matches_arguments(rule, document, positionals):
+    """Whether the object previews exactly the paths the command names, in order. The object is `describe`'s, so the
+    command's own words are the other side of the comparison."""
+    requested = _fact(document, "requested_paths", "texts")
+    return _fact(document, "target_paths", "texts") == requested == list(_command_paths(positionals))
 
 
-def _errors_decide(rule, document):
+def _no_git_metadata(rule, document, positionals):
+    """Whether no segment of any requested path, and of any path the command names, is `.git`, in any case. The other
+    spellings of Git metadata are refused by `describe` itself, with an error code that this check also maps."""
+    paths = _fact(document, "requested_paths", "texts") + list(_command_paths(positionals))
+    return not any(segment.casefold() == ".git" for path in paths for segment in path.split("/"))
+
+
+def _errors_decide(rule, document, positionals):
     return True
 
 
@@ -830,8 +878,10 @@ CHECK_FUNCTIONS = {
 }
 
 
-def run_checks(rule, document):
-    """The names, in the order of `CHECKS`, of the checks of the rule that the `describe` object fails. An error code
+def run_checks(rule, document, positionals=None):
+    """The names, in the order of `CHECKS`, of the checks of the rule that the `describe` object fails. `positionals` are
+    the paths the command names (`command_positionals`); the checks that compare the object with the command fail
+    without them. An error code
     fails the check it maps to; a code that maps to no check of the rule, an object that is not ok and names no error,
     and a fact that is missing or of the wrong type fail `facts_complete`. A check of the rule with no function here
     fails and names itself, so it can never pass by being unwritten."""
@@ -841,7 +891,7 @@ def run_checks(rule, document):
             continue
         function = CHECK_FUNCTIONS.get(name)
         try:
-            passed = function is not None and function(rule, document)
+            passed = function is not None and function(rule, document, positionals)
         except Absent:
             passed, incomplete = False, True
         if not passed:
@@ -873,6 +923,7 @@ INSTALLED = ".workbench/workbench/action-review"
 RUBRIC_FILE = INSTALLED + "/rubric/rubric.md"
 SCHEMA_FILE = INSTALLED + "/reply-schema.json"
 MAX_RUBRIC = 65536
+MAX_SCHEMA = 4096
 # The bridge accepts a prompt of at most 262,144 bytes (`model-bridge.md`); the facts take at most 196,608 of them and
 # the rest is for the rubric, the questions and the framing (`safe-git.md`, "Caps and their sources").
 MAX_PROMPT = 262144
@@ -965,6 +1016,8 @@ def read_rubric(root, rule):
                           % MAX_RUBRIC) from None
     if data is None:
         raise RubricError("the rubric file is missing")
+    if not pinned("rubric/rubric.md", data):
+        raise RubricError("the rubric file is not the one this release ships")
     try:
         text = data.decode("ascii")
     except UnicodeDecodeError:
@@ -1143,6 +1196,13 @@ def ask_bridge(root, setting, prompt, seconds):
     pinned and unchanged, and that is `BridgeRefused`: no other vendor is tried."""
     if not seconds > 0:
         raise BridgeFailed("the review has no time left for the bridge")
+    try:
+        with safefs.Root(root, "project root") as tree:
+            schema = tree.read_if_present(SCHEMA_FILE, MAX_SCHEMA)
+    except safefs.SafeFsError:
+        raise BridgeRefused("the reply schema cannot be read, has another link or is too large") from None
+    if schema is None or not pinned("reply-schema.json", schema):
+        raise BridgeRefused("the reply schema is missing or is not the one this release ships")
     arguments = ["ask", "--timeout", str(BRIDGE_SECONDS), "--schema", SCHEMA_FILE]
     if setting.model:
         arguments += ["--model", setting.model]
@@ -1156,11 +1216,11 @@ def ask_bridge(root, setting, prompt, seconds):
     return read_answer(got)
 
 
-def judge(root, rule, document, setting, rubric, seconds):
+def judge(root, rule, document, setting, rubric, seconds, positionals=None):
     """The `Judgement` for the `describe` object `document`. A failed code check, or a prompt too large for the bridge, is
     a decline that never calls it; otherwise the bridge is asked and its reply, checked against the rule, is the verdict.
     `BridgeRefused` and `BridgeFailed` mean no verdict, and so no approval."""
-    failed = run_checks(rule, document)
+    failed = run_checks(rule, document, positionals)
     if failed:
         return code_decline(failed)
     try:
@@ -1168,8 +1228,10 @@ def judge(root, rule, document, setting, rubric, seconds):
     except PromptTooLarge:
         return Judgement("decline", ("facts_complete",), "The facts and the rubric together are larger than the bridge "
                          "accepts, so the review would be incomplete.", None, None, None, None)
-    verdict = parse_verdict(ask_bridge(root, setting, prompt, seconds).reply, rule)
-    return Judgement(verdict.verdict, verdict.failed_checks, verdict.reason, setting.bridge, setting.model,
+    answer = ask_bridge(root, setting, prompt, seconds)
+    verdict = parse_verdict(answer.reply, rule)
+    # The model the bridge reports is the one used; the setting's is only a request, and is kept when none is reported.
+    return Judgement(verdict.verdict, verdict.failed_checks, verdict.reason, setting.bridge, answer.model or setting.model,
                      setting.effort, rubric.sha256)
 
 
@@ -1239,13 +1301,15 @@ def review(text, cwd, notes):
     except DescribeFailed as exc:
         raise Refused("describe: %s" % exc) from None
     try:
-        failed = run_checks(rule, document)
+        positionals = command_positionals(rule, arguments)
+        failed = run_checks(rule, document, positionals)
         if failed:
             judgement = code_decline(failed)
         else:
             setting = read_setting(root)
             rubric = read_rubric(root, rule)
-            judgement = judge(root, rule, document, setting, rubric, REVIEW_SECONDS - (time.monotonic() - started))
+            judgement = judge(root, rule, document, setting, rubric, REVIEW_SECONDS - (time.monotonic() - started),
+                              positionals)
     except (SettingError, RubricError) as exc:
         raise Refused(str(exc)) from None
     except BridgeRefused as exc:
@@ -1286,7 +1350,8 @@ def main(argv, stdin, out, err, cwd):
     """Run one command from `cwd` and return the exit code: 0 with the verdict object on standard output (an approve or a
     decline), 1 for a refusal and 2 for a failure, each with one ``refused:`` or ``failed:`` line on standard error and
     nothing on standard output. With ``--log-row`` a verdict is followed by one ``log-row:`` line on standard error. The
-    engine writes nothing else."""
+    engine writes nothing else. Only exit 0 with a whole object is an approval: an interrupt, an exit or a failed write
+    on the way out is exit 2, so an object that was cut short or followed by a failed row never counts."""
     notes = []
     try:
         wants_row, text = parse_call(argv)
@@ -1297,18 +1362,25 @@ def main(argv, stdin, out, err, cwd):
         label, reason, code = "refused", str(exc), 1
     except Failed as exc:
         label, reason, code = "failed", str(exc), 2
-    except Exception:
+    except (Exception, KeyboardInterrupt, SystemExit):
         label, reason, code = "failed", "an internal error stopped the review", 2
     else:
+        try:
+            for note in notes:
+                err.write(note + "\n")
+            out.write(line)
+            out.flush()
+            if row is not None:
+                err.write("log-row: %s\n" % row)
+            return 0
+        except (OSError, ValueError, KeyboardInterrupt, SystemExit):
+            label, reason, code = "failed", "the verdict could not be written", 2
+    try:
         for note in notes:
             err.write(note + "\n")
-        out.write(line)
-        if row is not None:
-            err.write("log-row: %s\n" % row)
-        return 0
-    for note in notes:
-        err.write(note + "\n")
-    err.write("%s: %s\n" % (label, _plain(reason, MAX_STDERR_REASON) or "no reason is given"))
+        err.write("%s: %s\n" % (label, _plain(reason, MAX_STDERR_REASON) or "no reason is given"))
+    except (OSError, ValueError, KeyboardInterrupt, SystemExit):
+        pass
     return code
 
 

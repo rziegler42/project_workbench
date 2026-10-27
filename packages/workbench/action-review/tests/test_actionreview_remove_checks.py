@@ -7,12 +7,21 @@ repository."""
 
 import copy
 import io
+import json
 import os
 import subprocess
 import tempfile
 import unittest
 
-from tests import support_helpers
+from tests import support_helpers, support_install
+
+MODULE = os.path.join(support_install.ROOT, "packages", "workbench", "action-review")
+
+
+def shipped(relative):
+    with open(os.path.join(MODULE, *relative.split("/")), "rb") as handle:
+        return handle.read()
+
 
 FACTS = {
     "confirm": True, "recursive": False, "requested_paths": ["old.txt"], "target_paths": ["old.txt"],
@@ -56,6 +65,9 @@ def without_fact(document, name):
     return result
 
 
+DERIVED = object()
+
+
 class Base(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -65,8 +77,12 @@ class Base(unittest.TestCase):
         return self.helper.Rule("safe-git-remove.json", ("wb", "run", "safe-git"), "remove", "safe-git", "remove",
                                 {}, None, tuple(checks), "remove", (), None)
 
-    def run_checks(self, document, **options):
-        return self.helper.run_checks(self.rule(**options), document)
+    def run_checks(self, document, positionals=DERIVED, **options):
+        """The checks of the object. The paths the command names default to the ones the object says were requested,
+        which is the honest case; a test of a dishonest object gives them."""
+        if positionals is DERIVED:
+            positionals = document["facts"].get("requested_paths", [])
+        return self.helper.run_checks(self.rule(**options), document, positionals)
 
 
 class Checking(Base):
@@ -103,6 +119,32 @@ class Checking(Base):
         self.assertEqual(("preview_matches_arguments",), self.run_checks(doc(target_paths=["b", "a"], **both)))
         self.assertEqual(("preview_matches_arguments",),
                          self.run_checks(doc(target_paths=["a", "a", "b"], **both)))
+
+    def test_the_checks_read_the_paths_the_command_names_and_not_only_the_object(self):
+        # Security pass, finding 9: an ok object with empty paths passed both checks for a command that removes `.git`.
+        empty = doc(requested_paths=[], target_paths=[])
+        self.assertEqual(("preview_matches_arguments", "no_git_metadata"), self.run_checks(empty, [".git"]))
+        elsewhere = doc(requested_paths=["old.txt"], target_paths=["old.txt"])
+        self.assertEqual(("preview_matches_arguments",), self.run_checks(elsewhere, ["build/out"]))
+        self.assertEqual(("preview_matches_arguments",), self.run_checks(elsewhere, ["old.txt", "old.txt"]))
+        self.assertEqual((), self.run_checks(elsewhere, ["old.txt"]))
+
+    def test_a_git_segment_in_the_commands_own_path_fails_even_when_the_object_hides_it(self):
+        hidden = doc(requested_paths=["x"], target_paths=["x"])
+        self.assertEqual(("preview_matches_arguments", "no_git_metadata"), self.run_checks(hidden, ["a/.GIT/b"]))
+
+    def test_without_the_commands_paths_the_two_checks_cannot_pass(self):
+        self.assertEqual(("facts_complete", "preview_matches_arguments", "no_git_metadata"),
+                         self.run_checks(doc(), None))
+
+    def test_the_paths_a_command_names_are_those_after_the_separator_and_never_a_flag_value(self):
+        remove = self.helper.build_rule("safe-git-remove.json", json.loads(shipped("rules/safe-git-remove.json")))
+        commit = self.helper.build_rule("safe-git-commit.json", json.loads(shipped("rules/safe-git-commit.json")))
+        self.assertEqual(["a", "b"], self.helper.command_positionals(remove, ["--confirm", "--recursive", "--", "a", "b"]))
+        self.assertEqual(["--confirm"], self.helper.command_positionals(remove, ["--", "--confirm"]))
+        self.assertEqual(["a.txt"], self.helper.command_positionals(
+            commit, ["--expected-head", "a" * 40, "--subject", "--", "--trailer", "--", "--", "a.txt"]))
+        self.assertEqual([], self.helper.command_positionals(remove, ["--confirm"]))
 
     def test_no_git_metadata_sees_a_git_segment_in_any_case_and_any_place(self):
         for path in (".git", ".GIT", ".Git", "a/.git", "a/.git/config", ".git/hooks/x", "a/.GiT/b", "a/b/.git"):

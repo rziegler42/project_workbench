@@ -64,7 +64,7 @@ class Fakes:
     def __call__(self, root, command, arguments=(), **kwargs):
         self.calls.append((command, list(arguments), kwargs))
         answer = self.describe if command == "safe-git" else self.bridge
-        if isinstance(answer, Exception):
+        if isinstance(answer, BaseException):
             raise answer
         return answer
 
@@ -88,6 +88,7 @@ class Base(unittest.TestCase):
             handle.write(b"{}")
         for name in ("safe-git-commit.json", "safe-git-remove.json"):
             self.copy(os.path.join("rules", name), os.path.join(root, INSTALLED, "rules", name))
+        self.copy("reply-schema.json", os.path.join(root, INSTALLED, "reply-schema.json"))
         if rubric:
             self.copy(os.path.join("rubric", "rubric.md"), os.path.join(root, INSTALLED, "rubric", "rubric.md"))
         if setting is not None:
@@ -177,6 +178,21 @@ class Verdicts(Base):
         code, out, _, fakes = self.review(REMOVE, describe=described(document))
         self.assertEqual((0, "approve"), (code, json.loads(out)["verdict"]))
         self.assertIn(b"## remove", fakes.bridge_calls()[0][2]["stdin"])
+
+    def test_a_removal_whose_object_hides_the_commands_paths_is_declined_without_the_bridge(self):
+        # Security pass, finding 9: an ok object with other or empty paths passed both removal checks.
+        def hiding(paths):
+            return described({"contract": 1, "action": "remove", "ok": True, "truncated": False, "errors": [], "facts": {
+                "confirm": True, "recursive": True, "requested_paths": paths, "target_paths": paths,
+                "ignore_unknown_targets": [], "omitted": []}})
+
+        for text, paths, names in (
+                ("wb run safe-git remove --confirm --recursive -- .git", [], ["preview_matches_arguments", "no_git_metadata"]),
+                ("wb run safe-git remove --confirm --recursive -- build/out", ["old.txt"], ["preview_matches_arguments"])):
+            code, out, _, fakes = self.review(text, describe=hiding(paths))
+            body = json.loads(out)
+            self.assertEqual((0, "decline", names), (code, body["verdict"], body["failed_checks"]), text)
+            self.assertEqual([], fakes.bridge_calls(), text)
 
     def test_describe_runs_from_the_working_directory_and_the_bridge_gets_the_prompt(self):
         root = self.project()
@@ -360,6 +376,9 @@ class LogRow(Base):
             def write(self, text):
                 events.append((self.name, text))
 
+            def flush(self):
+                pass
+
         fakes = Fakes(described(commit_doc()), answered(reply()))
         with unittest.mock.patch.object(self.helper.call, "run_command", fakes):
             self.helper.main(["review", "--log-row", COMMAND], io.BytesIO(b""), Stream("out"), Stream("err"),
@@ -385,7 +404,7 @@ class LogRow(Base):
                           "command_sha256": hashlib.sha256(json.dumps(arguments, separators=(",", ":")).encode()).hexdigest(),
                           "facts_sha256": hashlib.sha256(facts.encode()).hexdigest(),
                           "rubric_sha256": hashlib.sha256(rubric.encode()).hexdigest(),
-                          "bridge": "ask-codex", "model": "m1", "effort": "low", "format": 1}, row)
+                          "bridge": "ask-codex", "model": "m", "effort": "low", "format": 1}, row)
 
     def test_a_decline_of_the_model_row_names_the_questions(self):
         _, _, err, _ = self.run_main(["review", "--log-row", COMMAND],
@@ -404,7 +423,7 @@ class LogRow(Base):
         root = self.project(setting='{"format": 1, "bridge": "ask-codex"}')
         _, _, err, _ = self.run_main(["review", "--log-row", COMMAND], root=root)
         row = self.row(err)
-        self.assertEqual(("ask-codex", None, None), (row["bridge"], row["model"], row["effort"]))
+        self.assertEqual(("ask-codex", "m", None), (row["bridge"], row["model"], row["effort"]))
 
     def test_the_row_holds_no_command_text_fact_or_diff_except_the_bounded_reason(self):
         secret = "planted-line-of-the-diff-" + "q" * 10
@@ -464,6 +483,75 @@ class Writes(Base):
             text = handle.read()
         for word in ("open(", ".write_text", "safefs.write", "append_line", "os.rename", "os.replace", "shutil"):
             self.assertNotIn(word, text, word)
+
+
+class Breaking(io.StringIO):
+    """A stream whose write (or flush) fails after `allow` characters have been accepted."""
+
+    def __init__(self, allow=0, flush_fails=False):
+        super().__init__()
+        self.allow, self.flush_fails = allow, flush_fails
+
+    def write(self, text):
+        if len(self.getvalue()) + len(text) > self.allow:
+            super().write(text[:max(0, self.allow - len(self.getvalue()))])
+            raise OSError("the stream is broken")
+        return super().write(text)
+
+    def flush(self):
+        if self.flush_fails:
+            raise OSError("the stream cannot be flushed")
+
+
+class Interrupts(Base):
+    """Security pass, finding 5: whatever goes wrong on the way out, the only approval is exit 0 with a whole object."""
+
+    def run_streams(self, out, err, argv=None, bridge=None):
+        root = self.project()
+        fakes = Fakes(described(commit_doc()), answered(reply()) if bridge is None else bridge)
+        with unittest.mock.patch.object(self.helper.call, "run_command", fakes), \
+                unittest.mock.patch.object(self.helper, "utc_now", lambda: "2026-10-27T01:02:03Z"):
+            return self.helper.main(argv or ["review", "--log-row", COMMAND], io.BytesIO(b""), out, err, root)
+
+    def test_a_failed_write_of_the_verdict_is_exit_2_and_never_exit_0(self):
+        for allow in (0, 1, 20):
+            out, err = Breaking(allow), io.StringIO()
+            self.assertEqual(2, self.run_streams(out, err), allow)
+            self.assertIn("failed: ", err.getvalue())
+            self.assertNotIn("log-row:", err.getvalue())
+
+    def test_a_failed_flush_of_the_verdict_is_exit_2(self):
+        out, err = Breaking(10 ** 6, flush_fails=True), io.StringIO()
+        self.assertEqual(2, self.run_streams(out, err))
+
+    def test_a_failed_write_of_the_row_after_the_verdict_is_exit_2(self):
+        for allow in (0, 5):
+            out, err = io.StringIO(), Breaking(allow)
+            self.assertEqual(2, self.run_streams(out, err), allow)
+
+    def test_a_stream_that_cannot_report_the_failure_still_gives_exit_2(self):
+        self.assertEqual(2, self.run_streams(Breaking(0), Breaking(0)))
+
+    def test_an_interrupt_or_an_exit_inside_the_review_is_exit_2_with_nothing_on_standard_output(self):
+        for exc in (KeyboardInterrupt(), SystemExit(0), SystemExit(1)):
+            out, err = io.StringIO(), io.StringIO()
+            self.assertEqual(2, self.run_streams(out, err, bridge=exc), repr(exc))
+            self.assertEqual("", out.getvalue())
+            self.assertIn("failed: ", err.getvalue())
+
+    def test_an_interrupt_while_writing_is_exit_2(self):
+        class Interrupted(io.StringIO):
+            def write(self, text):
+                raise KeyboardInterrupt()
+
+        self.assertEqual(2, self.run_streams(Interrupted(), io.StringIO()))
+        self.assertEqual(2, self.run_streams(io.StringIO(), Interrupted()))
+
+    def test_a_whole_run_still_prints_the_object_then_the_row_and_exits_0(self):
+        out, err = io.StringIO(), io.StringIO()
+        self.assertEqual(0, self.run_streams(out, err))
+        self.assertTrue(out.getvalue().startswith('{"verdict":"approve"'))
+        self.assertIn("log-row: ", err.getvalue())
 
 
 if __name__ == "__main__":
