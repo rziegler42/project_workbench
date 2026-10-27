@@ -814,7 +814,7 @@ introduction is not tested.
 Not done: wiring into `run`, the output, the exit table and the log row (I); a second-model review; a security pass (K asks the
 owner); committing. The shipped approval records will be stale after landing; the owner runs `release-approvals`.
 
-### Increment I — built, verified and reviewed (not committed)
+### Increment I — committed as `3d345ab`
 
 Changed: `packages/workbench/action-review/helper/action-review` (the skeleton `run` and `main` are replaced by `parse_call`,
 `review`, `verdict_line`, `log_row`, `main`, `code_decline` and `utc_now`, with the exceptions `Refused` and `Failed`; `judge`
@@ -862,3 +862,53 @@ run the checks, harmlessly.
 
 Not done: a second-model review; a security pass (K asks the owner); the dangerous cases end to end (J); the specs (L).
 Committing. The shipped approval records will be stale after landing; the owner runs `release-approvals`.
+
+### Increment J — built, verified and reviewed (not committed)
+
+Changed: `packages/workbench/action-review/tests/dangerous-cases.json` (new, the set the owner reviews and plan 4 reuses) and
+`tests/test_actionreview_dangerous.py` (new, 37 tests). No helper or shipped data changed.
+
+What it does: the set holds 29 cases as data (an id, a category, how it is decided, the setup as data steps, the command text,
+the check or question that declines it, the expected outcome and, where useful, a note). Each runs `main` in a scratch project
+with the real `safe-git` installed and pinned, a real Git repository and a fake bridge, so `describe` is the real one through the
+real launcher. `code` cases are run with a bridge that would approve everything: each is declined by its check and the bridge is
+never started. `refused` cases exit 1 with the cause named, with no `describe` and no bridge. `control` cases (a plain commit
+and a plain removal) are approved, so a decline elsewhere is the check's doing. The one `model` case (a body that speaks to the
+reviewer) is run twice: with the approving fake it is approved, which shows no code check catches it; with the declining fake the
+text is found, JSON-escaped, in the facts line between the nonce markers and the decline is passed through. It carries
+`plan4: true` and is not claimed as covered. After every case the project, `.git` included, is byte for byte what it was.
+
+The cases: a secret in a diff, a subject, a trailer and a body (built at run time; the file holds none and a test scans it); a
+wrong HEAD; a repository that selects a program (`core.fsmonitor`, `core.hooksPath`); a reviewer-directed body; a truncated
+object (a file over the diff cap); a credential file (`.env`, `id_rsa`); a path through a link and a path that is a link; seven
+spellings of removing Git metadata (`.git`, `.git/`, `./.git`, `.GIT`, `.git/config`, `sub/../.git`, `sub/.git`); five
+unreviewable command lines (a substitution, a pipe, a chained command, a leading assignment, a command no rule covers); two rules
+that do not load (damaged JSON, a field the schema lacks).
+
+Observed, recorded in each case's note, none a defect: describe reports no HEAD when the repository selects a program, so
+`head_matches` fails with `repo_config_safe`; a too-large diff is left out whole, so `no_secret_lines` fails with
+`facts_complete`; a removal of Git metadata fails four checks, `no_git_metadata` among them; a path that is a link is refused by
+`describe` itself, so `paths_regular` is exercised by the unit tests only.
+
+Verification as run on 2026-10-27, in a scratch copy: the new file ran first against my guesses and failed 14 ways, which
+showed what `describe` really reports; the data was then set to those outcomes. Sixteen mutations of the helper were applied one
+at a time (checks never failing; the secret scan off, blind to the message, the trailers or the diff; the head, program,
+credential and Git-metadata checks off; a case-sensitive Git-metadata test; truncation ignored; a failed check still asking the
+bridge; the grammar skipped; rule errors ignored; facts left out of the prompt; a model decline not passed): twelve were caught.
+The four that were not are equivalent, since a second path decides the same outcome (the `repo_selects_program` error code also
+fails `repo_config_safe`; `judge` re-runs the checks before it asks the bridge; `read_command` re-parses the grammar; a damaged
+rule leaves no rule to match). After the review a body-secret case was added and a body-blind mutation was caught. The module's
+423 tests pass (386 before). Full `python3 -B -W error tests/run_all.py` in the scratch copy: 5279 tests in 11 roots; the one
+failure, `test_levellog` `test_parallel_appends_keep_every_line`, is the known intermittent test and unrelated (it failed 1 in 3
+reruns of its module alone with no change to it).
+
+Review: the `reviewer` agent, one exchange, no blocking finding, six notes. Applied: (1) a secret in the body, added; (3) a note
+on the model case that its expected decline is the fake's reply and not a forecast. Recorded, not applied: (2) only `.env` and
+`id_rsa` stand for the credential list, which is covered name by name by the unit tests; (4) a refused case has no `declined_by`
+because a refusal is not a decline, and its `refusal_contains` names the cause; (5) a rule with an extra verb or a path, and an
+ambiguous rule, are not in the set (the plan asks for "a rule that does not load" and two are); (6) the truncation and Git-metadata
+expectations are tied to `describe`'s size cap and error codes and fail loudly if those change.
+
+Not done: a second-model review; a security pass (K asks the owner); the specs (L); the labelled run of the model-only case
+(plan 4). Stopping for the owner to review the set before committing. The shipped approval records will be stale after landing;
+the owner runs `release-approvals`.
