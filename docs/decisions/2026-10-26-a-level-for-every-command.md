@@ -127,3 +127,11 @@ acceptance.
 - [2026-10-19-restrictive-only-permissions](2026-10-19-restrictive-only-permissions.md)
 - [2026-10-19-mandatory-review-personal-delegation](2026-10-19-mandatory-review-personal-delegation.md)
 - [2026-10-26-ask-level-command-gate](2026-10-26-ask-level-command-gate.md)
+
+## Clarification note, 2026-10-27 (approved by the owner on 2026-10-27)
+
+Decision 3, "every key offers `block` and `none`", does not yet hold for the owner-run arguments of module commands. Their helpers
+check their own terminal, and the module contract has no field through which the installer can pass a helper a level. Giving it one
+is a change to the module contract and needs a decision of its own. Until that decision is accepted and built, those keys offer
+`block` only, and the plan `2026-10-27-a-level-for-every-command` builds everything else. The rest of the decision is unchanged. The
+text above is not edited.

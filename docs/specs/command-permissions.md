@@ -223,7 +223,9 @@ contract has no read-only declaration, so none is used. An undeclared command or
 checks its own pin, defaults to `none`. The owner-run commands, the checkpoints and the owner-run module arguments keep their
 default of `block`. `approve-plan` stays `block`; the default is not raised to `ask` (see "Shipped defaults").
 
-**Levels offered.** Every key offers `block` and `none`. `delegated` stays `approve-plan` only, and `ask` is offered by a key once
+**Levels offered.** Every key offers `block` and `none`, except the owner-run arguments of module commands (`wb run <command>
+<argument>` where the argument is owner-run), which offer `block` only until a later plan gives the module contract a way to pass a
+level to a helper (the clarification note of `2026-10-26-a-level-for-every-command`, and "Not built"). `delegated` stays `approve-plan` only, and `ask` is offered by a key once
 that key has a preview digest of its own, built as `approve-plan`'s is. Until then a key is never limited to `block`, because it
 offers `none`. The order of building the digests is for a plan **(call)**: `install` and `adopt` first, because they already have a
 preview, then the module arguments and `extend` (the deferred Increment G). At `none` an owner-run command runs without a terminal
@@ -253,13 +255,18 @@ when any other has none.
 P2. With no settings, every agent-safe command reads `none` and every other key reads as it does today, `block`.
 P3. A table entry sets the level of its key in either direction, whatever the key's checkpoint says; a version 1 `stop` or
 `delegate` for a key the table does not mention reads as `block` or `delegated`, with a note.
-P4. Every key accepts `block` and `none`, and a level a key does not yet offer reads as `block` with a note.
-P5. With every key set to `none`, no command refuses for want of a terminal or a harness `deny`, the floor still applies, and each
-run is logged.
+P4. Every key except the owner-run arguments of module commands accepts `block` and `none`, and a level a key does not yet offer
+reads as `block` with a note.
+P5. With every such key set to `none`, no command refuses for want of a terminal or a harness `deny`, the floor still applies, and
+each run that changes something is logged.
 P6. `accept-decision` set to `none` lets an agent accept a decision, and at `block` it does not.
 
 ## Not built
 
+- `none` for the owner-run arguments of module commands (`wb run mempalace init`, `mine`, `wb run remote-runner fetch-overwrite`
+  and the review engine's `reset`, `archive`, `prune`, `amend`, `extend`). The helper checks its own terminal and the contract has no
+  way to pass it a level. A later plan, after a decision on the module contract, would let the launcher pass the level and have the
+  helper use the kit's level function. Until then these keys offer `block` only.
 - `wb run review-engine extend` at `ask` and `none` (Increment G of the plan). The declaration schema (`declarations.py`) has no
   field for the levels an owner-run argument offers, and the installer may not name a module's command. A later plan needs: a field
   such as `levels` on a command, a decision for that change to the module contract, a helper that prints and checks a digest of the
