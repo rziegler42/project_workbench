@@ -212,6 +212,121 @@ class OtherKeys(unittest.TestCase):
         self.assertIsNone(judge("echo accept-decision", keys=("accept-decision",)))
 
 
+class SingleWordKeys(unittest.TestCase):
+    """A key of the form ``wb <word>`` is read in command position (``2026-10-27-command-gate-command-position``)."""
+
+    KEYS = ("wb install",)
+
+    def judge(self, command, keys=KEYS):
+        return judge(command, keys=keys)
+
+    def test_the_word_alone_is_allowed(self):
+        for command in ("npm install", "pip install requests", "git commit -m 'install deps'", "ls docs/install.md",
+                        "grep -rn install docs", "echo install", "wb check", "git add docs/x.md"):
+            with self.subTest(command=command):
+                self.assertIsNone(self.judge(command))
+
+    def test_the_exact_forms_and_the_preview_are_allowed(self):
+        for command in ("wb install --dir x", "wb install --dir x --package a/b", "%s install --dir x" % STORE_BIN,
+                        "wb preview install --dir x", "%s preview install --dir x" % STORE_BIN):
+            with self.subTest(command=command):
+                self.assertIsNone(self.judge(command))
+
+    def test_the_launcher_and_the_word_are_blocked_in_every_wrapper_and_spelling(self):
+        for command in ("python3 -m workbench install --dir x", "python3 -B -m workbench install", "bash -c 'wb install'",
+                        "env wb install --dir x", "sh -c \"wb  install\"", "wb install --dir x; echo done",
+                        "echo x && wb install", "wb install | cat", "eval 'wb install'", "xargs wb install",
+                        "cd x && %s install" % STORE_BIN, "$(wb install --dir x)", "wb preview install; wb install",
+                        "wb preview  install", "wb preview-install"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command))
+
+    def test_spliced_and_expanded_spellings_of_the_pair_are_blocked(self):
+        for command in ('w""b install', 'wb inst""all', "wb inst\\all", "wb $'\\x69nstall'", "w$'b' install",
+                        "${X}wb install", "wb ins${Y}tall", "wb `echo`install", "W=w; ${W}b install", "wb $'install'",
+                        "wb {install,x}", "wb inst*"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command))
+
+    def test_a_command_full_of_dollar_quotes_is_still_refused(self):
+        self.assertIsNotNone(self.judge("echo " + "$'a' " * 70))
+
+    def test_the_preview_exemption_does_not_hide_the_pair(self):
+        for command in ("wb preview install wb install", "wb install preview install ; wb install",
+                        "bash -c 'wb preview install && wb install'", "bash -c 'wb install preview install'"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command))
+
+    def test_the_word_before_the_launcher_is_blocked_too(self):
+        # The word can reach the launcher as data: both are literal in the text, in either order.
+        for command in ("echo install | xargs wb", "printf install | xargs wb", "xargs wb <<< install",
+                        "for w in install; do wb $w; done", "set -- install; wb \"$@\"", "read a <<< install; wb $a",
+                        "echo install; python3 -m workbench $1", "echo inst\"\"all | xargs wb", "echo $'install' | xargs wb",
+                        "echo install | xargs %s" % STORE_BIN, "echo install | xargs python3 -m workbench"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command))
+
+    def test_the_cost_of_that_is_a_compound_command_that_holds_both(self):
+        self.assertIsNotNone(self.judge("npm install && wb check"))
+        self.assertIsNone(self.judge("npm install"))
+        self.assertIsNone(self.judge("wb check"))
+
+    def test_a_real_call_whose_arguments_hold_the_preview_words_is_the_exact_form(self):
+        # It is the command the ask rule matches, so it is allowed to reach the harness's prompt.
+        self.assertIsNone(self.judge("wb install preview install"))
+        self.assertIsNone(self.judge("wb install --dir preview install"))
+
+    def test_the_launcher_alone_spliced_or_expanded_is_blocked(self):
+        for command in ('python3 -m work""bench install', "python3 -m wor${K}kbench install", "w${E}b install",
+                        "%s/b?n/wb install" % "~", "python3 -m w*bench install"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command))
+
+    def test_a_preview_that_holds_an_expansion_or_a_glob_is_still_blocked(self):
+        # The pattern rule reads the text as written (the decision accepts it): run such a preview with the path spelled out.
+        self.assertIsNotNone(self.judge("wb preview install --dir $PWD"))
+        self.assertIsNone(self.judge("wb preview install --dir /tmp/x"))
+
+    def test_a_module_command_named_like_a_preview_is_still_read_as_its_words(self):
+        key = "wb run preview install"
+        self.assertIsNone(self.judge("wb run preview install x", keys=(key,)))
+        self.assertIsNotNone(self.judge("bash -c 'wb run preview install x'", keys=(key,)))
+        self.assertIsNotNone(self.judge("echo preview install", keys=(key,)))
+
+    def test_two_words_guard_each_other_independently(self):
+        keys = ("wb install", "wb add")
+        self.assertIsNone(self.judge("git add docs/x.md && npm install", keys=keys))
+        self.assertIsNotNone(self.judge("bash -c 'wb add x'", keys=keys))
+        self.assertIsNotNone(self.judge("bash -c 'wb install'", keys=keys))
+        self.assertIsNone(self.judge("wb add --dir x", keys=keys))
+
+    def test_approve_plan_is_still_read_as_the_word_alone(self):
+        self.assertIsNotNone(self.judge("echo approve-plan", keys=("approve-plan",)))
+        self.assertIsNotNone(self.judge("grep approve-plan docs", keys=("approve-plan", "wb install")))
+        self.assertIsNone(self.judge("npm install", keys=("approve-plan", "wb install")))
+
+    def test_a_module_command_key_is_still_read_as_its_words(self):
+        key = "wb run tool go"
+        self.assertIsNotNone(self.judge("echo tool then go", keys=(key,)))
+        self.assertIsNone(self.judge("echo tool", keys=(key,)))
+
+    def test_the_launchers_and_the_preview_actions_are_those_of_the_rules(self):
+        from workbench import rules
+        self.assertEqual(sorted({spelling.split()[-1] for spelling in rules.SPELLINGS}),
+                         sorted(command_gate.LAUNCHERS))
+        self.assertEqual(tuple(rules.PREVIEW_ACTIONS), command_gate.PREVIEW_ACTIONS)
+
+    def test_every_owner_run_command_is_read_in_command_position(self):
+        from workbench import rules
+        for command in rules.OWNER_RUN:
+            if command == "approve-plan":
+                continue
+            key = "wb " + command
+            with self.subTest(key=key):
+                self.assertIsNotNone(self.judge("bash -c '%s'" % key, keys=(key,)))
+                self.assertIsNone(self.judge("echo %s" % command, keys=(key,)))
+
+
 def run(payload, prepare=None):
     """The gate on `payload`; `prepare(cwd)` gives ``(tool, field, table, store bin path)``."""
     err = io.StringIO()

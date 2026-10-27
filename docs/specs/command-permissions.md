@@ -196,6 +196,18 @@ escape sequence, a glob character or an expansion standing for a letter, and the
 to nothing). A command with more than 64 `$'…'` strings is blocked. The agent-safe `delegate-approve-plan` is exempt from the
 word test, but not from the in-order rule.
 
+A key whose command is an ordinary word (`wb install`, `wb adopt`, `wb add`, `wb pin` and the other single-word owner-run keys,
+as opposed to `approve-plan` and `wb run <command> <argument>`) is read in command position (built by Increment E; decision
+`2026-10-27-command-gate-command-position`): the gate counts a command as naming it only when it holds a launcher and the word, in either order
+(`echo install | xargs wb` passes the word to the launcher as data), where the launchers are `wb` (also the end of the store's `bin/wb`) and `workbench` (of `python3 -m workbench`; the last
+words of `rules.SPELLINGS`). The folding, the skeleton, the decoding of `$'…'` and the in-order rule for expansions, globs and
+escapes are applied to the pair, so `w""b install`, `wb inst""all` and `wb $'\x69nstall'` are blocked, and `npm install`, `git add`, a
+commit message or a path that holds the word are allowed. The exact pair `preview <action>` for each action of
+`rules.PREVIEW_ACTIONS` is removed before the search, as `delegate-approve-plan` is, for these keys only; the pattern rule still reads the text as written,
+so a preview that holds an expansion or a glob (`--dir $PWD`) is blocked and is run with the path spelled out. A command that names the word with no launcher
+before it, such as an alias or a script the agent wrote that wraps the call, is not seen; the classifier remains the barrier for
+it, as for the other limits listed under "Limits".
+
 ### The log
 
 Every run at a level other than `block` that goes on without a terminal appends two lines to `level-log` in the guarded store, never rewriting one: the attempt, with
@@ -225,7 +237,7 @@ give one key are a refusal.
 
 ## Planned: a level for every command
 
-Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B, C and D are
+Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B, C, D and E are
 built). It is the owner's direction of 2026-10-26, recorded here so a plan can implement it. Calls marked **(call)** are the
 author's and are not the owner's until the owner confirms them.
 

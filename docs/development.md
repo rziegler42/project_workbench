@@ -606,6 +606,10 @@ the records are read from the installed workbench, never copied into the guarded
   `wb approve-plan <plan> --digest <digest>` as one simple command on its own; the harness then prompts you. A command that wraps or
   rewrites it (`bash -c`, `env`, a quote splice, an escape, an expansion) is blocked by `wb gate-command`, and a command that only
   names `approve-plan` (a `grep`, a commit message) is blocked too while the level is relaxed; run those yourself.
+  A command key that is an ordinary word (`wb install`, `wb add`) is read in command position: only a command that names a
+  launcher (`wb`, the store's `bin/wb`, `python3 -m workbench`) and the word, in either order, is blocked, so `npm install`, `git add`
+  and a commit message that holds the word are not, and `wb preview <action>` is allowed. A compound command that holds both
+  (`npm install && wb check`) is blocked: run it as two calls.
 - **What it cannot stop.** A script or program that makes the call, a word built from variables or encodings, and a shell that writes
   the guarded store: see "Limits" in the spec. Leave a key at `block` if you do not accept them.
 - **When Bash calls are blocked.** While a key is relaxed, `wb gate-command` runs on every Bash call. If the store, the settings file

@@ -74,3 +74,13 @@ install --dir x` and the commands that name neither `install` nor `wb`. The beha
 - [2026-10-26-ask-level-command-gate](2026-10-26-ask-level-command-gate.md)
 - [2026-10-26-a-level-for-every-command](2026-10-26-a-level-for-every-command.md)
 - `docs/plans/2026-10-27-a-level-for-every-command.md`
+
+## Clarification note, 2026-10-27 (approved by the owner on 2026-10-27)
+
+Decision 1 says a launcher spelling comes before the word, in order. The security review of Increment E found that this lets a
+literal word reach a literal launcher as data, with the word first: `echo install | xargs wb`, `for w in install; do wb $w; done`,
+`set -- install; wb "$@"`. The earlier word-alone rule blocked each of them; the in-order rule allowed them (shown by running
+`judge`, commit `3d2567b` plus the uncommitted increment, Python 3.14.4). The increment therefore counts the launcher and the word in
+either order: a command that holds both is blocked unless it is exactly the call the `ask` rule matches. The cost is that a compound
+command holding both, such as `npm install && wb check`, is blocked and is run as two calls. The rest of the decision is unchanged,
+and the text above is not edited.

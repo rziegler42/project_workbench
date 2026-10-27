@@ -28,7 +28,7 @@ and restored between two commands. A hook is a speed bump and not a boundary.
 
 import re
 
-from . import gate_hook
+from . import gate_hook, rules
 from .wbkit import display
 
 USAGE = "usage: wb gate-command <harness>\n"
@@ -37,6 +37,12 @@ MAX_DOLLAR_QUOTES = 64  # decoding tries every ``$'``, so a command full of them
 RELAXED = ("ask", "none")
 # The agent-safe command whose name contains the word of ``approve-plan``.
 EXEMPT = ("delegate-approve-plan",)
+# A single-word command key (``wb install``) is read in command position: a launcher spelling, then the word. The launchers
+# are the last words of the spellings an agent could submit (``wb``, and ``workbench`` of ``python3 -m workbench``; the
+# guarded store's ``bin/wb`` ends in ``wb``). ``wb preview <action>`` is agent-safe and has its own key, so the exact pair
+# ``preview <action>`` is removed before the search, as the agent-safe ``delegate-approve-plan`` is.
+LAUNCHERS = tuple(sorted({spelling.split()[-1] for spelling in rules.SPELLINGS}))
+PREVIEW_ACTIONS = tuple(rules.PREVIEW_ACTIONS)
 _TOKEN = r"[A-Za-z0-9._/:=-]+"
 _PATH = r"[A-Za-z0-9._/][A-Za-z0-9._/-]*"
 _DIGEST = r"[0-9a-f]{32}"
@@ -54,6 +60,23 @@ def words(key):
     if parts[0] == "wb" and len(parts) == 2:
         return [parts[1]]
     return []
+
+
+def _by_launcher(key):
+    """Whether `key` is read as a launcher and then a word (not ``approve-plan`` and not ``wb run <command> <argument>``)."""
+    return bool(words(key)) and key != "approve-plan" and not key.startswith("wb run ")
+
+
+def alternatives(key):
+    """The spellings of the command `key` names, each a list of words that must occur in order. ``approve-plan`` is read as
+    the word alone, and ``wb run <command> <argument>`` as its words; any other ``wb <word>`` is a launcher and then the word,
+    so that an ordinary command holding the word (``npm install``) is not taken for it."""
+    found = words(key)
+    if not found:
+        return []
+    if not _by_launcher(key):
+        return [found]
+    return [[launcher] + found for launcher in LAUNCHERS]
 
 
 def forms(key, store_bin):
@@ -206,12 +229,15 @@ def judge(command, keys, store_bin):
     if keys and text.count("$'") > MAX_DOLLAR_QUOTES and any(words(key) for key in keys):
         return ("the command holds more than %d $'...' strings, which the gate cannot read while a command is set to "
                 "ask or none here" % MAX_DOLLAR_QUOTES)
-    views = []
+    views, previewed = [], []
     for version in decoded_views(text):
         folded = _folded(version)
         for token in EXEMPT:
             folded = re.sub(r"(?<![a-z0-9-])%s(?![a-z0-9-])" % re.escape(_folded(token)), " ", folded)
         views.append((folded, _skeleton(folded)))
+        for action in PREVIEW_ACTIONS:
+            folded = re.sub(r"(?<![a-z0-9-])preview %s(?![a-z0-9-])" % re.escape(_folded(action)), " ", folded)
+        previewed.append((folded, _skeleton(folded)))
     # The in-order rule reads the text as written, the exempt command included: `${A#delegate-}` can make the word out of it.
     wilds = []
     for version in (_folded(text), _collapse(_folded(text))):
@@ -220,19 +246,28 @@ def judge(command, keys, store_bin):
         wilds.append("".join(char for char in spelled if char.isalnum() or char == _WILD))
     pattern = any(char in text for char in _PATTERN_CHARS)
     for key in keys:
-        pieces = [_folded(word) for word in words(key)]
-        if not pieces:
-            continue
-        if any(_names(folded, skel, pieces) for folded, skel in views):
-            if any(form.fullmatch(text) for form in forms(key, store_bin)):
+        # Only a key read as a launcher and a word has a preview that is not the call; a module's command may be named `preview`.
+        seen = previewed if _by_launcher(key) else views
+        for spelling in alternatives(key):
+            # A launcher and a word can reach each other as data (``echo install | xargs wb``), so for a launcher key the two
+            # count in either order. A command that holds both is blocked unless it is exactly the call the ask rule matches.
+            orders = [spelling, spelling[::-1]] if _by_launcher(key) else [spelling]
+            for order in orders:
+                pieces = [_folded(word) for word in order]
+                if any(_names(folded, skel, pieces) for folded, skel in seen):
+                    if any(form.fullmatch(text) for form in forms(key, store_bin)):
+                        break
+                    return ("the command names %s, which the owner has set to ask or none here, and is not exactly the simple "
+                            "command the ask rule matches; run it as `wb %s ...` on its own" % (
+                                display.ascii_text(" ".join(_folded(word) for word in spelling))[:80],
+                                " ".join(words(key))[:60]))
+                if pattern and any(_subsequence(wild, _skeleton("".join(pieces))) for wild in wilds):
+                    return ("the command uses an expansion, a pattern or an escape and holds the letters of %s in order, so "
+                            "it may spell a command that the owner has set to ask or none here"
+                            % display.ascii_text(" ".join(pieces))[:80])
+            else:
                 continue
-            return ("the command names %s, which the owner has set to ask or none here, and is not exactly the simple "
-                    "command the ask rule matches; run it as `wb %s ...` on its own" % (
-                        display.ascii_text(" ".join(pieces))[:80], " ".join(pieces)[:60]))
-        if pattern and any(_subsequence(wild, _skeleton("".join(pieces))) for wild in wilds):
-            return ("the command uses an expansion, a pattern or an escape and holds the letters of %s in order, so it "
-                    "may spell a command that the owner has set to ask or none here"
-                    % display.ascii_text(" ".join(pieces))[:80])
+            break
     return None
 
 

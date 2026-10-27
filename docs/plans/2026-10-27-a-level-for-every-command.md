@@ -468,3 +468,35 @@ at a terminal is not logged. Rejected: (3) an interrupt in `level_now` or `done`
 read HEAD and it was the same there, and it fails closed with the attempt listed as unfinished. Recorded for the plan that lets a
 helper run at `none`: the channel by which the launcher passes a level needs its own protection. Limits: no hostile link, FIFO,
 hard-link or race probe was run by the reviewer; the unit tests cover link, directory, hard link and full log. After the fixes: full suite `Ran 4959 tests in 10 roots`, `OK`; `wb check` and the plan check: no problems.
+
+### Increment E — built, not committed (2026-10-27)
+
+**Done.** `workbench/command_gate.py` reads a single-word key (`wb <word>`, other than `approve-plan` and `wb run ...`) as a launcher
+and then the word (`LAUNCHERS` are the last words of `rules.SPELLINGS`: `wb`, `workbench`), with the folding, skeleton, `$'` decoding
+and in-order rules applied to the pair; the exact pair `preview <action>` (`PREVIEW_ACTIONS` = `rules.PREVIEW_ACTIONS`) is removed
+before the search, for these keys only. `approve-plan` and `wb run` keys are read as before. The spec ("The command gate") and
+`docs/development.md` say so.
+
+**Verification as run.** Tests first: the new class `SingleWordKeys` failed (19 failures) before the change. Then
+`test_command_gate.py`: 56 tests OK, the earlier cases unchanged; full suite `python3 -B -W error tests/run_all.py`: `Ran 4974 tests
+in 10 roots`, `OK`; `wb check` and the plan check: no problems. **Not verified:** the gate was not run end to end under a harness
+with `wb install` at `none`; the rendering and the hook are unchanged and covered by their own tests.
+
+**Review.** One round by the `reviewer` agent: no blocking findings, five not blocking. Applied: (1) the `preview <action>` removal
+also applied to a module's `wb run preview install`-style key, so it now applies only to the launcher-and-word keys (test added);
+(2) a preview that holds an expansion or glob is still blocked by the pattern rule, which the spec now says and a test pins;
+(3) and (4) the exemption and launcher tests were tightened (a call whose arguments hold the words is the exact form and is allowed;
+a spliced or expanded launcher alone is blocked). Recorded, not changed: (5) a launcher that does not end in `wb` or `workbench`
+(an alias, a symlink under another name, `python3 /store/x/cli.py install`) is no longer seen, which is the drop in coverage the
+decision accepts. The reviewer ran nothing and had no diff against the old code.
+
+**Security review** (the owner asked; `security-reviewer` agent, one run). Its Bash and Write calls were refused, so it ran no probe and is a
+read-only review. One Medium finding: a literal word before a literal launcher was allowed by the in-order rule where the word-alone
+rule blocked it (`echo install | xargs wb`, `for w in install; do wb $w; done`, `set -- install; wb "$@"`, `read a <<< install; wb $a`).
+I reproduced it with `judge` (five of the six were allowed), wrote the tests first (11 failures), and changed the gate to count the
+launcher and the word in either order; a compound command that holds both (`npm install && wb check`) is blocked and is run as two
+calls. A differential probe I ran of the old and the new gate over 5,880 generated spellings (launchers, wrappers, splices of the
+word, trailing text) found no command the old gate blocked and the new one allowed. This departs from decision 1 of
+`2026-10-27-command-gate-command-position` ("in order"), so a clarification note was added to that record, approved by the owner on 2026-10-27. After the change: `test_command_gate.py` 58 tests OK; full suite `Ran 4976 tests in 10 roots`, `OK`; `wb check` and the
+plan check: no problems. Limits: the reviewer did not read `gate_hook.fold`, line continuation or `python3 -c`/`runpy`; my corpus covers
+`wb install` only and the launchers and splices listed in the probe.
