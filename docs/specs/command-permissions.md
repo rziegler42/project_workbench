@@ -198,7 +198,7 @@ word test, but not from the in-order rule.
 
 ### The log
 
-Every run at a level other than `block` appends two lines to `level-log` in the guarded store, never rewriting one: the attempt, with
+Every run at a level other than `block` that goes on without a terminal appends two lines to `level-log` in the guarded store, never rewriting one: the attempt, with
 a random operation identifier, the time, the key, the level and the evidence (`digest:<d>` at `ask`, `converged-<n>-of-<bound>` for a
 delegated approval, empty at `none`); then the outcome, with the same identifier, the time, `done` or `refused`, and a reason of at
 most 200 printable ASCII characters. Lines are tab-separated, at most 1,024 bytes, and written by one `write` to a descriptor opened
@@ -225,7 +225,7 @@ give one key are a refusal.
 
 ## Planned: a level for every command
 
-Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B and C are
+Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B, C and D are
 built). It is the owner's direction of 2026-10-26, recorded here so a plan can implement it. Calls marked **(call)** are the
 author's and are not the owner's until the owner confirms them.
 
@@ -262,6 +262,17 @@ key the table does not mention, and a table entry wins in either direction, so l
 `stop` and `delegate` are aliases, read from a version 1 file, for `block` and `delegated`; the `level` lines of `wb settings` print
 only the four level names, and a `translated` line says what a checkpoint word was read as. This replaces the rule that a key's level is the stricter of its checkpoint reading and its
 table entry **(call)**.
+
+**One way to run at `none`** (built by Increment D; no command but `approve-plan` uses it yet). Two modules hold what every owner-run
+command shares. The kit's `wbkit/levels.py` is the part that needs nothing else of the workbench: `may_run(level, terminal)` is true
+at a terminal and, without one, only for the level `none` (a missing, unreadable or unknown level is no level, so only a terminal
+runs), and the log's attempt and outcome lines and their append (`begin`, `finish`, `finish_refused`), which `levellog.py` calls
+so that the installer and a helper write one format. Adding it did not change a kit function, so `wbkit.API` stays 1. The
+installer's `levelrun.py` adds what needs the rendering record: `route` goes on at a terminal without reading anything, and
+otherwise reads the key's level as `approve-plan`'s is read (`rendering.effective_level`: the record, the hashes and the gate must
+hold) and refuses with the caller's text unless `may_run` says the command may go on; `logged` and `done` write the attempt after
+every check and just before the change and the outcome after it, and write nothing for a run that changes nothing. `approve-plan`
+uses `level_now`, `logged` and `done`, and its behavior is unchanged.
 
 **Out of scope.** The compiled hard-stop floor is unchanged and is not a key (see "Non-goals").
 

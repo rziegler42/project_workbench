@@ -614,6 +614,11 @@ the records are read from the installed workbench, never copied into the guarded
   until the harness is attached again in a new clone.
 - **The level log.** `~/.config/project-workbench/level-log` is plain text, one line per attempt and one per outcome. It is not
   pruned; it holds about 4 MiB, and a full log refuses runs above `block`, so rotate it by hand.
+- **Where the level code lives.** The level log's line format and its append, and the rule that a verified level of `none` runs
+  without a terminal, are in the kit (`workbench/wbkit/levels.py`); `workbench/levellog.py` reads the log and calls the kit to write
+  it, and `workbench/levelrun.py` adds the check of the rendering record for an owner-run command (`approve-plan` uses it; the other
+  owner-run commands come with later increments of the plan `2026-10-27-a-level-for-every-command`). Tests: `tests/test_wbkit_levels.py`,
+  `tests/test_levelrun.py`.
 - **After editing a first-party module.** Any change under `packages/workbench/<module>/`, its `tests/` included, changes the
   module's hash and stales its shipped approvals. The project's own edit gate then refuses file edits until the owner runs
   `python3 -m workbench release-approvals` and removes the obsolete records it warns about with

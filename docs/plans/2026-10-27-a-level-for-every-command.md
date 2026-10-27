@@ -403,3 +403,38 @@ test was added; the other two needed no change (above). The reviewer read no tes
 
 **Carried forward.** A deny rendered for an agent-safe key takes effect at the next attach, and `wb attach` refuses a clone that
 already records a harness, so tightening an agent-safe key in an attached clone needs a new clone (the known limit in "Not built").
+
+### Increment D — built, not committed (2026-10-27)
+
+**Done.** `workbench/wbkit/levels.py` (new, kit, standard library only, `wbkit.API` stays 1): `may_run(level, terminal)` (true at a
+terminal; without one only for the string `none`), `is_terminal`, the log's `attempt_line`, `outcome_line`, `append`, `begin`, `finish`
+and `finish_refused`, the limits and the errors. `workbench/levellog.py` keeps its reader and its own clock and identifiers and calls
+the kit for the formats, the limits and the append; its errors are the kit's, and its existing tests pass unchanged.
+`workbench/levelrun.py` (new): `level_now` (the level through `rendering.effective_level`), `route` (a terminal goes on and reads
+nothing; otherwise the kit's `may_run` on the verified level, else `Refusal` with the caller's text), `logged` (attempt, change,
+outcome; no entry when nothing changes) and `done`. `planapprovals.py` uses `level_now`, `logged` and `done`; its behavior is
+unchanged. No other command uses them. The spec ("One way to run at `none`"), `module-boundary.md` (the kit list) and
+`docs/development.md` say so. `tests/test_kit.py` lists `datetime` among the standard-library modules the kit may use.
+
+**Verification as run.** Tests written before the modules. `test_wbkit_levels.py` (20), `test_levelrun.py` (22), and the unchanged
+`test_approve_levels.py` (34), `test_delegation.py` (87), `test_levellog.py` (26): OK with warnings as errors. Full suite
+`python3 -B -W error tests/run_all.py`: `Ran 4957 tests in 10 roots`, `OK`; `wb check`: no problems. The existing helpers load against
+the kit as before: the kit's API is asserted to be 1 and the package tests that import the kit pass. **Not verified:** no command
+but `approve-plan` runs through `route`.
+
+**Review.** One round by the `reviewer` agent: no blocking findings, five not blocking. Applied: (1) `route` does not check that the
+project a command acts on is the one the level was read for; the docstring now requires the command to compare it with
+`Route.project_id`, as `approve-plan` does, and increments E to H must do so. (3) `logged` docstring says a `refused` outcome can
+follow a change that was made. Rejected with reason: (2) `level_now` catches two exception types; anything else fails closed as a
+traceback and never lets a run through. (4) The two writers share the formats and the append through the kit, so the lines cannot
+drift; the plan allowed the split. (5) `may_run` trusts a verified level by design; a helper run directly getting no level is the
+deferred plan's policy. The reviewer read no test bodies and ran nothing.
+
+**Security review** (the owner asked; `security-reviewer` agent, one run). It could not run experiments (its writes and probe commands were refused) and
+compared nothing with HEAD, so it is a read-only review: no Critical, High or Medium finding and four Low. Applied: (1) `may_run`
+counted any truthy `terminal`; only `True` counts now. (2) `attempt_line` and `outcome_line` did not check the identifier and
+time; they do now (tests for both). (4) the spec's "every run" sentence now says a run that goes on without a terminal, because a run
+at a terminal is not logged. Rejected: (3) an interrupt in `level_now` or `done` is not caught in `approve-plan`'s second `try`; I
+read HEAD and it was the same there, and it fails closed with the attempt listed as unfinished. Recorded for the plan that lets a
+helper run at `none`: the channel by which the launcher passes a level needs its own protection. Limits: no hostile link, FIFO,
+hard-link or race probe was run by the reviewer; the unit tests cover link, directory, hard link and full log. After the fixes: full suite `Ran 4959 tests in 10 roots`, `OK`; `wb check` and the plan check: no problems.

@@ -25,30 +25,21 @@ import re
 import secrets
 
 from . import approvals, levels
-from .wbkit import display, safefs
+from .wbkit import display, levels as kit, safefs
 
-LOG = "level-log"
-MAX_BYTES = 4 * 1024 * 1024
-MAX_LINE = 1024
-MAX_REASON = 200
-MAX_KEY = 96
-_ID = re.compile(r"[0-9a-f]{16}\Z")
-_KEY = re.compile(r"[a-z][a-z0-9-]*( [a-z][a-z0-9-]*)*\Z")
-_EVIDENCE = re.compile(r"[A-Za-z0-9._:/-]{0,128}\Z")
-_TIME = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\Z")
-OUTCOMES = ("done", "refused")
-
-
-class LogError(Exception):
-    """The attempt could not be written, so the command must do nothing."""
-
-
-class LogFull(LogError):
-    """The log is at its limit."""
-
-
-class OutcomeError(Exception):
-    """The outcome could not be written after the change was made."""
+# The line formats, the limits and the errors are the kit's, so that a helper writes the same log
+# (``wbkit/levels.py``); this module adds the installer's clock and identifiers, and reads the file.
+LOG = kit.LOG
+MAX_BYTES = kit.MAX_BYTES
+MAX_LINE = kit.MAX_LINE
+MAX_REASON = kit.MAX_REASON
+MAX_KEY = kit.MAX_KEY
+_ID = re.compile(kit.ID_PATTERN + r"\Z")
+_KEY = re.compile(kit.KEY_PATTERN + r"\Z")
+_EVIDENCE = re.compile(kit.EVIDENCE_PATTERN + r"\Z")
+_TIME = re.compile(kit.TIME_PATTERN + r"\Z")
+OUTCOMES = kit.OUTCOMES
+LogError, LogFull, OutcomeError = kit.LogError, kit.LogFull, kit.OutcomeError
 
 
 Operation = collections.namedtuple("Operation", "op time key level evidence outcome outcome_time reason")
@@ -56,38 +47,21 @@ Read = collections.namedtuple("Read", "operations unfinished problems")
 
 
 def _append(guarded, line):
-    try:
-        safefs.append_line(guarded.root, LOG, line, MAX_BYTES, MAX_LINE)
-    except safefs.FullError:
-        raise LogFull("the level log %s is full; the owner rotates it by hand, and nothing was done" % LOG)
-    except safefs.SafeFsError as exc:
-        raise LogError("the level log %s cannot be written: %s" % (LOG, display.clean(str(exc))[:200]))
+    kit.append(guarded.root, line, MAX_BYTES)
 
 
 def begin(guarded, key, level, evidence=""):
     """Write the attempt line and return its operation identifier. ``ValueError`` writes nothing."""
-    if not isinstance(key, str) or len(key) > MAX_KEY or not _KEY.match(key):
-        raise ValueError("a log key must be a valid key name of at most %d characters" % MAX_KEY)
-    if level not in levels.LEVELS or level == levels.BLOCK:
-        raise ValueError("only a level other than block is logged")
-    if not isinstance(evidence, str) or not _EVIDENCE.match(evidence):
-        raise ValueError("log evidence must be at most 128 characters of letters, digits and . _ : / -")
     op = secrets.token_hex(8)
-    line = "A\t%s\t%s\t%s\t%s\t%s\n" % (op, approvals.utc_now(), key, level, evidence)
-    _append(guarded, line.encode("ascii"))
+    _append(guarded, kit.attempt_line(op, approvals.utc_now(), key, level, evidence))
     return op
 
 
 def finish(guarded, op, outcome, reason=""):
     """Write the outcome line for `op`. ``ValueError`` writes nothing; ``OutcomeError`` when it cannot be written."""
-    if not isinstance(op, str) or not _ID.match(op):
-        raise ValueError("a log operation identifier is 16 hexadecimal characters")
-    if outcome not in OUTCOMES:
-        raise ValueError("a log outcome is done or refused")
-    text = display.ascii_text(reason)[:MAX_REASON]
-    line = "O\t%s\t%s\t%s\t%s\n" % (op, approvals.utc_now(), outcome, text)
+    line = kit.outcome_line(op, approvals.utc_now(), outcome, reason)
     try:
-        _append(guarded, line.encode("ascii"))
+        _append(guarded, line)
     except LogError as exc:
         raise OutcomeError(str(exc))
 

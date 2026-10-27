@@ -64,6 +64,10 @@ needs in order to read untrusted repository content safely and to report:
   paths git tracks read from `.git/index` (`wbkit/gitindex.py`) and strict JSON (`wbkit/jsonstrict.py`);
 - cleaning text for a terminal (`display.clean`) and decoding bytes with `replace`;
 - running another module's command through the launcher (`wbkit/call.py`, below);
+- the permission level of a command and the level log's lines (`wbkit/levels.py`): whether a command whose level the caller
+  has verified may run with or without a terminal (`may_run`), and the attempt and outcome lines of the log with their
+  append (`begin`, `finish`). The caller reads and verifies the level; the kit does not, and no module helper uses these yet
+  (`command-permissions.md`, "Planned: a level for every command");
 - the report form of a module check (below) and the exit-code convention.
 
 Rules for the kit:
