@@ -1,0 +1,219 @@
+# Re-render an attached harness after a settings change
+
+Status: Proposed
+Created: 2026-10-27
+Candidate: none (an owner request, found while building the per-command levels; no roadmap candidate names it)
+Specs: harness-rerender, command-permissions, installer-interface
+Decisions: 2026-10-27-rerender-is-terminal-only (Proposed; the owner accepts it)
+
+## Goal
+
+An owner who changes a level in `~/.config/project-workbench/settings` can make an attached clone pick it up with one owner-run
+command, `wb rerender`, and no new clone. A read-only `wb preview rerender` shows what would change. When the plan is done the
+design in `docs/specs/harness-rerender.md` is built, its acceptance criteria 1 to 8 pass, and the specs say it as built.
+
+## Scope
+
+- `wb preview rerender`: the plan of a re-render, read only, as its own agent-safe key defaulting to `none`.
+- `wb rerender`: terminal only, the preview digest typed, the plan rebuilt just before the first write, the permissions file
+  replaced with `Writer.replace_file`, the local manifest's hash for it replaced, and the rendering record written last. Its key
+  offers `block` only.
+- The live permissions file's `allow` rules kept, and every rule or entry the new file will not have listed in the preview.
+- `wb check` naming the command when the rendering is out of date, and no longer telling the owner to attach in a new clone for
+  that case.
+- The specs, `docs/development.md` and tests that say and check the above.
+
+## Non-goals
+
+- A change of harness, or a clone with no recorded harness (`attach` stays for that).
+- A re-render for a module or package change. That is `upgrade`'s work (`harness-rerender`, "Limits").
+- `none` for `wb rerender`. It would read the level through `rendering.effective_level`, which is `block` exactly when a
+  re-render is needed (`harness-rerender`, "Terminal only").
+- A hook or watcher that re-renders by itself.
+- Closing the window between `replace_file`'s hash comparison and its rename.
+- Re-rendering any file other than the permissions file. The table changes no other staged file.
+
+## Assumptions and constraints
+
+- The owner approved the design in `docs/specs/harness-rerender.md` on 2026-10-27, the calls in it included (the spec's header says
+  so). It was reviewed in four rounds with the project's review bridge; the last edit, making the command terminal-only, was not
+  reviewed. The spec stays `Draft` until Increment D. Where this plan and the spec differ, the spec wins and the plan is corrected.
+- Both commands are project commands under `installer-interface.md`, "The target": `[<target> | --dir <path>]`, defaulting to
+  `.`, resolved once, opened without following links and held, with the refusals and the printed resolved target that section
+  defines, and the exit codes `attach` uses (0 done, 1 refused, 3 stopped after writing, 130 interrupted before writing).
+  `target.open_target` and `target.write_refusal` carry those rules for `attach` and are reused.
+- The table is rendered into one file, the harness's permissions file, through `harnessstage.stage` and
+  `harnessplan.render_permissions`; the gate reads only the record, the local manifest's harness name, that file and the shared
+  settings file (`rendering.effective_level`). Both were read in the code, not run.
+- `Writer.replace_file` exists and is used by `upgrade` (`upgrade.py`). `localmanifest.write` uses `create_file`, which does not
+  overwrite, so a replacing write is new.
+- `wb check` already reports a permissions file that differs from the record (`check._rendering_drift`).
+- Staging needs the harness package. For a local source it is given with `--package`, as for `upgrade` and `attach`.
+- A new owner-run key follows `docs/decisions/2026-10-26-a-level-for-every-command`. Offering `block` only is an exception to its
+  decision 3, which the accepted decision does not allow. The exception is proposed in `2026-10-27-rerender-is-terminal-only`
+  (`Proposed`). That record must be accepted by the owner before this plan is approved; if it is not accepted, this plan is
+  wrong and is redrafted. The exception is then listed with the other (`command-permissions`, "Not built").
+- Code is the Python standard library only; checks run with `python3 -B -W error tests/run_all.py`. The code in `workbench/` is
+  in the agent's write scope in this repository.
+- Discovery tooling: skipped. No discovery module is installed and the files the plan touches are named below.
+- The change touches authorization, a permission boundary and the filesystem, so an increment that touches them stops for the
+  owner before the next (see "Risks and sensitive actions").
+
+## Completion criteria
+
+1. With the table changed from `block` to `none` for a key, `wb preview rerender` shows the key moving and writes nothing, and
+   `wb rerender` at a terminal with the digest makes the key read `none` (spec criterion 1).
+2. With no change to the table it writes nothing, and every `allow` rule in the live file is listed and survives (criterion 2).
+3. A permissions file that is a link, is not valid, or changes between the plan and the replacement is refused with nothing
+   written; anything the live file has that the new one will not is listed (criterion 3).
+4. A failure after the permissions file is replaced and before the record is written leaves every relaxed key reading `block`
+   (criterion 4).
+5. A clone with no recorded harness is refused and pointed at `attach` (criterion 5).
+6. A run without a terminal is refused at every level and the key offers `block` only (criterion 6).
+7. If anything the plan reads changes between the preview and the write, the command refuses and writes nothing (criterion 7).
+8. `wb check` reports an out-of-date rendering and stops reporting it after a re-render (criterion 8).
+9. The specs, `docs/development.md` and `wb settings` describe the built behavior, and `wb check` reports no problems.
+10. The full suite passes with warnings as errors.
+
+## Increments
+
+### Increment A — The plan of a re-render and `wb preview rerender`
+
+**Outcome:** `wb preview rerender [<target> | --dir <path>] [--package <source> [--ref <ref>] ...]` prints the resolved target,
+then the whole plan and its digest, from the clone's recorded harness and the table now, and writes nothing; a re-render that
+changes nothing says so; the key `wb preview rerender` exists, agent-safe, default `none`. It exits 0 when it printed a plan and
+1 when it refused.
+**Dependencies:** none (this plan is approved).
+**Affected areas:** a new `workbench/rerender.py`; `workbench/attach.py` (the resolution and staging in `prepare`, shared rather
+than copied); `workbench/cli.py`; `workbench/levels.py` and `workbench/rules.py` (the key); `tests/test_rerender.py`,
+`tests/test_levels.py`, `tests/test_cli.py`.
+**Steps:**
+1. Write the tests first: a clone attached at one table and re-planned at another lists each key's old and new rule (`deny`,
+   `ask`, `none`, `unruled`); an unchanged table says nothing changes and yields an empty write list; a live file with an extra
+   `allow` rule lists it as kept; a live entry the new file will not have is listed as a removal; the digest changes when any of
+   these changes; a change to a staged input that leaves the rendered permissions file the same still changes the digest; the
+   preview lists the permissions file, the local manifest and the rendering record with their old and new hashes, and a file
+   that a run would leave as it is is marked as such; a clone with no recorded harness, a harness that is not one the project records, and unacknowledged
+   differences are refused; nothing is written in any case; the registry has the key and a drift test still passes. The target
+   rules hold: the default is `.`, `<target>` and `--dir` are one value: both naming the same directory is accepted and two that differ are refused with nothing
+   written (`installer-interface.md`, "The target", rules 3 to 5, as the shared parser has them), a target that is not an
+   existing project or whose state `installer-interface.md` refuses is refused before anything is read, the resolved target is
+   printed first and sanitized, and the exit codes are as above.
+2. Share the part of `attach.prepare` that resolves the packages and stages the harness; keep `attach`'s behavior and tests
+   unchanged.
+3. Build the plan in `rerender.py` from `harnessstage.stage`'s permissions file and the record `rendering.record_of` would give,
+   read the live permissions file through the project writer, carry its `allow` rules over, compute the removals, and digest the
+   whole plan: the table, both files' hashes, the kept and removed entries, the record body, and the identity of every input the
+   staging read (the tree hash of the harness module and of each module snapshot, the harness module's version, and the local
+   manifest's `tree` and `module_version`), so an input that changes without changing the rendered file still changes the digest.
+   The preview names the files a re-render replaces: the permissions file, the local manifest, and the rendering record (by its
+   name in the guarded store, not its path), each with its old and new hash, and says which of them a run would leave as it is.
+4. Route `wb preview rerender` in `cli.py` and print the plan.
+5. Add the key `wb preview rerender` to the registry as agent-safe with the default `none`.
+**Verification:** `python3 -B -W error -m unittest tests.test_rerender tests.test_levels tests.test_cli tests.test_attach`, then
+the full suite.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-rerender-attached-harness#A`.
+
+### Increment B — `wb rerender`: the terminal-only write
+
+**Outcome:** `wb rerender [<target> | --dir <path>] [--package <source> [--ref <ref>] ...]` at a terminal, with the digest typed,
+replaces the permissions file, the local manifest's hash for it, and then the record, and refuses without a terminal; the key
+offers `block` only. It prints the resolved target before the plan, and exits 0 done, 1 refused, 3 stopped after writing and 130
+interrupted before writing.
+**Dependencies:** A, and the owner's answer on a security review (the checkpoint below): this increment stops before it starts
+until the owner has said whether to run one.
+**Affected areas:** `workbench/rerender.py`; `workbench/localmanifest.py` (a replacing write); `workbench/rendering.py` (writing
+the record last); `workbench/cli.py`; `workbench/levels.py` and `workbench/rules.py`; `workbench/settings.py` (a level the key
+does not offer reads `block` with a note); `tests/test_rerender.py`, `tests/test_levels.py`, `tests/test_settings.py`,
+`tests/test_cli.py`.
+**Steps:**
+1. Write the tests first: the digest typed (`confirm.token_of`, `confirm.typed_matches`) lets it write; a wrong digest and no
+   terminal write nothing; the plan is rebuilt before the first write and a difference in the table, either file, the manifest or a staged input (a changed package or module tree that leaves the rendered
+   file the same)
+   refuses with nothing written; a live file replaced between the plan and the write is a `WriteConflict` and nothing is
+   written; a link, an invalid file or an unreadable file refuses; a forced failure after the permissions file is replaced, and
+   again after the manifest, leaves every relaxed key reading `block` through `rendering.effective_level`; after a full run a key
+   moved from `block` to `none` reads `none`; the `allow` rules survive; a re-run with no change writes nothing; `wb settings`
+   shows the key with only `block` and a settings entry of `none` for it reads `block` with a note; the target rules and exit
+   codes of Increment A hold for the write, a target whose identity changes between the plan and the write refuses with nothing
+   written, and a failure after writing began reports what was and was not written and exits 3.
+2. Add the key `wb rerender`, owner-run, default `block`, offering `block` only.
+3. Replace the permissions file with `Writer.replace_file`, expecting the hash of the file as the plan read it.
+4. Add a replacing write to `localmanifest` and update the entry for the permissions file; confirm in the code what `wb check`
+   reads from the manifest before relying on the order and record the answer in the plan's Result.
+5. Write the record last, with the shared settings file's hash as `rendering.with_shared_hash` gives it.
+6. Route `wb rerender` in `cli.py` with the terminal test and the typed digest, as `upgrade` has them, and no level-log entry.
+**Verification:** `python3 -B -W error -m unittest tests.test_rerender tests.test_levels tests.test_settings tests.test_cli
+tests.test_rendering tests.test_check`, then the full suite. Run it once in a scratch clone attached to a copy of this
+repository's harness, change a level, preview, re-render, and read `wb settings` and `wb check`; record the output.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-rerender-attached-harness#B`.
+
+### Increment C — `wb check` names the command
+
+**Outcome:** when the rendering is out of date, `wb check` says so and names `wb rerender`; the text that tells the owner to
+attach again in a new clone is gone for this case; a re-render makes the report go away.
+**Dependencies:** B.
+**Affected areas:** `workbench/check.py`, `tests/test_check.py`.
+**Steps:**
+1. Write the tests first: a record whose digest differs from the table now gives one line naming `wb rerender`; the same clone
+   after a re-render gives none; a stale state is informational and does not change the exit code (the stale state already reads
+   `block`); the existing lines for a changed permissions file and a shared settings file are kept.
+2. Add the table-digest comparison to `_rendering_drift` and reword the lines that point at a new clone.
+**Verification:** `python3 -B -W error -m unittest tests.test_check tests.test_rerender`, then the full suite.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-rerender-attached-harness#C`.
+
+### Increment D — The specs, the guide and the plan's acceptance
+
+**Outcome:** the specs, `docs/development.md` and the spec index say what is built; the "Not built" item that this plan closes is
+gone; the spec's status is `Current`.
+**Dependencies:** C.
+**Affected areas:** `docs/specs/harness-rerender.md`, `docs/specs/command-permissions.md`, `docs/specs/installer-interface.md`,
+`docs/specs/README.md`, `docs/development.md`.
+**Steps:**
+1. In `command-permissions.md` replace the "Not built" item on re-rendering with the built behavior, and list `wb rerender` with
+   the keys that offer `block` only.
+2. In `installer-interface.md` add the two commands, their arguments, their exit codes and what they print.
+3. In `docs/development.md` add the commands and the sequence "edit the settings, preview, re-render".
+4. Add the row to `docs/specs/README.md` and set the spec's status to `Current` with its built-by note and its remaining limits.
+5. Run the plan check, `wb check` and `refcheck`.
+**Verification:** `git diff --check`, `wb check`, `wb run code-work check`, `doccheck` and `refcheck`, then the full suite.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-rerender-attached-harness#D`.
+
+## Verification for the plan as a whole
+
+- `python3 -B -W error tests/run_all.py` passes.
+- `wb check`, `wb run code-work check`, `doccheck` and `refcheck` report no problems.
+- The scratch-clone run of Increment B is repeated on the final tree: change a level to `none`, preview, re-render, and read that
+  the key reads `none`; change it back, re-render, and read that it reads `block`.
+
+## Risks and sensitive actions
+
+- **Authorization and a permission boundary.** The command decides which commands the harness lets an agent run. A defect could
+  leave a key reading looser than the table says. Mitigations: the record is written last, so any earlier failure reads `block`;
+  the command is terminal-only; the plan is rebuilt before the first write and its digest compared with the one typed; the
+  forced-failure tests of Increment B. A module providing `security-review` is installed in this project. A security review runs
+  only when the owner asks, so the run stops after Increment A and asks whether to run one on Increment B before B starts. The
+  owner's answer goes in the Result.
+- **Kept `allow` rules.** The command keeps rules it did not render. Mitigation: the preview lists them and the typed digest covers
+  them. The owner sees them only if they read the preview; no code makes them.
+- **The window after `replace_file`'s comparison.** A write that lands between the comparison and the rename is overwritten
+  without notice. Accepted and listed in the spec's limits.
+- **A `localmanifest` change.** A replacing write is new code on the file that records the harness. Mitigation: it uses
+  `replace_file` with the expected hash and a test for each failure.
+- **Not reviewed.** The last edit to the spec (terminal-only) had no review round. The plan's review record should say so.
+- No secret, host name or token is written anywhere in this plan. The code in `workbench/` is in the agent's write scope, and the
+  owner runs `release-approvals` when the edit gate asks.
+
+## Review record
+
+Empty until a review is asked for.
+
+## Deferred work
+
+- `none` for `wb rerender`, if a way to authorize a stale rendering without a terminal is ever wanted. It needs its own decision.
+- Picking up a module or package change in an attached clone, which `upgrade` covers today.
+- Closing the window between `replace_file`'s comparison and its rename.
+
+## Result
+
+Empty until work starts.

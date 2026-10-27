@@ -96,3 +96,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-26-action-review-reads-the-review-setting](2026-10-26-action-review-reads-the-review-setting.md) | The action-review engine reads `.workbench/review.json`, the review engine's file, where decision 5 names a file per engine | Accepted by the owner on 2026-10-26 |
 | [2026-10-27-command-gate-command-position](2026-10-27-command-gate-command-position.md) | The command gate reads a single-word command in command position, not the word alone | Accepted by the owner on 2026-10-27 |
 | [2026-10-27-command-gate-literal-arguments](2026-10-27-command-gate-literal-arguments.md) | The command gate leaves a literal `wb run` command and a sibling command name alone | Accepted by the owner on 2026-10-27 |
+| [2026-10-27-rerender-is-terminal-only](2026-10-27-rerender-is-terminal-only.md) | `wb rerender` offers `block` only and always needs a terminal | Proposed |
