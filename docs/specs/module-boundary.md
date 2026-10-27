@@ -310,7 +310,7 @@ checked with the rest of its declaration, before anything is written.
     `2026-10-24-owner-run-in-code`). The declaration authorizes the first argument only, so a form that must be allowed to the agent and a form that must not
     are two arguments of the command.
   - `describes` (optional; *the verifier and the launcher rule are built by plan `2026-10-25-safe-git-describe`, and
-    `safe-git` declares it; the engine's use of it is not built*): a list of at most 16 distinct strings, each `^[a-z][a-z0-9-]*$` and at most 32
+    `safe-git` declares it; the engine's use of it is built for `commit` and `remove` by plan `2026-10-26-action-review-engine`*): a list of at most 16 distinct strings, each `^[a-z][a-z0-9-]*$` and at most 32
     characters, default empty. These are the actions the command's `describe` argument answers, in the sense of the
     decision `2026-10-25-describe-interface-for-action-review`. It is allowed only when `describe` is one of the
     command's `arguments`, and `describe` may not be listed in `owner`: the engine runs `describe` for the agent's
