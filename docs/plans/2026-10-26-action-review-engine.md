@@ -615,7 +615,7 @@ was run by the owner (11 approvals written); it warned that the two records adde
 `f7b67a17cd4e`) are not part of this release. They are tracked and stale, and removing them needs the owner's word. Two new
 untracked approval directories (`715ab071…`, `ac14b22f…`) belong in this commit.
 
-### Increment E — built, verified and reviewed (not committed)
+### Increment E — committed as `8db7cf6`
 
 Changed: `packages/workbench/action-review/helper/action-review` (`DescribeFailed`, `read_description`, `describe`, the
 constants `DESCRIBE_LIMIT` 196,608 and `DESCRIBE_SECONDS` 5; `run` now asks for `describe` after the rule is found and still
@@ -653,3 +653,58 @@ shipped approval records for the module will be stale after landing; the owner r
 
 Not done: the checks, the rubric and the bridge call (F to J); a second-model review; committing; running the shipped rules
 against the real launcher end to end (the real `safe-git` is only read through its helper, not through `wb run`).
+
+### Increment F — built, verified and reviewed (not committed)
+
+Changed: `packages/workbench/action-review/helper/action-review` (the secret scan, `diff_secret_kind`, `credential_path`,
+`ERROR_CHECKS`, `CHECK_FUNCTIONS`, `run_checks`; `math` is a new import; `run` is not changed and does not call the
+checks yet, so the output of a decline is Increment I's), `rules/safe-git-commit.json` (new `lists.credential_names`, 42
+entries), `tests/test_actionreview_checks.py` (new, 60 tests), and one assertion each in `tests/test_actionreview_module.py`
+(the import set gains `math`) and `tests/test_actionreview_rules.py` (the commit rule has a list, the remove rule none).
+
+What it does: `run_checks(rule, document)` runs the checks the rule names, in the order of the engine's list, and returns
+the names that fail as a tuple. The nine checks for `commit` are those of the spec's table. An error code fails the check it
+maps to; a code with no check of the rule, an `ok: false` object with no error, and a missing or mistyped fact fail
+`facts_complete`; a rule check with no function fails and names itself. A rule with no `credential_names` list fails
+`paths_not_credentials`. The secret scan is the approver's, ported as code (the same fifteen patterns, the entropy and
+long-hex checks, the lock-file and test-directory options, escape decoding); it returns a kind and never the text. The
+credential names are rule data. A failed check declines before any bridge call, so the diff is never sent where the scan
+hit.
+
+Port source: `codex_approver.py` at SHA-256 `d8b3facd…bcd613` (122,474 bytes), the hash `safe-git.md` already records;
+rechecked on 2026-10-27 before the port. Read only for the port.
+
+Choices of the author, not fixed by the spec (owed to Increment L): a list entry may hold `*` (a glob over the final
+segment) and may end in `/` (a directory name, matched against any directory above the file), because the approver's
+patterns (`.env.*`, `id_rsa*`, the credential directories, `.git`, `.config/gh`) cannot be said by the spec's two rules; the
+spec's two rules are kept. The `diff` is split into files by counting each hunk's lines from its header, so a line inside a
+hunk is never a header; a diff whose shape is not exactly the helper's (or has a count over nine digits) is scanned whole
+with no relaxation. An `ok: false` object runs through the same checks, with a null text or flag read as nothing. Percent
+decoding is a local function, because a module test forbids `urllib` in the helper.
+
+Known differences from the approver: it matched `.config/gh` as a substring of the whole path; the port matches that name as
+a directory above a file, so a file named exactly `gh` in `.config` is not a hit and the approver's substring hit on
+`x.config/gh/y` is not reproduced (the first is a directory in practice). Recorded, not changed.
+
+Verification as run on 2026-10-27, in a scratch copy: the new tests failed first (59 errors, each a missing name), then
+passed; seven mutations of the helper (hunk counting, directory entries, null head, missing list, error-code redirect,
+test-directory relaxation, percent decoding) were each caught by the new tests; the checks ran on the objects the real
+`safe-git describe commit` prints (plain change, stale head, staged path, program-selecting repository, refused path and
+message, credential name, binary path, secret in the diff, the subject, the body and a trailer, lock-file and test-directory
+diffs). The module's 223 tests pass. Full `python3 -B -W error tests/run_all.py` in the scratch copy: 5079 tests in 11 roots;
+ten roots pass; the action-review root failed one test because that run started before the last review fix was in place (the
+test's own assertion was wrong, not the code); the root was rerun alone after the fix and passes, 223 tests. The full suite
+was not run again after that.
+
+Review: the `reviewer` agent, one exchange, no blocking finding, five notes. Applied: the test constant `RANDOM` is built
+from pieces (the file would otherwise hold a line the approver's entropy check flags, against its own docstring); a hunk
+header with an absurd count no longer raises (and a test). Recorded: the `.config/gh` difference above; an empty
+`credential_names` list is accepted by the loader and then matches nothing (the shipped list is tested to be non-empty and
+complete; a rule that names the check with an empty list is the rule author's, to be revisited by K); `_facts_complete` reads
+`binary_paths`, which a removal does not have, so Increment G must read only `truncated` for `remove`; the existing reader's
+reason can include the text of a `jsonstrict` message (Increment E; its messages name a number up to 40 characters or a
+constant, and K should look at it).
+
+Not done: the checks for `remove` (G), the rubric and the bridge call (H), the output (I); wiring the checks into `run`; a
+second-model review; a security pass (K asks the owner); committing. The shipped approval records for the module will be
+stale after landing; the owner runs `release-approvals`.

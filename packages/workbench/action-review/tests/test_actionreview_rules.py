@@ -104,7 +104,8 @@ class Loading(Base):
             self.assertEqual(("wb", "run", "safe-git"), rule.spelling)
             self.assertTrue(rule.positionals.separator)
             self.assertEqual((1, 61), (rule.positionals.min, rule.positionals.max))
-            self.assertIsNone(rule.lists)
+        self.assertIn("credential_names", by_action["commit"].lists)
+        self.assertIsNone(by_action["remove"].lists)
 
     def test_a_missing_required_field_is_refused(self):
         for field in COMMIT:

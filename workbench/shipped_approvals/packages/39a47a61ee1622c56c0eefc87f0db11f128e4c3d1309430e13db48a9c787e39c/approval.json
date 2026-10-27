@@ -1,0 +1,10 @@
+{
+  "approver": "workbench-release",
+  "declaration_hash": "04a18bad6edf458d54c62d6145cba1dcc68b65e1bbf1aaececb8f0533db75d61",
+  "format": 1,
+  "kind": "module",
+  "subject": "workbench/action-review",
+  "time": "1970-01-01T00:00:00Z",
+  "tree_hash": "7d250d57682226dd2c093c8bc33369119d109383b1ed2dd36a79a7b39ad2c990",
+  "workbench_version": "0.1.0"
+}
