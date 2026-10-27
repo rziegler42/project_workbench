@@ -19,6 +19,7 @@ PACKAGE = os.path.join(ROOT, "packages", "workbench")
 MODULE = os.path.join(PACKAGE, "action-review")
 HELPER = "helper/action-review"
 RULES = ("rules/safe-git-commit.json", "rules/safe-git-remove.json")
+DATA = ("rubric/rubric.md", "reply-schema.json")
 
 
 def declaration():
@@ -44,7 +45,7 @@ class Declaration(unittest.TestCase):
         self.assertEqual(["action-review"], document["provides"])
         self.assertEqual(["model-bridge"], document["requires"])
         # The files are listed, not their directory: a shipped item named `rules` is a word the installer may not use.
-        self.assertEqual([HELPER, *RULES], document["ships"])
+        self.assertEqual([HELPER, *RULES, *DATA], document["ships"])
         for field in ("writes", "fills", "checks", "helpers", "blocks", "slots", "layout"):
             self.assertNotIn(field, document)
 
@@ -68,7 +69,7 @@ class Declaration(unittest.TestCase):
                 dirs.remove("tests")  # the module's own tests are not part of what it installs
             for name in files:
                 found.append(os.path.relpath(os.path.join(base, name), MODULE))
-        self.assertEqual(sorted(["module.json", HELPER, *RULES]), sorted(found))
+        self.assertEqual(sorted(["module.json", HELPER, *RULES, *DATA]), sorted(found))
 
     def test_the_package_lists_it(self):
         with open(os.path.join(PACKAGE, "package.json"), encoding="utf-8") as handle:
@@ -99,7 +100,8 @@ class Helper(unittest.TestCase):
 
     def test_it_imports_only_the_standard_library_and_the_kit(self):
         imported = set(re.findall(r"^(?:import|from) ([a-z_.]+)", self.text(), re.M))
-        self.assertEqual({"collections", "math", "os", "re", "sys", "wbkit"}, imported)
+        self.assertEqual({"collections", "fnmatch", "hashlib", "json", "math", "os", "re", "secrets", "sys", "wbkit"},
+                         imported)
 
     def test_it_starts_no_process_and_opens_no_connection(self):
         text = self.text()

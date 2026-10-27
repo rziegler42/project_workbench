@@ -709,7 +709,7 @@ Not done: the checks for `remove` (G), the rubric and the bridge call (H), the o
 second-model review; a security pass (K asks the owner); committing. The shipped approval records for the module will be
 stale after landing; the owner runs `release-approvals`.
 
-### Increment G — built, verified and reviewed (not committed)
+### Increment G — committed as `35e0734`
 
 Changed: `packages/workbench/action-review/helper/action-review` (`ERROR_CHECKS` gains a `remove` map; the five functions
 `_confirm_present`, `_ignore_status_known`, `_preview_matches_arguments`, `_no_git_metadata` and the shared
@@ -750,3 +750,66 @@ guard; (4) `no_git_metadata` does only the spec's segment test and relies on `de
 Not done: the rubric and the bridge call (H), the output (I); wiring the checks into `run`; a second-model review; a
 security pass (K asks the owner); committing. The shipped approval records for the module will be stale after landing; the
 owner runs `release-approvals`.
+
+### Increment H — built, verified and reviewed (not committed)
+
+Changed: `packages/workbench/action-review/helper/action-review` (a new block: `read_setting`, `read_rubric`, `facts_text`,
+`build_prompt`, `read_answer`, `parse_verdict`, `ask_bridge`, `judge`, with the exceptions `SettingError`, `RubricError`,
+`PromptTooLarge`, `BridgeRefused` and `BridgeFailed`; the docstring and imports), `rubric/rubric.md` and `reply-schema.json`
+(new shipped data), `module.json` (`ships` lists both), `rules/safe-git-commit.json` (adds `lists.reviewer_facing_paths`: the
+approver's four globs), `tests/test_actionreview_bridge.py` (new, 89 tests) and `tests/test_actionreview_module.py` (file list and
+import allow-list). `run` and `main` are unchanged and do not call the new code; the wiring, the output and the exit table are I.
+
+What it does: `read_setting` reads `.workbench/review.json` as the review engine does (strict, at most 4,096 bytes, `format` 1,
+a required `bridge`, optional `model` and `effort`) and quotes nothing of the file. `read_rubric` reads the shipped rubric from
+`.workbench/workbench/action-review/rubric/rubric.md` (plain ASCII, unique `##` sections and `###` questions), checks that the
+rule's section and questions exist (so a rule naming one that is missing is a `RubricError` for its own key only, found at
+review time and not at load time), and sends the premise, the section introduction and only the questions the rule names; its
+SHA-256 is that of the text sent. `build_prompt` gives the rubric, `DETERMINISTIC_CHECKS_PASSED`, `SEMANTIC_CHECKS`, the
+"untrusted data" line, the facts as one ASCII line of sorted compact JSON between marker lines with a random 128-bit nonce, and
+`Reply with JSON only.`; the facts are `{action, facts, reviewer_facing_paths}`, the last only for a rule that lists the globs and
+computed by the program from the `paths` fact (the approver's segment-for-segment match). A prompt over 262,144 bytes is
+`PromptTooLarge`. `ask_bridge` calls `run_command` with the setting's bridge, `provides="model-bridge"`, exactly
+`ask --timeout 20 --schema <installed reply-schema.json> [--model m] [--effort e]`, the prompt on standard input, the output
+limit 2,000,000 and the time left as the time limit. `read_answer` checks the envelope as `model-bridge.md` defines it (exact
+fields, types, the six error classes, `detail` non-null only for `vendor_error`, `ok` against the exit code) and quotes none of
+the vendor's text; exit 1 with no object is `BridgeRefused`, every other bad answer, a timeout and an oversize answer are
+`BridgeFailed`. `parse_verdict` takes exactly `verdict`, `failed_checks`, `reason`; an approve names none and a decline at least
+one, each distinct and a question of the rule, so a code-check name is refused; the reason is cleaned to printable ASCII on one
+line and cut to 300, never passed on raw. `judge` runs the code checks first: a failure, or a prompt too large (named
+`facts_complete`), is a decline and never calls the bridge.
+
+Choices to record: `Judgement` carries `bridge`, `model`, `effort` (the setting's) and `rubric_sha256` for I's log row, all null
+for a code-check decline; the exit mapping is for I (`BridgeRefused` is exit 1, `BridgeFailed` exit 2, and a decline from
+`judge` exit 0); the bridge is called from the project root, not the working directory; a `detail` code of at most 64
+characters of `a-z0-9_` is the one piece of vendor text in a failure reason; a reply with prose around the object fails; a fact
+named `reviewer_facing_paths` can sit under `facts` beside the program's top-level key (the names come from `describe`, not the
+request).
+
+The rubric port: source, the owner's approver rubric (role USER), read on 2026-10-27, 14,166 bytes, SHA-256
+`49e369d28ee425c66608dcd6540eb9aa945d6ca000a47e48f117ac1a2b172799` (the figure `safe-git.md` already records). The `commit` and
+`remove` sections and their questions keep the approver's wording; the premise drops push and `remote-runner` and gains a
+paragraph on what FACTS holds; the headings are `## <name>` and `### <question>`. The shipped file is 6,005 bytes, inside the
+28,332 bytes (twice the approver's) that `safe-git.md` allows, and a test bounds it. The largest object the module can print
+(196,608 bytes) with this rubric and the framing fits 262,144 bytes (a test builds it).
+
+Verification as run on 2026-10-27, in a scratch copy: the 88 first tests failed (86 errors, each from a missing function), then
+passed; a prose-around-the-reply test was added after review (89). Eighteen mutations were applied one at a time (code check
+still calls the bridge, approve with failed checks, failed check outside the questions, reason not cut, exit code against `ok`,
+timeout, the model flag, the schema flag, the capability, the reviewer list from the request, dot segments, the size check,
+ASCII escaping, an unknown setting field, question existence, exit 1 with no object, the `detail` rule, a fixed nonce): sixteen
+were caught at once and two after the tests were tightened. Real launcher tests run a fake bridge module through `wb run`
+(with its capability patched to the prefixed form a non-first-party module needs): the exact argument list and the prompt on
+standard input; a bridge that is not installed, not pinned, edited after the pin or not providing the capability is refused and
+nothing runs; a bridge that sleeps is stopped in the time left; the project is byte for byte unchanged. The module's 346 tests pass (257
+before). Full `python3 -B -W error tests/run_all.py` in the scratch copy: 5201 tests in 11 roots, all pass (before the one added test; the module's 346 pass after it).
+
+Review: the `reviewer` agent, one exchange, no blocking finding. Recorded: (1) the rubric provenance is recorded here and in
+no shipped file, by design; (2) the rubric, schema and rule files are read from the project tree, where a repository can edit
+them, and the log's `rubric_sha256` is not compared with a shipped one: for K, with whether `wb check` drift or `acknowledge`
+covers installed rule, rubric and schema files; (3) the `detail` code (above); (4) the same-named fact (above, not applied);
+(5) test gaps: a non-1 exit with an `ok: false` object is accepted (safe, not tested), and a question heading inside an
+introduction is not tested.
+
+Not done: wiring into `run`, the output, the exit table and the log row (I); a second-model review; a security pass (K asks the
+owner); committing. The shipped approval records will be stale after landing; the owner runs `release-approvals`.

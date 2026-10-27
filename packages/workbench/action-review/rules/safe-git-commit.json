@@ -95,6 +95,12 @@
       ".kube/",
       ".docker/",
       ".config/gh/"
+    ],
+    "reviewer_facing_paths": [
+      "ask-codex/kinds/*/prompt.md",
+      "skills/second-opinion/*",
+      "agents/workflow-reviewer.md",
+      "agents/security-reviewer.md"
     ]
   }
 }
