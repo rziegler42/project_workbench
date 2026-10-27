@@ -244,9 +244,11 @@ The setting names are what the module declares in `checkpoints` and what the own
 the personal settings (`trust-and-approval.md`). Setting `delegate` takes effect for `approve-plan` only
 (built by `delegated-approval`, increment D); every other checkpoint stops, whatever the setting says. `wb settings`
 reports the effective values. The owner may also set a key, `approve-plan` among them, to `ask` or `none` in the `levels` table
-(`command-permissions.md`); the checkpoint names are the keys of that table, and only `approve-plan` offers a level beyond `block`.
-The `delegable` marks above describe what a way of working may allow; they do not make a checkpoint delegable until the installer
-builds it, and the installer builds `approve-plan` only.
+(`command-permissions.md`); the checkpoint names are the keys of that table. `approve-plan` offers `ask`, `delegated` and `none`;
+`accept-decision`, `acknowledge-first-tier` and `acknowledge-second-tier` offer `none`; `push-shared-branch`, `submit-remote-job`,
+`fetch-remote-output` and `change-direction` offer `block` only. The `delegable` marks above describe what a way of working may
+allow; they do not make a checkpoint delegable until the installer builds it, and the installer builds `delegate` for
+`approve-plan` only.
 
 Delegability *(built by plan `2026-10-23-delegated-approval`, increment C; the installer's use of it is increment D)*.
 The module's helper has a read-only subcommand, `delegable <plan>`, that tells the installer whether a plan may be

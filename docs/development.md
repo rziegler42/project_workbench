@@ -703,7 +703,8 @@ other than `0700` (group or other access, setgid, sticky) is refused with exit c
 `-h` does not create it.
 
 - The personal settings are the file `settings` in the store: strict JSON with a
-  `version`, a `checkpoints` object (`stop` or `delegate` per checkpoint name) and a
+  `version`, a `levels` table (a level per key; version 2) or, in a version 1 file, a `checkpoints` object
+  (`stop` or `delegate` per checkpoint name; read as the aliases `block` and `delegated`) and a
   copy of the hard-stop floor's ids. A missing file is created. With no settings, or with
   any entry that is missing or not exactly `delegate`, a checkpoint stops. A damaged file
   is never overwritten: the command prints a `settings:` warning and everything stops

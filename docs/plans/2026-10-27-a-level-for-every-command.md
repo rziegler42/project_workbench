@@ -340,6 +340,32 @@ module commands at `block` only, against the accepted decision and the spec's P4
 applied. Round 2 returned no meaningful findings and one minor one (the `Specs:` line omitted `module-boundary`), which was applied.
 The review is not an approval; the plan stays `Proposed` until the owner approves it.
 
+**Amendments after approval.** The plan was approved by the owner with `wb approve-plan` and changed twice afterwards, each time with
+a new approval. (1) On 2026-10-27, after Increment D was committed, a command-gate problem stopped the work: a relaxed key such as `wb
+install` blocked `wb preview install`, `npm install` and commit messages that hold the word. The owner chose to fix the gate first;
+the decision `2026-10-27-command-gate-command-position` was proposed, the plan gained a new Increment E for it, the old E to I became F
+to J, and the owner accepted the decision and approved the plan again. (2) On 2026-10-27, after Increment H was committed, a second
+problem (the gate blocked every `wb run safe-git commit` whose subject or paths held a relaxed word, and `wb approve-plan` when `wb
+approve` was relaxed) was found by running the gate on those commands; the owner chose to build H as planned and fix the gate
+separately, the decision `2026-10-27-command-gate-literal-arguments` was proposed and reviewed (its first draft was changed after the
+review), the plan gained Increment I, the old I and J became J and K, and the owner accepted the decision and approved the plan
+again. The label changes touched increments that had no commit under the old labels, so no commit trailer is wrong. Both decisions
+carry the owner's acceptance in their status lines.
+
+**Review of the whole plan, 2026-10-27, at the owner's request.** One round by the `reviewer` agent after Increment K, reading the plan,
+the three decisions, the spec and the code; it ran nothing. Verdict on the code: no blocking finding. Blocking findings, all applied:
+three stale sentences in the specs (`command-permissions.md` "a key is never limited to `block`", `installer-interface.md` "no command
+an agent is meant to run records an approval or a pin", `code-work.md` "only `approve-plan` offers a level beyond `block`") and this
+record of the amendments. Also applied: the command table of `installer-interface.md`, the log section of the spec, and the settings
+description of `docs/development.md`. Left as they are, because the plan body cannot change without a new approval: the plan's
+Assumptions still call the decisions of Increments E and I `Proposed` (both are Accepted), the headings of the Result entries still
+say "built, not committed" (every increment is committed; the commits are listed in the plan's history by the `Plan:` trailer), and
+the Goal and Completion criterion 4 are worded without the exceptions that the K Result lists. The review's ranked risks are in the
+chat record: an agent can make code trusted at `none`; the command gate is a text matcher; real-harness coverage covers `install`,
+`add` and the gate only; `attach` and `release-approvals` are tested with the command mocked; `accept-decision` is guidance only.
+Security reviews were asked and run at the checkpoints D, E, H and I and at J; F, G and K had no security review: F's was offered as optional and not asked for, and the owner was not asked at the end of G or K (the plan lists no checkpoint there; F and G touch authorization and the filesystem, which AGENTS.md says to ask about).
+
+
 ## Deferred work
 
 - **`none` for an owner-run argument of a module command** (`wb run mempalace init`, `mine`, `remote-runner fetch-overwrite`, and the

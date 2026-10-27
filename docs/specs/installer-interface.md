@@ -161,15 +161,15 @@ says so.
 
 | command | kind | takes | writes | terminal only | state |
 |---|---|---|---|---|---|
-| `install` | project | target, a module selection | committed content, manifest, the project's store directory, then per-clone harness files | yes, owner-run | built |
+| `install` | project | target, a module selection | committed content, manifest, the project's store directory, then per-clone harness files | yes, owner-run; the owner may set `wb install` to `none` | built |
 | `preview` | project | `install`, `adopt`, `upgrade` or `add` and their arguments | nothing; no network, it reads only the approved cache | no | built |
-| `adopt` | project | target, a module selection (as `install`) | committed content for the paths that are missing, manifest, the project's store directory; never an existing file and no harness file | yes, owner-run | built (`adopt-existing-repository`) |
+| `adopt` | project | target, a module selection (as `install`) | committed content for the paths that are missing, manifest, the project's store directory; never an existing file and no harness file | yes, owner-run; the owner may set `wb adopt` to `none` | built (`adopt-existing-repository`) |
 | `attach` | project | target, `--harness` | per-clone harness files, `.git/info/exclude`, the local manifest | no, but owner-run (harness deny rule) | built |
 | `check` | project | target | nothing | no | built |
 | `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run; the owner may set it to `none` | built |
 | add a module | project | target, a module | the same as `upgrade`, new files and blocks only | yes, owner-run; the owner may set `wb add` to `none` | built |
-| `acknowledge` | project | target | the guarded store: the project's acknowledgement baselines | yes, owner-run | built |
-| `recover` | project | target | removes the unfinished-write marker and the empty directories the plan created, nothing else | yes, owner-run | built |
+| `acknowledge` | project | target | the guarded store: the project's acknowledgement baselines | yes, owner-run; the owner may set `acknowledge-first-tier` to `none` | built |
+| `recover` | project | target | removes the unfinished-write marker and the empty directories the plan created, nothing else | yes, owner-run; the owner may set `wb recover` to `none` | built |
 | `verify` | package | a package directory (`<package>` or `--dir`), `--select`, `--no-harness-required` | nothing | no | built |
 | `approve` | package | a package directory, or `--source` with an optional `--ref`; `--module` | the guarded store: approval records, the cache | yes | built; `--dir` proposed |
 | `pin` | package | a project id, a name, a helper, `--root` | the guarded store: a pin (the installer pins declared helpers itself; this is for any other) | yes | built |
@@ -188,7 +188,9 @@ says so.
   project; an install never offers it *(my call)*.
 - `approve` and `pin` record an owner's approval or pin in the guarded store and each need a
   terminal on both standard input and standard output. **rule:** no command an agent is
-  meant to run records an owner approval or a pin. The terminal test is friction and not
+  meant to run records an owner approval or a pin, unless the owner has set the key `wb approve` or `wb pin` to `none`; at `none` the
+  command runs without a terminal and its run is logged (`command-permissions.md`, "`approve` and `pin` at `none`"), which lets an
+  agent make a package or a helper trusted. The terminal test is friction and not
   authentication; what stops an agent is the harness's deny rule on these commands and on the
   store (`trust-and-approval.md`, "Residual risk").
 - `release-approvals` is a maintainer's release-time command. It needs no terminal and
@@ -373,7 +375,7 @@ plan made and the owner may still change.
   the state found), a refused target, and every conflict above. After a failure part-way, the report
   says what was written.
 - **Terminal and exit codes.** Owner-run and terminal-only, checked before anything is read, as
-  `install` is, and runnable without a terminal only at the owner's level `none` for `wb adopt`
+  `install` is, and runnable without a terminal only at the owner's level `none` for `wb adopt` (and for `wb install`)
   (`command-permissions.md`, "`install` and `adopt` at `none`"). Exit 0 done; 1 refused or cancelled; 2 usage; 3 stopped after writing. There is no
   attach step, so the exit 3 of `install` for a failed attach does not exist here. Standard output
   ends with the count of paths created, the count kept, the blocks not filled, that nothing was

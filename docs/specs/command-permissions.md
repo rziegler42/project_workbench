@@ -225,7 +225,7 @@ compound command is read that way.
 
 ### The log
 
-Every run at a level other than `block` that goes on without a terminal appends two lines to `level-log` in the guarded store, never rewriting one: the attempt, with
+Every run at a level other than `block` that goes on without a terminal appends two lines (except `attach` and `release-approvals` where no level can be read, a run that changes nothing, and `accept-decision`, which no command runs; see their paragraphs above) to `level-log` in the guarded store, never rewriting one: the attempt, with
 a random operation identifier, the time, the key, the level and the evidence (`digest:<d>` at `ask`, `converged-<n>-of-<bound>` for a
 delegated approval, empty at `none`); then the outcome, with the same identifier, the time, `done` or `refused`, and a reason of at
 most 200 printable ASCII characters. Lines are tab-separated, at most 1,024 bytes, and written by one `write` to a descriptor opened
@@ -278,8 +278,7 @@ default of `block`. `approve-plan` stays `block`; the default is not raised to `
 **Levels offered.** Every key offers `block` and `none`, except the owner-run arguments of module commands (`wb run <command>
 <argument>` where the argument is owner-run), which offer `block` only until a later plan gives the module contract a way to pass a
 level to a helper (the clarification note of `2026-10-26-a-level-for-every-command`, and "Not built"). `delegated` stays `approve-plan` only, and `ask` is offered by a key once
-that key has a preview digest of its own, built as `approve-plan`'s is. Until then a key is never limited to `block`, because it
-offers `none`. The order of building the digests is for a plan **(call)**: `install` and `adopt` first, because they already have a
+that key has a preview digest of its own, built as `approve-plan`'s is. Every key built by the plan offers `none`; the keys that still offer `block` only are listed under "Not built". The order of building the digests is for a plan **(call)**: `install` and `adopt` first, because they already have a
 preview, then the module arguments and `extend` (the deferred Increment G). At `none` an owner-run command runs without a terminal
 and without a harness `deny`; the command's own checks of its input and its log entry apply, and the terminal prompt does not.
 `accept-decision` offers `block` and `none`, and `AGENTS.md` says that the owner decides who accepts a decision.
