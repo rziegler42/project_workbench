@@ -1,6 +1,6 @@
 # The permission levels as built: what stands, what changed and what was not built
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-26
 Date: 2026-10-26
 
 ## Context
