@@ -67,7 +67,7 @@ needs in order to read untrusted repository content safely and to report:
 - the permission level of a command and the level log's lines (`wbkit/levels.py`): whether a command whose level the caller
   has verified may run with or without a terminal (`may_run`), and the attempt and outcome lines of the log with their
   append (`begin`, `finish`). The caller reads and verifies the level; the kit does not, and no module helper uses these yet
-  (`command-permissions.md`, "Planned: a level for every command");
+  (`command-permissions.md`, "A level for every command");
 - the report form of a module check (below) and the exit-code convention.
 
 Rules for the kit:

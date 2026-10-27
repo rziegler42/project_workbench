@@ -2,16 +2,15 @@
 
 Status: Current
 
-Written by plan `2026-10-26-command-permission-levels` (Increment H), which built it. It describes the levels table, the keys, the
-log, the rendering record, the command gate and `approve-plan` at the levels `ask` and `none`. One key, `approve-plan`, is built
-beyond `block` (and, from the plan `2026-10-27-a-level-for-every-command`, `wb install`, `wb adopt`, `wb upgrade`, `wb add`, `wb approve`, `wb pin`, `acknowledge-first-tier`, `acknowledge-second-tier`, `wb recover`, `wb attach` and `wb release-approvals` offer `none`); every other key offers `block` only. Extending a review (`wb run review-engine extend`) was part of the design,
-was not built, and is listed under "Not built". The design is `docs/decisions/2026-10-26-per-command-permission-levels.md`, as refined by
-`docs/decisions/2026-10-26-permission-levels-as-built.md` (accepted), which states what stands, what changed and what was not built;
-where the two differ on the defaults or the offered levels, this spec follows the later record.
-
-The owner has since directed that every `wb` command has a level, with a default that suits that command and no key limited to
-`block`. That direction is written under "Planned: a level for every command" and is not built; the sections before it describe the
-code as it is. The decisions it supersedes are named there and are not yet superseded: only the owner accepts a replacement.
+Written by plan `2026-10-26-command-permission-levels` (Increment H), which built the levels table, the keys, the log, the
+rendering record, the command gate and `approve-plan` at the levels `ask` and `none`, and extended by plan
+`2026-10-27-a-level-for-every-command`, which built a level for every command (the section "A level for every command"): a key for
+every command and subcommand the owner can govern, the agent-safe ones included, a default that suits each, and `none` for every
+owner-run installer command and for `accept-decision`. `approve-plan` alone offers `ask` and `delegated`. The keys that still offer
+`block` only are listed under "Not built". The design is `docs/decisions/2026-10-26-per-command-permission-levels.md`, as refined by
+`docs/decisions/2026-10-26-permission-levels-as-built.md` and `docs/decisions/2026-10-26-a-level-for-every-command.md` (all accepted),
+which state what stands, what changed and what was not built; where they differ on the defaults or the offered levels, this spec
+follows the later record.
 
 ## Scope
 
@@ -26,8 +25,8 @@ a harness renders it, and the command gate that protects the rendering.
 - The actions governed by action review, `safe-git commit` and `remove`, and the push check
   (`2026-10-25-module-commands-and-the-approver`, `action-review.md`).
 - A command that builds a table for the owner. The owner edits the personal settings by hand, as for checkpoints today.
-- Changing what an approval means. As built, only the owner's act makes a decision `Accepted`; the planned revision lets the owner
-  loosen that through the `accept-decision` key.
+- Changing what an approval means. Only the owner's act makes a decision `Accepted`, unless the owner loosens that through the
+  `accept-decision` key.
 
 ## Assumptions and constraints
 
@@ -101,9 +100,9 @@ separated by single spaces, at most 96 characters.
 - `block`: every key.
 - `delegated`: `approve-plan` only, whose gate is a converged, sealed review of the exact bytes (`delegation.py`). The gate must
   pass at the moment of the run, and the run counts only while the table still reads `delegated`.
-- `ask`: `approve-plan` only. `none`: `approve-plan`, `wb install`, `wb adopt` (built by Increment F), `wb upgrade` and `wb add` (built by Increment G), `wb approve` and `wb pin` (built by Increment H), `acknowledge-first-tier`, `acknowledge-second-tier`, `wb recover`, `wb attach` and `wb release-approvals` (built by Increment J), every agent-safe action and
-  every declared module argument that is not owner-run; no other key offers it yet. A key offers a level only from the version that builds it for that command; `accept-decision`
-  and every other key offer `block` only.
+- `ask`: `approve-plan` only. `none`: `approve-plan`, `wb install`, `wb adopt` (built by Increment F), `wb upgrade` and `wb add` (built by Increment G), `wb approve` and `wb pin` (built by Increment H), `acknowledge-first-tier`, `acknowledge-second-tier`, `wb recover`, `wb attach` and `wb release-approvals` (built by Increment J), `accept-decision` (built by Increment K), every agent-safe action and
+  every declared module argument that is not owner-run; the keys under "Not built" offer `block` only. A key offers a level only
+  from the version that builds it for that command.
 
 ### Shipped defaults
 
@@ -251,11 +250,11 @@ an agent-safe key only when it is not at its default, so an attached clone's rec
 Problems and notes print as `settings:` lines. Two declarations that
 give one key are a refusal.
 
-## Planned: a level for every command
+## A level for every command
 
-Not built, except where a paragraph says "built by Increment ..." (the plan `2026-10-27-a-level-for-every-command`; Increments A, B, C, D, E, F, G, H, I and J are
-built). It is the owner's direction of 2026-10-26, recorded here so a plan can implement it. Calls marked **(call)** are the
-author's and are not the owner's until the owner confirms them.
+Built by the plan `2026-10-27-a-level-for-every-command`, Increments A to K, and described here as built. It is the owner's direction
+of 2026-10-26. Calls marked **(call)** were approved with the section on 2026-10-26. Where a paragraph says "built by Increment ...",
+that increment of the plan built it; the keys it did not build are under "Not built".
 
 **Intent.** The owner chooses their own risk appetite, command by command, and may loosen any protection that is theirs to loosen.
 A state in which an owner has set every key to `none`, and so has no protections left on the commands, is an outcome of that
@@ -283,7 +282,7 @@ that key has a preview digest of its own, built as `approve-plan`'s is. Until th
 offers `none`. The order of building the digests is for a plan **(call)**: `install` and `adopt` first, because they already have a
 preview, then the module arguments and `extend` (the deferred Increment G). At `none` an owner-run command runs without a terminal
 and without a harness `deny`; the command's own checks of its input and its log entry apply, and the terminal prompt does not.
-`accept-decision` offers the same levels, and `AGENTS.md` says that the owner decides who accepts a decision.
+`accept-decision` offers `block` and `none`, and `AGENTS.md` says that the owner decides who accepts a decision.
 
 **One table** (built by Increment B). The `levels` table is the only place a level is set. A version 1 file's `checkpoints` are read as a fallback for a
 key the table does not mention, and a table entry wins in either direction, so loosening a key is one edit. The checkpoint words
@@ -382,6 +381,17 @@ written after the launcher wrapper under `bin/` is refreshed, which every comman
 level that could not be read carries the reason after the terminal-only text. `release-approvals`
 writes the approvals shipped with the first-party packages, so at `none` an agent can make the first-party packages trusted.
 
+**`accept-decision` at `none`** (built by Increment K). The checkpoint `accept-decision`, which the process module declares, offers `block` and
+`none` and defaults to `block`. It governs no command of the installer: an agent accepts a decision by editing the record, so the
+level is read by the guidance. The `draft-decision` skill tells the agent to run the one read-only command `wb settings` and to mark a
+record it drafted `Accepted`, in its status line and in its index row, only while the output holds the line `level accept-decision:
+none`; on any other line, when the line is missing or when the command fails, it stops at `Proposed` and asks the owner, and a file, a
+review or a reply is never that level. This repository's `AGENTS.md` says the same; the managed block that the groundwork module writes into other projects still says that only the
+owner accepts a decision, which is stricter and wins there, so the skill's exception reaches a project only through its own `AGENTS.md`. **At `none` an agent can accept a decision,
+and an accepted decision outranks the code** (`## Source of truth` in `AGENTS.md`); that is the owner's choice and it is not
+logged. Nothing in the installer enforces the level, because accepting is an edit to a tracked file; the barrier is the guidance and
+the owner's review of the commit.
+
 **Out of scope.** The compiled hard-stop floor is unchanged and is not a key (see "Non-goals").
 
 **Decision.** `2026-10-26-a-level-for-every-command` (accepted by the owner on 2026-10-26) refines
@@ -392,7 +402,7 @@ changed: a level of `none` renders no rule, so the neutral rule list still holds
 **Left to the builder.** The order of the increments, each key's digest content, the wording of the notes, and the layout of
 `wb settings` output, which is grouped by command.
 
-### Planned acceptance criteria
+### Acceptance criteria of the plan
 
 P1. Every command and subcommand `cli.py` routes has a key, except `gate`, `agent-gate` and `gate-command`, and the drift test fails
 when any other has none.
@@ -405,6 +415,14 @@ P5. With every such key set to `none`, no command refuses for want of a terminal
 each run that changes something is logged.
 P6. `accept-decision` set to `none` lets an agent accept a decision, and at `block` it does not.
 
+As built: P1 is the drift test of `rules`/`levels` and the tests of the agent-safe keys (Increment A); P2 and P3 are the tests of the
+registry, the settings and `wb settings` (Increments A and B); P4 is the offers tests of `test_levels`, `test_settings` and
+`test_approve_levels`; P5 is `tests/test_install_levels.py`, `test_upgrade_levels.py`, `test_approve_pin_levels.py`,
+`test_ack_recover_levels.py` and the command-gate tests, with the owner's trials in the plan's Result (Increments D to J); P6 is the
+offers test for the key and the draft-decision skill test of the groundwork module (Increment K). P5 holds for every key that offers
+`none`; it does not hold for the keys under "Not built", which offer `block` only. P6 is guidance, not enforcement: the test pins
+what the skill says.
+
 ## Not built
 
 - `none` for the owner-run arguments of module commands (`wb run mempalace init`, `mine`, `wb run remote-runner fetch-overwrite`
@@ -415,8 +433,11 @@ P6. `accept-decision` set to `none` lets an agent accept a decision, and at `blo
   field for the levels an owner-run argument offers, and the installer may not name a module's command. A later plan needs: a field
   such as `levels` on a command, a decision for that change to the module contract, a helper that prints and checks a digest of the
   review's `status` and `n`, and the log attempt written before the helper is launched.
-- The keys `reset`, `archive`, `prune`, `amend`, `acknowledge-second-tier`, `submit-remote-job` and `push-shared-branch`: each needs
-  its own preview digest and offers `block` only. `accept-decision` offers `block` only; the planned revision above changes that.
+- The keys `submit-remote-job` and `push-shared-branch`, and the review engine's `wb run review-engine reset`, `archive`, `prune` and
+  `amend` (already in the first item): each needs its own preview digest for `ask` and offers `block` only. The checkpoints `fetch-remote-output` and `change-direction` also offer `block` only: the plan
+  built `none` for the installer commands and for `accept-decision`, and these two are agent checkpoints that no command of the
+  installer runs, so a `none` for them has nothing to change. The accepted decision says no key should be limited to `block`; this
+  list is the gap, and the owner decides whether a later plan closes it.
 - The rule that a command reaching more than one key takes the strictest level of them: each command reaches one key today.
 - A command that re-renders an attached clone, so a table or module change leaves `ask` and `none` reading `block` until a new clone
   is attached.
@@ -484,7 +505,7 @@ agent in rounds for each increment and by the `security-reviewer` agent for the 
 the built code; none of the security reviews could run an experiment, and the strings they proposed were run by the author. See the
 plan's Result.
 
-The section "Planned: a level for every command" was reviewed on 2026-10-26 by the review engine (spec review `spec-5bcae25932e2d2fa`,
+The section "A level for every command" (then called "Planned: a level for every command") was reviewed on 2026-10-26 by the review engine (spec review `spec-5bcae25932e2d2fa`,
 `ask-codex`, model `gpt-5.6-terra`, effort medium): one round of the bound of 3, one finding (a decision missing from the governing
 list), applied. The owner approved that section on 2026-10-26 as the direction for a plan. The approval does not accept the
 decisions it proposes to supersede, does not approve a plan and authorises no implementation. The author's calls marked **(call)**
@@ -496,6 +517,9 @@ were approved with it except where the owner says otherwise.
   [2026-10-26-permission-levels-as-built](../decisions/2026-10-26-permission-levels-as-built.md),
   [2026-10-26-ask-level-spelling-limit](../decisions/2026-10-26-ask-level-spelling-limit.md),
   [2026-10-26-ask-level-command-gate](../decisions/2026-10-26-ask-level-command-gate.md),
+  [2026-10-26-a-level-for-every-command](../decisions/2026-10-26-a-level-for-every-command.md),
+  [2026-10-27-command-gate-command-position](../decisions/2026-10-27-command-gate-command-position.md),
+  [2026-10-27-command-gate-literal-arguments](../decisions/2026-10-27-command-gate-literal-arguments.md),
   [2026-10-23-delegated-plan-approval](../decisions/2026-10-23-delegated-plan-approval.md),
   [2026-10-19-mandatory-review-personal-delegation](../decisions/2026-10-19-mandatory-review-personal-delegation.md),
   [2026-10-19-compiled-hard-stop-floor](../decisions/2026-10-19-compiled-hard-stop-floor.md),
@@ -503,4 +527,5 @@ were approved with it except where the owner says otherwise.
   [2026-10-20-preview-then-owner-run-write](../decisions/2026-10-20-preview-then-owner-run-write.md),
   [2026-10-24-project-guarantees-a-floor](../decisions/2026-10-24-project-guarantees-a-floor.md).
 - Specs: `trust-and-approval.md`, `code-work.md`, `installer-interface.md`, `harness-modules.md`.
-- Plan: `docs/plans/2026-10-26-command-permission-levels.md`. References: none.
+- Plans: `docs/plans/2026-10-26-command-permission-levels.md`, `docs/plans/2026-10-27-a-level-for-every-command.md`.
+  References: none.

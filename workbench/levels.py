@@ -7,8 +7,9 @@ the agent-safe actions and the arguments of the installed commands. No module is
 
 A level is offered by a key only from the increment that builds it for that key; until then the key offers
 ``block`` only. In this version ``approve-plan`` also offers ``delegated`` (``wb delegate-approve-plan`` is its
-gate), ``ask`` (a digest of its preview) and ``none``; no other owner-run key offers ``ask`` or ``none``. An agent-safe
-key and a declared argument that is not owner-run offer ``none`` and default to it; every other default is
+gate), ``ask`` (a digest of its preview) and ``none``; no other key offers ``ask``, and ``none`` is offered by the owner-run
+installer commands, ``accept-decision`` and the keys of ``_OFFERS``. An agent-safe key and a declared argument that is not
+owner-run offer ``none`` and default to it; every other default is
 ``block``: the shipped default of ``approve-plan`` becomes ``ask`` only after the probe the decision
 ``2026-10-26-ask-level-spelling-limit`` requires is recorded.
 """
@@ -40,11 +41,11 @@ class RegistryError(ValueError):
 _OFFERS = {APPROVE_PLAN: (DELEGATED, ASK, NONE), "wb install": (NONE,), "wb adopt": (NONE,), "wb upgrade": (NONE,),
            "wb add": (NONE,), "wb approve": (NONE,), "wb pin": (NONE,),
            "acknowledge-first-tier": (NONE,), "acknowledge-second-tier": (NONE,), "wb recover": (NONE,),
-           "wb attach": (NONE,), "wb release-approvals": (NONE,)}
+           "wb attach": (NONE,), "wb release-approvals": (NONE,), "accept-decision": (NONE,)}
 # The shipped default of a key that is not ``block``; none yet among the owner-run keys.
 _DEFAULTS = {}
 # An agent-safe action, and a declared module argument that is not owner-run, is one an agent may run today, so it
-# defaults to ``none`` (``docs/specs/command-permissions.md``, "Planned: a level for every command"). Until the
+# defaults to ``none`` (``docs/specs/command-permissions.md``, "A level for every command"). Until the
 # increment that renders a ``deny`` for it, a ``block`` here is read and reported but is not enforced.
 _AGENT_OFFERS = (NONE,)
 

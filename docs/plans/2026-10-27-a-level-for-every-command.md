@@ -735,3 +735,38 @@ rendering record, the second-tier key alone not opening `acknowledge`, a duplica
 project check and the digest binding of `acknowledge`, the target identity and canonical form of the marker, the removals of
 `recover` bounded to the recorded empty directories, `_refuse_without_store` with links, and the clean one-line reasons. Not tested by
 the reviewer: any experiment. `tests/test_ack_recover_levels.py` is now 41 tests.
+
+### Increment K — built, not committed (2026-10-27)
+
+**Done.** The checkpoint `accept-decision`, which the process module already declared, now offers `block` and `none` (`levels._OFFERS`)
+and defaults to `block`; `wb settings` prints `level accept-decision: <level>` as for every key. The `draft-decision` skill of the
+groundwork module tells the agent to run `wb settings` from the project directory and to mark a record it drafted `Accepted` only while
+the output holds a line that begins `level accept-decision: none`; on any other line, a missing line or a failing command it stops at
+`Proposed`, and a file, a review or a reply is never that level. The skill's one allowed command is `wb settings`; its "Do not run
+commands" sentence is relaxed for this skill only, and a test pins the new sentence. `docs/specs/command-permissions.md` no longer says
+"Planned": the section is "A level for every command", described as built, with the acceptance criteria P1 to P6 mapped to the tests
+that cover them, `docs/specs/code-work.md` lists the built behavior of `accept-decision`, and `docs/development.md` says so. The
+repository's own installed copy of the skill is not updated and the shipped approvals are not regenerated: an owner-run `wb upgrade` and
+`wb acknowledge` update the first, and `wb release-approvals` at release time the second.
+
+**Verification as run.** The offers tests, the skill test and a `wb settings` test were written first and failed; after the change,
+`python3 -B -W error tests/run_all.py`: `Ran 5133 tests in 10 roots`, `OK`, and again after the review changes below:
+`Ran 5133 tests in 10 roots`, `OK`. `wb check` and the plan check: no problems. **Not verified:** nothing under a real harness for K; the skill is prose, so
+the test pins what it says and not what an agent does.
+
+**Review.** One round by the `reviewer` agent: no blocking findings. Applied: the skill's description and step 6 now carry the
+exception, it says to run `wb settings` from the project directory and that a line must begin with `level accept-decision: none`
+(a settings note starts with `settings:` and a test pins that), and that the owner's acceptance of a superseding record is matched by
+the agent's while the level is `none`; the spec says the managed block that the groundwork module writes into other projects still
+says that only the owner accepts, which is stricter and wins there; a stale sentence in the `levels.py` docstring is corrected.
+
+**The Goal and the Completion criteria, honestly.** Criteria 1 to 3, 7 and 8 are met by the tests and checks above. Criterion 4 is met
+for every key built by this plan that offers `none`: `block` and `none` are accepted and a level a key does not offer reads as `block`
+with a note. Criterion 5 holds for those keys; the keys that still offer `block` only are the owner-run arguments of module commands
+(`wb run mempalace init`, `mine`, `wb run remote-runner fetch-overwrite`, and the review engine's `reset`, `archive`, `prune`, `amend`,
+`extend`, as the plan's Deferred work says) and four checkpoints that the plan did not list: `push-shared-branch`, `submit-remote-job`,
+`fetch-remote-output` and `change-direction`. The accepted decision says no key should be limited to `block`, so the Goal is **not**
+fully met: those four checkpoints are not named in "Deferred work" and need the owner's decision, either that `none` has nothing to
+change for them (no installer command runs them) or a later plan. Criterion 6 is guidance, not enforcement. The verification step
+"a trial in a throwaway project" was run by the owner for `install`, `add` and the gate (see the two trial records above) and not for
+`upgrade`, `approve`, `pin`, `acknowledge`, `recover`, `attach`, `release-approvals` or `accept-decision`.

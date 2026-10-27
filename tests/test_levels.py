@@ -203,7 +203,8 @@ class OfferedLevelsTest(unittest.TestCase):
     # The owner-run keys that offer ``none`` in this version; each increment of the plan ``2026-10-27-a-level-for-every-command``
     # adds the keys it builds.
     NONE_KEYS = ("approve-plan", "wb install", "wb adopt", "wb upgrade", "wb add", "wb approve", "wb pin",
-                 "acknowledge-first-tier", "acknowledge-second-tier", "wb recover", "wb attach", "wb release-approvals")
+                 "acknowledge-first-tier", "acknowledge-second-tier", "wb recover", "wb attach", "wb release-approvals",
+                 "accept-decision")
 
     def test_only_approve_plan_offers_ask_among_the_owner_run_keys(self):
         for name, key in self.keys().items():
@@ -224,8 +225,9 @@ class OfferedLevelsTest(unittest.TestCase):
             with self.subTest(key=name):
                 self.assertEqual(name == "approve-plan", "ask" in key.offers)
 
-    def test_accept_decision_offers_block_only(self):
-        self.assertEqual(("block",), self.keys()["accept-decision"].offers)
+    def test_accept_decision_offers_block_and_none_and_defaults_to_block(self):
+        key = self.keys()["accept-decision"]
+        self.assertEqual((("block", "none"), "block"), (key.offers, key.default))
 
     def test_the_default_of_every_key_but_an_agent_safe_one_is_block(self):
         for name, key in self.keys().items():

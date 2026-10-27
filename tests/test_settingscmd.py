@@ -221,6 +221,23 @@ class Printed(Settings):
 class OtherModules(Settings):
     INSTALL = False
 
+    def test_accept_decision_is_printed_as_block_by_default_and_as_none_when_the_table_says_so(self):
+        """The `draft-decision` skill looks for the exact line `level accept-decision: none`; a settings note starts with
+        `settings:` and cannot be taken for it."""
+        self.use(checkpoints=["approve-plan", "accept-decision"], caps=[])
+        code, out, err = self.settings()
+        self.assertEqual((0, ""), (code, err))
+        self.assertIn("\nlevel accept-decision: block\n", "\n" + out)
+        self.owner({"version": 2, "levels": {"accept-decision": "none"}})
+        code, out, err = self.settings()
+        self.assertEqual((0, ""), (code, err))
+        self.assertIn("\nlevel accept-decision: none\n", "\n" + out)
+        self.owner({"version": 2, "levels": {"accept-decision": "ask"}})
+        code, out, err = self.settings()
+        self.assertIn("\nlevel accept-decision: block\n", "\n" + out)
+        self.assertNotIn("level accept-decision: none", out)
+        self.assertTrue(any(line.startswith("settings: ") for line in out.splitlines()), out)
+
     def test_an_owner_run_argument_of_an_installed_command_prints_as_a_key(self):
         commands = {"tool": {"helper": support_project.HELPER_PATH, "arguments": ["go", "look"], "owner": ["go"]}}
         self.use(commands=commands)

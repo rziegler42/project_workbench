@@ -1,6 +1,6 @@
 """How an owner-run command of the installer runs at the level ``none``, and writes what it did to the level log.
 
-``docs/specs/command-permissions.md``, "Planned: a level for every command". A command that is owner-run runs from a
+``docs/specs/command-permissions.md``, "A level for every command". A command that is owner-run runs from a
 terminal. When the owner has set its key to ``none`` it also runs without one, and then two things are shared by every
 such command, which is what this module is for:
 
