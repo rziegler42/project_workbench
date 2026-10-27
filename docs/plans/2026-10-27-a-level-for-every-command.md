@@ -545,3 +545,24 @@ before writing`) and for an unapproved module. Recorded, not changed: (1) a usag
 agent's `wb upgrade` at `block` opens the store and writes the launcher wrapper before the refusal, as `install` and `preview` already
 do; (2) no test for a changed second digest, an interrupt, a failure in the file stage, a nothing-to-change `add`, or `apply_logged`
 alone; (3) a failing `finish_refused` inside `levelrun.logged` can replace the original exception (already so for `approve-plan`).
+
+### Trial in a real harness — F and G (2026-10-27, run by the owner; completion criterion 4, partly)
+
+A throwaway project was installed with the owner's table at `{"wb install": "none", "wb upgrade": "none"}` (settings version 2) and the
+Claude harness attached by the install itself; a second clone installed before the table was set served as the control. Observed:
+
+- The rendered `.claude/settings.local.json` of the new clone has no `Bash(wb install…)` or `Bash(wb upgrade…)` `deny`, still has `wb add`
+  (at `block`) and every `python3 -m workbench install|upgrade` spelling, and holds the `wb gate-command claude` hook. The control keeps
+  all of them.
+- In a new session in that clone, `wb install <absolute path> --package … --select groundwork claude` ran with no prompt and no typed
+  digest and wrote the project (49 paths). The level log gained `A … wb install none digest:<64 hex>` and then `O … done written`.
+- Blocked: `python3 -m workbench install …`; `echo install; wb check` (the accepted compound-command cost); `wb install ~/…` (the gate
+  refuses `~` and `$HOME`, as it does every expansion); `wb add …` (denied by the harness, `block`).
+- Allowed: `wb preview install …` (printed a plan, wrote nothing), `git add -A`. `npm install` reached the harness's own `ask` rule for
+  the `install-dependencies` hard stop, which is unchanged.
+
+Found, not changed: the gate's block message for a key at `none` says the command is "not exactly the simple command the ask rule
+matches", though a `none` key has no `ask` rule, and it does not name `~` or `$VAR` as the reason. A wording fix for a later increment.
+
+**Not covered:** `wb upgrade` and `wb add` at `none` were not run by an agent (only `install` was); `approve`, `pin`, `acknowledge`,
+`recover`, `release-approvals`, `attach` and `accept-decision` are not built yet. The trial does not repeat for them unless the owner asks.
