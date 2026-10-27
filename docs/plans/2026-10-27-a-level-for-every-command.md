@@ -1,6 +1,6 @@
 # A permission level for every command
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-27
 Candidate: none (an owner request that implements the accepted decision `2026-10-26-a-level-for-every-command`; no roadmap candidate names it)
 Specs: command-permissions, trust-and-approval, installer-interface, harness-modules, code-work, module-boundary
