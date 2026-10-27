@@ -608,6 +608,13 @@ each statement and that list field by field. Carrying plan: `retire-carried-inst
 policy block. Not covered, so they stay in the file: RP1a's "establish `docs/plans/README.md` where there is no lifecycle";
 RP3a's "task queue" and "merge roadmap text into a plan"; RP5's "commit roadmaps" and "keep scratch notes out". Mismatch: RP5's
 "ordered plan candidates" (the shipped README says no order is required). The owner removes sentences, not whole groups.
+*Increment B of that plan, 2026-10-27:* the gate run needs `groundwork`, `code-work` and `safe-git` (the plans README comes from
+`code-work`, which requires a `commit` provider). Increment A graded RP5 and parts of RP1a and RP3a against this repository's own
+READMEs, not the shipped ones; read against the shipped files, RP1a's parallel-directory clause, RP3a's "tracked, committed" wording,
+RP5's archive prefix and RP5's file-lists sentence also have **no cover**. The run showed the archive gap: without the sentence the
+agent set `Status: Archived` in place and made no archive directory. Owner's decision, 2026-10-27: M5 is not carried out now and
+nothing is removed; it waits for a separate plan that gives the shipped text the missing rules, then a rerun of the gate. The rows
+below are unchanged, but their "cover" claims are superseded by the plan Result, and M5 stays `move`, held.
 
 **M6: instruction text the `code-work` module carries.** Items: OP4, OP8, IV1, IV16, CI3, CI4. Gates: for OP4 a recorded run in
 an attached project where the harness suggests attribution lines and the agent adds none with the paragraph absent (the
