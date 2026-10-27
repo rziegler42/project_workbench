@@ -10,8 +10,10 @@ import json
 import os
 import tempfile
 import unittest
+import unittest.mock
 
 from tests import support_helpers, support_install
+from workbench.wbkit import call
 
 ROOT = support_install.ROOT
 MODULE = os.path.join(ROOT, "packages", "workbench", "action-review")
@@ -27,6 +29,7 @@ COMMIT = {
     "checks": ["head_matches", "facts_complete"], "rubric": "commit", "questions": ["message_matches_change"],
 }
 HEAD = "a" * 40
+DESCRIBED = (b'{"contract":1,"action":"commit","ok":true,"truncated":false,"errors":[],"facts":{"omitted":[]}}\n')
 
 
 def encode(document):
@@ -485,9 +488,17 @@ class Keys(Base):
     def test_main_still_does_not_review_a_command_that_fits_a_rule(self):
         root = self.project({n: read_shipped(n) for n in ("safe-git-commit.json", "safe-git-remove.json")})
         out, err = io.StringIO(), io.StringIO()
-        code = self.helper.main(["review", self.text(self.COMMAND)], io.BytesIO(b""), out, err, root)
+        described = []
+
+        def fake(*args, **kwargs):
+            described.append(args)
+            return call.Result(0, DESCRIBED, b"", False, False)
+
+        with unittest.mock.patch.object(self.helper.call, "run_command", fake):
+            code = self.helper.main(["review", self.text(self.COMMAND)], io.BytesIO(b""), out, err, root)
         self.assertEqual((1, ""), (code, out.getvalue()))
         self.assertIn("not built", err.getvalue())
+        self.assertEqual(1, len(described))
 
 
 class Arguments(Base):

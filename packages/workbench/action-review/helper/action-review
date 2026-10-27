@@ -8,9 +8,10 @@ runner with nothing beside it.
 
 The contract is ``docs/specs/action-review.md``. The command text is read once, under a grammar so small that
 ``sh`` and ``zsh`` read it alike: single-spaced words, each a bare word of a small alphabet or a single-quoted
-string. Anything else is unreviewable. The rules, the checks and the bridge call are later increments of plan
-``2026-10-26-action-review-engine``, so a text inside the grammar is still refused for now. A refusal prints one
-``refused:`` line on standard error and nothing on standard output, and exits 1.
+string. Anything else is unreviewable. The rule found for the text names the module and the action, and the engine asks
+that module for ``describe`` through the launcher and reads the object it prints. The checks and the bridge call are
+later increments of plan ``2026-10-26-action-review-engine``, so a text that gets this far is still refused for now. A
+refusal prints one ``refused:`` line on standard error and nothing on standard output, and exits 1.
 """
 
 import collections
@@ -18,7 +19,7 @@ import os
 import re
 import sys
 
-from wbkit import jsonstrict, project, safefs
+from wbkit import call, jsonstrict, project, safefs
 
 USAGE = "usage: action-review review [--log-row] <command text>"
 MAX_TEXT = 4096
@@ -44,6 +45,15 @@ MODULE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,63}")
 ACTION = re.compile(r"[a-z][a-z0-9-]{0,31}")
 FLAG = re.compile(r"--[a-z][a-z0-9-]{0,31}")
 NAME = re.compile(r"[a-z][a-z0-9_]{0,63}")
+# `describe` (decision 2026-10-25-describe-interface-for-action-review): the object and its newline are at most 196,608
+# bytes (`safe-git.md`, "Caps and their sources"), and it is given 5 of the review's 25 seconds (spec, "The time budget").
+DESCRIBE_LIMIT = 196608
+DESCRIBE_SECONDS = 5
+CONTRACTS = frozenset((1,))
+DESCRIBE_FIELDS = ("contract", "action", "ok", "truncated", "errors", "facts")
+ERROR_CODE = re.compile(r"[a-z0-9_]{1,64}")
+MAX_MESSAGE = 500
+MAX_WHOLE = 2 ** 53 - 1
 BARE = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._/:=@%+,-")
 
 Word = collections.namedtuple("Word", ("text", "quoted"))
@@ -59,6 +69,11 @@ class RulesUnavailable(Exception):
 
 class RuleError(Exception):
     """One rule file does not load. The reason is fixed text and never quotes the file."""
+
+
+class DescribeFailed(Exception):
+    """`describe` did not give an object the engine can use. The reason is fixed text: it never quotes the object, the
+    standard error or a field name, because all of them are the repository's text."""
 
 
 class AnyWord:
@@ -385,9 +400,99 @@ def read_command(loaded, text):
     return rule, parse_arguments(rule, split_command(words, rule.spelling, rule.subcommand))
 
 
+def _error_entry(item):
+    if not isinstance(item, dict) or set(item) != {"code", "message"} or not isinstance(item["code"], str) \
+            or not isinstance(item["message"], str):
+        raise DescribeFailed("an error entry is not an object with a code and a message and nothing else")
+    if not ERROR_CODE.fullmatch(item["code"]):
+        raise DescribeFailed("an error code is not 1 to 64 characters of a-z, 0-9 and _")
+    if len(item["message"]) > MAX_MESSAGE:
+        raise DescribeFailed("an error message is longer than %d characters" % MAX_MESSAGE)
+
+
+def _whole_or_text(value):
+    """Whether `value` is one the decision allows as a fact: text, a whole number from 0 to 2^53 - 1, a boolean, null
+    or a list of text. A boolean is not a number here."""
+    if value is None or isinstance(value, (bool, str)):
+        return True
+    if type(value) is int:
+        return 0 <= value <= MAX_WHOLE
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def read_description(data, action):
+    """The `describe` object in `data`, the standard output of the call, as a dict, or raise `DescribeFailed`.
+
+    The field rules are those of the accepted decision: one JSON object on one line, exactly the six fields,
+    a `contract` the engine knows, `action` equal to `action`, booleans `ok` and `truncated`, `errors` as a list of
+    entries of exactly a `code` and a `message`, `ok` true only with no error, and `facts` a flat object. An object
+    that says `ok: false` or `truncated: true` is well formed and is returned; deciding what that means is the
+    checks' work, not this function's."""
+    if not isinstance(data, bytes):
+        raise DescribeFailed("the output is not bytes")
+    if len(data) > DESCRIBE_LIMIT:
+        raise DescribeFailed("the output is larger than %d bytes" % DESCRIBE_LIMIT)
+    body = data[:-1] if data.endswith(b"\n") else data
+    if b"\n" in body:
+        raise DescribeFailed("the output is not a single line")
+    if not (body.startswith(b"{") and body.endswith(b"}")):
+        raise DescribeFailed("the output is not one object")
+    try:
+        document = jsonstrict.parse_object(body, DESCRIBE_LIMIT)
+    except ValueError as exc:
+        raise DescribeFailed("the object is not strict JSON: %s" % exc) from None
+    for name in DESCRIBE_FIELDS:
+        if name not in document:
+            raise DescribeFailed("the field %s is missing" % name)
+    if set(document) - set(DESCRIBE_FIELDS):
+        raise DescribeFailed("the object has a field that is not part of the contract")
+    if type(document["contract"]) is not int or document["contract"] not in CONTRACTS:
+        raise DescribeFailed("the field contract is not a contract number the engine knows")
+    if not isinstance(document["action"], str) or document["action"] != action:
+        raise DescribeFailed("the field action is not the action requested")
+    for name in ("ok", "truncated"):
+        if type(document[name]) is not bool:
+            raise DescribeFailed("the field %s is not a boolean" % name)
+    if not isinstance(document["errors"], list):
+        raise DescribeFailed("the field errors is not a list")
+    for item in document["errors"]:
+        _error_entry(item)
+    if document["ok"] and document["errors"]:
+        raise DescribeFailed("ok is true but errors is not empty")
+    if not isinstance(document["facts"], dict):
+        raise DescribeFailed("the field facts is not an object")
+    for name, value in document["facts"].items():
+        if not NAME.fullmatch(name):
+            raise DescribeFailed("a fact name is not lowercase letters, digits and underscores from a letter")
+        if not _whole_or_text(value):
+            raise DescribeFailed("a fact value is not text, a whole number from 0 to 2^53 - 1, a boolean, null or a "
+                                 "list of text")
+    return document
+
+
+def describe(root, rule, arguments, cwd):
+    """The object `wb run <module> describe <action> <arguments>` prints, run from `cwd`. The command is the rule's
+    module and the fixed word `describe` and the rule's action, and the arguments are the parsed ones; they reach the
+    launcher as a list, with no shell. The launcher refuses a command that is not installed, declared and pinned, and
+    that refusal is a failed call here like any other. Raises `DescribeFailed`; what the call printed on standard error
+    is not shown."""
+    try:
+        got = call.run_command(root, rule.module, ["describe", rule.action] + list(arguments),
+                               limit=DESCRIBE_LIMIT, timeout=DESCRIBE_SECONDS, cwd=cwd)
+    except call.CallError:
+        raise DescribeFailed("describe could not be started") from None
+    if got.timed_out:
+        raise DescribeFailed("describe did not finish in %d seconds" % DESCRIBE_SECONDS)
+    if got.over:
+        raise DescribeFailed("describe printed an output larger than %d bytes" % DESCRIBE_LIMIT)
+    if got.code != 0:
+        raise DescribeFailed("describe was refused or failed (exit %d)" % got.code)
+    return read_description(got.stdout, rule.action)
+
+
 def run(argv, cwd, notes):
-    """Check the arguments and the text; return the refusal text and append the rule errors to `notes`. The rest is
-    not built yet."""
+    """Check the arguments and the text, find the rule and ask for `describe`; return the refusal text and append the
+    rule errors to `notes`. The checks and the bridge are not built yet."""
     if not argv or argv[0] != "review":
         return USAGE
     rest = argv[1:]
@@ -409,9 +514,13 @@ def run(argv, cwd, notes):
         return "no rule is trusted: %s" % exc
     notes.extend("rule error: %s: %s" % (ascii(name), why) for name, why in loaded.errors)
     try:
-        read_command(loaded, rest[0])
+        rule, arguments = read_command(loaded, rest[0])
     except Unreviewable as exc:
         return "unreviewable: %s" % exc
+    try:
+        describe(root, rule, arguments, cwd)
+    except DescribeFailed as exc:
+        return "describe: %s" % exc
     return "the engine is not built yet; " + USAGE
 
 

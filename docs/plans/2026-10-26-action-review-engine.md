@@ -552,7 +552,7 @@ commit (it had warned about `0dde3b333a54`, `51d13076423d`, `63d178d2836c`,
 `6d02998747b2`, `77a1f5745fae` and `ffe787e0fa3f`; the third and fourth are approvals Increment B added for a tree that
 has since changed).
 
-### Increment D — built, verified and reviewed (not committed)
+### Increment D — committed as `415876c`
 
 Changed: `packages/workbench/action-review/helper/action-review` (the loader `load_rules`, `build_rule`, `find_rule`,
 `parse_arguments`, `read_command`; `run` now loads the rules and reads the command before its "not built" refusal),
@@ -614,3 +614,42 @@ Not done: `describe`, the checks, the rubric and the bridge call (E to J); a sec
 was run by the owner (11 approvals written); it warned that the two records added in Increment C (`3aa496ba0dba` and
 `f7b67a17cd4e`) are not part of this release. They are tracked and stale, and removing them needs the owner's word. Two new
 untracked approval directories (`715ab071…`, `ac14b22f…`) belong in this commit.
+
+### Increment E — built, verified and reviewed (not committed)
+
+Changed: `packages/workbench/action-review/helper/action-review` (`DescribeFailed`, `read_description`, `describe`, the
+constants `DESCRIBE_LIMIT` 196,608 and `DESCRIBE_SECONDS` 5; `run` now asks for `describe` after the rule is found and still
+refuses with "the engine is not built yet" afterwards; `call` is a new kit import), `tests/test_actionreview_describe.py`
+(new, 48 tests) and one test in `tests/test_actionreview_rules.py`, which now fakes `run_command` so it does not reach a
+real launcher.
+
+What it does: `describe(root, rule, arguments, cwd)` runs `wb run <rule module> describe <rule action> <parsed arguments>`
+through the kit's `run_command` (arguments as a list, no shell, no capability, no input), from the working directory, with
+a 5-second limit and a 196,608-byte bound. A kit error, a timeout, output over the bound or a non-zero exit is a refusal
+(exit 1); the standard error is not shown. `read_description` reads the object under the decision's field rules: one
+line, one strict-JSON object with exactly the six fields, `contract` 1, `action` equal to the one requested, boolean `ok`
+and `truncated`, `errors` as entries of exactly a `code` (1 to 64 of `a-z0-9_`) and a `message` (at most 500), `ok` true only
+with no error, `facts` flat with values of text, a whole number 0 to 2^53 - 1, a boolean, null or a list of text. An
+`ok: false` or `truncated: true` object is returned, not refused. Every reason is fixed text; none quotes the object, a
+field name or the standard error.
+
+Choices of the author, not fixed by the decision: a fact name is `[a-z][a-z0-9_]{0,63}` (the existing `NAME`); a negative
+whole number is refused (the range follows `safe-git.md`); the engine does not enforce `safe-git`'s per-value caps (string,
+array, element), only the object cap, because those belong to the module; the final newline is optional.
+
+Verification as run on 2026-10-27, in a scratch copy: the new tests failed first (46 errors, no `DescribeFailed`), then
+passed; the module's 163 tests pass (the real-launcher cases show that an undeclared, unpinned, edited or wrong-action
+command is refused with nothing run, against a positive control). `read_description` read the real output of
+`safe-git describe commit` (ok, stale head) and `describe remove` (ok, missing target) in a throwaway repository. Full
+`python3 -B -W error tests/run_all.py` in the scratch copy: 5017 tests in 11 roots, OK, exit 0 (run before the last three
+added tests; the 163 module tests were rerun after). `test_levellog` did not flake.
+
+Review: the `reviewer` agent, one exchange, no blocking finding, six notes. Applied: direct test of one byte over the
+limit, a test of a 5,000-digit integer, and the refused-case test now asserts the reason (so it cannot pass if `wb` is
+missing). Recorded: the fact-name and negative-number strictness (above); the per-value caps left to the module; a float
+literal in a reason can show up to 40 digits (harmless); timeout and oversize are tested with a fake result only, not a
+slow child (the kit's own tests cover them); the "pinned but no `describes`" case is covered by the wrong-action case. The
+shipped approval records for the module will be stale after landing; the owner runs `release-approvals`.
+
+Not done: the checks, the rubric and the bridge call (F to J); a second-model review; committing; running the shipped rules
+against the real launcher end to end (the real `safe-git` is only read through its helper, not through `wb run`).
