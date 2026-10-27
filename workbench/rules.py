@@ -30,7 +30,7 @@ HOOK_ENTRY_POINTS = ("gate", "agent-gate", "gate-command")
 DISPATCHERS = ("preview", "run")
 REACHES_ANOTHER_KEY = {"delegate-approve-plan": "approve-plan"}
 # The actions ``wb preview`` dispatches to; each has a key.
-PREVIEW_ACTIONS = ("install", "adopt", "upgrade", "add")
+PREVIEW_ACTIONS = ("install", "adopt", "upgrade", "add", "rerender")
 # `python3 -B -m workbench` is how this repository's own checks are run; the flags a rule can name
 # are limited to this one. Other interpreter spellings, a path-qualified `wb`, `env` and `bash -c`
 # are not matched (a Bash deny is not a security boundary).

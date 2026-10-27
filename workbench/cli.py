@@ -12,7 +12,7 @@ import sys
 
 from . import (acknowledge, agent_gate, approvalcmd, approve, attach, check, command_gate, delegation, firstparty,
                gate_hook, harnesses, install, launch, levelrun, levels, pins, planapprovals, preview, recover, rendering,
-               settings, settingscmd, sources, store, target, upgrade, verify)
+               rerender, settings, settingscmd, sources, store, target, upgrade, verify)
 from . import commands as module_commands
 from .wbkit import display, safefs
 
@@ -34,6 +34,7 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench preview upgrade [<target> | --dir <path>] [--package <source> [--ref <ref>]] ...\n"
          "                                            (read-only; no --select, no download)\n"
          "       python3 -m workbench upgrade <same arguments as preview upgrade>   (owner-run, terminal only)\n"
+         "       python3 -m workbench preview rerender [<target> | --dir <path>] [--package <source> [--ref <ref>]] ...\n"
          "       python3 -m workbench preview add [<target> | --dir <path>] --package <source> [--ref <ref>] ...\n"
          "                                        --select <module> ...   (read-only; no download)\n"
          "       python3 -m workbench add <same arguments as preview add>   (owner-run, terminal only)\n"
@@ -229,10 +230,28 @@ def _project_command(tokens, out, err, store_root, distribution, upgrading=False
     return command, guarded
 
 
-def _preview(argv, out, err, store_root, distribution, home=None):
-    if len(argv) < 2 or argv[1] not in ("install", "adopt", "upgrade", "add"):
-        err.write("preview takes install, adopt, upgrade or add\n%s" % USAGE)
+def _preview_rerender(tokens, out, err, store_root, distribution, home=None):
+    try:
+        command = rerender.parse(tokens)
+    except sources.UsageError as exc:
+        err.write("%s\n%s" % (_clean(str(exc)), USAGE))
         return 2
+    opened = _open_store(store_root, err)
+    if opened is None:
+        return 1
+    guarded, notes = opened
+    notes += launch.install_wrapper(guarded, distribution or firstparty.default_distribution())
+    for note in notes:
+        err.write("warning: %s\n" % _clean(note))
+    return rerender.run_preview(guarded, command, out, err, distribution, home=home)
+
+
+def _preview(argv, out, err, store_root, distribution, home=None):
+    if len(argv) < 2 or argv[1] not in ("install", "adopt", "upgrade", "add", "rerender"):
+        err.write("preview takes install, adopt, upgrade, add or rerender\n%s" % USAGE)
+        return 2
+    if argv[1] == "rerender":
+        return _preview_rerender(argv[2:], out, err, store_root, distribution, home)
     upgrading = argv[1] == "upgrade"
     opened = _project_command(argv[2:], out, err, store_root, distribution, upgrading)
     if isinstance(opened, int):

@@ -15,7 +15,7 @@ OWNER_RUN_KEYS = ("wb install", "wb adopt", "wb upgrade", "wb add", "wb attach",
                   "wb approve", "wb pin", "wb release-approvals", "approve-plan")
 # The keys the agent-safe actions give (plan 2026-10-27-a-level-for-every-command, increment A).
 AGENT_KEYS = ("wb verify", "wb preview install", "wb preview adopt", "wb preview upgrade", "wb preview add",
-              "wb launch", "wb check", "wb plan-status", "wb settings")
+              "wb preview rerender", "wb launch", "wb check", "wb plan-status", "wb settings")
 # Agent-safe words that are not a key: the hook entry points, the words that only dispatch to an action, and an
 # action that reaches another action's key.
 NOT_KEYS = ("gate", "agent-gate", "gate-command", "preview", "run", "delegate-approve-plan")

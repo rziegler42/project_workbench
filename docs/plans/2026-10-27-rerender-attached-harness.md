@@ -216,4 +216,61 @@ Empty until a review is asked for.
 
 ## Result
 
-Empty until work starts.
+### Increment A — The plan of a re-render and `wb preview rerender` (not committed)
+
+**Done.**
+- `workbench/rerender.py` (new): `build` makes the plan from the clone's recorded harness and the table now; `render` and
+  `run_preview` print it; nothing is written by them. The plan lists the project, the harness, each key whose rule moves (old to
+  new), the three files (the permissions file, the local manifest, the rendering record by name) with old and new hash or "left
+  as it is", the live `allow` rules it keeps (`kept:`), every other live entry the new file will not have (`removed:`), notes,
+  a summary of the inputs, and a 64-character digest. A re-render that changes nothing says `nothing to change`.
+- `workbench/attach.py`: `prepare` is split into `stage` (the shared read, check, verify, gate and translate; returns a
+  `Staging` that also carries the identity of every package and module read) and `prepare`; `parse` takes `harness_required`.
+  `wb attach` is meant to behave as before.
+- `workbench/cli.py` routes `wb preview rerender [<target> | --dir <path>] [--package <source> [--ref <ref>]] ...`;
+  `workbench/rules.py` adds `rerender` to `PREVIEW_ACTIONS`, which gives the agent-safe key `wb preview rerender`
+  (default `none`). Exit codes: 0 plan printed, 1 refused, 2 usage.
+- The digest covers the project, the harness, the table digest, the three files' old and new hashes, the kept and removed entries,
+  the whole new record and manifest, and the inputs (package tree hashes, each module's declaration and tree hash, the harness
+  token and version).
+- Two calls of mine, not in the plan: the new local manifest keeps every field of the old one and changes only the permissions
+  file's hash, so a note (`harness module differs...`) is printed when the staged harness is not the recorded one; the live file's
+  `allow` list is found as the sibling of the rendered `deny` list, because the layout names no `allow`.
+
+**Verification as run** (Python 3.15.0, warnings as errors).
+- Tests first: `tests/test_rerender.py` failed on import with the module absent, then passed.
+- `python3 -B -W error -m unittest tests.test_rerender`: 36 tests OK.
+- Seven distinct deliberate breaks of `rerender.py` were each caught by a failing test (inputs left out of the digest; allow
+  rules dropped; removals not listed; the record's old hash replaced; kept and removed cut at 200 characters; non-string `allow`
+  items kept; a clone with no recorded harness not refused). One was not caught at first (non-string `allow` items kept) and the
+  test was strengthened. The file was restored and compared after each run.
+- `tests.test_levels tests.test_attach tests.test_install_attach tests.test_settingscmd tests.test_rendering tests.test_check
+  tests.test_command_gate tests.test_adopt_rules tests.test_rerender`: 385 tests OK (before the review edits); `test_cli.py` (31)
+  and `test_settings.py` (81) OK through discovery. `tests/test_levels.py` lists the new key.
+- Full suite on the final tree, in a scratch copy: `python3 -B -W error tests/run_all.py`, 5627 tests in 11 roots. One failure:
+  `packages/workbench/claude/tests`, `test_claude_module.Shipped.test_the_package_verifies_as_first_party_and_installs_claude`.
+  It expects the module list `[ask-codex, claude, code-work, groundwork, safe-git, review-engine, mempalace, remote-runner,
+  security-review]`, which has no `action-review`. It fails the same way on a clean copy of `HEAD` (`d9ef76d`), so it is not
+  caused by this increment. It is skipped unless the shipped approvals are current (`support.require_release`), and they became
+  current today after `release-approvals`, so it ran for the first time. Not fixed: it is in a first-party package, and a change
+  there needs `release-approvals`. An earlier full run of a copy made before the review edits failed in that test and in
+  `test_levellog.test_parallel_appends_keep_every_line` (the known intermittent failure), which did not recur.
+- `git diff --check`, `wb check` and `wb run code-work check` report no problems. `doccheck` and `refcheck` printed nothing.
+- A sample preview was run with a changed table, two added `allow` rules and one extra entry; it printed what the plan describes.
+
+**Review.** The `reviewer` agent, one exchange (cap 6): no blocking findings, recommendation "no blocking findings". Applied:
+missing tests from step 1 added (the harness the project does not record, unacknowledged differences, the default target,
+an empty target and `--dir`, a link target, a non-object file, a deeply nested file, a non-list and a non-string `allow`, an
+`ask` rule); a test that could not fail removed; kept and removed entries shown whole instead of cut at 200 characters; the
+lambda replaced by a `def`; a comment pinning the case of no `deny` list. Noted, not changed: a preview opens the guarded store
+and writes the launcher wrapper if it is missing, as every preview does (`cli._open_store`, `launch.install_wrapper`), and the
+tests cannot see it because `bin/wb` already exists; the reviewer could not diff `attach.py` against git, so the behavior-preserving
+claim rests on the 95 attach tests and the full suite; the output is unbounded in count for a very large live file. Not
+done by the reviewer: it ran nothing.
+
+**Not done.** Sanitized output of a control character in the project line has no test of its own (`ascii_text` is used). A preview
+into a fresh store is untested. Increments B to D. The plan said `levels.py` and `tests/test_cli.py` would change; neither did,
+because the registry derives the key from `rules.PREVIEW_ACTIONS`.
+
+**Checkpoint before B.** The plan asks whether the owner wants a security review of Increment B before it starts, and B waits for
+the owner's acceptance of `2026-10-27-rerender-is-terminal-only` (still `Proposed`). Neither has been answered.
