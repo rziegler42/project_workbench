@@ -913,7 +913,7 @@ Not done: a second-model review; a security pass (K asks the owner); the specs (
 (plan 4). Stopping for the owner to review the set before committing. The shipped approval records will be stale after landing;
 the owner runs `release-approvals`.
 
-### Increment K — built, verified and reviewed (not committed)
+### Increment K — committed as `738641a`
 
 The owner chose to run the security pass. Changed: `packages/workbench/action-review/helper/action-review`,
 `rules/safe-git-commit.json` and the tests (`test_actionreview_pins.py` new; the bridge, checks, output, parse, remove-checks and
@@ -987,3 +987,36 @@ any test.
 
 Not done: a second-model review; the specs (L). Stopping for the owner. The `PINS` for the changed rule file was computed from
 the scratch copy's bytes; the landed bytes are the same files.
+
+### Increment L — built, verified and reviewed (not committed)
+
+Changed (documents only; nothing under `packages/workbench/`): `docs/specs/action-review.md`, `docs/specs/safe-git.md` and
+`docs/development.md`. `module-contract.md` does not name this module or capability, so it is unchanged.
+
+What changed. In `action-review.md`: the status paragraph and the headings now say the engine is built for `commit` and
+`remove` and the push rule, hook, log writer, labelled set, report and shadow period are not; the module paragraph (installed
+path, `ships` by file, the pins); the rule table (rubric and questions checked at review time, the glob and directory forms of
+`lists`, link and hard-link rule errors); the removal checks that also read the command's paths; the grammar's five extra
+refusals and the property and shell tests with the hook requirement on the shell; the exit table with the failed-write case and
+the rule that a hook allows only on exit 0 with a whole object; the log (`rule` is the file stem, `model` is the bridge's,
+`rubric_sha256` null on a code-check decline); split item 3; and a new section "As built, and its limits" (what exists, the
+departures from A's text, the checks with no counterpart, the open limits, the owner's steps). In `safe-git.md`: a paragraph
+under the counterpart table, a note that the push counterparts are not built in the engine, and the "Not checked" bullet. In
+`development.md`: a Commands row and a section "The action-review engine".
+
+Verification as run on 2026-10-27: `git diff --check`, `wb check`, `wb run code-work check` (51 plans), `doccheck` and
+`refcheck` clean, before and after the review fixes. A search for "not built|unbuilt|not yet built" in the three documents
+returns the personal setting, the enforcement point, the header status and one unrelated use. No test was run (documents only).
+
+Review: the `reviewer` agent, one exchange, no blocking finding, thirteen findings. Applied: the contradiction "Plans 3 to 5 do
+not exist" and the word "Done"; the unsupported interpreter version (dropped) and the overstated "mutation batteries over each
+increment" (now C and F to K); the hook step (the last `log-row: ` line, not any); the missing limits (quoted text in a refusal,
+the `detail` code, the empty credential list, the empty removal lists); the glob forms in the `paths_not_credentials` row; the
+null `rubric_sha256`; the `ignore_unknown_targets` contradiction with `safe-git.md`; the exit-2 case in `development.md`; and
+the `add` prerequisites (owner-run, approval on this machine, a current `safe-git`). Not applied: the test command keeps
+`PYTHONPATH=.` (the form used for the module's runs here). Not changed, outside L's scope: `module-boundary.md` (line about the
+engine's use "not built") and `global-config-inventory.md` (rows saying the engine is unbuilt and has no plan) are stale, and the
+helper's module docstring (lines 12 to 15) still says `run` does not call the checks; fixing it needs a change under
+`packages/workbench/`, so it is owed to a later increment or plan, and the owner places it.
+
+Not done: a second-model review; committing; the owner's `wb add` and the hook. The plan's last increment is L.

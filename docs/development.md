@@ -50,6 +50,7 @@ ambiguous blank.
 | Preview and remove exact project paths | `python3 -m workbench run safe-git remove [--recursive] -- <path> ...`, then the same with `--confirm` after the owner approves |
 | Report what a commit, a removal or a push would act on (read-only) | `python3 -m workbench run safe-git describe commit\|remove <the arguments of the real command>` or `describe push <the arguments that follow git push>` (a push is described locally and never contacts the remote): prints one JSON object (`contract`, `action`, `ok`, `truncated`, `errors`, `facts`), changes nothing, and exits 0 for a refusal of the real command (`ok: false` with an error code); see `docs/specs/safe-git.md`, "Describe" |
 | Ask a model one read-only question | `python3 -m workbench run --provides model-bridge ask-codex ask [--model <name>] [--effort low\|medium\|high] [--timeout <seconds>] [--root <path>] [--schema <path>]` with the prompt on standard input (the `ask-codex` module's command; needs a `codex` program and a sign-in; see "The ask-codex bridge") |
+| Review one command the harness is about to run (read-only) | `python3 -m workbench run action-review review [--log-row] '<the command text>'` (the `action-review` module's command; needs the command's module and a `model-bridge` installed and pinned, and `.workbench/review.json`; prints one verdict object and exits 0, or exits 1 or 2 (allow only on exit 0 with a whole, valid object); see "The action-review engine") |
 | Search the owner's memory (agent-safe) | `python3 -m workbench run mempalace status`, and `python3 -m workbench run mempalace search [--wing <name>] [--room <name>] [--results <1-20>] [--since <date>] [--before <date>] -- <query>` (the `mempalace` module's command; needs a `mempalace` program and its cached embedding model; see "The mempalace module") |
 | Owner-run: build the memory (terminal only) | `python3 -m workbench run mempalace init <dir> [--yes] [--allow-project-root]`, and `python3 -m workbench run mempalace mine <dir> [--confirm] [--wing <name>] [--mode projects\|convos] [--allow-project-root]` (refuse unless standard input and output are terminals; `mine` is a dry run without `--confirm`) |
 | Show a project's remote job profiles | `python3 -m workbench run remote-runner profiles` (the `remote-runner` module's command; reads `.workbench/remote-runner.toml`, starts no program; `wb check` also reports a refused file and a leftover `.claude/remote-runner.toml`; see `docs/specs/remote-runner.md`) |
@@ -106,6 +107,36 @@ no state and writes nothing in the project.
 - **A first hand run** starts with `codex exec --help`, to check the flags the bridge passes against the installed
   version; none has been run against a real Codex yet (`docs/specs/model-bridge.md`, "As built, and its limits").
 - **The launcher** passes standard input through to the helper, so `wb run` forwards the prompt.
+
+## The action-review engine
+
+`wb run action-review review` takes the text of one command (`wb run safe-git commit ...` or `wb run safe-git remove ...`)
+and prints a verdict object, `approve` or `decline` with the failed checks and a reason (`docs/specs/action-review.md`).
+It parses the text under a restricted grammar, asks the owning module's `describe` for the facts, runs fixed code checks,
+and only if they all pass asks the model bridge named in `.workbench/review.json` for a verdict. It changes nothing and
+writes no file; `--log-row` adds the row of the log as one `log-row:` line on standard error. Exit 0 is a verdict, 1 a
+refusal and 2 a failure. A refusal prints nothing on standard output; a failure prints nothing except when the row or a
+flush could not be written after the object was printed, which exits 2 with the object already out. So a hook allows only
+on exit 0 together with a whole, valid object.
+
+- **What is built.** The engine for `commit` and `remove`, its rules, rubric, reply schema and pins, and a set of 29
+  dangerous cases (`packages/workbench/action-review/tests/dangerous-cases.json`). **What is not:** a rule for a push, the
+  owner's hook, the writer of the log, the labelled set, the report and the shadow period, cutover and the removal of
+  `claude-workflow`. Nothing the engine says takes effect anywhere, and no command is run on its word.
+- **What a real call needs.** The `safe-git` module and a model bridge (`ask-codex`) installed and pinned, a
+  `.workbench/review.json` naming the bridge, and a working directory inside the project where the command would run.
+  The bridge sends the facts, including the diff of a commit, to its vendor; the tests use a fake bridge and send nothing.
+- **Owner's steps.** Install the module into this repository (the first test of the pins through the installer):
+  `python3 -m workbench preview add --dir <this checkout> --package packages/workbench --select action-review`, then the same
+  with `add` instead of `preview add` (run `acknowledge` first if it lists changes). `add` is owner-run in a terminal,
+  verifies the module and needs it approved on this machine, and the module's files changed after the shipped approvals
+  were written, so `release-approvals` may have to run first; the installed `safe-git` must be current (it must declare
+  `describe`), and `upgrade` brings it up to date. The hook is plan 4; its requirements
+  are in the spec, "As built, and its limits".
+- **Changing a shipped data file.** A rule, the rubric or the reply schema needs a new entry in `PINS` in the helper in
+  the same change, and `release-approvals` afterwards; `test_actionreview_pins` fails otherwise.
+- **The module's tests.** `PYTHONPATH=. python3 -B -W error -m unittest discover -s packages/workbench/action-review/tests -t packages/workbench/action-review/tests` (458 tests, about a minute; they run the real `git`, `sh`, `zsh` and `bash`).
+- **Recorded limits** are in the spec, "As built, and its limits".
 
 ## The mempalace module
 

@@ -290,8 +290,18 @@ normal prompt). The owner may raise the `diff` cap; the object cap and the rubri
 | `no_git_metadata` | remove | engine: no segment of `requested_paths` is `.git`, folded; also errors `path_refused` and `git_metadata_refused` |
 | `targets_look_disposable`, `scope_is_narrow`, `no_reviewer_directed_text` | remove | rubric over the target lists, the counts and `requested_paths` |
 
+**Built for `commit` and `remove`.** The engine (`action-review.md`, plan `2026-10-26-action-review-engine`) implements
+every "engine" row above as a code check of the same name (fourteen in all, the `facts_complete` row shared by both
+actions) and every "rubric" row as a question of the shipped rubric. Where the engine's check differs from the row:
+`preview_matches_arguments` also compares with the paths the command names, `no_git_metadata` also scans them, and
+`facts_complete` reads `binary_paths` for a commit only. The checks of this table that have no counterpart in the
+engine are none for these two actions; the `.config/gh` match and the diff bound above are the two known differences
+from the approver, and are recorded in `action-review.md`, "As built, and its limits".
+
 The checks of the approver's rule `git-push`, and where each goes in `describe push` (below). "Engine" is a
-check the engine makes in code over facts; "rubric" is a question the model answers over facts.
+check the engine makes in code over facts; "rubric" is a question the model answers over facts. **None of these is
+built in the engine yet:** the push rule, its checks and its rubric section wait for a follow-up plan (plan 4 or later),
+and until then a push stays with the approver. `describe push` itself is built.
 
 | Approver check | Action | Counterpart |
 |---|---|---|
@@ -580,10 +590,12 @@ looked at here:
   - The time budget is checked between files, so one call can take the budget plus one comparison (about 0.6 s at the
     bound). Each of up to 2,000 paths costs two git runs (about 26 ms each in the pass, so about 52 s for 2,000);
     nothing bounds that total.
-  - A `describe remove` target that the `check-ignore` shape refuses (a leading colon or a backslash) can be listed in
-    `ignore_unknown_targets`, because its ignore status is not asked.
-  - Not checked: a full run of 2,000 paths, `wb launch` through a real pin, a SHA-256 repository, and the engine's use of
-    the facts (plan 3 of the split in `action-review.md`). The push gap is closed by `describe push` (see below).
+  - A `describe remove` target that the `check-ignore` shape refuses (a leading colon or a backslash) would be listed in
+    `ignore_unknown_targets`, because its ignore status is not asked; the engine's tests observed that the real command
+    refuses such a target as `path_refused` first, so no real object has been seen with a non-empty list.
+  - Not checked: a full run of 2,000 paths, `wb launch` through a real pin, and a SHA-256 repository. The engine now uses the facts of
+    `commit` and `remove` (plan `2026-10-26-action-review-engine`; its dangerous-case set runs the real `describe` through
+    the real launcher). The push gap is closed by `describe push` (see below), but the engine has no rule for a push yet.
 - Built, from plan `2026-10-26-safe-git-describe-push` (increments B to F): `describe push` as specified in "`describe push`",
   with an adversarial security pass (increment F) whose findings were fixed and tested, or recorded below. Where the helper differs from the
   text first written, or adds to it, and what it does not do:
