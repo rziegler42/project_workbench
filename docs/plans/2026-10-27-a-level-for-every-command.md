@@ -40,6 +40,8 @@ acceptance criteria P1 to P6 pass, except where "Deferred work" says otherwise.
 
 - The decision `2026-10-26-a-level-for-every-command` and the spec are accepted and approved by the owner. Where this plan and
   either differs, they win.
+- Increment E builds the decision `2026-10-27-command-gate-command-position`, which is `Proposed` until the owner accepts it. F to I
+  need it, because the gate as it stands blocks every command that holds a common word such as `install` once its key is relaxed.
 - Only `approve-plan` runs without a terminal today (`planapprovals.py`). Every other owner-run command refuses unless standard
   input and output are terminals, each with its own check (`install.py`, `upgrade.py`, `acknowledge.py`, `recover.py`,
   `approve.py`, `pins.py`), and several also read a typed confirmation. Running at `none` therefore changes each command, and the
@@ -157,11 +159,39 @@ behavior), `tests/test_wbkit_levels.py`, `tests/test_levelrun.py`, `docs/specs/c
 **Checkpoint (owner):** this increment changes authorization and the log. At its end the agent asks whether to run a security review
 with an installed module that provides `security-review`, and does not begin E until the owner answers.
 
-### Increment E — `install` and `adopt` at `none`
+### Increment E — The command gate reads a single-word command in command position
+
+**Outcome:** with a key of the form `wb <word>` relaxed, the command gate blocks a Bash command that names a launcher spelling and
+then the word (`wb install`, `python3 -m workbench install`, the store's `bin/wb install`, and every spliced or expanded form of the
+pair), and no longer blocks a command that holds the word alone (`npm install`, `git commit -m 'install deps'`, `ls docs/install.md`);
+`wb preview <action>` is allowed. `approve-plan` and `wb run <command> <argument>` are read as now. This is the decision
+`2026-10-27-command-gate-command-position` and builds only that.
+**Dependencies:** D, and the owner's acceptance of that decision. If the owner does not accept it, this increment and F to I are
+dropped by a new amendment of the plan, and the keys they cover offer `block` only.
+**Affected areas:** `workbench/command_gate.py`, `tests/test_command_gate.py`, `docs/specs/command-permissions.md` ("The command gate"),
+`docs/development.md`.
+**Steps:**
+1. Write the tests first. For a gate with `wb install` relaxed: allowed are `wb install --dir x`, the same through the store's
+   `bin/wb`, `wb preview install --dir x`, `npm install`, `git commit -m 'install deps'`, `ls docs/install.md` and a command that
+   names neither; blocked are `python3 -m workbench install`, `bash -c 'wb install'`, `env wb install`, `sh -c "wb  install"`,
+   `w""b install`, `wb inst""all`, `wb $'\x69nstall'`, `${X}wb install` and a command with more than 64 `$'` strings; the keys
+   `approve-plan` and `wb run <command> <argument>` give the results they give now (the existing tests pass unchanged). A test pins
+   that the launcher spellings and the preview actions the gate reads are those of `rules`.
+2. Change `words` and `judge` so that a key `wb <word>` is read as the launcher alternatives followed by the word, with the same
+   folding, skeleton, `$'` decoding and in-order rules applied to the pair, and remove the exact token pair `preview <action>` for the
+   actions of `rules.PREVIEW_ACTIONS` before the search, as `delegate-approve-plan` is removed.
+3. Update the spec's "The command gate" and `docs/development.md`.
+**Verification:** `python3 -B -W error -m unittest discover -s tests -p 'test_command_gate.py'`, the tests of the rendering and the
+gate hook, then the full suite.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#E`.
+**Checkpoint (owner):** this increment changes a permission boundary and a parser of untrusted text. At its end the agent asks whether
+to run a security review with an installed module that provides `security-review`, and does not begin F until the owner answers.
+
+### Increment F — `install` and `adopt` at `none`
 
 **Outcome:** with `wb install` or `wb adopt` set to `none` and rendered, an agent can install or adopt without a terminal and
 without a typed confirmation; at `block` they refuse without a terminal as now.
-**Dependencies:** D.
+**Dependencies:** D and E.
 **Affected areas:** `workbench/install.py`, `workbench/adoptplan.py` and the adopt code, `workbench/cli.py`, `tests/test_install.py`
 and the adopt tests, `docs/development.md`, `docs/specs/installer-interface.md`.
 **Steps:**
@@ -172,13 +202,13 @@ and the adopt tests, `docs/development.md`, `docs/specs/installer-interface.md`.
 3. Decide the form: the same arguments, no flag. A flag such as `--yes` was rejected in `2026-10-20-preview-then-owner-run-write`.
 4. Update the command table in `docs/development.md` and the spec.
 **Verification:** the install and adopt tests, then the full suite.
-**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#E`.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#F`.
 
-### Increment F — `upgrade` and `add` at `none`
+### Increment G — `upgrade` and `add` at `none`
 
 **Outcome:** the same for `wb upgrade` and `wb add`, which also refuse until the owner has acknowledged a changed manifest; the
 acknowledgement check is not bypassed.
-**Dependencies:** D (E is not required).
+**Dependencies:** D and E (F is not required).
 **Affected areas:** `workbench/upgrade.py`, `workbench/upgradeplan.py`, `workbench/cli.py`, the upgrade tests,
 `docs/development.md`, `docs/specs/installer-interface.md`.
 **Steps:**
@@ -187,12 +217,12 @@ acknowledgement check is not bypassed.
 2. Replace the terminal test with the function from D, and keep the acknowledgement check where it is.
 3. Update the development table and the spec.
 **Verification:** the upgrade tests, then the full suite.
-**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#F`.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#G`.
 
-### Increment G — `approve` and `pin` at `none`
+### Increment H — `approve` and `pin` at `none`
 
 **Outcome:** the same for `wb approve` and `wb pin`, the commands that make a package or a helper trusted.
-**Dependencies:** D.
+**Dependencies:** D and E.
 **Affected areas:** `workbench/approve.py`, `workbench/pins.py`, `workbench/cli.py`, their tests, `docs/development.md`,
 `docs/specs/trust-and-approval.md`.
 **Steps:**
@@ -202,15 +232,15 @@ acknowledgement check is not bypassed.
 2. Replace the terminal test with the function from D.
 3. State in the spec, in the consequences, that `none` here lets an agent make a package trusted, as the decision records.
 **Verification:** the approve and pin tests, then the full suite.
-**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#G`.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#H`.
 **Checkpoint (owner):** this increment lets an agent make code trusted. At its end the agent asks whether to run a security review,
-and does not begin H until the owner answers.
+and does not begin I until the owner answers.
 
-### Increment H — `acknowledge`, `recover`, `release-approvals` and `attach` at `none`
+### Increment I — `acknowledge`, `recover`, `release-approvals` and `attach` at `none`
 
 **Outcome:** the same for the remaining installer commands. `acknowledge` is set by the checkpoints `acknowledge-first-tier` and
 `acknowledge-second-tier`; `attach` only loses its `deny`; `release-approvals` loses its `deny` (it never had a terminal test).
-**Dependencies:** D.
+**Dependencies:** D and E.
 **Affected areas:** `workbench/acknowledge.py`, `workbench/recover.py`, `workbench/attach.py`, `workbench/cli.py`,
 `workbench/rules.py`, their tests, `docs/development.md`, `docs/specs/trust-and-approval.md`.
 **Steps:**
@@ -220,9 +250,9 @@ and does not begin H until the owner answers.
 2. Replace the terminal tests with the function from D where one exists.
 3. Update the development table and the specs.
 **Verification:** the affected tests, then the full suite.
-**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#H`.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#I`.
 
-### Increment I — `accept-decision` at `none`, and the documents
+### Increment J — `accept-decision` at `none`, and the documents
 
 **Outcome:** the checkpoint `accept-decision` offers `block` and `none`; the decision-drafting guidance reads it; `wb settings`
 prints it; the specs and `docs/development.md` describe everything built and the spec's status reads as current.
@@ -239,7 +269,7 @@ prints it; the specs and `docs/development.md` describe everything built and the
 4. Move the "Planned" section of the spec into the built sections, leave what is deferred under "Not built", and update the
    acceptance criteria and the review record.
 **Verification:** the levels tests, `wb check`, then the full suite.
-**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#I`.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-27-a-level-for-every-command#J`.
 
 ## Verification for the plan as a whole
 
@@ -248,7 +278,7 @@ prints it; the specs and `docs/development.md` describe everything built and the
 3. `wb settings` with the default personal settings prints every agent-safe key as `none` and every other key as `block`.
 4. A trial in a throwaway project, run by the owner: set `wb install` to `none`, attach, and have the agent run an install with no
    terminal; then set it back to `block` and confirm it refuses. The agent describes the steps and runs none of them.
-5. A security review of the permission boundary, run only if the owner asks at the checkpoints in D and G.
+5. A security review of the permission boundary, run only if the owner asks at the checkpoints in D, E and H.
 
 ## Risks and sensitive actions
 
@@ -263,7 +293,7 @@ prints it; the specs and `docs/development.md` describe everything built and the
   project that only uses the workbench.
 - **A rendering that denies too much.** Increment C could deny an agent-safe command the agent needs (for example `wb settings`)
   if an owner sets it to `block`. That is the owner's choice and the default is `none`; a test pins the default rendering.
-- Two increments, D and G, are checkpoints for a security review; a review runs only when the owner asks.
+- Three increments, D, E and H, are checkpoints for a security review; a review runs only when the owner asks.
 - Nothing is pushed, published or installed from outside, and no secret is used.
 
 ## Review record
@@ -395,7 +425,7 @@ one computed now; the tests pin the property for a clone attached in a test.
 **Review.** One round by the `reviewer` agent (3 of 6 exchanges this run): no blocking findings, four not blocking, all recorded or
 applied. (1) The loss of an explicit `block` while the file is damaged was implied and is now stated in the spec and development.md.
 (2) `effective_level` reads `block` for a key missing from the table, and an agent-safe key at its default is missing on purpose;
-a docstring now says not to ask it, and **Increments D to I must not call `effective_level` on an agent-safe key**. (3) The deny
+a docstring now says not to ask it, and **Increments D to J must not call `effective_level` on an agent-safe key**. (3) The deny
 patterns of a module argument use the existing `run --provides *` head, whose glob can also match another module's command whose name
 and arguments coincide; it is the shape the owner-run deny rules already have, argument names cannot carry a space or a glob, and a
 deny never un-denies, so it is accepted. (4) The plan lists `test_command_gate.py`, `harness-modules.md` and `harnessplan.py`: a gate
@@ -424,7 +454,7 @@ but `approve-plan` runs through `route`.
 
 **Review.** One round by the `reviewer` agent: no blocking findings, five not blocking. Applied: (1) `route` does not check that the
 project a command acts on is the one the level was read for; the docstring now requires the command to compare it with
-`Route.project_id`, as `approve-plan` does, and increments E to H must do so. (3) `logged` docstring says a `refused` outcome can
+`Route.project_id`, as `approve-plan` does, and increments F to I must do so. (3) `logged` docstring says a `refused` outcome can
 follow a change that was made. Rejected with reason: (2) `level_now` catches two exception types; anything else fails closed as a
 traceback and never lets a run through. (4) The two writers share the formats and the append through the kit, so the lines cannot
 drift; the plan allowed the split. (5) `may_run` trusts a verified level by design; a helper run directly getting no level is the
