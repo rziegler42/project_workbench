@@ -17,7 +17,7 @@ Two lists are compiled in, like the floor, so no file can shorten them:
 A rule is ``(action, tool, pattern)`` in the neutral vocabulary of ``neutral.py``.
 """
 
-OWNER_RUN = ("install", "adopt", "upgrade", "add", "attach", "acknowledge", "recover", "approve", "pin",
+OWNER_RUN = ("install", "adopt", "upgrade", "add", "attach", "rerender", "acknowledge", "recover", "approve", "pin",
              "release-approvals", "approve-plan")
 # Commands an agent may run: they only read, or run a helper that checks its own pin.
 AGENT_SAFE = ("verify", "preview", "launch", "check", "run", "plan-status", "settings", "gate",

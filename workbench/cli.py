@@ -35,6 +35,7 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "                                            (read-only; no --select, no download)\n"
          "       python3 -m workbench upgrade <same arguments as preview upgrade>   (owner-run, terminal only)\n"
          "       python3 -m workbench preview rerender [<target> | --dir <path>] [--package <source> [--ref <ref>]] ...\n"
+         "       python3 -m workbench rerender <same arguments as preview rerender>   (owner-run, terminal only)\n"
          "       python3 -m workbench preview add [<target> | --dir <path>] --package <source> [--ref <ref>] ...\n"
          "                                        --select <module> ...   (read-only; no download)\n"
          "       python3 -m workbench add <same arguments as preview add>   (owner-run, terminal only)\n"
@@ -244,6 +245,28 @@ def _preview_rerender(tokens, out, err, store_root, distribution, home=None):
     for note in notes:
         err.write("warning: %s\n" % _clean(note))
     return rerender.run_preview(guarded, command, out, err, distribution, home=home)
+
+
+def _rerender(tokens, out, err, store_root, distribution, stdin, home=None):
+    try:
+        command = rerender.parse(tokens)
+    except sources.UsageError as exc:
+        err.write("%s\n%s" % (_clean(str(exc)), USAGE))
+        return 2
+    stdin = stdin if stdin is not None else sys.stdin
+    # The key offers `block` only, so there is no level to read: without a terminal it refuses, and a refused run must not
+    # create the guarded store.
+    if not (approve.is_terminal(stdin) and approve.is_terminal(out)):
+        err.write("refused: %s\n" % _clean(rerender.TERMINAL_ONLY))
+        return 1
+    opened = _open_store(store_root, err)
+    if opened is None:
+        return 1
+    guarded, notes = opened
+    notes += launch.install_wrapper(guarded, distribution or firstparty.default_distribution())
+    for note in notes:
+        err.write("warning: %s\n" % _clean(note))
+    return rerender.run(guarded, command, stdin, out, err, distribution, home=home)
 
 
 def _preview(argv, out, err, store_root, distribution, home=None):
@@ -514,6 +537,8 @@ def main(argv, out=None, err=None, *, store_root=None, distribution=None, stdin=
         return _attach(argv[1:], out, err, store_root, distribution, home, stdin)
     if argv and argv[0] == "check":
         return _check(argv[1:], out, err, store_root, distribution)
+    if argv and argv[0] == "rerender":
+        return _rerender(argv[1:], out, err, store_root, distribution, stdin, home)
     if argv and argv[0] in ("upgrade", "add"):
         return _upgrade(argv[1:], out, err, store_root, distribution, stdin, argv[0])
     if argv and argv[0] == "adopt":

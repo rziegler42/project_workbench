@@ -100,8 +100,8 @@ class TableTest(Rendered):
         table = self.levels_now()
         # The keys of the table as it was before the agent-safe keys existed, written out so the test pins them.
         before = {name: "block" for name in (
-            "approve-plan", "wb install", "wb adopt", "wb upgrade", "wb add", "wb attach", "wb recover", "wb approve",
-            "wb pin", "wb release-approvals")}
+            "approve-plan", "wb install", "wb adopt", "wb upgrade", "wb add", "wb attach", "wb rerender", "wb recover",
+            "wb approve", "wb pin", "wb release-approvals")}
         self.assertEqual(rendering.digest(before), rendering.digest(table))
 
     def test_a_declared_argument_that_is_not_owner_run_stays_out_of_the_table_even_when_given(self):

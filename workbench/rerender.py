@@ -18,7 +18,7 @@ import hashlib
 import json
 import shutil
 
-from . import attach, declarations, localmanifest, projectfs, refusal, rendering, target
+from . import approve, attach, confirm, declarations, localmanifest, preview, projectfs, refusal, rendering, target
 from .wbkit import display, safefs
 
 Command = attach.Command
@@ -35,10 +35,15 @@ def parse(tokens):
 # `kept` are the rules carried over; `removed` are ``(path, text)`` entries of the live file the new one will not have.
 Plan = collections.namedtuple(
     "Plan", "path token version files keys kept removed notes warnings inputs digest changes settings data record "
-            "manifest old_hash")
+            "manifest old_hash project old_manifest_hash")
 
 NOTHING = "nothing to change"
 ALLOW = "allow"
+RECORD = "rendering record (guarded store)"
+TERMINAL_ONLY = ("rerender is owner-run: standard input and output must both be terminals. Run this command yourself, "
+                 "from your own terminal; `preview rerender` shows the same plan without writing.")
+AGAIN = ("run `wb rerender` again with the same arguments: a file that already holds the new bytes is left as it is, and "
+         "until it completes every key the table relaxes reads `block`")
 
 
 def digest_of(body):
@@ -95,8 +100,12 @@ def _shown(text):
 
 def _whole(text):
     """A rule or an entry as the owner reads it before confirming: never cut, because the digest covers all of it and a cut
-    would hide the end of a long rule."""
-    return display.ascii_text(str(text))
+    would hide the end of a long rule. Text that is not plain (a control character, a non-ASCII character, a leading or
+    trailing space, a backslash) is shown as the JSON string it is, so that two different rules never read alike."""
+    text = str(text)
+    if text.isascii() and text.isprintable() and text == text.strip() and "\\" not in text:
+        return text
+    return json.dumps(text, ensure_ascii=True)
 
 
 def build(guarded, held, command, distribution=None, version=None, which=shutil.which, home=None):
@@ -182,8 +191,14 @@ def build(guarded, held, command, distribution=None, version=None, which=shutil.
 
     files = [(path, state.hash, new_hash),
              (localmanifest.PATH, old_manifest_hash, new_manifest_hash),
-             ("rendering record (guarded store)", old_record_hash, new_record_hash)]
+             (RECORD, old_record_hash, new_record_hash)]
     notes = []
+    old_shared = old_record["shared"] if old_record else {"path": None, "hash": None}
+    new_shared = new_record["shared"]
+    if new_shared["path"] is not None and old_shared["hash"] != new_shared["hash"]:
+        notes.append("the shared settings file %s is not what the rendering record watched (%s -> %s); this re-render "
+                     "does not write it and records it as it is now, so read it before you confirm"
+                     % (new_shared["path"], (old_shared["hash"] or "none")[:12], (new_shared["hash"] or "none")[:12]))
     if harness_differs(recorded, staged.document):
         notes.append("the harness module differs from the one recorded at attach; only the permissions file is "
                      "replaced, and the other harness files stay as attach wrote them")
@@ -193,7 +208,8 @@ def build(guarded, held, command, distribution=None, version=None, which=shutil.
             "removed": [[list(where), text] for where, text in removed], "record": new_record,
             "manifest": new_manifest, "inputs": [list(item) for item in done.inputs]}
     return Plan(held.path, staged.token, staged.version, files, keys, carried, removed, notes, done.warnings,
-                done.inputs, digest_of(body), changes, path, data, new_record, new_manifest, state.hash)
+                done.inputs, digest_of(body), changes, path, data, new_record, new_manifest, state.hash, done.project,
+                old_manifest_hash)
 
 
 def render(plan):
@@ -221,6 +237,118 @@ def render(plan):
     if not plan.changes:
         lines.append(NOTHING)
     return "\n".join(lines) + "\n"
+
+
+def _write(guarded, held, plan, done):
+    """Write what `plan` changes, in this order: the permissions file, the local manifest's hash for it, then the record.
+    A key is relaxed only while the record, the permissions file and the shared settings file agree, so until the record
+    is written the old one names a hash the replaced file no longer has and every relaxed key reads ``block``: a stop at
+    any step leaves the clone stricter than the table says and never looser. `done` lists the names written so far."""
+    writer = projectfs.Writer(held)
+    changing = [name for name, old, new in plan.files if old != new]
+    if plan.settings in changing:
+        writer.replace_file(plan.settings, plan.old_hash, plan.data)
+        done.append(plan.settings)
+    if localmanifest.PATH in changing:
+        localmanifest.replace(writer, plan.old_manifest_hash, plan.manifest)
+        done.append(localmanifest.PATH)
+    if RECORD in changing:
+        rendering.write(guarded, plan.project, plan.record)
+        done.append(RECORD)
+
+
+def _listed(out, title, items):
+    if not items:
+        return
+    out.write("%s:\n" % title)
+    for item in items[:confirm.LISTED]:
+        out.write("  %s\n" % _shown(item))
+    if len(items) > confirm.LISTED:
+        out.write("  and %d more\n" % (len(items) - confirm.LISTED))
+
+
+def _reconcile(held, plan, done):
+    """Add to `done` a file that was renamed into place although the call did not return (an interrupt right after the
+    rename), so that the report of a stop says what is on disk."""
+    changing = {name for name, old, new in plan.files if old != new}
+    expected = ((plan.settings, _sha(plan.data)), (localmanifest.PATH, _sha(localmanifest.serialize(plan.manifest))))
+    for index, (path, wanted) in enumerate(expected):
+        if path in changing and path not in done and rendering.live_hash(held.path, path) == wanted:
+            done.insert(min(index, len(done)), path)
+
+
+def _failed(cause, plan, done, err):
+    """Report a stop after writing began: what was written, what was not, and how to finish."""
+    err.write("failed: %s\n" % _shown(cause))
+    _listed(err, "written", done)
+    _listed(err, "not written", [name for name, old, new in plan.files if old != new and name not in done])
+    err.write("if the failure came while a file was being written, nothing was renamed over the original, so the original "
+              "file is as it was\n%s\n" % AGAIN)
+
+
+def _refuse(err, text):
+    err.write("refused: %s\n" % display.clean(text))
+    return 1
+
+
+def run(guarded, command, stdin, out, err, distribution=None, version=None, which=shutil.which, home=None):
+    """Re-render after the owner types the digest, at a terminal; at no level does it run without one. Returns 0 done or
+    nothing to change, 1 refused or cancelled, 3 stopped after writing began, 130 interrupted before it."""
+    if not (approve.is_terminal(stdin) and approve.is_terminal(out)):
+        return _refuse(err, TERMINAL_ONLY)
+    started = False
+    try:
+        with target.open_target(command.target, guarded.root) as held:
+            plan = build(guarded, held, command, distribution, version, which, home)
+            for warning in plan.warnings:
+                err.write("warning: %s\n" % display.clean(warning))
+            out.write(render(plan))
+            if not plan.changes:
+                return 0
+            out.write("\nTo re-render, type the first %d characters of the digest shown above and press Enter.\n"
+                      "Anything else cancels and writes nothing.\n> " % confirm.CONFIRM_CHARS)
+            out.flush()
+            if not confirm.typed_matches(stdin, plan.digest):
+                out.write("cancelled: nothing was written\n")
+                return 1
+            held.recheck()
+            try:
+                again = build(guarded, held, command, distribution, version, which, home)
+            except Refused as exc:
+                raise Refused(["the project, its packages or the settings changed while the plan was shown: %s; nothing "
+                               "was written" % "; ".join(exc.lines)])
+            if again.digest != plan.digest:
+                return _refuse(err, "the plan changed while it was shown; nothing was written")
+            done = []
+            started = True
+            try:
+                _write(guarded, held, again, done)
+            except (Exception, KeyboardInterrupt) as exc:
+                _reconcile(held, again, done)
+                if not done and not isinstance(exc, KeyboardInterrupt):
+                    # The first replacement failed (a conflict, say): nothing was renamed over anything.
+                    return _refuse(err, "%s; nothing was written" % _shown(exc))
+                _failed("interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc), again, done, err)
+                return 3
+            try:
+                out.write("re-rendered %s in %s\n" % (_shown(again.token), display.ascii_text(held.path)))
+                _listed(out, "wrote %d paths" % len(done), done)
+                out.write("nothing was committed\n")
+                out.flush()
+            except (BrokenPipeError, KeyboardInterrupt):
+                pass
+            return 0
+    except target.TargetError as exc:
+        return target.write_refusal(err, exc)
+    except Refused as exc:
+        return attach._refusal(exc, err)
+    except safefs.SafeFsError as exc:
+        return _refuse(err, str(exc))
+    except KeyboardInterrupt:
+        if started:
+            return 3
+        out.write("\ncancelled: nothing was written\n")
+        return 130
 
 
 def run_preview(guarded, command, out, err, distribution=None, version=None, which=shutil.which, home=None):

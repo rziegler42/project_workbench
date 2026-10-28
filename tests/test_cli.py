@@ -165,6 +165,19 @@ class UsageTest(CliBase):
                 self.assertEqual((code, out), (2, ""))
                 self.assertIn("python3 -m workbench install", err)
 
+    def test_rerender_usage_is_listed_and_a_bad_form_exits_2(self):
+        code, out, err = run("rerender", "--nope")
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("python3 -m workbench rerender", err)
+        self.assertIn("usage:", err)
+
+    def test_rerender_without_a_terminal_refuses_names_preview_and_creates_no_store(self):
+        code, out, err = run("rerender", os.path.join(self.base, "x"))
+        self.assertEqual((code, out), (1, ""))
+        self.assertIn("refused: rerender is owner-run", err)
+        self.assertIn("preview rerender", err)
+        self.assertFalse(os.path.exists(self.store_root))
+
     def test_install_without_a_terminal_refuses_and_names_preview(self):
         code, out, err = run("install", os.path.join(self.base, "x"), "--package", self.path,
                              "--select", "a")

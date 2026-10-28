@@ -130,3 +130,11 @@ def write(writer, document):
     data = serialize(document)
     writer.create_file(PATH, data)
     return data
+
+
+def replace(writer, expected_hash, document):
+    """Replace the local manifest, whose SHA-256 must be `expected_hash`, with `document`. Any other content, a link or a
+    missing file is a conflict (``projectfs.Writer.replace_file``)."""
+    data = serialize(document)
+    writer.replace_file(PATH, expected_hash, data)
+    return data

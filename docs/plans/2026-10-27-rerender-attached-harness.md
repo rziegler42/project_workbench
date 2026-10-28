@@ -216,7 +216,7 @@ Empty until a review is asked for.
 
 ## Result
 
-### Increment A — The plan of a re-render and `wb preview rerender` (not committed)
+### Increment A — The plan of a re-render and `wb preview rerender` (committed as `85a4bcc`)
 
 **Done.**
 - `workbench/rerender.py` (new): `build` makes the plan from the clone's recorded harness and the table now; `render` and
@@ -272,5 +272,72 @@ done by the reviewer: it ran nothing.
 into a fresh store is untested. Increments B to D. The plan said `levels.py` and `tests/test_cli.py` would change; neither did,
 because the registry derives the key from `rules.PREVIEW_ACTIONS`.
 
-**Checkpoint before B.** The plan asks whether the owner wants a security review of Increment B before it starts, and B waits for
-the owner's acceptance of `2026-10-27-rerender-is-terminal-only` (still `Proposed`). Neither has been answered.
+**Checkpoint before B.** The plan asked whether the owner wants a security review of Increment B, and B waited for the owner's
+acceptance of `2026-10-27-rerender-is-terminal-only`. The owner accepted it (committed as `6f14476`) and answered "Yes, run one".
+
+### Increment B — `wb rerender`, the terminal-only write (not committed)
+
+**Done.**
+- `workbench/rules.py`: `rerender` is in `OWNER_RUN`, which gives the key `wb rerender` (owner-run, default `block`, offers
+  `block` only: it is in no `_OFFERS` entry) and the deny patterns of every spelling. A settings entry of `none`, `ask` or
+  `delegated` for it reads `block` with a note, through the existing rule for a level a key does not offer.
+- `workbench/localmanifest.py`: `replace(writer, expected_hash, document)`, a replacing write through `Writer.replace_file`.
+- `workbench/rerender.py`: `run` refuses unless standard input and output are both terminals (at no level), prints the plan,
+  asks for the first 12 characters of the digest, calls `held.recheck()`, rebuilds the plan and refuses unless its digest equals
+  the confirmed one, then `_write`s the files whose old and new hash differ, in this order: the permissions file
+  (`replace_file` with the hash the plan read), the local manifest (`localmanifest.replace` with the hash the plan read), the
+  rendering record last. Exit codes: 0 done or nothing to change, 1 refused or cancelled, 2 usage, 3 stopped after writing began,
+  130 interrupted before it. A stop after writing began lists what was written and what was not. No level-log entry is written.
+- `workbench/cli.py` routes `wb rerender`; without a terminal it refuses before the store or the target is opened.
+- Step 4, answered from the code: `wb check` reads from the local manifest only `harness` and the `files` list (`check._drift`
+  compares each file's hash, `_strays` and `_shallow` use the paths); `_rendering_drift` reads the record and the live file. So
+  the manifest's hash for the permissions file must be current, and it is written before the record.
+- Hand-kept key lists in `tests/test_levels.py`, `test_rendering.py`, `test_permissions.py` and `test_owner_run_arguments.py` now
+  include `rerender`. The key changes the table, so a clone attached before this commit (this one included) reads every relaxed
+  key as `block`, and has no deny for `wb rerender`, until it is re-rendered.
+
+**Verification as run** (Python 3.15.0, warnings as errors).
+- Tests first: with the command absent, 30 of the new tests failed and 2 errored; they then passed.
+- `python3 -B -W error -m unittest tests.test_rerender`: 78 tests OK (classes `Write`, `Relaxed`, `Pty`, `Keys` are B's; `Pty`
+  runs the command on real pseudo-terminals with `approve.is_terminal` as it ships). `test_settings.py` (82) and `test_cli.py`
+  (33) OK through discovery; `tests.test_levels tests.test_rendering tests.test_check tests.test_owner_run_arguments
+  tests.test_attach tests.test_command_gate tests.test_adopt_rules tests.test_permissions` OK.
+- Deliberate breaks of `rerender.py`, each caught by a failing test: the record written first, no digest comparison, no
+  `held.recheck()`, writing before the confirmation, exit 1 for a stop after writing, no shared-file note, plain display of kept
+  rules, no reconcile after an interrupt. One was not caught at first (the terminal check in `run`, since `cli` checks it
+  too); a test that calls `run` directly and one that stops `cli` before the store were added. The file was restored and compared.
+- Full suite on the final tree, in a scratch copy: 5672 tests in 11 roots. Two failures, neither from this increment:
+  `test_claude_module.Shipped.test_the_package_verifies_as_first_party_and_installs_claude` (recorded under A, also fails on a clean
+  `HEAD`) and `test_levellog.ConcurrencyTest.test_parallel_appends_keep_every_line` (the known intermittent failure: it failed
+  in one of two reruns on its own and passed in the other). An earlier full run, before the review edits, also found
+  `test_permissions.OwnerRun.test_the_constant_is_the_documented_list`, which was a hand-kept list and is fixed.
+- `git diff --check`, `wb check` and `wb run code-work check` report no problems.
+
+**Reviews.**
+- The `reviewer` agent, one exchange (cap 6): no blocking findings. Applied: a conflict on the first file now exits 1 with
+  "nothing was written" (the plan and criterion 3 say refused with nothing written; it had exited 3); a test with the table
+  unchanged and a stop after the file is replaced (`Relaxed`). Not applied: an interrupt landing between `replace_file`'s return
+  and the report, which the security review's second finding covers and `_reconcile` now handles. The reviewer's note that these
+  Result items were missing is this entry. The `block` assertions in the forced-failure tests hold for any write order, because
+  the table is changed first; the ordering is proved by the written and not-written lists, which the record-first break fails.
+- The `security-reviewer` agent, on the owner's answer: no Critical or High findings. Medium: a re-render re-baselined the shared
+  settings file silently, so a change to it after attach, which the record watches, became accepted when the owner re-rendered for
+  another reason, with only a record hash in the plan. Fixed: the plan now carries a note naming the shared file, its old and new
+  hash, and that the re-render records it as it is and does not write it. Low: two different kept rules could print alike; fixed
+  (a rule that is not plain printable ASCII, or has a leading or trailing space or a backslash, is shown as its JSON string).
+  Low: after an interrupt right after the rename the report called the replaced file "not written"; fixed (`_reconcile` checks the
+  live files). A regression test for each, each shown to fail without its fix. Tested by the reviewer: typed-ahead input does not
+  answer the prompt; link, hard link and swapped-directory attacks; forced failures at each step; hostile and oversized content; an
+  edited shared file reads `block`. Not tested by it: a real harness, the harness's handling of `disableAllHooks`, an older
+  attach, and a real race of the rename.
+
+**Limits.** A process that owns a pseudo-terminal can type the digest; that is the limit `approve` shares, and the barrier against
+an agent is the deny rule. The shared-file note shows hashes, not content. The plan was not run against this clone's own harness:
+`wb preview rerender` refuses here until the owner runs `wb acknowledge` for the review-engine files, and `wb attach` for a
+scratch clone is the owner's. The owner can run the plan's scratch-clone check with `python3 -m workbench preview rerender
+--package packages/workbench` and `python3 -m workbench rerender --package packages/workbench` in a terminal. The window
+between `replace_file`'s comparison and its rename stays (spec, "Limits"). A preview and a re-render both open the guarded store
+and write the launcher wrapper if it is missing. The output is unbounded in count for a very large live file.
+
+**Not done.** `wb check` does not yet name the command (Increment C); the specs, `docs/development.md` and the spec index
+(Increment D).

@@ -11,7 +11,7 @@ from workbench import floor, levels, rules
 
 # The keys the installer's own owner-run commands give. A new command in ``rules.OWNER_RUN`` fails
 # ``test_the_owner_run_keys_are_the_ones_listed`` until it is listed here, so it cannot gain a key unseen.
-OWNER_RUN_KEYS = ("wb install", "wb adopt", "wb upgrade", "wb add", "wb attach", "wb recover",
+OWNER_RUN_KEYS = ("wb install", "wb adopt", "wb upgrade", "wb add", "wb attach", "wb rerender", "wb recover",
                   "wb approve", "wb pin", "wb release-approvals", "approve-plan")
 # The keys the agent-safe actions give (plan 2026-10-27-a-level-for-every-command, increment A).
 AGENT_KEYS = ("wb verify", "wb preview install", "wb preview adopt", "wb preview upgrade", "wb preview add",

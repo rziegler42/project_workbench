@@ -576,6 +576,19 @@ class LevelsTest(SettingsBase):
                 self.assertEqual(1, len(got.notes))
                 self.assertIn("beta", got.notes[0])
 
+    def test_rerender_offers_block_only_and_any_other_level_reads_block_with_a_note(self):
+        """``docs/decisions/2026-10-27-rerender-is-terminal-only``: the write is terminal-only, so no level but ``block`` is
+        offered, and a level the owner writes for it is read as ``block`` with a note, as for any level a key does not offer."""
+        key = levels.registry()["wb rerender"]
+        self.assertEqual((("block",), "block"), (key.offers, key.default))
+        self.assertEqual("block", self.effective({"version": 2, "levels": {}})[1].levels["wb rerender"])
+        for level in ("ask", "none", "delegated"):
+            with self.subTest(level=level):
+                got = self.effective({"version": 2, "levels": {"wb rerender": level}})[1]
+                self.assertEqual("block", got.levels["wb rerender"])
+                self.assertEqual(1, len(got.notes))
+                self.assertIn("wb rerender", got.notes[0])
+
     def test_the_installer_commands_and_approve_and_pin_offer_none_and_nothing_else(self):
         for key in ("wb install", "wb adopt", "wb upgrade", "wb add", "wb approve", "wb pin"):
             with self.subTest(key=key):
