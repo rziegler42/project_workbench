@@ -358,3 +358,31 @@ Open for the owner:
   before the permissions file by design, so a stop between leaves new instructions under the old permissions, never a looser key.
 
 **Not done.** Increments C and D. The findings above, apart from 5, are not applied; none was asked for.
+
+### Increment C — `wb upgrade` points at the preview (not committed)
+
+**Done.**
+- `workbench/upgrade.py`: `_finish` prints one line after "wrote N paths" when a written path lies under
+  `.workbench/<package>/<module>/harness/` (`_is_harness_item`): "the rendered skills, agents or commands may be behind;
+  `wb preview rerender` shows which". It reads `progress.writer.written` only; it stages, compares and writes nothing, and a
+  failed upgrade never reaches it.
+- `tests/test_upgrade.py`, class `Pointer` (6 tests): a replaced item prints the line once, right after the count; a created
+  item prints it; an upgrade that wrote no harness item prints none; `wb preview upgrade` prints none; a failed upgrade prints
+  none; every changed path stays within `.workbench` and `.git`.
+
+**Verification as run.**
+- The positive test was red before the change. Two deliberate breaks were each caught: the line always printed; the line for
+  any `.workbench` path.
+- `tests.test_upgrade`, `tests.test_install_attach`, `tests.test_upgrade_preview`: 87 OK. `tests/test_cli.py` as a script: 33 OK.
+  `git diff --check` clean.
+- First full suite run: one failure, `test_boundary` (a test of mine named a harness folder, which the installer tests may not).
+  I removed that redundant assertion; `test_boundary` and `test_upgrade` then ran 65 OK. The full suite rerun: 5908 tests in
+  12 roots, OK.
+
+**Review.** One `reviewer` exchange, no blocking findings. Applied: a create-only test; `SKILL_HEAD` defined before use. Not applied:
+- `wb add` shares `_finish`, so adding a module that ships harness items also prints the line. That is arguably right (the
+  rendered copies lack the new items), but the spec says "after an upgrade". For Increment D or the owner to settle; no test
+  pins it.
+- A later-stage failure (the store stage) is not tested; by code it also skips `_finish`.
+
+**Not done.** Increment D.

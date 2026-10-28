@@ -378,6 +378,15 @@ def _write(guarded, held, plan, progress, record):
         progress.warnings.append("the marker %s was already gone" % projectfs.MARKER)
 
 
+POINTER = "the rendered skills, agents or commands may be behind; `wb preview rerender` shows which"
+
+
+def _is_harness_item(path):
+    """Whether `path` is below ``.workbench/<package>/<module>/harness/``, where a module's neutral items live."""
+    parts = path.split("/")
+    return len(parts) > 4 and parts[0] == ".workbench" and parts[3] == "harness"
+
+
 def _finish(plan, progress, held, out, err):
     for warning in progress.warnings:
         err.write("warning: %s\n" % display.clean(warning))
@@ -386,7 +395,9 @@ def _finish(plan, progress, held, out, err):
             if path not in (projectfs.MARKER, projectfs.MARKER.rsplit("/", 1)[0] + "/")]
     try:
         out.write("wrote %d paths in %s\n" % (len(done), display.ascii_text(held.path)))
-        notes = [r for r in plan.rows if r.kind == upgradeplan.CONFLICT
+        if any(_is_harness_item(path) for path in done):
+            out.write(POINTER + "\n")
+        notes =[r for r in plan.rows if r.kind == upgradeplan.CONFLICT
                  or (r.kind == upgradeplan.SKIP and r.detail)]
         if notes:
             out.write("left as they are:\n")
