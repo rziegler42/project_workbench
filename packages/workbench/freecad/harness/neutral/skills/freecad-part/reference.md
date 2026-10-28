@@ -124,6 +124,83 @@ print(pipe.ShapeType, pipe.isClosed(), round(pipe.Volume, 1))                  #
 print(solid_pipe.ShapeType, solid_pipe.isClosed(), round(solid_pipe.Volume, 1))   # Solid True 565.5
 ```
 
+## Mirror a shape
+
+```python
+import FreeCAD as App
+import Part
+
+V = App.Vector
+shape = Part.makeBox(10, 10, 10, V(5, 0, 0))              # a box that does not touch the plane x = 0
+mirrored = shape.mirror(V(0, 0, 0), V(1, 0, 0))           # a base point on the plane, then the plane's normal
+bb = mirrored.BoundBox
+print(round(bb.XMin, 1), round(bb.XMax, 1), round(bb.YMin, 1), round(bb.ZMax, 1))     # -15.0 -5.0 0.0 10.0
+print(round(shape.Volume, 1), round(mirrored.Volume, 1), mirrored.ShapeType, mirrored.isValid())
+print(shape.BoundBox.XMin, "unchanged:", round(shape.BoundBox.XMax, 1))               # the original is not changed
+```
+
+## Arrays of a shape
+
+```python
+import FreeCAD as App
+import Part
+
+V = App.Vector
+
+
+def linear_array(shape, direction, count, spacing):
+    """A Compound of `count` copies, each `spacing` further along `direction`."""
+    shapes = []
+    for i in range(count):
+        offset = V(direction)
+        offset.multiply(i * spacing)
+        moved = shape.copy()
+        moved.translate(offset)
+        shapes.append(moved)
+    return Part.Compound(shapes)
+
+
+cube = Part.makeBox(5, 5, 5)
+row = linear_array(cube, V(1, 0, 0), 5, 15.0)
+print(row.ShapeType, len(row.Solids), round(row.Volume, 1), round(row.BoundBox.XMax, 1))     # Compound 5 625.0 65.0
+
+# A Compound does not merge its parts: where copies overlap, the volumes still add up.
+overlapping = linear_array(cube, V(1, 0, 0), 5, 3.0)
+print(round(overlapping.Volume, 1))                                      # 625.0, though the copies overlap
+fused = overlapping.Solids[0].multiFuse(overlapping.Solids[1:]).removeSplitter()
+print(round(fused.Volume, 1))                                            # 425.0: the volume of the merged shape
+```
+
+```python
+import math
+
+import FreeCAD as App
+import Part
+
+V = App.Vector
+
+
+def polar_array(shape, axis, center, count):
+    """A Compound of `count` copies turned about `axis` through `center`, a full turn in all."""
+    shapes = []
+    angle = 360.0 / count
+    for i in range(count):
+        rotation = App.Rotation(axis, angle * i)
+        placement = App.Placement(V(0, 0, 0), rotation, center)      # position, rotation, centre of rotation
+        moved = shape.copy()
+        moved.Placement = placement
+        shapes.append(moved)
+    return Part.Compound(shapes)
+
+
+peg = Part.makeCylinder(2, 5, V(20, 0, 0))
+ring = polar_array(peg, V(0, 0, 1), V(0, 0, 0), 8)
+print(len(ring.Solids), round(ring.Volume, 1), round(8 * math.pi * 4 * 5, 1))          # 8 502.7 502.7
+radii = sorted({round(math.hypot(s.CenterOfMass.x, s.CenterOfMass.y), 3) for s in ring.Solids})
+angles = sorted(round(math.degrees(math.atan2(s.CenterOfMass.y, s.CenterOfMass.x)) % 360, 1) for s in ring.Solids)
+print(radii, angles)                                                      # [20.0] and 0, 45, 90 ... 315
+```
+
 ## Reading a shape
 
 ```python

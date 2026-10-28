@@ -142,8 +142,10 @@ The module `freecad`, its entry in `packages/workbench/package.json`, its tests,
 6. **Distinct descriptions.** A skill is chosen by its description, at most 300 characters. The tests check each begins
    with "Use when", names its own subject, and is not the description of another skill; overlapping skills (Part and
    PartDesign, Mesh and ReverseEngineering) name which to use for what.
-7. **Nine increments.** Skills are grouped by subject, with the script and the risky ones early (A: the verifier check;
-   D: the bundled script), and approvals and the record last.
+7. **Nine increments, then H-A.** Skills are grouped by subject, with the script and the risky ones early (A: the verifier
+   check; D: the bundled script), and approvals and the record last. Increment H-A was added between H and I on
+   2026-10-28, at the owner's word, for three things the runs of increments E, F and H found in earlier skills; it needs
+   the owner's new approval of this plan.
 
 ## Completion criteria
 
@@ -299,10 +301,32 @@ M5 only under `freecadcmd`; whatever needs a display is marked not run.
 **Verification:** as M4, M5.
 **Evidence:** the one local commit, trailer `Plan: 2026-10-28-freecad-module#H`.
 
+### Increment H-A — Corrections and recipes found by the runs
+
+**Outcome:** `freecad-part` says that a Boolean returns a `Compound` without a `CenterOfMass` and carries the source's mirror,
+linear-array and polar-array recipes, each run in FreeCAD 1.1.4; the Gmsh row of the table in `freecad-python` no longer
+carries a "read" mark, because increment F ran it. The module still ships exactly the seventeen skills.
+**Dependencies:** H (and E and F, whose runs found the first two).
+**Affected areas:** `freecad-part/SKILL.md` and `reference.md`, `freecad-python/SKILL.md`, the module's tests, this plan's Result.
+**Steps:**
+1. Check the hash of `workbenches-and-advanced.md` against Assumptions; stop and tell the owner on a difference. Read its
+   mirror, array and polar-array recipes again. The tube recipe (a cut of two cylinders) is not carried.
+2. Test first: add assertions to the module's tests that `freecad-part` names `Compound` and `CenterOfMass` together in its text,
+   that its reference has a mirror section and an array section, and that the Gmsh row of `freecad-python` has no "read"
+   mark. See them fail.
+3. Write the recipes as self-contained blocks in a scratch directory (a mirrored shape; a linear array and a polar array as
+   functions that return a `Compound`), rewritten with a shape they build themselves and not a document object that is assumed to
+   exist. With the owner's word, run them in FreeCAD 1.1.4 from a scratch directory (M5) and keep only what ran, with the
+   printed volumes and positions in comments. A recipe that fails is corrected or dropped.
+4. Copy the changed files in with one command (the owner then runs `wb release-approvals`, because the gates refuse until
+   then); then M4 and M6.
+**Verification:** as M4, M5.
+**Evidence:** the one local commit, trailer `Plan: 2026-10-28-freecad-module#H-A`.
+
 ### Increment I — Approvals and record
 
 **Outcome:** the shipped approvals match the final package tree and the plan records what was done.
-**Dependencies:** A to H.
+**Dependencies:** A to H, and H-A.
 **Affected areas:** `workbench/shipped_approvals/` (by `release-approvals`), this plan's Result.
 **Steps:**
 1. The owner runs `wb release-approvals`, or asks me to run it. Remove stale records only after a preview and the owner's
@@ -744,3 +768,27 @@ companion plan will not complete without it.
 - **Gate:** the owner ran `wb release-approvals` once for this increment. Twenty records are reported stale; none was
   removed. Increment I removes them after a preview.
 - **Not done:** no independent review of the increment (only when the owner asks); no run in the GUI; the MCP server was not run.
+
+### Increment H-A
+
+- **Read (2026-10-28):** the sha-256 of `workbenches-and-advanced.md` matched the plan (`20cb9c3a…`). The mirror and array
+  recipes were read there and rewritten, not copied.
+- **Written:** a `Corrections` class in the module's tests (4 tests, 23 in all); in `freecad-part`, a sentence that a Boolean
+  returns a `Compound` with `Volume` and `Area` but no `CenterOfMass`, a `Mirror and repeat` section, two rows in Common
+  mistakes, and `Mirror a shape` and `Arrays of a shape` in the reference (a linear and a polar array as functions); in
+  `freecad-python`, the Gmsh row of the removed-API table no longer marked read.
+- **Verification as run:**
+  - Test first: the 4 new assertions failed (23 tests, 4 failures) before the edits.
+  - Module tests, 23, OK; package tests, 29, OK; the full suite, 5864 tests in 13 roots, OK; `wb run code-work check`
+    (61 plans) and `wb check` found no problems; `git diff --check` printed nothing.
+- **Run against FreeCAD 1.1.4 (revision 20260928), headless, at the owner's word, from a scratch directory:** 3 example
+  blocks, none raised. A box at x 5 to 15 mirrored about the YZ plane lay at x -15 to -5, volume 1000.0, original unchanged.
+  A linear array of five 5 mm cubes gave a `Compound` of 5 solids, volume 625.0, XMax 65.0. With copies 3 mm apart
+  (overlapping) the `Compound` still reported 625.0 and the fused shape 425.0. A polar array of 8 pegs gave 502.7, all at
+  radius 20.0, at 0 to 315 degrees in 45 degree steps.
+- **Found, not in the source:** a `Compound` of overlapping copies does not merge, so its volume counts the overlap twice;
+  recorded in the skill.
+- **Not carried:** the source's tube recipe (`makePipe` returns an open shell, found in increment B).
+- **Gate:** the owner ran `wb release-approvals` once for this increment. Twenty-two records are reported stale; none was
+  removed. Increment I removes them after a preview.
+- **Not done:** no independent review (only when the owner asks).

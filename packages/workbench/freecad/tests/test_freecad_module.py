@@ -209,5 +209,26 @@ class Script(unittest.TestCase):
             self.assertIn(fragment, text, fragment)
 
 
+class Corrections(unittest.TestCase):
+    """What increment H-A of the plan added to earlier skills, after runs in FreeCAD 1.1.4 found it missing or wrong."""
+
+    def test_part_says_a_boolean_returns_a_compound_that_has_no_centre_of_mass(self):
+        lines = skill_text("freecad-part").splitlines()
+        self.assertTrue(any("Compound" in line and "CenterOfMass" in line for line in lines))
+
+    def test_part_has_a_mirror_and_an_array_section_in_its_reference(self):
+        text = reference_text("freecad-part")
+        for heading in ("## Mirror a shape", "## Arrays of a shape"):
+            self.assertIn(heading, text)
+
+    def test_part_warns_that_a_compound_of_overlapping_copies_is_not_merged(self):
+        text = skill_text("freecad-part")
+        self.assertIn("does not merge", text)
+
+    def test_the_gmsh_row_of_the_removed_api_table_is_no_longer_marked_read(self):
+        rows = [line for line in skill_text("freecad-python").splitlines() if "Gmsh" in line]
+        self.assertEqual(1, len(rows))
+        self.assertNotIn("(read)", rows[0])
+
 if __name__ == "__main__":
     unittest.main()

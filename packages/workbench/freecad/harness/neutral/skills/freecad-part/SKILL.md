@@ -9,7 +9,7 @@ This skill is for the Part workbench in FreeCAD 1.1: building and reading B-rep 
 
 ## The shape hierarchy
 
-A shape is one of Vertex, Edge, Wire, Face, Shell, Solid, CompSolid or Compound, each built from the levels before it. A boolean on solids gives a solid or a compound, so test `ShapeType` before relying on a `Solid`.
+A shape is one of Vertex, Edge, Wire, Face, Shell, Solid, CompSolid or Compound, each built from the levels before it. A boolean returns a `Compound` (a `cut` of a box by a cylinder did), and a `Compound` has `Volume` and `Area` but no `CenterOfMass`, so test `ShapeType` and take `.Solids[0]` before you rely on a `Solid`.
 
 ## Build from the bottom up
 
@@ -22,6 +22,10 @@ A shape is one of Vertex, Edge, Wire, Face, Shell, Solid, CompSolid or Compound,
 ## Combine and finish
 
 Combine with `fuse`, `cut`, `common` and `multiFuse`. After a fuse call `removeSplitter()` to merge the seam edges it leaves. Round or bevel edges with `makeFillet(radius, edges)` and `makeChamfer(distance, edges)`; pass only the edges you mean. Hollow a solid with `makeThickness`, offset it with `makeOffsetShape`, and cut a section with `section`. Profiles become solids by `extrude`, `revolve`, `Part.makeLoft(wires, True)` and `makePipeShell(profiles, True, False)` along a path. `makePipe` returns an open shell, not a solid, and its `Volume` is only its area, so use `makePipeShell` with its solid flag when you need a volume.
+
+## Mirror and repeat
+
+`shape.mirror(base_point, normal)` returns a mirrored copy about the plane through the point with that normal and leaves the original unchanged; a box at x from 5 to 15 mirrored about the YZ plane (`V(0, 0, 0)`, `V(1, 0, 0)`) lies at x from -15 to -5 with the same volume. An array is a `Compound` of copies, each moved with `copy()` and `translate()` or given a `Placement` that turns it about a centre; `reference.md` has a linear and a polar array as functions. A `Compound` does not merge its parts: five 5 mm cubes spaced 3 mm apart, so that they overlap, still report a volume of 625.0, and the merged shape (`multiFuse` then `removeSplitter`) is 425.0. Fuse the copies before you measure them if they touch or overlap.
 
 ## Read the result
 
@@ -40,5 +44,7 @@ Combine with `fuse`, `cut`, `common` and `multiFuse`. After a fuse call `removeS
 | Using `makePipe` and reading its `Volume` | Use `makePipeShell(..., True, ...)` for a solid |
 | Filleting every edge when you meant some | Pass the edge list you chose |
 | Reporting a volume without checking validity | Check `isValid()` and `ShapeType` first |
+| Reading `CenterOfMass` of a Boolean result | Take `.Solids[0]` of the `Compound` first |
+| Measuring an array of overlapping copies | Fuse the copies, then measure |
 | Hard-coding `Face6` after the first build | Select faces by geometry |
 | Building an editable part from Part shapes | Use `freecad-partdesign` |

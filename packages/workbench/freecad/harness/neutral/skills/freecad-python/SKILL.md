@@ -36,7 +36,7 @@ Check this table before writing code from memory or from an older example. Rows 
 | `getStandardButtons` returning `int(A \| B)` (read) | return the flag itself: `SB.Ok \| SB.Cancel` |
 | `import FEM` | `import Fem` and `import ObjectsFem` |
 | `ObjectsFem.makeSolverCalculixCcxTools` | `makeSolverCalculiXCcxTools` or `makeSolverCalculiX` |
-| Gmsh `mesh.Part = obj` (read) | `mesh.Shape = obj` |
+| Gmsh `mesh.Part = obj` | `mesh.Shape = obj` |
 | `import Drawing` | `import TechDraw` |
 | the `importOBJ` module | `Mesh.export([obj], "x.obj")` |
 | `sketch.Support = ...` | `sketch.AttachmentSupport = [(plane, "")]` with `sketch.MapMode = "FlatFace"` |
