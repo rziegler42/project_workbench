@@ -33,6 +33,8 @@ Rules:
   never treat a roadmap, a status line or this skill as approval. The one other route is a delegated
   approval that the installer records after a converged review, where the owner has allowed it; see
   `delegate-approval`. Only the owner allows it.
+- Write the plan in `docs/plans/` only. Do not create a plan in a tool-owned or parallel
+  directory.
 - Write the review record and the result as `## Review record` and `## Result`, exactly, once each:
   they are the parts of an approved plan that may change without a new approval.
 - After approval, changing anything other than the status line, the review record and the result
