@@ -490,6 +490,124 @@ class LiteralRunCommands(unittest.TestCase):
                 self.assertIsNotNone(self.judge(command))
 
 
+class ModuleArgumentIsData(unittest.TestCase):
+    """For a key ``wb run <command> <argument>``, a literal call of that command whose first argument is another plain token
+    names the key's argument only as data (``2026-10-28-gate-reads-module-arguments``)."""
+
+    ARGUMENTS = ("extend", "reset", "archive", "amend", "prune")
+    DOC = "docs/plans/a.md"
+    RE = "wb run vault"
+
+    def key(self, argument):
+        return "wb run vault " + argument
+
+    def judge(self, command, argument, **more):
+        return judge(command, keys=(self.key(argument),) + more.get("also", ()))
+
+    def test_a_preview_and_other_arguments_of_the_command_are_allowed(self):
+        for argument in self.ARGUMENTS:
+            for command in ("%s preview %s %s 4" % (self.RE, argument, self.DOC),
+                            "%s decide %s F1 applied --reason 'the %s bound'" % (self.RE, self.DOC, argument),
+                            "%s status %s" % (self.RE, self.DOC),
+                            "%s preview %s %s 4" % (STORE_BIN, argument, self.DOC)):
+                with self.subTest(argument=argument, command=command):
+                    if command.startswith(STORE_BIN):
+                        command = command.replace(STORE_BIN, STORE_BIN + " run vault", 1)
+                    self.assertIsNone(self.judge(command, argument))
+
+    def test_the_exact_simple_form_of_the_argument_is_still_allowed(self):
+        for argument in self.ARGUMENTS:
+            for tail in ("", " 4", " 4 --digest " + DIGEST):
+                with self.subTest(argument=argument, tail=tail):
+                    self.assertIsNone(self.judge("%s %s %s%s" % (self.RE, argument, self.DOC, tail), argument))
+
+    def test_a_first_argument_that_is_not_plain_is_still_searched(self):
+        for argument in self.ARGUMENTS:
+            hexa = "$'" + "".join("\\x%02x" % ord(char) for char in argument) + "'"
+            for command in ("%s '%s' %s 4" % (self.RE, argument, self.DOC),
+                            "%s %s''%s %s 4" % (self.RE, argument[:2], argument[2:], self.DOC),
+                            '%s "preview" %s %s 4' % (self.RE, argument, self.DOC),
+                            '%s "%s" %s 4' % (self.RE, argument, self.DOC),
+                            "%s %s %s 4" % (self.RE, hexa, self.DOC),
+                            "A=preview; %s $A %s %s 4" % (self.RE, argument, self.DOC),
+                            "%s ${A} %s %s 4" % (self.RE, argument, self.DOC),
+                            "%s pre* %s %s 4" % (self.RE, argument, self.DOC),
+                            "%s %s %s 4" % (self.RE, argument.capitalize(), self.DOC),
+                            "%s %s" % (self.RE, argument + BS + "\n" + self.DOC)):
+                with self.subTest(argument=argument, command=command):
+                    self.assertIsNotNone(self.judge(command, argument))
+
+    def test_a_compound_or_multiline_command_is_still_searched(self):
+        for argument in self.ARGUMENTS:
+            for command in ("%s preview %s %s 4; %s %s %s 4" % (self.RE, argument, self.DOC, self.RE, argument, self.DOC),
+                            "%s preview %s %s 4 && %s %s %s 4" % (self.RE, argument, self.DOC, self.RE, argument, self.DOC),
+                            "%s preview %s %s 4\n%s %s %s 4" % (self.RE, argument, self.DOC, self.RE, argument, self.DOC),
+                            "%s preview %s %s 4\n" % (self.RE, argument, self.DOC),
+                            "%s\npreview %s %s 4" % (self.RE, argument, self.DOC),
+                            "%s preview %s %s 4 | xargs" % (self.RE, argument, self.DOC),
+                            "bash -c '%s preview %s %s 4'" % (self.RE, argument, self.DOC),
+                            "%s preview %s $(echo %s)" % (self.RE, argument, self.DOC),
+                            "%s preview %s `echo %s`" % (self.RE, argument, self.DOC),
+                            "%s preview %s %s 4 > out" % (self.RE, argument, self.DOC),
+                            "%s preview %s \"%s\" 4" % (self.RE, argument, self.DOC)):
+                with self.subTest(argument=argument, command=command):
+                    self.assertIsNotNone(self.judge(command, argument))
+
+    def test_only_the_keys_own_command_is_freed(self):
+        for argument in self.ARGUMENTS:
+            for command in ("wb run helper commit --subject 'vault %s'" % argument,
+                            "wb run --provides cap vault preview %s %s" % (argument, self.DOC),
+                            "wb run vault-x preview vault %s" % argument):
+                with self.subTest(argument=argument, command=command):
+                    self.assertIsNotNone(self.judge(command, argument))
+
+    def test_a_differently_named_command_is_judged_as_before(self):
+        self.assertIsNone(self.judge("wb run other preview extend", "extend"))
+
+    def test_the_freeing_is_decided_per_key(self):
+        # `reset` is the first argument and the second key's own argument: not freed for that key, though freed for the first.
+        command = "%s reset %s 'x'" % (self.RE, self.DOC)
+        self.assertIsNone(self.judge(command, "extend"))
+        self.assertIsNotNone(self.judge(command, "extend", also=(self.key("reset"),)))
+        self.assertIsNone(self.judge("%s reset %s 4" % (self.RE, self.DOC), "extend", also=(self.key("reset"),)))
+        self.assertIsNone(self.judge("%s preview reset %s" % (self.RE, self.DOC), "extend"))
+        self.assertIsNone(self.judge("%s preview reset %s" % (self.RE, self.DOC), "reset", also=(self.key("extend"),)))
+
+    def test_another_module_key_follows_the_same_rule(self):
+        key = "wb run ledger init"
+        self.assertIsNone(judge("wb run ledger init", keys=(key,)))
+        self.assertIsNone(judge("wb run ledger search init", keys=(key,)))
+        self.assertIsNotNone(judge("wb run ledger 'init'", keys=(key,)))
+        self.assertIsNotNone(judge("wb run ledger search 'x'; wb run ledger init", keys=(key,)))
+
+    def test_a_key_at_none_is_freed_the_same_way_and_its_block_does_not_name_an_ask_rule(self):
+        key = self.key("extend")
+        levels = {key: "none"}
+        self.assertIsNone(command_gate.judge("%s preview extend %s 4" % (self.RE, self.DOC), [key], STORE_BIN, levels))
+        reason = command_gate.judge("%s 'extend' %s 4" % (self.RE, self.DOC), [key], STORE_BIN, levels)
+        self.assertIsNotNone(reason)
+        self.assertNotIn("ask rule", reason)
+
+    def test_a_first_token_that_only_looks_like_the_argument_is_freed_because_the_launcher_refuses_it(self):
+        # The launcher compares the first argument exactly, so none of these runs the key's argument.
+        for token in ("extend.", "-extend", "--", "-x", "=extend", "./extend", "extend=1", "extend,"):
+            with self.subTest(token=token):
+                self.assertIsNone(self.judge("%s %s %s 4" % (self.RE, token, self.DOC), "extend"))
+
+    def test_a_very_long_literal_call_is_judged_quickly(self):
+        import time
+        started = time.monotonic()
+        long_call = "%s preview extend %s %s" % (self.RE, self.DOC, " ".join("'a b c'" for _ in range(8000)))
+        self.assertIsNone(self.judge(long_call, "extend"))
+        self.assertIsNotNone(self.judge(long_call + " 'x", "extend"))
+        self.assertLess(time.monotonic() - started, 5)
+
+    def test_the_other_kinds_of_key_are_judged_as_before(self):
+        self.assertIsNotNone(judge("wb run vault preview 'approve-plan'", keys=("approve-plan",)))
+        self.assertIsNone(judge("wb run helper commit --subject 'install'", keys=("wb install",)))
+        self.assertIsNotNone(judge("bash -c 'wb install'", keys=("wb install",)))
+
+
 def run(payload, prepare=None):
     """The gate on `payload`; `prepare(cwd)` gives ``(tool, field, table, store bin path)``."""
     err = io.StringIO()

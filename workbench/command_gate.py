@@ -20,6 +20,11 @@ is decided by the harness's classifier in auto mode. This gate reads one Bash to
   and single-quoted strings only, on the raw text): ``wb run`` dispatches to a declared, pinned module command and never to an
   owner-run verb, so a word in the arguments (a commit subject, a path) is data
   (``docs/decisions/2026-10-27-command-gate-literal-arguments.md``);
+* for a key of the form ``wb run <command> <argument>``, allows the same literal call of that command when its first
+  argument is a plain token other than the key's ``<argument>`` (for example a ``preview <argument>`` of the command): the
+  launcher runs only the first argument, so the key's argument is data
+  (``docs/decisions/2026-10-28-gate-reads-module-arguments.md``). A quoted, escaped or expanded first token, a command of
+  another name and a compound command are still searched;
 * for such a key, does not take a launcher followed by the exact token of a sibling command that continues the word
   (``wb approve-plan`` for ``wb approve``) for the key's own word; the token alone, as data, is still the word.
 
@@ -54,7 +59,8 @@ _TOKEN = r"[A-Za-z0-9._/:=-]+"
 # The literal ``wb run <name> <arguments>`` form: a name as a pin or a command name is spelled, then plain tokens or
 # single-quoted strings (bash reads those literally, a newline included), each after one space.
 _RUN_NAME = r"[A-Za-z0-9][A-Za-z0-9._+-]{0,63}"
-_RUN_ARGUMENT = r"(?:[A-Za-z0-9._/:=@,+-]+|'[^']*')"
+_RUN_PLAIN = r"[A-Za-z0-9._/:=@,+-]+"
+_RUN_ARGUMENT = r"(?:%s|'[^']*')" % _RUN_PLAIN
 # A name that is a launcher or a verb is never the module command of a literal call.
 RESERVED_NAMES = frozenset(rules.OWNER_RUN) | frozenset(rules.AGENT_SAFE) | frozenset(LAUNCHERS) | {"python", "python3"}
 _PATH = r"[A-Za-z0-9._/][A-Za-z0-9._/-]*"
@@ -109,6 +115,21 @@ def literal_run(text, store_bin):
     heads = "|".join(["wb", re.escape(store_bin)])
     found = re.fullmatch(r"(?:%s) run (%s)(?: %s)*" % (heads, _RUN_NAME, _RUN_ARGUMENT), text)
     return bool(found) and found.group(1) not in RESERVED_NAMES
+
+
+def reads_argument_as_data(text, key, store_bin):
+    """Whether `text` is one literal ``wb run <command> <first> ...`` of the command of a key ``wb run <command> <argument>``,
+    with a plain first token that is not the key's `<argument>`. The launcher dispatches on that first argument and refuses an
+    undeclared one, so the key's argument is not run and its word is data
+    (``docs/decisions/2026-10-28-gate-reads-module-arguments.md``). A quoted, escaped or expanded first token is not plain,
+    and a command of another name is not freed. This holds only for a module command whose helper takes its action from the
+    first argument alone; a helper that took it from a later position, or re-dispatched one, would need its key left out."""
+    found = words(key)
+    if not key.startswith("wb run ") or len(found) != 2 or not literal_run(text, store_bin):
+        return False
+    heads = "|".join(["wb", re.escape(store_bin)])
+    call = re.fullmatch(r"(?:%s) run (%s) (%s)(?: %s)*" % (heads, _RUN_NAME, _RUN_PLAIN, _RUN_ARGUMENT), text)
+    return bool(call) and call.group(1) == found[0] and _folded(call.group(2)) != _folded(found[1])
 
 
 def forms(key, store_bin):
@@ -307,6 +328,9 @@ def judge(command, keys, store_bin, levels=None):
     for key in keys:
         # Only a key read as a launcher and a word has a preview that is not the call; a module's command may be named `preview`.
         if literal and _by_launcher(key):
+            continue
+        # A key ``wb run <command> <argument>``: the literal call of that command with another plain first argument.
+        if literal and reads_argument_as_data(text, key, store_bin):
             continue
         seen = _without(previewed, siblings(key)) if _by_launcher(key) else views
         for spelling in alternatives(key):

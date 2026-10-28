@@ -172,4 +172,33 @@ Empty until a review is asked for.
 - Review: one `reviewer` exchange, no blocking finding. Applied: the "same limit on the characters" wording (there is no per-token
   limit, only the 64 KiB cap), the `wb run --provides` case, the per-key consequence, and that the helper's read-only `preview` is
   known by reading. Not applied: a re-runnable probe (Increment B's tests are the durable record).
-- Not done: the record is not accepted. Increment B cannot start until the owner accepts it.
+- Accepted by the owner on 2026-10-28 and committed (`8237dcd`). Increment B began after that.
+
+### Increment B — built, waiting for the owner's commit (2026-10-28)
+
+- Changed: `workbench/command_gate.py` (new `reads_argument_as_data` and `_RUN_PLAIN`, one new `continue` in `judge`, a docstring
+  bullet) and `tests/test_command_gate.py` (class `ModuleArgumentIsData`, 12 tests). Built and tested in a scratch copy, then landed
+  with one copy of each file; the later docstring wording and three added tests were edited in place.
+- Tests first: 16 of the new subtests failed for the right reason (a call that should be allowed was blocked) before the change.
+  The tests use stand-in names (`vault`, `ledger`) because the installer source and its tests may not name a module.
+- Verification: `tests/run_all.py` from the scratch copy, 5823 tests in 11 roots, OK. A first run failed two boundary tests
+  (module names in a docstring and in the tests, fixed) and two action-review tests that timed out under load and pass alone
+  (458 tests). In the real tree: `tests.test_command_gate` and `tests.test_boundary` 109 OK, `wb check`, `wb run code-work check`
+  (55 plans) and `git diff --check` clean.
+- Live trial: with the five review-engine keys at `ask`, `wb run review-engine preview extend <plan> 2` ran and printed the
+  preview and its digest; the same command was refused by the gate earlier the same day.
+- Review: one `reviewer` exchange, no blocking finding; it found no string the rule frees that runs the key's argument. Applied:
+  the docstring no longer asserts that a preview is read-only (the gate does not know it), and tests for a key at `none`, for
+  first tokens that only look like the argument (`extend.`, `-extend`, `--`, `./extend`), and for a long literal call.
+- Security review (the owner asked): the `security-reviewer` agent worked on a scratch copy and found no Critical, High or Medium
+  finding. It compared HEAD with the new `judge` on 46,961 commands across 8 key sets: 689 (key set, command) pairs changed, 180
+  distinct commands, every one from block to allow and each a literal call of the key's own command with a plain first token other
+  than the key's argument; key sets of single-word keys and `approve-plan` showed no change. It ran each newly allowed command in bash
+  and zsh with a fake `wb`: none dispatched the key's argument except the exact forms the harness `ask` rule still prompts (zsh
+  fails `=extend` and runs nothing). Fourteen 64 KiB adversarial inputs took 0.01 to 0.04 s, as at HEAD. It read the launcher and
+  the helper: only the first argument selects the command. Two Low observations: the rule assumes a module command dispatches on its
+  first argument alone (now a sentence in the function's docstring), and a store path with shell characters (no agent can set it).
+  Applied: the docstring sentence, and `-x` and `=extend` added to the look-alike-token test. Limit: the Bash hook let it run only
+  its pinned probes, so it could not run the real launcher or helper. It reported that a stale script from an earlier session ran
+  once by mistake and wrote nothing outside the scratch directory.
+- Not done: the harness's own `ask` rule firing on the freed preview was not exercised. Increment C (the specs) is not started.
