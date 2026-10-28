@@ -1,6 +1,6 @@
 # The verilog module
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-28
 Candidate: workbench-v1#verilog-module
 Specs: module-contract, global-config-inventory
@@ -246,3 +246,25 @@ Empty until a review is asked for.
 - **Incident:** the gate lockout recurred as predicted; the owner ran `wb release-approvals` twice more (after the copy and
   after the description fix). Four more records are reported stale; none removed. C reruns it once for the final tree.
 - **Not done:** no independent review (only when the owner asks); no tool was run against any design.
+
+### Increment C
+
+- **Approvals:** the owner ran `wb release-approvals` (the command gate refused when I tried it, because the approvals were
+  stale). Eight stale records were removed after a preview and the owner's "remove them": three tracked (`07653a8d30d1…`,
+  `3153f319c144…`, `940cfeb1d8c5…`) and five untracked; the tracked `e96d58fb3738…` had been removed earlier. Five new
+  records are added. Together with the Increment A and B releases, the owner ran the command five times in this plan.
+- **Missed in A and B:** four hard-coded module lists in the tests of `claude`, `code-work` and `groundwork` ended at
+  `security-review`, so the full suite failed in three roots once `verilog` was listed. A and B ran only the module's tests
+  and the package tests. With the owner's approval ("option 1") `"verilog"` was added to those four lists, which the plan's
+  affected areas did not name.
+- **Inventory** (`docs/specs/global-config-inventory.md`, M18 and skill-row text only): the simulation skill's hash is
+  corrected to the one read on 2026-10-28 (the 2026-10-25 hash is noted); rows are added for `verilog-sby-formal` and its
+  reference (hashes read on 2026-10-28, not listed on 2026-10-25); SA6 and M18 say the module is built; M18 now has five
+  items. The gate is not stated as met: the recorded run in a project that installed the module, and the owner's removal of
+  the personal skills and the paragraph, remain open.
+- **Verification as run:** `python3 -B -W error tests/run_all.py`: 5839 tests in 12 roots, OK, with no stale-approval skip;
+  before the four lists were corrected, 4 tests failed in 3 roots. `wb run code-work check` (56 plans) and `wb check`
+  found no problems; `git diff --check` is clean.
+- **Not done:** no independent review (only when the owner asks); no tool was run against any design; the hashes read on
+  2026-10-28 were not re-read at the end of C; the inventory's count lines for the skills table still say four authored
+  skills.
