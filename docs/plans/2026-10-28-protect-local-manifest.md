@@ -1,6 +1,6 @@
 # Deny agent writes to the local harness manifest
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-28
 Candidate: none — a finding of the security review of Increment B of `2026-10-28-refresh-rendered-harness`, not a roadmap candidate
 Specs: harness-refresh, command-permissions
@@ -97,7 +97,7 @@ Empty until a review is asked for.
 
 ## Result
 
-### Increment A — Protect the local manifest in the rendered permissions
+### Increment A — Protect the local manifest in the rendered permissions (committed `2ef091e`)
 
 **Done.** `harnessstage.stage` passes `protect=tuple(done.confined) + (localmanifest.PATH,)` to `render_permissions`, so every
 rendered permissions file denies `Edit` on `.workbench/local/harness.json` in the three spellings, with or without the hook
@@ -121,4 +121,4 @@ criterion 2, which the code structure guarantees.
 
 **Not done.** The scratch-clone run (attach, read the three denies, edit the manifest with the harness's tool and see it refused)
 was not made; whether the harness's `Edit` deny also covers its other file-writing tools is not checked here. A clone gets the
-rule at its next `wb rerender`; this clone has not been re-rendered. The plan's own `Status:` line still says `Proposed`.
+rule at its next `wb rerender`; this clone has not been re-rendered. A docs-only wording fix followed in `bb30e7d`.

@@ -1,6 +1,6 @@
 # Refresh the rendered skills and agents of an attached clone
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-28
 Candidate: none (an owner request, found when a rendered skill stayed behind its source after `wb upgrade`; no roadmap candidate names it)
 Specs: harness-refresh, harness-rerender, installer-interface, command-permissions
@@ -385,7 +385,7 @@ Open for the owner:
   pins it.
 - A later-stage failure (the store stage) is not tested; by code it also skips `_finish`.
 
-### Increment D — The specs, the guide and the plan's acceptance (not committed)
+### Increment D — The specs, the guide and the plan's acceptance (committed `bc56873`)
 
 **Done.** Documents only; no code or test changed.
 - `harness-refresh.md`: header says it is built; one sentence that an unlisted file of equal content is `applied`; a note under
