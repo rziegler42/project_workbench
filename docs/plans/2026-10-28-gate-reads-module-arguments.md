@@ -1,6 +1,6 @@
 # Let the command gate read a module argument as data
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-28
 Candidate: none (an owner request that follows a gap found in use and recorded in the Result of `2026-10-27-levels-for-the-review-workflow`; no roadmap candidate names it)
 Specs: command-permissions.md, review-engine.md
