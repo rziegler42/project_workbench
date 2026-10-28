@@ -192,7 +192,9 @@ for the owner to decide:
   hash, and the file then reads stale and is replaced. The bytes written are always the staged ones, the preview shows the diff,
   and the owner types the digest. Since the plan `2026-10-28-protect-local-manifest` the rendered permissions deny the harness's
   write tool on the manifest (a clone has it after its next re-render), which closes the harness's tool and not a write by the
-  shell. Corroborating the hash in the guarded store would close the rest and is not built.
+  shell. Corroborating the hash in the guarded store would close the rest and is not built. The deny also makes the
+  rendered permissions need a plain project path, which they did not when there was nothing to protect: a project path with
+  `(`, `)`, `#`, `'` or a non-ASCII character is refused by `wb attach` and `wb rerender`, as it already was with a hook.
 - **A new file is not written atomically.** `create_file` writes into the final name, so a crash can leave a short file, which the
   next run refuses and names. An agent file without its `tools:` line might load with every tool.
 - **A new file is checked against the layout's exclude entries and not the clone's `.git/info/exclude`.**

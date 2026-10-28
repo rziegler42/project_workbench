@@ -387,7 +387,9 @@ review or in the security pass:
 - **Attach is idempotent.** A path that already holds exactly the planned bytes is kept; a
   different one is a conflict. The local manifest, `.workbench/local/harness.json`, is written
   last, so a part-written attach has none and can be rerun. It is scratch and grants no
-  authority.
+  authority, except that `wb rerender` trusts its hashes to tell an edited rendered file from a stale one
+  ([`harness-refresh.md`](harness-refresh.md)); the rendered permissions deny the harness's write tool on it and
+  nothing stops a write by the shell.
 - **`install` attaches as its last step,** after its own unfinished-write marker is removed. If
   attach fails, the install is complete, `install` prints `failed:` and names `wb attach`, and
   exits 3.

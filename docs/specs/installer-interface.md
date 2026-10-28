@@ -470,7 +470,8 @@ plan made and the owner may still change.
   is valid.
 - **The local manifest is not evidence.** The hashes in `.workbench/local/harness.json` are
   scratch, which grants no authority, so "no drift" says the files match the scratch record
-  and not that they are safe.
+  and not that they are safe. `wb rerender` does trust them to tell an edited rendered file from a stale one, so the
+  rendered permissions deny the harness's write tool on the file (not a write by the shell).
 - **Options:** none in this version.
 - **Agent may run it:** yes. It asks git nothing: it reads `.git/index` itself, so the git rule
   in the states section is met without running a program or reading the repository's
