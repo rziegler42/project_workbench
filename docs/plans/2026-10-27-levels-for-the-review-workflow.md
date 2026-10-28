@@ -1,6 +1,6 @@
 # Levels for the review engine's owner-run commands and the planning workflow
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-27
 Candidate: none (an owner request from the "Not built" list of `command-permissions.md`; no roadmap candidate names it)
 Specs: command-permissions, module-contract, review-engine
@@ -442,3 +442,18 @@ approval; the plan stays `Proposed` until the owner approves it.
   later change gives the preview a spelling the gate does not read as the key's word, the owner either runs the preview and passes
   on the digest, or confirms a digest of a preview that was not shown. Not fixed here; a fix is a new plan increment and the
   owner's call. Keep `prune` and `reset` at `block` while it stands.
+- **Later, 2026-10-28: the preview gap is closed.** `2026-10-28-gate-reads-module-arguments` changed what the gate reads. With
+  the five keys at `ask`, an agent's `wb run review-engine preview extend <document> <n>` ran and printed its digest.
+
+### Plan as a whole — verified in use (2026-10-28)
+
+- **Owner steps at a terminal, done:** `wb acknowledge` (nothing to acknowledge), `wb upgrade --package packages/workbench` (all
+  nine modules unchanged, nothing to change) and `wb rerender --package packages/workbench` (every file left as it is).
+- **One real `extend` at `ask`, in this clone.** The agent ran the preview for `docs/specs/harness-refresh.md` (3 of 3 rounds
+  used, bound 3, ceiling 5), then `extend ... 1 --digest <the preview's digest>`. The bound went from 3 to 4, rounds used stayed 3 and
+  the seal read `ok`. The owner read the level log (`~/.config/project-workbench/level-log`): the run left an attempt line (key
+  `wb run review-engine extend`, level `ask`, `digest:` form) and an outcome line with the same identifier and `done`. No digest is
+  copied here.
+- **Not run here:** a real `reset`, `archive`, `amend` or `prune` at `ask`, and a stale-digest refusal in use (both are covered by
+  tests only). The full suite was last run on the tree at `2ef091e`, not after the later commits.
+- **Left for the owner:** the stale terminal-only wording in `module-boundary.md` and `trust-and-approval.md`.
