@@ -455,6 +455,103 @@ class DriftTest(Rendered):
         self.assertEqual(1, code, text)
         self.assertIn("rendered at ask or none but no command gate was recorded", text)
 
+    def table_changed(self):
+        """Attached with `wb pin` at ask, then the owner sets it to block in the settings."""
+        self.attached(wb_pin="ask")
+        self.table(wb_pin="block")
+
+    def rerender(self):
+        import io
+        from workbench import approve, cli
+        from tests.test_rerender import Ticks
+        out, err = io.StringIO(), io.StringIO()
+        with unittest.mock.patch.object(approve, "is_terminal", lambda stream: True):
+            code = cli.main(["rerender", self.place, "--package", self.pkg, "--package", self.synth], out, err,
+                            store_root=self.store_root, home=self.home, distribution=self.dist,
+                            stdin=Ticks(out))
+        return code, out.getvalue() + err.getvalue()
+
+    STALE = "rendering: out of date; the settings table differs from the rendered one (wb rerender)"
+
+    def test_check_names_wb_rerender_when_the_table_changed_after_attach(self):
+        self.table_changed()
+        code, text = self.check()
+        self.assertEqual(1, text.count(self.STALE), text)
+        self.assertIn("warning: " + self.STALE, text)
+
+    GIT = "problem: .git/index: it does not start as a git index does"
+
+    def problems(self, text):
+        return [line for line in text.splitlines() if line.startswith("problem:")]
+
+    def test_a_stale_rendering_is_informational_and_adds_no_problem(self):
+        """The fixture's fake git index is the one problem every check here finds; a stale rendering is a warning."""
+        self.table_changed()
+        code, text = self.check()
+        self.assertIn(self.STALE, text)
+        self.assertEqual([self.GIT], self.problems(text), text)
+        self.assertIn("check found 1 problem\n", text)
+
+    def test_a_stale_rendering_does_not_hide_a_problem_check_found(self):
+        self.table_changed()
+        with open(os.path.join(self.place, SETTINGS_FILE), "ab") as handle:
+            handle.write(b" ")
+        code, text = self.check()
+        self.assertIn(self.STALE, text)
+        self.assertIn("problem: " + SETTINGS_FILE + ": differs from the rendering record", text)
+
+    def test_check_does_not_name_the_command_when_the_table_is_as_rendered(self):
+        self.attached(wb_pin="ask")
+        code, text = self.check()
+        self.assertNotIn("wb rerender", text)
+        self.assertNotIn("out of date", text)
+
+    def test_a_re_render_makes_the_report_go_away(self):
+        self.table_changed()
+        self.assertIn(self.STALE, self.check()[1])
+        code, text = self.rerender()
+        self.assertEqual(0, code, text)
+        code, text = self.check()
+        self.assertEqual([self.GIT], self.problems(text), text)
+        self.assertNotIn("out of date", text)
+
+    def test_a_relaxed_key_without_a_gate_points_at_the_re_render_not_a_new_clone(self):
+        self.ready()
+        os.makedirs(os.path.join(self.place, ".fixture"), exist_ok=True)
+        os.mkdir(os.path.join(self.place, ".fixture", "settings.json"))
+        self.table(wb_pin="ask")
+        self.assertEqual(0, self.attach()[0])
+        text = self.check()[1]
+        self.assertNotIn("new clone", text)
+        self.assertIn("wb rerender", text)
+
+    def test_check_says_nothing_about_the_table_when_it_cannot_be_built(self):
+        from workbench import approvalcmd
+        self.table_changed()
+        for error in (levels.RegistryError("two keys"), approvalcmd.ApprovalError("a declaration")):
+            with self.subTest(error=type(error).__name__):
+                with unittest.mock.patch.object(rendering, "current_table", side_effect=error):
+                    code, text = self.check()
+                self.assertEqual([self.GIT], self.problems(text), text)
+                self.assertNotIn("out of date", text)
+
+    def test_an_agent_safe_key_at_its_default_is_not_a_stale_table(self):
+        self.attached(wb_pin="ask")
+        self.table(wb_pin="ask", wb_check="none", wb_verify="none")
+        self.assertNotIn("out of date", self.check()[1])
+
+    def test_a_re_render_clears_the_no_gate_problem_once_the_obstacle_is_gone(self):
+        self.ready()
+        os.makedirs(os.path.join(self.place, ".fixture"), exist_ok=True)
+        os.mkdir(os.path.join(self.place, ".fixture", "settings.json"))
+        self.table(wb_pin="ask")
+        self.assertEqual(0, self.attach()[0])
+        self.assertIn("no command gate was recorded", self.check()[1])
+        os.rmdir(os.path.join(self.place, ".fixture", "settings.json"))
+        code, text = self.rerender()
+        self.assertEqual(0, code, text)
+        self.assertNotIn("no command gate was recorded", self.check()[1])
+
     def test_check_reports_a_harness_file_that_differs_from_the_record(self):
         self.attached(wb_pin="ask")
         with open(os.path.join(self.place, SETTINGS_FILE), "ab") as handle:

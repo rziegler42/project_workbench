@@ -21,8 +21,8 @@ safe, and the report says so. Git is never run: what it tracks is read from ``.g
 import collections
 import hashlib
 
-from . import (__version__, checks, gitindex, harnesses, installed, localmanifest, manifest, pointers, projectfs,
-               rendering, sources, target)
+from . import (__version__, approvalcmd, checks, gitindex, harnesses, installed, levels, localmanifest, manifest, pointers,
+               projectfs, rendering, sources, target)
 from .wbkit import display, safefs
 
 # Top-level paths that are scratch, not content: nothing tracked may live there.
@@ -353,17 +353,34 @@ def _listed(err, prefix, items):
         err.write("%s: and %d more\n" % (prefix, len(items) - LISTED))
 
 
+def _stale_table(guarded, root, record):
+    """The warning, or None, when the record was rendered from another table than the settings give now. Informational:
+    the stale state is already safe, because a key then reads ``block``, and ``wb rerender`` makes the record current. A
+    table that cannot be built here gives nothing: the commands that read it say why."""
+    try:
+        table, _, _ = rendering.current_table(guarded, root)
+    except (approvalcmd.ApprovalError, levels.RegistryError):
+        return None
+    if record["table_digest"] == rendering.digest(table):
+        return None
+    return "rendering: out of date; the settings table differs from the rendered one (wb rerender)"
+
+
 def _rendering_drift(guarded, writer, root):
-    """Problems for the harness's permissions file when it differs from the record attach kept in the guarded store
-    (``rendering.py``). No record, or a project that cannot be read here, gives none: the other checks say so."""
+    """``(problems, warnings)`` for the harness's permissions file when it differs from the record attach kept in the
+    guarded store (``rendering.py``), and for a record rendered from another table than the settings give now. No record,
+    or a project that cannot be read here, gives none: the other checks say so."""
     try:
         project = manifest.project_id(installed.read(writer, __version__).document["seed"])
     except (installed.InstalledError, manifest.ManifestError, KeyError):
-        return []
+        return [], []
     record = rendering.read(guarded, project)
     if record is None or record["file"] is None:
-        return []
-    problems = []
+        return [], []
+    problems, warnings = [], []
+    stale = _stale_table(guarded, root, record)
+    if stale:
+        warnings.append(stale)
     try:
         state = writer.read_file(record["file"])
     except safefs.SafeFsError:
@@ -374,7 +391,7 @@ def _rendering_drift(guarded, writer, root):
     if not record["gate"] and any(rule in ("ask", "none") for rule in record["keys"].values()):
         problems.append("a key is rendered at ask or none but no command gate was recorded (the shared settings file could "
                         "not be read as a regular file when the harness was attached), so it reads as block; remove the "
-                        "obstacle and attach again in a new clone")
+                        "obstacle and run `wb rerender`")
     shared = record["shared"]
     # The shared settings file only matters while a key is relaxed: the layout tolerates it, and the harness may create it.
     if shared["path"] is not None and record["gate"]:
@@ -385,7 +402,7 @@ def _rendering_drift(guarded, writer, root):
                     "is missing from the rendering record attach kept" if live is None else
                     "differs from the rendering record attach kept")
             problems.append("%s: %s, so a key at ask or none reads as block" % (_shown(shared["path"]), what))
-    return problems
+    return problems, warnings
 
 
 def run(guarded, command, out, err, distribution=None):
@@ -397,7 +414,8 @@ def run(guarded, command, out, err, distribution=None):
                 return 1
             writer = projectfs.Writer(held)
             report = examine(writer, distribution)
-            report = report._replace(problems=list(report.problems) + _rendering_drift(guarded, writer, held.path))
+            drift, stale = _rendering_drift(guarded, writer, held.path)
+            report = report._replace(problems=list(report.problems) + drift, warnings=list(report.warnings) + stale)
             path = held.path
         report = report._replace(modules=checks.run_all(guarded, path))
     except target.TargetError as exc:

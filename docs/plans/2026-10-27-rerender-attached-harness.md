@@ -275,7 +275,7 @@ because the registry derives the key from `rules.PREVIEW_ACTIONS`.
 **Checkpoint before B.** The plan asked whether the owner wants a security review of Increment B, and B waited for the owner's
 acceptance of `2026-10-27-rerender-is-terminal-only`. The owner accepted it (committed as `6f14476`) and answered "Yes, run one".
 
-### Increment B — `wb rerender`, the terminal-only write (not committed)
+### Increment B — `wb rerender`, the terminal-only write (committed as `1989c73`)
 
 **Done.**
 - `workbench/rules.py`: `rerender` is in `OWNER_RUN`, which gives the key `wb rerender` (owner-run, default `block`, offers
@@ -339,5 +339,45 @@ scratch clone is the owner's. The owner can run the plan's scratch-clone check w
 between `replace_file`'s comparison and its rename stays (spec, "Limits"). A preview and a re-render both open the guarded store
 and write the launcher wrapper if it is missing. The output is unbounded in count for a very large live file.
 
+**Real-harness run (the owner's, after B was committed).** The owner ran `wb acknowledge`, then `python3 -m workbench preview
+rerender --package packages/workbench` and `python3 -m workbench rerender --package packages/workbench` in a terminal on this
+clone. The plan listed every key moving from `unrecorded` (this clone predates records), the two old `approve-plan` denies as
+`removed`, the harness-module note and one digest; the typed digest wrote three paths and exit was 0. Afterwards `wb check`
+reported no problems, the rendered file held the deny rules for `wb rerender` in all five spellings, and the command gate was
+live (a command of mine that named the approval command was refused). The paste's second listing lacked the `wb rerender` line
+that the first had, while both digests were equal; I took it for a trimmed paste, and the deny rules confirm the rule was rendered.
+
 **Not done.** `wb check` does not yet name the command (Increment C); the specs, `docs/development.md` and the spec index
 (Increment D).
+
+### Increment C — `wb check` names the command (not committed)
+
+**Done.**
+- `workbench/check.py`: `_stale_table` compares the record's `table_digest` with `rendering.digest` of
+  `rendering.current_table(...)` and returns the warning `rendering: out of date; the settings table differs from the rendered
+  one (wb rerender)`, the spec's wording; `_rendering_drift` now returns `(problems, warnings)` and `run` passes the warning on, so
+  the stale state is informational and cannot change the exit code or hide a problem. A table that cannot be built
+  (`ApprovalError`, `levels.RegistryError`) gives no line. The line for a relaxed key with no recorded command gate now says
+  "remove the obstacle and run `wb rerender`" instead of "attach again in a new clone"; a test shows a re-render clears that state
+  once the obstacle is gone. The other drift lines are as they were.
+- Tests are in `tests/test_rendering.py` (`DriftTest`), not `tests/test_check.py` as the plan's affected areas say, because the
+  fixtures with an attached synthetic harness and a settable table are there. The plan is not edited for this.
+
+**Verification as run** (Python 3.15.0, warnings as errors).
+- Tests first: five of the new tests failed with the check unchanged (the others passed for want of a line to find).
+- `tests.test_rendering tests.test_check tests.test_rerender tests.test_levels tests.test_attach`: 315 tests OK.
+- Two deliberate breaks of `check.py` were caught (the digest comparison removed; the warning made a problem). The second was
+  first reported as not caught: `warnings` and `problems` have the same length, so a stale bytecode cache of the edited file was
+  used; with a fresh `PYTHONPYCACHEPREFIX` it was caught.
+- Full suite on the tree, in a scratch copy: 5679 tests in 11 roots. One failure: the Claude module test recorded under A, which
+  also fails on a clean `HEAD`. The intermittent levellog test did not fail this time.
+- `git diff --check`, `wb check` and `wb run code-work check` report no problems; `wb check` on this clone after the re-render
+  shows no stale line.
+
+**Review.** The `reviewer` agent, one exchange (cap 6): no blocking findings. Applied: a vacuous exit-code assertion replaced by a
+check of the problem line; `ApprovalError` added to the table-cannot-be-built test; a test that an agent-safe key at its default
+`none` is not a stale table; a test that a re-render clears the no-gate problem. Noted, not changed: the warnings list is cut at
+40 lines (`LISTED`), so the stale line, which comes last, could be cut on a clone with more than 40 warnings; a record from before
+records had a table digest is not valid and gives no line (nothing is printed for it, and no test covers it).
+
+**Not done.** The specs, `docs/development.md` and the spec index (Increment D).
