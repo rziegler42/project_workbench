@@ -15,8 +15,9 @@ The document is strict JSON::
   a key that is not valid, or a ``levels`` that is not an object reads as ``block``. In this version a key is a
   checkpoint the process module declares; ``stop`` reads as ``block`` and ``delegate`` as ``delegated``, a key set
   in both takes the table entry, and a checkpoint is only a fallback for a key the table does not name. ``delegated``, ``ask`` and ``none`` are offered by ``approve-plan``; ``none`` is also offered
-  by an agent-safe action and a declared module argument that is not owner-run (``levels``); any other key reads a level
-  it does not offer as ``block`` with a note.
+  by an agent-safe action and a declared module argument that is not owner-run (``levels``); an owner-run argument of a
+  module's command offers the levels its declaration names in ``levels`` (``ask`` and ``none``); any other key reads a
+  level it does not offer as ``block`` with a note.
 * ``caps`` is optional. It holds the owner's value for each loop cap a process module declares.
   The loader keeps a valid name with an integer value; ``effective`` judges the value against
   the module's ceiling and falls back to the module's default with a note.

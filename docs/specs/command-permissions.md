@@ -101,9 +101,22 @@ separated by single spaces, at most 96 characters.
 - `block`: every key.
 - `delegated`: `approve-plan` only, whose gate is a converged, sealed review of the exact bytes (`delegation.py`). The gate must
   pass at the moment of the run, and the run counts only while the table still reads `delegated`.
-- `ask`: `approve-plan` only. `none`: `approve-plan`, `wb install`, `wb adopt` (built by Increment F), `wb upgrade` and `wb add` (built by Increment G), `wb approve` and `wb pin` (built by Increment H), `acknowledge-first-tier`, `acknowledge-second-tier`, `wb recover`, `wb attach` and `wb release-approvals` (built by Increment J), `accept-decision` (built by Increment K), every agent-safe action and
+- `ask`: `approve-plan`, and an owner-run argument of a module's command whose declaration names it in `levels` (below). `none`: `approve-plan`, `wb install`, `wb adopt` (built by Increment F), `wb upgrade` and `wb add` (built by Increment G), `wb approve` and `wb pin` (built by Increment H), `acknowledge-first-tier`, `acknowledge-second-tier`, `wb recover`, `wb attach` and `wb release-approvals` (built by Increment J), `accept-decision` (built by Increment K), every agent-safe action and
   every declared module argument that is not owner-run; the keys under "Not built" offer `block` only, and so does `wb rerender`. A key offers a level only
   from the version that builds it for that command.
+
+**The levels an owner-run argument of a module's command offers** (decision `2026-10-27-owner-run-arguments-take-a-level`; the
+declaration and the key are built by Increment C of the plan `2026-10-27-levels-for-the-review-workflow`, the launcher by its
+Increment D). A command's declaration may give `levels`, an object that maps an `owner` argument to a non-empty list of different
+levels from `ask` and `none`; the key `wb run <command> <argument>` then offers `block` and those levels, in the order `block`,
+`ask`, `none`, and its default stays `block`. `delegated` is refused by `verify`, as are a key that is not an `owner` argument of
+that command and an unknown level. A command that offers `ask` also gives `preview`, the name of a declared argument that is
+neither owner-run nor `describe`; `verify` refuses `ask` without it and `preview` without `ask`. The preview argument is an
+ordinary declared argument, so its key defaults to `none`. A command without these fields offers `block` only, as before, and
+its declaration hashes as before. **Until the launcher is built (Increment D) a table level of `ask` or `none` for such a key
+renders its rule but the launcher still refuses the argument without a terminal; no first-party module declares the field yet.**
+The terminal test and the level are read by the launcher, not by the helper
+(`commands.owner_refusal`).
 
 ### Shipped defaults
 
@@ -278,9 +291,11 @@ default of `block`. `approve-plan` stays `block`; the default is not raised to `
 
 **Levels offered.** Every key offers `block` and `none`, except `wb rerender`, which offers `block` only for good (see "Re-rendering an
 attached clone"), and the owner-run arguments of module commands (`wb run <command>
-<argument>` where the argument is owner-run), which offer `block` only until a later plan gives the module contract a way to pass a
-level to a helper (the clarification note of `2026-10-26-a-level-for-every-command`, and "Not built"). `delegated` stays `approve-plan` only, and `ask` is offered by a key once
-that key has a preview digest of its own, built as `approve-plan`'s is. Every key built by the plan offers `none`; the keys that still offer `block` only are listed under "Not built". The order of building the digests is for a plan **(call)**: `install` and `adopt` first, because they already have a
+<argument>` where the argument is owner-run), which offer `block` only unless the command's declaration gives `levels` (built by
+Increment C of the plan `2026-10-27-levels-for-the-review-workflow`; "Which levels a key offers"; no module declares it yet).
+`delegated` stays `approve-plan` only, and `ask` is offered by a key once
+that key has a preview digest of its own, built as `approve-plan`'s is (for an owner-run argument of a module's command, once its
+declaration names a `preview` argument; `verify` checks the name, and the digest the argument prints is the module's to build). Every key built by the plan offers `none`; the keys that still offer `block` only are listed under "Not built". The order of building the digests is for a plan **(call)**: `install` and `adopt` first, because they already have a
 preview, then the module arguments and `extend` (the deferred Increment G). At `none` an owner-run command runs without a terminal
 and without a harness `deny`; the command's own checks of its input and its log entry apply, and the terminal prompt does not.
 `accept-decision` offers `block` and `none`, and `AGENTS.md` says that the owner decides who accepts a decision.
@@ -502,18 +517,20 @@ Also, in the same flow:
 - `run-increment`, `security-review` and committing or pushing (`safe-git`, `push-shared-branch`) are not part of drafting,
   reviewing or approving, and are governed elsewhere.
 - The "yes" in "Needs a terminal" for the review engine's owner-run arguments rests on `review-engine.md`, "Owner-run commands". In
-  the code the test is made by the launcher (`commands.owner_refusal`); the spec's wording places it in the helper.
+  the code the test is made by the launcher (`commands.owner_refusal`); any wording in `review-engine.md` that places it in the helper
+  is corrected by Increment G of the plan `2026-10-27-levels-for-the-review-workflow`.
 
 ## Not built
 
 - `none` for the owner-run arguments of module commands (`wb run mempalace init`, `mine`, `wb run remote-runner fetch-overwrite`
-  and the review engine's `reset`, `archive`, `prune`, `amend`, `extend`). The helper checks its own terminal and the contract has no
-  way to pass it a level. A later plan, after a decision on the module contract, would let the launcher pass the level and have the
-  helper use the kit's level function. Until then these keys offer `block` only.
-- `wb run review-engine extend` at `ask` and `none` (Increment G of the plan). The declaration schema (`declarations.py`) has no
-  field for the levels an owner-run argument offers, and the installer may not name a module's command. A later plan needs: a field
-  such as `levels` on a command, a decision for that change to the module contract, a helper that prints and checks a digest of the
-  review's `status` and `n`, and the log attempt written before the helper is launched.
+  and the review engine's `reset`, `archive`, `prune`, `amend`, `extend`). The declaration field that gives them levels is built
+  (`levels` and `preview`, Increment C of the plan `2026-10-27-levels-for-the-review-workflow`), and the terminal test is the
+  launcher's (`commands.owner_refusal`), not the helper's. Still to build, by Increments D to F of that plan: the launcher reading
+  the level and logging the run, and a declaration of `levels` and a preview with a digest in the review engine. Until then these
+  keys offer `block` only.
+- `wb run review-engine extend` at `ask` and `none` (Increments D and E of the plan `2026-10-27-levels-for-the-review-workflow`): a
+  helper that prints and checks a digest of the review's `status` and `n`, and the log attempt written before the helper is
+  launched.
 - The keys `submit-remote-job` and `push-shared-branch`, and the review engine's `wb run review-engine reset`, `archive`, `prune` and
   `amend` (already in the first item): each needs its own preview digest for `ask` and offers `block` only. The checkpoints `fetch-remote-output` and `change-direction` also offer `block` only: the plan
   built `none` for the installer commands and for `accept-decision`, and these two are agent checkpoints that no command of the

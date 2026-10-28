@@ -274,7 +274,7 @@ approval; the plan stays `Proposed` until the owner approves it.
   none`. Refreshing it is the owner's `wb upgrade` and re-render; this increment did not touch it.
 - **Not done.** Nothing in code. No owner-run command was run.
 
-### Increment B — built, not committed (2026-10-27)
+### Increment B — committed as ffeb43d (2026-10-27)
 
 - **Done.** `docs/decisions/2026-10-27-owner-run-arguments-take-a-level.md`, status `Proposed`, and its row in
   `docs/decisions/README.md`. It decides: the launcher stays the one place that reads the terminal and the level (the helper has no
@@ -289,4 +289,31 @@ approval; the plan stays `Proposed` until the owner approves it.
   lists that file, so the plan needs no edit); (3) what the digest binds and how `--digest` is parsed: applied
   (decision 8); (4) `ask` inherits the spelling limit: applied (decision 9, a recommendation to keep `prune` and `reset` at `block`);
   (5) evidence wording: confirmed, no change.
-- **Not done.** The decision is not accepted; that is the owner's act. Increments C to G wait for `Accepted`. Not committed.
+- **Not done.** Accepting the decision was the owner's act, made by the owner's edit of the record's status line and its index row on
+  2026-10-27, before this commit; the agent wrote it `Proposed`.
+
+### Increment C — committed (2026-10-27)
+
+- **Done.** `workbench/declarations.py`: `Command` gains `levels` (`((argument, (level, ...)), ...)`) and `preview`, both defaulted
+  so older constructions are unchanged; `_argument_levels` refuses a non-object, a key that is not an `owner` argument, an empty or
+  non-list value, a level other than `ask` or `none` (`delegated` named in the message), a repeated level, `ask` without `preview`,
+  `preview` without `ask`, and a `preview` that is not a declared argument, is owner-run, or is `describe`. `workbench/levels.py`:
+  `_key` offers the declared levels after `block` and `registry` reads them from a fourth item of a command's tuple (only for an
+  `owner` argument; the default stays `block`). `rendering.py`, `harnessstage.py` and `settingscmd.py` pass `command.levels`.
+  `settings.py` and `levels.py` docstrings updated. Specs: `module-contract.md` (the two fields) and `command-permissions.md` (the
+  offer, the not-yet-built launcher, the corrected "Not built" text that the terminal test is the launcher's).
+  Tests: `tests/test_owner_argument_levels.py`, 29 tests.
+- **Verification run.** The 29 new tests pass (`python3 -B -W error -m unittest tests.test_owner_argument_levels`). Against a scratch
+  copy of HEAD's code, 13 of the first 25 failed and 5 errored; the rest pin behaviour that does not change. With the three callers
+  reverted in a scratch copy, 2 of the 3 caller tests fail. `git diff --check`, `doccheck`, `refcheck`, `wb check` and
+  `wb run code-work check` are clean. Full suite (`python3 -B -W error tests/run_all.py`, scratch copy of the final tree): 5710
+  tests in 11 roots; one failure, the known intermittent `test_levellog.ConcurrencyTest.test_parallel_appends_keep_every_line`
+  (a race creating `level-log`; it failed 3 of 8 runs on HEAD's code and 4 of 8 on this tree; this increment does not touch
+  that code). Every other root passed.
+- **Review.** One `reviewer` exchange of six, no blocking finding, four non-blocking, all applied: (1) `_key` built its offers from
+  `LEVELS` and would offer `delegated` to a hand-built `Command`: now only `ask` and `none`, with a test; (2) no test went through
+  the callers: `ThroughTheInstalledModule` runs `wb settings` and `current_table` on an installed module; (3) the hash tests compared
+  two parses of one input: replaced by a check that a declaration without the fields carries no trace of them (the hash covers the
+  declaration as written); (4) stale text in `settings.py` and one overstated sentence in `command-permissions.md`.
+- **Not done.** Nothing takes effect yet: the launcher (Increment D) still refuses an owner-run argument without a terminal, and no
+  first-party module declares the field. Not committed.

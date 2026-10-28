@@ -119,7 +119,8 @@ def current_table(guarded, start):
     table = table_of(
         guarded,
         tuple(name for item in found if item.module.type == "process" for name in item.module.checkpoints),
-        [(command.name, command.owner, command.arguments) for item in found for command in item.module.commands])
+        [(command.name, command.owner, command.arguments, command.levels)
+         for item in found for command in item.module.commands])
     return table, root, ident
 
 

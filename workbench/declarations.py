@@ -32,8 +32,12 @@ commands    an object of at most ``MAX_COMMANDS`` entries, each a command name i
             that command's ``arguments`` that only the owner runs; a harness that provides
             permissions denies the agent each one (``module-contract.md``). ``describes`` is a
             list of at most ``MAX_DESCRIBES`` actions, each in the form of an argument; it needs
-            ``describe`` among the arguments, and ``describe`` is never owner-run.
-checks      a list of at most ``MAX_CHECKS`` objects ``{"helper", "kit"}``, both required. The
+            ``describe`` among the arguments, and ``describe`` is never owner-run. ``levels`` is an
+            object that maps an ``owner`` argument to the non-empty list of levels, from ``ask`` and
+            ``none``, that it offers beyond ``block``; ``preview`` names the declared argument, neither
+            owner-run nor ``describe``, that previews them, and goes exactly with a command that
+            offers ``ask`` (``2026-10-27-owner-run-arguments-take-a-level``).
+checks     a list of at most ``MAX_CHECKS`` objects ``{"helper", "kit"}``, both required. The
             helper is an item of ``ships`` or a file below one, and its last path segment, the
             check's pin name, is in the helper-name form (``module-boundary.md``).
 approval    process modules only: ``{"command", "argument"}``, the key of one of the module's
@@ -108,7 +112,10 @@ Module = collections.namedtuple(
     "Module", "name version type description provides requires blocks helpers slots fills "
               "writes ships commands checks layout declaration approval checkpoints caps convergence",
     defaults=(None, (), (), None))
-Command = collections.namedtuple("Command", "name helper runtime kit arguments owner describes", defaults=((), ()))
+Command = collections.namedtuple("Command", "name helper runtime kit arguments owner describes levels preview",
+                                 defaults=((), (), (), None))
+# The levels, beyond ``block``, that a declaration may give an owner-run argument (``module-contract.md``).
+ARGUMENT_LEVELS = ("ask", "none")
 Cap = collections.namedtuple("Cap", "name default ceiling")
 
 
@@ -286,7 +293,7 @@ def _commands(check, value, ships):
             check.fail("commands", "command name %s must be letters, digits and ._+-, starting "
                                    "with a letter or digit, at most %d characters"
                        % (_shown(name), MAX_NAME_CHARS))
-        check.exact_keys(entry, "commands", ("helper",), ("runtime", "kit", "arguments", "owner", "describes"))
+        check.exact_keys(entry, "commands", ("helper",), ("runtime", "kit", "arguments", "owner", "describes", "levels", "preview"))
         helper = check.path(entry["helper"], "commands")
         helper = "/".join(helper)
         if not any("/".join(helper.split("/")[:n]) in ships
@@ -342,8 +349,45 @@ def _commands(check, value, ships):
             check.fail("commands", "command %s: 'describe' may not be owner-run" % name)
         if describes and "describe" not in arguments:
             check.fail("commands", "command %s: 'describes' needs 'describe' among its 'arguments'" % name)
-        commands.append(Command(name, helper, runtime, kit, tuple(arguments), tuple(owner), tuple(describes)))
+        offered, preview = _argument_levels(check, name, entry, arguments, owner)
+        commands.append(Command(name, helper, runtime, kit, tuple(arguments), tuple(owner), tuple(describes), offered,
+                                preview))
     return tuple(commands)
+
+
+def _argument_levels(check, name, entry, arguments, owner):
+    """``(levels, preview)`` of a command entry: the ``levels`` field as ``((argument, (level, ...)), ...)`` in the order
+    written, and the ``preview`` argument or ``None``. Each key is an owner-run argument and each value a non-empty list of
+    different levels from ``ARGUMENT_LEVELS``; ``ask`` needs a ``preview``, a declared argument that is neither owner-run
+    nor ``describe``, and a ``preview`` needs ``ask`` (``2026-10-27-owner-run-arguments-take-a-level``)."""
+    given = entry.get("levels", {})
+    if not isinstance(given, dict):
+        check.fail("commands", "command %s: 'levels' must be an object of owner-run arguments" % name)
+    offered = []
+    for argument, wanted in given.items():
+        if argument not in owner:
+            check.fail("commands", "command %s: 'levels' names %s, which is not one of its 'owner' arguments"
+                       % (name, _shown(argument)))
+        if not isinstance(wanted, list) or not wanted:
+            check.fail("commands", "command %s: the levels of %s must be a non-empty list" % (name, _shown(argument)))
+        for level in wanted:
+            if level not in ARGUMENT_LEVELS:
+                check.fail("commands", "command %s: the level %s of %s must be one of %s ('delegated' needs a gate "
+                                       "that only a checkpoint has)"
+                           % (name, _shown(level), _shown(argument), ", ".join(ARGUMENT_LEVELS)))
+        check.unique(wanted, "commands")
+        offered.append((argument, tuple(wanted)))
+    asks = any("ask" in wanted for _, wanted in offered)
+    preview = entry.get("preview")
+    if "preview" in entry:
+        if not isinstance(preview, str) or preview not in arguments or preview in owner or preview == "describe":
+            check.fail("commands", "command %s: 'preview' must name a declared argument that is neither owner-run nor "
+                                   "'describe'" % name)
+        if not asks:
+            check.fail("commands", "command %s: 'preview' goes only with a command that offers 'ask'" % name)
+    elif asks:
+        check.fail("commands", "command %s: a command that offers 'ask' needs a 'preview' argument" % name)
+    return tuple(offered), preview
 
 
 def _checks(check, value, ships, commands):
