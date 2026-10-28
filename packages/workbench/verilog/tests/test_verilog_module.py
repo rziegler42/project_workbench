@@ -15,7 +15,7 @@ ROOT = support_install.ROOT
 PACKAGE = os.path.join(ROOT, "packages", "workbench")
 MODULE = os.path.join(PACKAGE, "verilog")
 NEUTRAL = os.path.join(MODULE, "harness", "neutral")
-SKILLS = ("verilog-verilator-sim",)
+SKILLS = ("verilog-verilator-sim", "verilog-sby-formal")
 
 
 def read(*parts):
@@ -50,6 +50,11 @@ class Declaration(unittest.TestCase):
 
     def test_the_package_lists_it(self):
         self.assertIn("verilog", json.loads(read(PACKAGE, "package.json"))["modules"])
+
+    def test_it_ships_exactly_the_two_skills(self):
+        self.assertEqual(["verilog-sby-formal", "verilog-verilator-sim"], sorted(SKILLS))
+        shipped = sorted(os.listdir(os.path.join(NEUTRAL, "skills")))
+        self.assertEqual(sorted(SKILLS), shipped)
 
     def test_every_file_is_the_declaration_or_a_skill_file(self):
         expected = ["module.json"]
@@ -92,6 +97,12 @@ class Skills(unittest.TestCase):
             opening = body.strip().split("\n\n")[1]  # the paragraph after the heading
             for phrase in ("plain Verilog-2001", "SystemVerilog", "out of scope", "stop and tell the owner"):
                 self.assertIn(phrase, opening, "%s: %s" % (name, phrase))
+
+    def test_the_formal_skill_ties_a_new_assume_to_a_written_source_and_the_owner(self):
+        text = skill_text("verilog-sby-formal")
+        for phrase in ("written source", "conditional task", "unweakened", "never as an unconditional pass",
+                       "tell the owner"):
+            self.assertIn(phrase, text, phrase)
 
     def test_each_points_to_its_reference_file(self):
         for name in SKILLS:

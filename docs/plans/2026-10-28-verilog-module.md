@@ -224,3 +224,25 @@ Empty until a review is asked for.
   owner ran `wb release-approvals` twice (once before the skill files, once after) to open the gate. Increment C still runs it
   once more for the final tree. Five stale shipped records are reported as not part of the release; none was removed.
 - **Not done:** no independent review (AGENTS.md: only when the owner asks); no tool was run against any design.
+
+### Increment B
+
+- **Read (2026-10-28):** the formal skill's `SKILL.md` (sha-256 `d1ed4793befb9607abfc70a6329ede265a605205040eb43ec5005d03966a92db`, as in Assumptions) and its `reference.md`
+  (sha-256 `b4dd053746e245bb512a1d4e4c951b3f7143412bc6ea91cc52c01f0731ced559`, 11037 bytes; the plan recorded no hash for it).
+- **Rewritten, not copied.** Both files open with their scope (plain Verilog-2001, SystemVerilog out of scope, stop and
+  tell the owner), point to each other and to the simulation skill, and mark the advice as read, not run.
+- **Changed or dropped:** the web links under "Sources" are dropped (no URLs in shipped text), with the remarks that only
+  they carried (`-noverific`, the `:default` task tag). The claim that `bmc`, `prove` and `cover` all pass on a toy
+  responder is kept only as "read to pass, not run here", and the same for the broken-fixture result. The description is
+  shortened to fit 300 characters. Added by me: the skill says that raising the depth to change a result is also to be put
+  to the owner first, the same rule as for a new `assume`; the source only warns against the depth bump.
+- **Assume rule (routing line SA6):** kept as a written-source requirement, a separately named conditional task, an
+  unweakened unconditional task, and results reported as conditional.
+- **Written:** `verilog-sby-formal/SKILL.md` and `reference.md` under the module's neutral skills; the module's tests now
+  cover both skills (13 tests), assert exactly two skills, and check the assume rule's phrases.
+- **Verification as run:** test first, 2 failures and 8 errors before the skill existed; then the module's tests, 13, OK;
+  `tests.test_package tests.test_skill_names tests.test_boundary`, 29, OK; `wb run code-work check` no problems;
+  `git diff --check` clean. The first attempt found a 312-character description (limit 300); shortened.
+- **Incident:** the gate lockout recurred as predicted; the owner ran `wb release-approvals` twice more (after the copy and
+  after the description fix). Four more records are reported stale; none removed. C reruns it once for the final tree.
+- **Not done:** no independent review (only when the owner asks); no tool was run against any design.
