@@ -271,4 +271,28 @@ session). Findings are advice, judged by the author; the review is not an approv
 
 ## Result
 
-Empty until work starts.
+### Increment A (roadmap rules in `groundwork`)
+
+- **Probe, 2026-10-27, scratch fixture outside the repository** (a `git init`, `.workbench/manifest.json` holding `{}`, one
+  roadmap with one candidate, one plan naming `road#first-one`; helper run with `python3 -I`): roadmap `Active`:
+  `complete road#first-one`; the same file set to `Archived` in place: `complete road#first-one`, unchanged; exit status 0 both
+  times. `doccheck`, run with the repository's `workbench/` on the path because a direct run cannot import `wbkit`, accepted
+  the archived form with no output; a control with `Status: Bogus` printed `problem: … has the status Bogus; a roadmap is
+  Draft, Active or Archived`. So retiring by status keeps the candidate resolved.
+- **Edits:** the roadmaps README (tracked and committed; a contents line on file lists, acceptance criteria and commands; a
+  `Retiring a roadmap` section), the `draft-roadmap` skill (step 1 qualified to a roadmap that is not archived, a new step 7 that
+  stops for the owner, two rule lines) and the Roadmaps section of `docs/specs/groundwork.md`. No decision record.
+- **Approvals:** the owner ran `release-approvals` (10 approvals written for 1 package; two obsolete shipped records warned).
+  Those two were removed with `safe-git remove --recursive --confirm` on the owner's approval; two regenerated package
+  records are added. The edit gate did not refuse any edit.
+- **Deviation, step 5:** `python3 -m workbench preview upgrade --package packages/workbench` was refused twice
+  ("the project was first seen at <another clone>, not here; it is treated as new here"): the owner's configuration pointed at a
+  second clone. The preview was not run, so what an upgrade offers for the module-owned README and the skill source is
+  **not recorded**, and the skill's reach into an existing project stays unverified. The README is seeded
+  (`repository-boundary`, file classes) and reaches new installs only.
+- **Verification run:** `python3 -B -W error tests/run_all.py` (4856 tests in 10 roots, OK, run before `release-approvals`);
+  `python3 -m workbench check` and `python3 -m workbench run code-work check` (53 plans) clean after it; `git diff --check`
+  clean. `doccheck` and `refcheck` were run as module checks inside `check`, not alone.
+- **Not done:** the upgrade preview; the Increment B and C work.
+
+Increments B and C: empty until work starts.

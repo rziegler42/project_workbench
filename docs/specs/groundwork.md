@@ -68,6 +68,14 @@ it does not authorize work and does not alter a plan that is in progress.
 
 - A roadmap is named by its scope in lowercase kebab-case, with no number or date.
   There may be several roadmaps, used alternately.
+- A roadmap is a tracked, committed document. It keeps no implementation file lists,
+  detailed acceptance criteria or executable commands; they belong in the plan written
+  when a candidate is promoted.
+- A roadmap is retired like a plan, by setting its status to `Archived`. The file is never
+  moved or renamed, so `<roadmap>#<id>` stays valid. One roadmap that is not archived is
+  kept for each scope and updated in place; a replacement takes a new name, and the old
+  one is archived when it is written. Retiring or replacing a roadmap changes direction,
+  so it needs the owner.
 - A roadmap states its status, its update date, its purpose, the current state, its
   candidates, deferred work, and the decisions that bear on it. The status is one line
   before the first `##` heading, and its values are `Draft`, `Active` and `Archived`.
