@@ -165,7 +165,7 @@ says so.
 | `preview` | project | `install`, `adopt`, `upgrade`, `add` or `rerender` and their arguments | nothing; no network, it reads only the approved cache | no | built |
 | `adopt` | project | target, a module selection (as `install`) | committed content for the paths that are missing, manifest, the project's store directory; never an existing file and no harness file | yes, owner-run; the owner may set `wb adopt` to `none` | built (`adopt-existing-repository`) |
 | `attach` | project | target, `--harness` | per-clone harness files, `.git/info/exclude`, the local manifest | no, but owner-run (harness deny rule) | built |
-| `rerender` | project | target, `--package` | the harness's permissions file, the local manifest's hash for it, then the rendering record in the guarded store | yes, owner-run at every level; the key offers `block` only | built (`rerender-attached-harness`) |
+| `rerender` | project | target, `--package` | the stale, new and missing rendered files, the harness's permissions file, the local manifest's hashes, then the rendering record in the guarded store | yes, owner-run at every level; the key offers `block` only | built (`rerender-attached-harness`, `refresh-rendered-harness`) |
 | `check` | project | target | nothing | no | built |
 | `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run; the owner may set it to `none` | built |
 | add a module | project | target, a module | the same as `upgrade`, new files and blocks only | yes, owner-run; the owner may set `wb add` to `none` | built |
@@ -437,8 +437,12 @@ plan made and the owner may still change.
 - **The preview prints,** after `project: <resolved target>`, the harness, each key whose rule moves (`old -> new`), the files it
   changes with old and new hash (or `left as it is`), the `allow` rules kept (`kept:`), every other live entry the new file will not
   have (`removed:`), notes, a summary of the inputs read and a 64-character `digest:`. Nothing to change says so. It writes nothing.
-- **`wb rerender` writes** in this order: the permissions file (`replace_file` with the hash the plan read), the local manifest's hash
-  for it, then the rendering record. It needs a terminal on both standard input and output at every level, asks for the first 12
+- **The other rendered files** (`harness-refresh.md`). The preview also lists each skill, agent and root file the harness
+  stages with a state: current, applied, stale, new, missing (recreated) or orphaned (listed, never deleted); an edited file, an
+  unrecorded file at a staged path, or a link at any staged or listed path refuses the whole run. Stale files show the changed lines.
+- **`wb rerender` writes** in this order: the stale files (`replace_file` with the hash the plan read) and the new and missing ones
+  (`create_file`), after a re-read of each that refuses with nothing written if one differs; the permissions file (`replace_file`
+  with the hash the plan read); the local manifest's hashes; then the rendering record. It prints a `files:` line of counts. It needs a terminal on both standard input and output at every level, asks for the first 12
   characters of the digest, rebuilds the plan and refuses unless the digest is unchanged, and writes no level-log entry. A stop after
   writing began lists what was and was not written and how to finish; running the command again finishes it.
 - **Exit codes:** 0 done or nothing to change, 1 refused or cancelled (a failure of the first replacement, a conflict for
@@ -446,6 +450,9 @@ plan made and the owner may still change.
   nothing was renamed yet), 130 interrupted before the writes begin. `preview rerender` exits 0 or 1.
 - **Agent may run it:** the preview, yes (its key defaults to `none`). The write, no: it is owner-run and terminal-only, and the
   harness renders a `deny` for it in every spelling.
+- **`upgrade` points at it.** After an upgrade that wrote a path under a module's `harness/` folder, `wb upgrade` (and `wb add`,
+  which shares the code) prints one line after "wrote N paths" saying the rendered skills, agents or commands may be behind and
+  naming `wb preview rerender`. It stages and compares nothing and writes nothing under the harness's folders.
 
 ### `check` (built by `claude-harness`)
 

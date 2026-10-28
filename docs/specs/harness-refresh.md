@@ -6,8 +6,9 @@ Updated: 2026-10-28
 A design, approved by the owner on 2026-10-28 as it stands, the calls included. It was reviewed in three rounds with the
 project's review bridge, which stopped at its bound; the fixes of the last round were not reviewed again. **(call)** marks a choice
 the owner did not make themselves; the owner's own words are under "Intent". The owner chose to put this in a spec of its own and
-not to revise [`harness-rerender.md`](harness-rerender.md), whose scope is the permissions file and the table. Nothing here is
-built, and the approval of the design is not the approval of a plan.
+not to revise [`harness-rerender.md`](harness-rerender.md), whose scope is the permissions file and the table. It is built by the
+plan `2026-10-28-refresh-rendered-harness` (increments A to D); "As built" lists what the build settled and what remains open.
+The text above "As built" is the design as approved, where it differs the built command is described under "As built".
 
 ## Intent
 
@@ -86,6 +87,9 @@ on disk, and the rows for a staged path follow:
 | unrecorded | the staged file is not in the manifest and a file with other content is at its path | refused, as for edited |
 | orphaned | the manifest lists a path the staged files no longer have (checked before every row above) | listed as "no longer shipped", with its on-disk state (present, or already gone); never deleted, never recreated |
 
+A staged file that is not in the manifest and whose content on disk equals the staged hash is "applied" too (an earlier run
+created it and stopped before the manifest was written); it is not "unrecorded".
+
 The owner resolves an edited file by moving it aside or deleting it, which makes it "missing" and so recreated from its
 source. This command has no force option. **(call)** Refusing the whole run on one edited file keeps the plan the owner
 confirmed identical to the plan written.
@@ -152,9 +156,48 @@ file writes nothing for it. The permissions file, the other files, the manifest 
    every file before its first write. A change after the first replacement stops the run with exit 3 and the written and not-written lists.
 6. A run without a terminal is refused at every level, and no level is offered for it.
 7. A failure after one replacement leaves every relaxed key reading `block`, and a second run reads each replaced or created
-   file as applied and finishes the job, including the manifest and the record.
+   file as applied and finishes the job, including the manifest and the record. (As built, a stop after the manifest was written
+   leaves the files reading `current` and not `applied`, because the manifest then records them; the second run finishes the record.)
 8. `wb upgrade` writes nothing under `.claude/`.
 9. The comparison tests use the real renderer, so a quoting or `tools:` translation does not count as stale.
+
+## As built
+
+Built by the plan `2026-10-28-refresh-rendered-harness`: A the states in the preview (`refresh.classify`), B the writes
+(`refresh.recheck`, `refresh.write`, `rerender._write`), C the line of `wb upgrade`. What the build settled:
+
+- **The write order.** The re-read of every stale, new, missing and applied file (a link or a changed hash refuses with nothing
+  written), then the files (a stale one by `Writer.replace_file` with the hash the plan read, a new or missing one by
+  `Writer.create_file`), then the permissions file, then the local manifest, then the record. The files go before the permissions
+  file on purpose: a stop between leaves new instructions under the old permissions, never a looser key. Applied files are read
+  again just before the manifest is written. The manifest keeps its fields; the hashes of the written and applied paths change and the entries of new paths are added.
+- **The report.** A successful run prints one `files:` line (replaced, created, recreated, and recorded as applied; nonzero counts
+  only) before "nothing was committed".
+- **Failures.** A re-read that differs refuses with exit 1 and "nothing was written". A failure after a write is exit 3 with the
+  written and not-written lists; the not-written list is every step of the write order not found done (the order is fixed, and the disk is read for the next step only). A new file that failed
+  part-way is named as possibly partly written: remove it, then run again. A second run finishes the job.
+- **`wb upgrade`.** After "wrote N paths" it prints one line when a written path lies under `.workbench/<package>/<module>/harness/`:
+  the rendered skills, agents or commands may be behind, and `wb preview rerender` shows which. It prints it for `wb add` as well,
+  which shares the code. It stages and compares nothing, and it writes nothing under the harness's folders.
+- **The root file is a rendered file like the others.** The owner-editable question (Open question 3) is answered by treating it
+  so: an edit to it refuses the run, and the owner moves it aside to have it recreated.
+- **`wb check`** still does not report staleness (Open question 1 stays open).
+
+## Limits as built
+
+Reviewed by a `reviewer` pass per increment and a security review of Increment B, asked for by the owner. Findings not applied,
+for the owner to decide:
+
+- **The edited-file test trusts the local manifest.** Whoever can write `.workbench/local/harness.json` can record an edited file's
+  hash, and the file then reads stale and is replaced. The bytes written are always the staged ones, the preview shows the diff,
+  and the owner types the digest. Corroborating the hash in the guarded store, or denying agent writes to the manifest, would close it.
+- **A new file is not written atomically.** `create_file` writes into the final name, so a crash can leave a short file, which the
+  next run refuses and names. An agent file without its `tools:` line might load with every tool.
+- **A new file is checked against the layout's exclude entries and not the clone's `.git/info/exclude`.**
+- **The changed lines of a stale file are split on any line separator**, so a change of only a carriage return or a vertical tab
+  shows `(stale)` with no changed lines.
+- A write that lands between `replace_file`'s comparison and its rename is overwritten without notice (as for the permissions file).
+- The fixes of the third review round of this spec were not reviewed again.
 
 ## Governing decisions and references
 

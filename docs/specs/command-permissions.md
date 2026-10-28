@@ -478,11 +478,12 @@ and not a problem, because the stale state is already safe).
 - **`wb preview rerender`** is the read-only plan and is its own agent-safe key, default `none`.
 - **It runs only at a terminal**, on standard input and output, at every level; the owner types the first 12 characters of the
   preview's digest. Before the first write it rebuilds the plan and refuses unless the digest is the one confirmed.
-- **The plan lists** each key whose rule moves, the three files it changes (the permissions file, the local manifest's hash for it,
-  the rendering record), every `allow` rule of the live file, which it keeps, and every other live entry the new file will not have,
+- **The plan lists** each key whose rule moves, the files it changes (the permissions file, the local manifest, the rendering
+  record, and the stale, new and missing rendered skills, agents and root file of
+  [`harness-refresh.md`](harness-refresh.md)), every `allow` rule of the live file, which it keeps, and every other live entry the new file will not have,
   which it removes, each shown whole. It notes the shared settings file when the record watched another version of it: a re-render
   records that file as it is now and does not write it.
-- **The write order** is the permissions file, the local manifest, then the record. The record is last, so a stop at any step leaves
+- **The write order** is the rendered files, the permissions file, the local manifest, then the record. The record is last, so a stop at any step leaves
   every relaxed key reading `block` and never looser. Exit 0 done or nothing to change, 1 refused or cancelled, 2 usage, 3 stopped
   after writing (the report lists what was and was not written), 130 interrupted before writing.
 
@@ -562,7 +563,8 @@ Also, in the same flow:
 - The rule that a command reaching more than one key takes the strictest level of them: each command reaches one key today.
 - `none` for `wb rerender`, if a way to authorize a stale rendering without a terminal is ever wanted: the key reads its level
   through the record that a re-render repairs (see "Re-rendering an attached clone"), and it needs its own decision.
-- Picking up a module or package change in an attached clone, which `upgrade` covers; `wb rerender` re-renders for the table only.
+- Picking up a module or package change in an attached clone: `upgrade` brings the installed files up to date and `wb rerender`
+  then refreshes the rendered skills and agents (`harness-refresh.md`); the key it needs is the same `wb rerender`, `block` only.
 - A provenance check inside `approve-plan`, managed settings, and a store whose approvals a shell cannot forge.
 
 ## Limits

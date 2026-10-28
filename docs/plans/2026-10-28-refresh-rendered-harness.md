@@ -255,7 +255,7 @@ so); this review read the plan against the spec as it stands.
 
 ## Result
 
-### Increment A — The states of the rendered files, in the preview (not committed)
+### Increment A — The states of the rendered files, in the preview (committed `8c8320a`)
 
 **Done.**
 - `workbench/refresh.py` (new): `classify(writer, listed, files, settings, exclude)` reads every staged path and every manifest
@@ -308,7 +308,7 @@ built, the `security-reviewer` agent reviews it, besides the mandatory `reviewer
 **Not done (Increment A).** Increments B to D. The mode of a created file (done in B). The plan's step 5 names "the writer's
 exclude check", which does not test coverage; the deviation is above.
 
-### Increment B — `wb rerender` writes the files (not committed)
+### Increment B — `wb rerender` writes the files (committed `f0cc042`)
 
 **Done.**
 - `workbench/refresh.py`: `recheck` reads every stale, created and applied row again without following a link and raises
@@ -359,7 +359,7 @@ Open for the owner:
 
 **Not done.** Increments C and D. The findings above, apart from 5, are not applied; none was asked for.
 
-### Increment C — `wb upgrade` points at the preview (not committed)
+### Increment C — `wb upgrade` points at the preview (committed `0bf7d46`)
 
 **Done.**
 - `workbench/upgrade.py`: `_finish` prints one line after "wrote N paths" when a written path lies under
@@ -385,4 +385,33 @@ Open for the owner:
   pins it.
 - A later-stage failure (the store stage) is not tested; by code it also skips `_finish`.
 
-**Not done.** Increment D.
+### Increment D — The specs, the guide and the plan's acceptance (not committed)
+
+**Done.** Documents only; no code or test changed.
+- `harness-refresh.md`: header says it is built; one sentence that an unlisted file of equal content is `applied`; a note under
+  criterion 7 (a stop past the manifest leaves the files `current`); new "As built" (write order, report line, failures, the
+  upgrade line, the root file answer, `wb check`) and "Limits as built" (the four security findings of B, left for the owner).
+- `harness-rerender.md`: pointers only (the table-only statement, the source, the write order, the manifest sentence, the limits);
+  its scope is unchanged.
+- `installer-interface.md`: the `rerender` table row, the `rerender` section (states, write order, `files:` line), the upgrade line.
+- `command-permissions.md`: what the plan lists, the write order, the "Not built" bullet. `specs/README.md` row; `docs/development.md`:
+  two table rows and the sequence upgrade, preview rerender, rerender.
+- Headings of A, B and C in this Result now name their commits.
+
+**Verification as run.** `git diff --check` clean; `wb check` and `wb run code-work check` (60 plans) report no problems. `wb check`
+runs the installed modules' own checks; `wb run doccheck` and `refcheck` are not declared commands here, so they were not run
+separately. Full suite (`python3 -B -W error tests/run_all.py`, run while the review was open and before its small wording fixes,
+which touched documents only): 5908 tests in 12 roots, OK.
+
+**Review.** One `reviewer` exchange. One blocking finding, applied: `harness-rerender.md` still said the command writes the
+permissions file, the manifest hash and the record only. Applied also: the manifest sentence of its "As built", two wordings in
+`harness-refresh.md`. The reviewer could not run commands or read the tests.
+
+**For the plan's acceptance (the owner).**
+- The Risks text says a created file's mode is "confirmed in A's tests"; it is confirmed in Increment B's tests. The approved text is
+  not edited here.
+- The scratch-clone run of Increment B was not run on the final tree, and the owner's runs of `wb preview rerender` and `wb rerender`
+  on this clone are not done (see the plan's Verification).
+- Open: the four security findings of B; whether `wb add` should print the upgrade line.
+
+**Not done.** The items above.

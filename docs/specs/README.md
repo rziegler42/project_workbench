@@ -42,7 +42,7 @@ or an evidence note.
 | [`mempalace.md`](mempalace.md) | The module that lets an agent search the owner's MemPalace; owner-run commands build it |
 | [`command-permissions.md`](command-permissions.md) | The per-command permission levels (`block`, `delegated`, `ask`, `none`) in the owner's personal settings: the table, the log, the rendering record, the command gate and `approve-plan` at `ask` and `none` |
 | [`harness-rerender.md`](harness-rerender.md) | `wb rerender`: rendering an attached clone's permissions again after the owner's table changes, terminal-only, with a preview and a digest |
-| [`harness-refresh.md`](harness-refresh.md) | Refreshing the rendered skills and agents of an attached clone from their sources, by `wb rerender`, and reporting the ones that are behind |
+| [`harness-refresh.md`](harness-refresh.md) | Refreshing the rendered skills and agents of an attached clone from their sources, by `wb rerender` (built), and reporting the ones that are behind |
 | [`remote-runner.md`](remote-runner.md) | The module that gives a project its remote job profiles and a guarded way to submit, inspect and fetch |
 | [`security-review.md`](security-review.md) | The module that gives a project a security review: one skill and one confined agent, provided as the capability `security-review` |
 | [`harness-modules.md`](harness-modules.md) | How a harness module describes one AI runtime |
