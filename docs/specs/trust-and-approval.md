@@ -229,7 +229,9 @@ Rules:
   (`rules.command_owner_patterns`). They are restrictive only, they depend on the modules installed when the
   harness was attached (a module added later needs `wb attach` again), and they are the same best-effort match
   as the rest. `wb run` and `wb launch` also refuse such an argument in their own code unless standard input and
-  output are both terminals, whatever the spelling of the command; for a pin the installer made, `wb launch` first
+  output are both terminals, whatever the spelling of the command; the exception is `wb run` of an argument whose key the owner has set
+  to `ask` (with the preview digest as the last two arguments) or `none`, for a command that declares `levels`
+  (`command-permissions.md`), and `wb launch` stays terminal-only; for a pin the installer made, `wb launch` first
   requires the declaration at its root to be the one the owner confirmed, so a copy that drops the list is refused.
   For a pin the owner typed (which holds no declaration, and replaces an installer's pin when the owner re-pins), `wb run` and
   `wb launch` use the declaration in the project's own files, which an agent can edit: the owner who pins a command's
