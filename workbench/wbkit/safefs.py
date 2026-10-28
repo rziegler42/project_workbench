@@ -25,7 +25,9 @@ Limits of the checks, recorded here on purpose:
 * Appending (``append_line``) never reads or rewrites the file: one ``O_APPEND`` write of one line. It refuses a
   symbolic link, a file that is not regular and a file with another hard link, and a file that the line would make
   larger than the given limit. Two writers' lines are never interleaved within a line; the limit is checked before the
-  write, so concurrent writers can exceed it by their lines.
+  write, so concurrent writers can exceed it by their lines. When the creating open fails with ``ENOENT`` it is tried
+  once more, because on macOS it can fail that way while another writer creates the same file; a second ``ENOENT`` is
+  an error.
 * Deletion is not provided yet.
 
 A platform that lacks the no-follow and directory-relative calls used here is
@@ -670,9 +672,15 @@ def append_line(root_path, rel, line, limit_total=None, limit_line=1024):
             current = _open_or_make_dir(part, current, shown)
             fds.append(current)
         shown = "%s/%s" % (root_path, rel)
+        flags = (os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK
+                 | getattr(os, "O_CLOEXEC", 0))
         try:
-            fd = os.open(parts[-1], os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK
-                         | getattr(os, "O_CLOEXEC", 0), 0o600, dir_fd=current)
+            try:
+                fd = os.open(parts[-1], flags, 0o600, dir_fd=current)
+            except FileNotFoundError:
+                # A creating open can fail with ENOENT while another writer creates the same name (seen on macOS);
+                # by the time of the second open the file exists. A real ENOENT fails again and is raised below.
+                fd = os.open(parts[-1], flags, 0o600, dir_fd=current)
         except OSError as exc:
             if exc.errno in (errno.ELOOP, errno.EISDIR, errno.ENXIO):
                 raise SafeFsError("refusing to append to %s (symbolic link, directory or not a regular file)" % shown)

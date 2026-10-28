@@ -1,7 +1,10 @@
+import contextlib
+import errno
 import os
 import stat
 import tempfile
 import unittest
+import unittest.mock
 
 from workbench.wbkit import safefs
 from workbench.wbkit.safefs import SafeFsError
@@ -479,6 +482,43 @@ class WriteTest(TempTest):
         self.assertFalse(os.path.islink(path))
         with open(path, "rb") as handle:
             self.assertEqual(handle.read(), b"new")
+
+
+class AppendCreateRaceTest(TempTest):
+    """Plan ``2026-10-28-fix-append-create-race``: on macOS a creating ``openat`` can fail with ``ENOENT`` while another
+    writer creates the same name, although the directory exists."""
+
+    @contextlib.contextmanager
+    def failing_creates(self, failures):
+        """Make the first `failures` opens of the name ``log`` raise ``ENOENT``; yield the list of its opens."""
+        real = os.open
+        opens = []
+
+        def fake(path, flags, *args, **kwargs):
+            if path == "log":
+                opens.append(path)
+                if len(opens) <= failures:
+                    raise FileNotFoundError(errno.ENOENT, "No such file or directory", path)
+            return real(path, flags, *args, **kwargs)
+
+        with unittest.mock.patch.object(safefs.os, "open", new=fake), \
+                unittest.mock.patch.object(safefs.os, "supports_dir_fd", new=set(os.supports_dir_fd) | {fake}):
+            yield opens
+
+    def test_one_enoent_from_the_creating_open_is_retried_once(self):
+        with self.failing_creates(1) as opens:
+            safefs.append_line(self.root, "log", b"one\n")
+        self.assertEqual(2, len(opens))
+        with open(os.path.join(self.root, "log"), "rb") as handle:
+            self.assertEqual(b"one\n", handle.read())
+
+    def test_a_second_enoent_is_refused_after_exactly_two_opens(self):
+        with self.failing_creates(2) as opens:
+            with self.assertRaises(SafeFsError) as caught:
+                safefs.append_line(self.root, "log", b"one\n")
+        self.assertIn("cannot open", str(caught.exception))
+        self.assertEqual(2, len(opens))
+        self.assertFalse(os.path.exists(os.path.join(self.root, "log")))
 
 
 if __name__ == "__main__":
