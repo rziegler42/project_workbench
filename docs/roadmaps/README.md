@@ -30,12 +30,15 @@ authorize implementation or change an active plan. The rules are in
   `workbench-v1#approve-specs`.
 - An abandoned candidate is marked dropped with a reason and stays in the file,
   because completed work may refer to it.
-- Keep one active roadmap per scope and update it in place. Move a completed or
-  superseded roadmap to `docs/roadmaps/archive/` with a `YYYY-MM-` prefix.
+- Keep one roadmap per scope that is not archived and update it in place. A replacement
+  takes a new name, and the old roadmap is retired by setting `Status: Archived`. The
+  file is never moved or renamed, so `<roadmap>#<id>` stays valid. Retiring or replacing
+  a roadmap changes direction, so it needs the owner.
 
 ## Index (current)
 
-List active roadmaps only; the archive directory preserves history.
+List roadmaps that are not archived; an archived roadmap stays in place and keeps its
+history.
 
 | Roadmap | Status | Scope |
 |---|---|---|
@@ -46,7 +49,7 @@ List active roadmaps only; the archive directory preserves history.
 ```markdown
 # Roadmap: <scope>
 
-Status: Active | Completed | Superseded
+Status: Draft | Active | Archived
 Updated: YYYY-MM-DD
 
 ## Purpose
