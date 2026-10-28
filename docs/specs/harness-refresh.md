@@ -174,8 +174,8 @@ Built by the plan `2026-10-28-refresh-rendered-harness`: A the states in the pre
 - **The report.** A successful run prints one `files:` line (replaced, created, recreated, and recorded as applied; nonzero counts
   only) before "nothing was committed".
 - **Failures.** A re-read that differs refuses with exit 1 and "nothing was written". A failure after a write is exit 3 with the
-  written and not-written lists; the not-written list is every step of the write order not found done (the order is fixed, and the disk is read for the next step only). A new file that failed
-  part-way is named as possibly partly written: remove it, then run again. A second run finishes the job.
+  written and not-written lists; the not-written list is every step of the write order not found done (the order is fixed, and the disk is read for the next step only). A new file is made whole or not at all
+  (see "Limits as built"), so a failed create leaves nothing at its path. A second run finishes the job.
 - **`wb upgrade`.** After "wrote N paths" it prints one line when a written path lies under `.workbench/<package>/<module>/harness/`:
   the rendered skills, agents or commands may be behind, and `wb preview rerender` shows which. It prints it for `wb add` as well,
   which shares the code. It stages and compares nothing, and it writes nothing under the harness's folders.
@@ -195,8 +195,12 @@ for the owner to decide:
   shell. Corroborating the hash in the guarded store would close the rest and is not built. The deny also makes the
   rendered permissions need a plain project path, which they did not when there was nothing to protect: a project path with
   `(`, `)`, `#`, `'` or a non-ASCII character is refused by `wb attach` and `wb rerender`, as it already was with a hook.
-- **A new file is not written atomically.** `create_file` writes into the final name, so a crash can leave a short file, which the
-  next run refuses and names. An agent file without its `tools:` line might load with every tool.
+- **A new file is written whole or not at all.** `Writer.create_file` (shared by install, adopt, add, upgrade and rerender) fills
+  and syncs a sibling named `.workbench-<pid>-<hex>.tmp` in the same directory and links it to the final name, which fails when
+  anything is there; the sibling is unlinked on every path out, and the path is listed as written only once the link is made. A
+  failure before the link leaves nothing at the path. The one gap left is a crash between the link and the unlink: the finished
+  file then has a second name, a later read refuses it (more than one hard link) and names it, and removing the sibling clears
+  it. A filesystem without hard links fails the create and leaves nothing behind.
 - **A new file is checked against the clone's `.git/info/exclude` as well as the layout's exclude entries.** Both the preview
   and the run refuse a file they would create unless the entry that covers it has its line in that file (read without following
   a link, at most the file size limit; a CR at the end of a line is not part of it), or when the file cannot be read as a plain

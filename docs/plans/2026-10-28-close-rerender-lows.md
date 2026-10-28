@@ -159,3 +159,30 @@ refuses it, so the test asserts that refusal). Not applied: naming "invalid entr
 validated at attach.
 
 **Not done.** Increment C. Not exercised on a real worktree or submodule clone. The plan's `Status:` line still says `Proposed`.
+
+### Increment C — Create a file whole or not at all (Low 2)
+
+**Done.** `Writer.create_file` now checks the final name is free (lstat), fills and fsyncs a sibling `.workbench-<pid>-<hex>.tmp`
+in the same directory (mode 0644 under the umask, 0755 when executable, as before), fires a new hook stage `projectfs_filled`, and
+`link()`s the sibling to the final name (exclusive; `dir_fd`, no follow). The sibling is unlinked on every path out, and the path
+is added to `written` only after the link. Tests first in `tests/test_projectfs.py`: a fault at `projectfs_filled` leaves nothing
+and lists nothing, and a file appearing during the write is a `WriteConflict` and is kept; both were red and are green. Two more
+guard the one-link result and the umask. One existing assertion in `tests/test_adopt.py` looked for created files under their
+final names in an `os.open` watch; it now looks for the sibling name (the check that no existing file is opened for writing is
+unchanged). `refresh.Partial`'s docstring and one comment, and two paragraphs of `harness-refresh.md`, describe the new behaviour.
+A conflict at the final name now says "the path already exists" for a link or directory there, where it said "a link or a file is
+in the way"; no test or doc asserted the old text.
+
+**Verification as run.** The 14 write-path test modules 586 OK; the full suite `python3 -B -W error tests/run_all.py` 5925 tests in
+12 roots OK (started before the `refresh.py` comment edits made after review); `git diff --check` clean; `wb check` no problems.
+
+**Review.** One `reviewer` exchange, no blocking findings. Applied: the `Partial` docstring and comment no longer overstate the
+guarantee (an interruption between the link and the listing leaves a whole, unlisted file, which the next run reads safely).
+Answered: `executable` still ends in `fchmod(0o755)` as before, so the mode is unchanged. Not applied: a test for `wb recover`
+on a marker with two links; surfacing a failed sibling unlink; checking the linked inode is the one written (`replace_file` has
+the same gap); the descriptor leak on an interrupt between `os.open` and the next line (same shape as `replace_file`);
+`test_refresh`'s `Partial` test still simulates the old in-place write with a mock.
+
+**Not done.** Not run on Linux or a filesystem without hard links. `tests/test_projectfs.py` still lacks an `import unittest.mock`
+(one test errors when the file runs alone; unrelated). The `Partial` message still says "may be partly written". The plan's
+`Status:` line still says `Proposed`.

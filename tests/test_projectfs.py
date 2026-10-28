@@ -1,3 +1,4 @@
+import errno
 import hashlib
 import os
 import stat
@@ -211,6 +212,47 @@ class WriterTest(Fixture):
         self.assertEqual(["one"], writer.written)
         self.assertEqual(b"1", self.read("one"))
         self.assertEqual(b"existing", self.read("two"))
+
+    def fail_at(self, stage, error):
+        def hook(name, **info):
+            if name == stage:
+                raise error
+        safefs._hook = hook
+
+    def test_a_write_that_fails_part_way_leaves_no_file_and_no_sibling(self):
+        os.mkdir(os.path.join(self.root, "docs"))
+        self.fail_at("projectfs_filled", OSError(errno.ENOSPC, "no space left"))
+        writer = self.writer()
+        with self.assertRaises(OSError):
+            writer.create_file("docs/a.md", b"hello")
+        self.assertEqual([], os.listdir(os.path.join(self.root, "docs")))
+        self.assertEqual([], writer.written)
+
+    def test_a_file_that_appears_while_it_is_written_is_a_conflict_and_is_kept(self):
+        def appear(name, **info):
+            if name == "projectfs_filled":
+                with open(os.path.join(self.root, "a"), "wb") as handle:
+                    handle.write(b"theirs")
+        safefs._hook = appear
+        writer = self.writer()
+        with self.assertRaises(WriteConflict):
+            writer.create_file("a", b"mine")
+        self.assertEqual(b"theirs", self.read("a"))
+        self.assertEqual(["a"], os.listdir(self.root))
+        self.assertEqual([], writer.written)
+
+    def test_a_created_file_has_one_link_and_leaves_no_sibling(self):
+        writer = self.writer()
+        writer.create_file("a", b"x")
+        self.assertEqual(["a"], os.listdir(self.root))
+        self.assertEqual(1, os.stat(os.path.join(self.root, "a")).st_nlink)
+        self.assertEqual(["a"], writer.written)
+
+    def test_a_created_file_takes_the_umask_as_a_file_made_in_place_did(self):
+        old = os.umask(0o027)
+        self.addCleanup(os.umask, old)
+        self.writer().create_file("a", b"x")
+        self.assertEqual(0o640, stat.S_IMODE(os.stat(os.path.join(self.root, "a")).st_mode))
 
     def test_a_closed_target_is_refused(self):
         writer = self.writer()

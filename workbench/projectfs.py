@@ -178,7 +178,13 @@ class Writer:
                 os.close(fd)
 
     def create_file(self, rel, data, executable=False):
-        """Create `rel` exclusively with `data`; mode 0755 only when `executable`."""
+        """Create `rel` exclusively with `data`; mode 0755 only when `executable`.
+
+        The file appears whole or not at all. A sibling in the same directory is created exclusively, filled and synced, then
+        linked to `rel`, which fails when anything is there, a link included; the sibling is unlinked on every path out. A
+        failure before the link leaves nothing at `rel` and does not list it in `written`. A crash between the link and the
+        unlink leaves the finished file with a second name, which a later read refuses (more than one hard link) until the
+        sibling, named ``.workbench-<pid>-<hex>.tmp``, is removed."""
         parts = safefs.validate_relpath(rel)
         if not isinstance(data, bytes):
             raise safefs.SafeFsError("content is not bytes: %s" % rel)
@@ -187,12 +193,44 @@ class Writer:
         shown = self._shown(rel)
         safefs._fire("projectfs_validated", root=self.target.path, rel=rel)
         fds = []
+        sibling = None
         try:
             dirfd = self._walk(parts[:-1], fds, True)
             safefs._fire("projectfs_walked", root=self.target.path, rel=rel)
             try:
-                fd = os.open(parts[-1], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
-                             0o644, dir_fd=dirfd)
+                os.stat(parts[-1], dir_fd=dirfd, follow_symlinks=False)
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                if exc.errno == errno.ENOTDIR:
+                    raise WriteConflict("a link or a file is in the way: %s" % shown)
+                raise _os_error("create", shown, exc)
+            else:
+                raise WriteConflict("the path already exists: %s" % shown)
+            temp = ".workbench-%d-%s.tmp" % (os.getpid(), os.urandom(6).hex())
+            try:
+                fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644,
+                             dir_fd=dirfd)
+            except FileExistsError:
+                raise WriteConflict("the temporary name is taken: %s" % self._shown(temp))
+            except OSError as exc:
+                raise _os_error("create", self._shown(temp), exc)
+            sibling = temp
+            try:
+                try:
+                    view = memoryview(data)
+                    while view:
+                        view = view[os.write(fd, view):]
+                    if executable:
+                        os.fchmod(fd, 0o755)
+                    os.fsync(fd)
+                except OSError as exc:
+                    raise _os_error("write", shown, exc)
+            finally:
+                os.close(fd)
+            safefs._fire("projectfs_filled", root=self.target.path, rel=rel)
+            try:
+                os.link(temp, parts[-1], src_dir_fd=dirfd, dst_dir_fd=dirfd, follow_symlinks=False)
             except FileExistsError:
                 raise WriteConflict("the path already exists: %s" % shown)
             except OSError as exc:
@@ -200,18 +238,12 @@ class Writer:
                     raise WriteConflict("a link or a file is in the way: %s" % shown)
                 raise _os_error("create", shown, exc)
             self.written.append(rel)
-            try:
-                view = memoryview(data)
-                while view:
-                    view = view[os.write(fd, view):]
-                if executable:
-                    os.fchmod(fd, 0o755)
-                os.fsync(fd)
-            except OSError as exc:
-                raise _os_error("write", shown, exc)
-            finally:
-                os.close(fd)
         finally:
+            if sibling is not None:
+                try:
+                    os.unlink(sibling, dir_fd=dirfd)
+                except OSError:
+                    pass
             for each in fds:
                 os.close(each)
 

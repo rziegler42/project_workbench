@@ -131,8 +131,10 @@ class Changed(Exception):
 
 
 class Partial(Exception):
-    """Creating a file failed after the path may have been made. `create_file` writes into the final name, so a failure
-    midway can leave a short file there; the next run reads it as unrecorded or edited and refuses until it is removed."""
+    """Creating a file failed after the path may have been made. `create_file` links a finished sibling into place and lists
+    the path once it has, so this is raised only when the file is whole but the call did not return (an interruption between
+    the link and the end of the call). An interruption between the link and the listing leaves a whole file that is not
+    listed; the next run reads it as current or applied, or refuses it."""
 
 
 def recheck(writer, rows):
@@ -161,7 +163,7 @@ def write(writer, rows, done):
             try:
                 writer.create_file(row.path, row.data)
             except (Exception, KeyboardInterrupt) as exc:
-                # `create_file` records the path as soon as it has made the file, before it writes into it.
+                # `create_file` records the path right after the link to it is made.
                 if row.path in writer.written[mark:]:
                     done.append(row.path)
                     cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
