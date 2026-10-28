@@ -24,7 +24,10 @@ import sys
 from . import approve, declarations, hashing, launch, manifest, pins
 from .wbkit import display, project, safefs
 
-Request = collections.namedtuple("Request", "root project_id name arguments kit owner", defaults=((),))
+# `levels` and `preview` are the declaration's (``declarations.Command``): the levels each owner-run argument offers and the
+# argument that previews them.
+Request = collections.namedtuple("Request", "root project_id name arguments kit owner levels preview",
+                                 defaults=((), (), None))
 Declared = collections.namedtuple("Declared", "package module command declaration provides")
 
 
@@ -169,7 +172,7 @@ def resolve(guarded, start, name, args, provides=None):
                            % (found.package, found.module, _shown(name), _shown(provides)))
     _arguments(command, args)
     pin = check_pin(guarded, ident, found)
-    return Request(root, ident, name, args, pin.kit, command.owner)
+    return Request(root, ident, name, args, pin.kit, command.owner, command.levels, command.preview)
 
 
 def launch_refusal(guarded, project_id, name, root, args, stdin, stdout):
@@ -260,7 +263,11 @@ def run(guarded, tokens, err, *, cwd=None, stdin=None, stdout=None):
                                stdin if stdin is not None else sys.stdin,
                                stdout if stdout is not None else sys.stdout)
         if reason:
-            raise CommandError(reason)
+            # Imported here because ownerargs imports levelrun, whose imports reach this module. It raises
+            # CommandError(reason) unless the argument offers a level that its key reads now (``ownerargs.py``).
+            from . import ownerargs
+            allowed = ownerargs.permit(guarded, request, start, reason)
+            return ownerargs.run_logged(guarded, request, allowed, stdout, err)
         return launch.launch(guarded, request.project_id, request.name, request.root,
                              request.arguments, stdout=stdout, kit=request.kit)
     except (CommandError, launch.LaunchError) as exc:

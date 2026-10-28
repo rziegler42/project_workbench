@@ -1,10 +1,15 @@
 {
   "approver": "workbench-release",
   "commit": null,
-  "declaration_hash": "6f6e63ff1140cbf51949c1fd9591c8e91b9fa75edaf06c28c37c83ab85121f29",
+  "declaration_hash": "d6dc9f995da3b9d774a41369296253f2c3737f5a1b22f462cbef5feddcbfbc43",
   "format": 1,
   "kind": "package",
   "modules": [
+    {
+      "declaration_hash": "bf26ca5125aaf3919a7bbeb1159116352ebfcd41f7fa1f3531c59824318253a8",
+      "name": "action-review",
+      "tree_hash": "b430917e5b59ed45cbc6c9c71e57b3fc79801f1e96d99db558c17152773c3838"
+    },
     {
       "declaration_hash": "56198469236c21632edd088a610737b27597365ad5b608fd7a2a8d7e0bd6c877",
       "name": "ask-codex",
@@ -13,17 +18,17 @@
     {
       "declaration_hash": "bbee74d628101045800cfe5e8d75672920a7d21a935171c914cdc932f0c2eb06",
       "name": "claude",
-      "tree_hash": "3ff12734f1d9fcb60bc1c717f0595bacfad1002591f1b12fdbc54a30a479f730"
+      "tree_hash": "af26f1056483be4960f57a995b4f21b3f3e26b53a5ecd7bad07ea8474f1a27e7"
     },
     {
       "declaration_hash": "50cfad42b0e477acb499f437f1272f5e189772c689091801639ea3dfc3ad232c",
       "name": "code-work",
-      "tree_hash": "33cb2eecf6f4f8a0210ce3999d35e060358d72c2757e7f078352eaf51eb20fb7"
+      "tree_hash": "acdead56c16dafa6cc831aad83cd0bdc356fc6c7392976f06bec32b3aaa4e7d2"
     },
     {
       "declaration_hash": "eb8f2f640ad950914c8de822f9c50fe8bc387c4938e656f339f11d092329bf3f",
       "name": "groundwork",
-      "tree_hash": "f788a25ad1d46c52a8ad760a95c0b9e7db16bab745ab4efac3bdb933daf23ccc"
+      "tree_hash": "5155301b8db49f95f39f5933af4cf25cc943a753cc0537d44a9bfd58d7048ee0"
     },
     {
       "declaration_hash": "184b1eaf0af1a0482a00da156e33ef42e6da16f6a14a2f71c30d77a9418368f9",
@@ -36,9 +41,9 @@
       "tree_hash": "537cdf6ee084c5c020ec3797a211d584bbfdb9c8430af25851824058efc6dc6d"
     },
     {
-      "declaration_hash": "c3d8035f7971b1509cfb90a1b709cafabb914b96b99fda50d64ad6c6eb7630d1",
+      "declaration_hash": "7af5f9f0a3e840f58f1808a7ebabc589416a1188813a08222504c742caa1d311",
       "name": "review-engine",
-      "tree_hash": "62f5963db079bbd2a0b3d9b25c67e79c2e42fc7a0c4941342b25cb0d4f8aa8d0"
+      "tree_hash": "2752b03db3a33e641e94aa03451fb81051cb24d592b0560725e987f87d7bc86e"
     },
     {
       "declaration_hash": "496e75db97a0b962c5ab010338824a450028dc5fbc21f42759e62527d5a2deaa",
@@ -53,6 +58,6 @@
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "22d1789d6441ec401ba294dc43964cbfa7063e20582460013c3d891e6f332b66",
+  "tree_hash": "5b00ce168785715a6f1401c55991128af0b841739ff48b62c3a1cb7dab3f0862",
   "workbench_version": "0.1.0"
 }

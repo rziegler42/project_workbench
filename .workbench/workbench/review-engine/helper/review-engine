@@ -16,11 +16,15 @@ private copy of it through the kit runner with nothing beside it.
     review-engine amend|extend|reset|archive <document> ...    (the owner's) change a decision, the bound or
                                          the window, or close the review
     review-engine prune [--apply]        (the owner's) list, or delete, closed reviews past their retention
+    review-engine preview extend <document> <n> | reset|archive <document> | amend <document> <finding> ... | prune
+                                         say what the command would change and print its digest (read-only)
+    review-engine <the owner's command> ... --digest <digest>
+                                         run it only if the digest is that of what it would change now
 
 The contract is ``docs/specs/review-engine.md``. A review lives in the project, in
 ``.workbench/workbench/review-engine/<key>/``, and is sealed with a key kept in the guarded store, together with
-a mark of the most it has ever sealed, so that an edited or restored state is seen. Every command prints one
-JSON object, or a ``refused:`` line and nothing on standard output. Whatever is read from the project is
+a mark of the most it has ever sealed, so that an edited or restored state is seen. Every command but ``preview``
+prints one JSON object, or a ``refused:`` line and nothing on standard output; ``preview`` prints lines of text. Whatever is read from the project is
 data: it is parsed strictly, bounded and checked, never run and never believed.
 """
 
@@ -55,9 +59,10 @@ KEY_BYTES = 32
 NAMESPACE = ".workbench/workbench/review-engine"
 STORE_NAME = "review-engine"
 USAGE = ("usage: review-engine status|init|convergence|review-plan|review-spec|review-roadmap|review-adr|reset|archive "
-         "<document>, "
-         "decide|amend <document> <finding> applied|rejected [--reason <text>], extend <document> <1 to 5>, "
-         "or prune [--apply]")
+         "<document> [--digest <digest>, for reset and archive], "
+         "decide|amend <document> <finding> applied|rejected [--reason <text>] [--digest <digest>, for amend], "
+         "extend <document> <1 to 5> [--digest <digest>], preview followed by one of these without its digest "
+         "(extend, reset, archive, amend or prune), or prune [--apply [--digest <digest>]]")
 FIELDS = {"format", "kind", "path", "window", "rounds", "decisions", "closed", "generation", "seal"}
 CHOICES = ("applied", "rejected")
 DECISION_FIELDS = {"finding", "choice", "reason", "at", "earlier"}
@@ -65,6 +70,9 @@ EARLIER_FIELDS = {"choice", "reason", "at"}
 FINDING = r"R[1-9][0-9]{0,3}-F[1-9][0-9]{0,2}"
 MAX_REASON = 2000
 MAX_EARLIER = 20
+DIGEST_CHARS = 32
+DIGEST = r"[0-9a-f]{32}"
+OWNER_DIGEST = ("extend", "reset", "archive", "amend", "prune")   # the owner's commands that take `--digest`
 RETENTION_DAYS = 90
 REVIEW_DIR = re.compile(r"(plan|spec|roadmap|adr)-[0-9a-f]{16}")
 FILE_NAME = re.compile(r"state\.json|ledger\.md|schema\.json|round-[1-9][0-9]{0,3}\.json")
@@ -923,14 +931,30 @@ def recoverable(document, loaded, command):
     return loaded.state, loaded.seal != "ok"
 
 
-def mutate(root, project_id, argv, out, command, make, access=changeable):
+def digest_of(lines):
+    """The digest of what a command would change: the first 32 characters of the SHA-256 of its preview lines."""
+    return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()[:DIGEST_CHARS]
+
+
+def confirm(given, lines):
+    """Refuse unless `given` is the digest of `lines`; with no digest given, go on (a terminal, or the level `none`)."""
+    if given is not None and not hmac.compare_digest(given, digest_of(lines)):
+        raise Refused("the digest does not match what the command would change now; preview it again with `preview`; "
+                      "nothing was changed")
+
+
+def mutate(root, project_id, argv, out, command, make, access=changeable, lines=None, given=None):
     """Change the state of the review named by `argv[1]` under the lock: `make(document, state)` returns the new
-    state and a dict to print beside the review's own object."""
+    state and a dict to print beside the review's own object. With `given`, the digest of the preview lines
+    `lines(document, loaded, state, override, guarded)` is compared inside the lock, on the state that is then
+    written."""
     document = resolve(root, argv[1])
     guarded = Guarded(project_id)
     with guarded.locked():
         loaded = load(root, guarded, document)
         state, override = access(document, loaded, command)
+        if given is not None:
+            confirm(given, lines(document, loaded, state, override, guarded))
         replaced = replaced_standing(guarded, document, loaded) if override else {}
         state, extra = make(document, state)
         save(root, guarded, document, state, override=override)
@@ -952,9 +976,9 @@ def replaced_standing(guarded, document, loaded):
                          "decisions": len(old["decisions"]) if old else None, "mark": mark}}
 
 
-def decide(root, project_id, argv, out):
-    """`decide` records what was done about a finding, once; `amend` changes it and keeps the value it had."""
-    command, finding, choice = argv[0], argv[2], argv[3]
+def answer_of(argv):
+    """``(finding, choice, reason)`` of ``decide|amend <document> <finding> <choice> [--reason <text>]``, checked."""
+    finding, choice = argv[2], argv[3]
     reason = argv[5] if len(argv) == 6 else ""
     if not re.fullmatch(FINDING, finding):
         raise Refused("%s is not a finding (they are named like R1-F1)" % shown(finding))
@@ -962,6 +986,13 @@ def decide(root, project_id, argv, out):
         raise Refused("the choice is applied or rejected, not %s" % shown(choice))
     if len(reason) > MAX_REASON or plain(reason, "\n\t") != reason:
         raise Refused("the reason is at most %d characters with no control character" % MAX_REASON)
+    return finding, choice, reason
+
+
+def decide(root, project_id, argv, out, given=None):
+    """`decide` records what was done about a finding, once; `amend` changes it and keeps the value it had."""
+    command = argv[0]
+    finding, choice, reason = answer_of(argv)
 
     def make(document, state):
         if finding not in {item["id"] for entry in state["rounds"] for item in entry["findings"]}:
@@ -984,32 +1015,151 @@ def decide(root, project_id, argv, out):
                                                             "at": old["at"]}]}
         state = dict(state, decisions=records)
         return state, {"finding": finding, "choice": choice, "reason": reason, "pending": pending(state)}
-    return mutate(root, project_id, argv, out, command, make)
+    return mutate(root, project_id, argv, out, command, make, lines=lines_of(argv) if command == "amend" else None,
+                  given=given)
 
 
-def extend(root, project_id, argv, out):
-    if not re.fullmatch("[1-5]", argv[2]):
-        raise Refused("extend takes a number of rounds from 1 to 5, not %s" % shown(argv[2]))
-    more = int(argv[2])
+def split_digest(argv):
+    """``(argv without a trailing --digest <digest>, the digest or None)``. A digest is exactly 32 lowercase hexadecimal
+    characters; only the last two arguments are read, so a `--digest` anywhere else stays an argument."""
+    if len(argv) >= 3 and argv[-2] == "--digest":
+        if not re.fullmatch(DIGEST, argv[-1]):
+            raise Refused("the digest is %d lowercase hexadecimal characters, as `preview` prints it" % DIGEST_CHARS)
+        return argv[:-2], argv[-1]
+    return argv, None
+
+
+def extension(document, state, more):
+    """The lines that say what extending the open review `state` of `document` by `more` rounds would change, and
+    their digest: the first 32 characters of the SHA-256 of the lines. The digest binds the document, the review's
+    key, its generation (every save raises it), its rounds and window, and the number, so a digest of another
+    document, number or state is another digest. Refused, as `extend` refuses, if the bound would pass the ceiling."""
+    window = state["window"]
+    bound = window["bound"]
+    if bound + more > CEILING:
+        raise Refused("the bound is %d and %d more would pass the ceiling of %d" % (bound, more, CEILING))
+    lines = ["preview of extend", "document: %s (%s)" % (shown(document.path), document.kind),
+             "review: %s" % document.key, "generation: %d" % state["generation"],
+             "rounds: %d, window first: %d" % (len(state["rounds"]), window["first"]),
+             "bound now: %d" % bound, "extend by: %d" % more, "bound after: %d (ceiling %d)" % (bound + more, CEILING)]
+    return lines, digest_of(lines)
+
+
+def number_of(argument):
+    if not re.fullmatch("[1-5]", argument):
+        raise Refused("extend takes a number of rounds from 1 to 5, not %s" % shown(argument))
+    return int(argument)
+
+
+def heading(command, document, state):
+    """The first lines of every preview: the command, the document, the review's key and its generation. The key is
+    a hash of the document's kind and path, so it binds the whole path where `shown` cuts it short."""
+    return ["preview of %s" % command, "document: %s (%s)" % (shown(document.path), document.kind),
+            "review: %s" % document.key, "generation: %d" % state["generation"]]
+
+
+def text_lines(label, text):
+    """A reason as the owner reads it (cut short) and the hash of all of it, so that the digest binds every character."""
+    return ["%s: %s" % (label, shown(text)), "%s sha256: %s" % (label, hashlib.sha256(text.encode("utf-8")).hexdigest())]
+
+
+def resetting(document, loaded, state, override, guarded):
+    """The preview lines of `reset`: the window it starts again and, for a review that was not sealed, what it replaces."""
+    window = state["window"]
+    rounds = len(state["rounds"])
+    lines = heading("reset", document, state) + [
+        "seal: %s" % loaded.seal, "rounds: %d, window first: %d" % (rounds, window["first"]),
+        "bound now: %d" % window["bound"], "window after: first %d, bound %d" % (rounds + 1, DEFAULT_BOUND)]
+    if override:
+        lines.append("replaced: %s" % json.dumps(replaced_standing(guarded, document, loaded)["replaced"],
+                                                  sort_keys=True))
+        # nothing vouches for the content of a state that is not sealed, and the reset seals it as it is
+        body = {name: value for name, value in state.items() if name != "seal"}
+        lines.append("content sha256: %s" % hashlib.sha256(canonical(body)).hexdigest())
+    return lines
+
+
+def archiving(document, loaded, state, override, guarded):
+    """The preview lines of `archive`: the review it closes, with what is still open in it."""
+    return heading("archive", document, state) + [
+        "rounds: %d" % len(state["rounds"]), "decisions: %d" % len(state["decisions"]),
+        "undecided: %d" % len(pending(state)), "closes the review: it takes no further round, decision or extension"]
+
+
+def amendment(document, state, finding, choice, reason):
+    """The preview lines of `amend`, which refuses as `amend` does when there is no decision to change."""
+    if finding not in {item["id"] for entry in state["rounds"] for item in entry["findings"]}:
+        raise Refused("no round of this review has the finding %s" % finding)
+    old = next((entry for entry in state["decisions"] if entry["finding"] == finding), None)
+    if old is None:
+        raise Refused("%s has no decision to amend (decide records it)" % finding)
+    if len(old["earlier"]) >= MAX_EARLIER:
+        raise Refused("%s has been amended %d times, the most that are kept" % (finding, MAX_EARLIER))
+    return (heading("amend", document, state) + ["finding: %s" % finding, "now: %s on %s" % (old["choice"], old["at"])]
+            + text_lines("now reason", old["reason"]) + ["becomes: %s" % choice] + text_lines("new reason", reason)
+            + ["earlier kept: %d of %d" % (len(old["earlier"]), MAX_EARLIER)])
+
+
+def removal_lines(found):
+    """The preview lines of `prune`: the reviews it would remove, in order of key, each with its path and when it was
+    closed. A digest of a different list is another digest."""
+    return (["preview of prune", "retention days: %d" % RETENTION_DAYS, "reviews: %d" % len(found)]
+            + ["review: %s %s closed %s" % (item["key"], shown(item["path"]), item["closed"])
+               for item in sorted(found, key=lambda item: item["key"])])
+
+
+def lines_of(argv):
+    """The function that gives the preview lines of the command `argv` (the command, then its own arguments; for
+    `prune` there is none): ``f(document, loaded, state, override, guarded)``. It checks the arguments first."""
+    command = argv[0]
+    if command == "extend":
+        more = number_of(argv[2])
+        return lambda document, loaded, state, override, guarded: extension(document, state, more)[0]
+    if command == "amend":
+        finding, choice, reason = answer_of(argv)
+        return lambda document, loaded, state, override, guarded: amendment(document, state, finding, choice, reason)
+    return resetting if command == "reset" else archiving
+
+
+def extend(root, project_id, argv, out, given=None):
+    """Raise the bound. With `given`, only if it is the digest of this extension of the review as it is now: it is
+    compared inside the lock, on the state that is then written."""
+    more = number_of(argv[2])
 
     def make(document, state):
+        extension(document, state, more)       # refuses a bound that would pass the ceiling
         bound = state["window"]["bound"]
-        if bound + more > CEILING:
-            raise Refused("the bound is %d and %d more would pass the ceiling of %d" % (bound, more, CEILING))
         return dict(state, window=dict(state["window"], bound=bound + more)), {}
-    return mutate(root, project_id, argv, out, "extend", make)
+    return mutate(root, project_id, argv, out, "extend", make, lines=lines_of(argv), given=given)
 
 
-def reset(root, project_id, argv, out):
+def preview(root, project_id, argv, out):
+    """`preview <command> <its arguments>`, for `extend`, `reset`, `archive`, `amend` or `prune`: what the command
+    would change, then ``digest: <digest>``. It reads the review as `status` does and writes nothing."""
+    own = argv[1:]
+    guarded = Guarded(project_id)
+    if own[0] == "prune":
+        lines = removal_lines(prunable(root, guarded, time.time()))
+    else:
+        lines_for = lines_of(own)
+        document = resolve(root, own[1])
+        loaded = load(root, guarded, document)
+        state, override = (recoverable if own[0] == "reset" else changeable)(document, loaded, own[0])
+        lines = lines_for(document, loaded, state, override, guarded)
+    out.write("\n".join(lines + ["digest: %s" % digest_of(lines)]) + "\n")
+    return 0
+
+
+def reset(root, project_id, argv, out, given=None):
     def make(document, state):
         return dict(state, window={"first": len(state["rounds"]) + 1, "bound": DEFAULT_BOUND}), {}
-    return mutate(root, project_id, argv, out, "reset", make, recoverable)
+    return mutate(root, project_id, argv, out, "reset", make, recoverable, lines=resetting, given=given)
 
 
-def archive(root, project_id, argv, out):
+def archive(root, project_id, argv, out, given=None):
     def make(document, state):
         return dict(state, closed=utc_now()), {}
-    return mutate(root, project_id, argv, out, "archive", make)
+    return mutate(root, project_id, argv, out, "archive", make, lines=archiving, given=given)
 
 
 def prunable(root, guarded, now):
@@ -1077,8 +1227,9 @@ def remove_review(root, name):
             os.close(fd)
 
 
-def prune(root, project_id, argv, out):
-    """List the closed reviews past their retention; with ``--apply`` remove them and their marks."""
+def prune(root, project_id, argv, out, given=None):
+    """List the closed reviews past their retention; with ``--apply`` remove them and their marks. With `given`, only
+    if it is the digest of the list that is then removed: it is compared inside the lock, on the list that is used."""
     apply = argv[1:] == ["--apply"]
     guarded = Guarded(project_id)
     removed = []
@@ -1087,6 +1238,7 @@ def prune(root, project_id, argv, out):
     else:
         with guarded.locked():
             found = prunable(root, guarded, time.time())
+            confirm(given, removal_lines(found))
             for item in found:
                 remove_review(root, item["key"])
                 guarded.remove_mark(item["key"])
@@ -1156,18 +1308,30 @@ def emit(out, found):
     return 0
 
 
-def run(argv, cwd, out):
+def fits_arguments(argv):
+    """Whether `argv` (a command and its arguments, with no digest) has the shape the command takes."""
     command = argv[0] if argv else ""
     if command == "prune":
-        fits = argv[1:] in ([], ["--apply"])
-    elif command in ("decide", "amend"):
-        fits = len(argv) == 4 or (len(argv) == 6 and argv[4] == "--reason")
-    elif command == "extend":
-        fits = len(argv) == 3
-    elif command in ("status", "init", "convergence", "reset", "archive") or command in ROUND_COMMANDS:
-        fits = len(argv) == 2
+        return argv[1:] in ([], ["--apply"])
+    if command in ("decide", "amend"):
+        return len(argv) == 4 or (len(argv) == 6 and argv[4] == "--reason")
+    if command == "extend":
+        return len(argv) == 3
+    return (command in ("status", "init", "convergence", "reset", "archive") or command in ROUND_COMMANDS) \
+        and len(argv) == 2
+
+
+def run(argv, cwd, out):
+    command = argv[0] if argv else ""
+    given = None
+    if command in OWNER_DIGEST:
+        argv, given = split_digest(argv)
+    if command == "preview":
+        # what is previewed is the command without its digest, and a prune is previewed as a list, not as `--apply`
+        fits = len(argv) >= 2 and argv[1] in OWNER_DIGEST and fits_arguments(argv[1:]) \
+            and argv[1:] != ["prune", "--apply"]
     else:
-        fits = False
+        fits = fits_arguments(argv) and (given is None or command != "prune" or argv[1:] == ["--apply"])
     if not fits:
         raise Refused(USAGE)
     try:
@@ -1179,10 +1343,13 @@ def run(argv, cwd, out):
         return run_round(root, project_id, ROUND_COMMANDS[command], argv[1], out)
     if command == "convergence":
         return convergence(root, project_id, argv[1], out)
-    commands = {"decide": decide, "amend": decide, "extend": extend, "reset": reset, "archive": archive,
-                "prune": prune}
+    if command == "preview":
+        return preview(root, project_id, argv, out)
+    if command == "extend":
+        return extend(root, project_id, argv, out, given)
+    commands = {"decide": decide, "amend": decide, "reset": reset, "archive": archive, "prune": prune}
     if command in commands:
-        return commands[command](root, project_id, argv, out)
+        return commands[command](root, project_id, argv, out, given)
     document = resolve(root, argv[1])
     guarded = Guarded(project_id)
     if argv[0] == "status":

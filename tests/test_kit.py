@@ -13,7 +13,7 @@ KIT = os.path.join(ROOT, "workbench", "wbkit")
 
 # `sys.stdlib_module_names` needs Python 3.10; older interpreters get this list, which is every
 # module the kit uses and is extended deliberately with the kit.
-KIT_STDLIB = ("collections", "errno", "hashlib", "json", "os", "re", "stat", "struct", "unicodedata")
+KIT_STDLIB = ("collections", "datetime", "errno", "hashlib", "json", "os", "re", "stat", "struct", "unicodedata")
 # Ways to import or run code that a plain import statement does not show.
 INDIRECT_MODULES = ("importlib", "runpy", "pkgutil", "imp", "zipimport")
 INDIRECT_NAMES = ("__import__", "import_module", "exec", "eval", "compile", "run_path", "run_module")

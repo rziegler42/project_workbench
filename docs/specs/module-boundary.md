@@ -64,6 +64,10 @@ needs in order to read untrusted repository content safely and to report:
   paths git tracks read from `.git/index` (`wbkit/gitindex.py`) and strict JSON (`wbkit/jsonstrict.py`);
 - cleaning text for a terminal (`display.clean`) and decoding bytes with `replace`;
 - running another module's command through the launcher (`wbkit/call.py`, below);
+- the permission level of a command and the level log's lines (`wbkit/levels.py`): whether a command whose level the caller
+  has verified may run with or without a terminal (`may_run`), and the attempt and outcome lines of the log with their
+  append (`begin`, `finish`). The caller reads and verifies the level; the kit does not, and no module helper uses these yet
+  (`command-permissions.md`, "A level for every command");
 - the report form of a module check (below) and the exit-code convention.
 
 Rules for the kit:
@@ -307,10 +311,12 @@ checked with the rest of its declaration, before anything is written.
     command's `arguments`, default empty. These are the arguments only the owner runs. A harness that provides
     `permissions` denies the agent each of them (`trust-and-approval.md`, "Rendering rules"), and `wb run` and
     `wb launch` run one only when standard input and output are both terminals (plan
-    `2026-10-24-owner-run-in-code`). The declaration authorizes the first argument only, so a form that must be allowed to the agent and a form that must not
+    `2026-10-24-owner-run-in-code`), except that `wb run` runs one without a terminal when the owner has set its key to `ask` (with the
+    preview digest as the last two arguments) or `none`, for a command that declares `levels` (`command-permissions.md`); `wb launch`
+    stays terminal-only. The declaration authorizes the first argument only, so a form that must be allowed to the agent and a form that must not
     are two arguments of the command.
   - `describes` (optional; *the verifier and the launcher rule are built by plan `2026-10-25-safe-git-describe`, and
-    `safe-git` declares it; the engine's use of it is not built*): a list of at most 16 distinct strings, each `^[a-z][a-z0-9-]*$` and at most 32
+    `safe-git` declares it; the engine's use of it is built for `commit` and `remove` by plan `2026-10-26-action-review-engine`*): a list of at most 16 distinct strings, each `^[a-z][a-z0-9-]*$` and at most 32
     characters, default empty. These are the actions the command's `describe` argument answers, in the sense of the
     decision `2026-10-25-describe-interface-for-action-review`. It is allowed only when `describe` is one of the
     command's `arguments`, and `describe` may not be listed in `owner`: the engine runs `describe` for the agent's

@@ -1,6 +1,6 @@
 # Each owner-run and checkpointed command gets one permission level in the owner's personal settings
 
-Status: Accepted by the owner on 2026-10-26; decisions 2 and 6 and Question 2 refined by 2026-10-26-permission-levels-as-built
+Status: Accepted by the owner on 2026-10-26; decisions 2 and 6 and Question 2 refined by 2026-10-26-permission-levels-as-built and 2026-10-26-a-level-for-every-command
 Date: 2026-10-26
 
 ## Context

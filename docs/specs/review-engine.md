@@ -37,18 +37,20 @@ Non-goals:
 | ships | `helper/review-engine` and the neutral skill `peer-review` |
 | commands | `review-engine`, with `helper` `helper/review-engine`, `runtime` `python`, `kit` 1 and the first `arguments` below |
 | owner-run arguments | `amend`, `extend`, `reset`, `archive`, `prune` (see "Owner-run commands") |
+| levels | `amend`, `archive`, `extend`, `prune` and `reset` each offer `["ask", "none"]` beside `block` (see "Owner-run commands"); the shipped default of every one stays `block` |
+| preview | `preview`, the read-only argument that prints the digest an `ask` run carries |
 | convergence | `{"command": "review-engine", "argument": "convergence"}`, the argument the installer asks for a delegated plan approval (see "Convergence") |
 
 The arguments are `status`, `init`, `review-plan`, `review-spec`, `review-roadmap`, `review-adr`, `decide`,
-`amend`, `extend`, `reset`, `archive`, `prune` and `convergence`. The engine is run as
+`amend`, `extend`, `reset`, `archive`, `prune`, `convergence` and `preview`. The engine is run as
 `wb run review-engine <argument> [...]`.
 
 ## The commands
 
-Every command prints one JSON object on standard output and exits 0, or prints a `refused:` line on standard error and
-exits 1 with nothing on standard output. Every string in an object is display-cleaned (control characters removed
-except newline and tab in a multi-line field) and bounded. None of them changes any file outside the review's own
-directory, and none changes the reviewed document.
+Every command but `preview` prints one JSON object on standard output and exits 0, or prints a `refused:` line on
+standard error and exits 1 with nothing on standard output. Every string in an object is display-cleaned (control
+characters removed except newline and tab in a multi-line field) and bounded. None of them changes any file outside the
+review's own directory, and none changes the reviewed document.
 
 | command | effect |
 |---|---|
@@ -56,11 +58,12 @@ directory, and none changes the reviewed document.
 | `init <document>` | makes the review's directory and state without calling a model |
 | `review-plan\|spec\|roadmap\|adr <document>` | runs one round (below) |
 | `decide <document> <finding> applied\|rejected [--reason <text>]` | records a decision once; a second call on the same finding is refused |
-| `amend <document> <finding> applied\|rejected [--reason <text>]` | changes a recorded decision and keeps the earlier one in the ledger (owner-run) |
-| `extend <document> <n>` | raises the bound by 1 to 5 rounds, never above the ceiling (owner-run) |
-| `reset <document>` | opens a fresh window of the default number of rounds (owner-run) |
-| `archive <document>` | closes the review: the ledger is its summary, and no further round, decision or change is taken (owner-run) |
-| `prune [--apply]` | lists, and with `--apply` deletes, closed reviews closed 90 days ago or more (owner-run) |
+| `amend <document> <finding> applied\|rejected [--reason <text>] [--digest <digest>]` | changes a recorded decision and keeps the earlier one in the ledger (owner-run); with a digest, only if it is that of this amendment of the decision now |
+| `extend <document> <n> [--digest <digest>]` | raises the bound by 1 to 5 rounds, never above the ceiling (owner-run); with a digest, only if it is that of this extension of the review now |
+| `preview extend <document> <n>`, `preview reset <document>`, `preview archive <document>`, `preview amend <document> <finding> applied\|rejected [--reason <text>]`, `preview prune` | prints what the command with those arguments would change as lines of text, the last being `digest: <32 lowercase hex>`, and writes nothing; refused where the command would be |
+| `reset <document> [--digest <digest>]` | opens a fresh window of the default number of rounds (owner-run); with a digest, only if it is that of this reset of the review now |
+| `archive <document> [--digest <digest>]` | closes the review: the ledger is its summary, and no further round, decision or change is taken (owner-run); with a digest, only if it is that of this closing of the review now |
+| `prune [--apply [--digest <digest>]]` | lists, and with `--apply` deletes, closed reviews closed 90 days ago or more (owner-run); with a digest, which only `--apply` takes, only if it is that of the list it would delete now |
 | `convergence <document>` | prints whether the last review of a plan converged, for the installer's delegated approval (read-only; see "Convergence") |
 
 `<document>` is a path relative to the project root. It must be a regular file with no link in any component, inside
@@ -227,12 +230,45 @@ setting now differs from what the last round asked.
 ## Owner-run commands
 
 `amend`, `extend`, `reset`, `archive` and `prune` change what a review allows or destroys what it recorded, so they are
-the owner's. The declaration lists them as owner-run arguments, and the installer renders a `deny` rule for
+the owner's. The declaration lists them as owner-run arguments, and at the shipped level `block` the installer renders a `deny` rule for
 `wb run review-engine <argument>` in each harness that provides `permissions`, as it does for the installer's own owner-run
 commands. The rule names the first argument only, which is why `decide` (a once-only record) and `amend` (a change of
 one) are separate arguments. The rule is restrictive and is a mistake guard, not a security boundary: a command spelling
 it does not match runs. The agent's `decide` is allowed. This repository's owner may, by habit, run `decide` themselves;
 nothing in the engine requires it.
+
+**The five at a level** (plan `2026-10-27-levels-for-the-review-workflow`, Increments E and F; decision
+`2026-10-27-owner-run-arguments-take-a-level`). The launcher, not the helper, reads the owner's level for the key
+`wb run review-engine <argument>` and tests the terminal (`command-permissions.md`); the helper is not told the level. At `ask`
+and without a terminal the launcher starts the helper only when the last two arguments are `--digest` and 32 lowercase
+hexadecimal characters, and passes them on unchanged. The helper takes a trailing `--digest <digest>` off before it counts
+its other arguments (a digest of another shape is refused before anything is read; a `--digest` anywhere but last is an
+argument and fails the count), then, inside the review's lock and on the state it is about to write, recomputes the digest
+and changes nothing unless the two are equal. The digest is the first 32 characters of the SHA-256 of the lines
+`preview extend` prints before its last line: the document and its kind, the review's key and generation (every save raises
+it), its rounds and window, the bound now, the number and the bound after. A digest of another document, another number, or
+the review before any later save is therefore refused. `preview extend` takes the same arguments as `extend`, reads the
+review as `status` does and writes nothing. At a terminal `extend` without a digest works as before, and at `none` the
+launcher requires none; the helper checks one it is given at either. The prompt shows the command and the digest, not the
+preview, so the agent shows the preview first; no code enforces that.
+
+An agent can run each `preview <argument>` at any level, `ask` and `none` included, because the command gate reads the first argument of a
+literal `wb run review-engine <first> ...` as data when `<first>` is a plain token other than the key's argument (plan
+`2026-10-28-gate-reads-module-arguments`; `command-permissions.md`, "The command gate"). `status` and a `decide` whose reason says
+`extend` pass the same way. The gate still blocks the argument itself in any spelling but the exact simple form, so the order is: the
+agent runs the preview, shows it, then runs the owner-run command with `--digest` and the owner confirms the harness prompt.
+
+The other four work the same way, each with the preview and digest of what it changes: `reset` of the window it
+starts again and, for a review that was not sealed, of what it replaces and a hash of the content it would seal (nothing
+vouches for that content, so an edit after the preview changes the digest); `archive` of the review it closes with its
+rounds, decisions and undecided findings; `amend` of the finding, the decision it has now and the one it becomes; `prune`
+of the reviews it would delete, in order of key, each with its path and when it was closed. The digests of `amend` also
+bind the whole of each reason, by its SHA-256, though the preview shows it cut short. Each command's own checks are
+made first and the digest is compared inside the lock, on the state or the list that is then written or deleted, so a
+review that changed after the preview, or a list that gained or lost a review, is refused with nothing changed. Only
+`prune --apply` takes a digest; to see the list at `ask`, an agent runs `preview prune`, because the plain list is an
+owner-run argument too and needs a digest of its own. `decide` is not owner-run and takes none. The plan recommends
+leaving `prune` and `reset` at `block`: both destroy history, and a phone prompt shows the digest, not the list.
 
 ## What leaves the machine
 
@@ -255,7 +291,7 @@ program can read"). So:
 
 The module conforms when tests against a fake bridge, installed as a real pinned module in a temporary project, show:
 
-1. The declaration is as above, and the installer renders a deny rule for each owner-run argument and none for the
+1. The declaration is as above, and at the shipped level `block` the installer renders a deny rule for each owner-run argument and none for the
    others.
 2. A document outside the project, in the wrong directory, a link, a non-regular file or over the bound is refused and
    no bridge runs; a path with `..` or an absolute path is refused.
@@ -308,7 +344,7 @@ The module conforms when tests against a fake bridge, installed as a real pinned
 Built by plan `2026-10-23-review-engine`, increments C to G (the module `review-engine`, version 0.1.0):
 
 - The declaration provides `peer-review`, requires `model-bridge` (hard) and declares the command `review-engine` with
-  the twelve arguments of "The commands" and the `owner` list `amend`, `extend`, `reset`, `archive`, `prune`. It ships
+  the arguments of "The commands" (fourteen now: `preview` and `convergence` came later) and the `owner` list `amend`, `extend`, `reset`, `archive`, `prune`. It ships
   the neutral skill `peer-review`. The package approval is shipped (`workbench/shipped_approvals/`), released by the owner at increment G.
   Plan `2026-10-23-delegated-approval` adds the thirteenth argument, `convergence`, and the declaration field that names
   it (increment B, below); that edit makes the shipped approval stale until the owner releases it again in that plan's

@@ -198,14 +198,16 @@ def stage(store_root, harness, modules, snaps, source, version, home, root):
             table = rendering.table_of(
                 guarded_store.Store(store_root),
                 tuple(name for item in modules if item.type == "process" for name in item.module.checkpoints),
-                [(command.name, command.owner) for item in modules for command in item.module.commands])
+                [(command.name, command.owner, command.arguments, command.levels)
+                 for item in modules for command in item.module.commands])
             # A key is relaxed only if the harness can render the command gate: it provides hooks and its layout
             # describes the gate. Otherwise every key keeps its deny and the record says no gate was rendered.
             can_gate = "hooks" in harness.module.provides and harnessplan.command_gate_described(layout)
             built = rendering.plan(table, gated=can_gate)
             gated = can_gate and bool(built.ask or built.open)
             data = harnessplan.render_permissions(
-                owner_rules(modules), layout, os.path.realpath(store_root), os.path.realpath(home),
+                owner_rules(modules) + [neutral.Rule("deny", "shell", pattern) for pattern in built.deny],
+                layout, os.path.realpath(store_root), os.path.realpath(home),
                 hook_for=harness.name if hook else None, root=os.path.realpath(root), protect=done.confined,
                 ask_patterns=built.ask, open_patterns=built.open,
                 command_gate_for=harness.name if gated else None)

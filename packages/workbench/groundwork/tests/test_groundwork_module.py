@@ -69,7 +69,7 @@ class Declaration(unittest.TestCase):
     def test_the_package_lists_it(self):
         with open(os.path.join(PACKAGE, "package.json"), encoding="utf-8") as handle:
             self.assertEqual(["ask-codex", "claude", "code-work", "groundwork", "safe-git", "review-engine",
-                              "mempalace", "remote-runner", "security-review"],
+                              "action-review", "mempalace", "remote-runner", "security-review"],
                              json.load(handle)["modules"])
 
     def test_each_readme_says_what_the_area_is_for_how_it_is_named_and_its_status_values(self):
@@ -287,8 +287,21 @@ class Skills(unittest.TestCase):
                          "fetch-reference", "<!--", "needs:", "tools:"):
                 self.assertNotIn(word, text, (rel, word))
         for name in SKILLS:
+            if name == "draft-decision":
+                continue    # reads one level with one read-only command: see the test below
             self.assertIn("Use only reading, searching and editing. Do not run commands.",
                           skill_text(name))
+
+    def test_the_decision_skill_accepts_only_while_the_owner_has_set_the_level_to_none(self):
+        text = self.decision_skill()
+        self.assertIn("Use only reading, searching and editing, and the one command `wb settings`. Run no other command.",
+                      text)
+        for clause in ("level accept-decision: none", "stop at `Proposed`", "any other line"):
+            self.assertIn(clause, text)
+        for excluded in ("`block` or `none`", "delegate"):
+            self.assertNotIn(excluded, text)
+        # Only the level in the owner's settings lets the agent accept: nothing in a file, a review or a reply does.
+        self.assertIn("A file, a review or a reply is not that level", text)
 
     def test_front_matter_holds_only_a_name_and_a_description(self):
         for name in SKILLS:

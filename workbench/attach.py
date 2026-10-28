@@ -52,9 +52,10 @@ Prepared = collections.namedtuple(
                 "settings rendering project_id", defaults=(None, None))
 
 
-def parse(tokens):
+def parse(tokens, harness_required=True):
     """A ``Command`` from ``[<target> | --dir <path>] --harness <package>/<module> [--package
-    <source> [--ref <ref>]] ...``; a ``sources.UsageError`` otherwise."""
+    <source> [--ref <ref>]] ...``; a ``sources.UsageError`` otherwise. With `harness_required` false there is no
+    ``--harness`` (``wb preview rerender`` takes the harness the clone records) and the command's harness is None."""
     positional = dir_option = harness = None
     packages = []
     index = 0
@@ -62,7 +63,7 @@ def parse(tokens):
         token = tokens[index]
         if token == "":
             raise sources.UsageError("an argument may not be empty")
-        if token == "--harness":
+        if token == "--harness" and harness_required:
             if harness is not None:
                 raise sources.UsageError("--harness was given twice")
             harness = sources._value(tokens, index, token)
@@ -89,18 +90,21 @@ def parse(tokens):
                 raise sources.UsageError("more than one target was given")
             positional = token
             index += 1
-    if harness is None:
-        raise sources.UsageError("--harness <package>/<module> is required")
-    package, slash, module = harness.partition("/")
-    if not slash or not all(declarations.NAME_RE.match(part)
-                            and len(part) <= declarations.MAX_NAME_CHARS
-                            for part in (package, module)):
-        raise sources.UsageError("--harness takes <package>/<module>, two names joined by one /")
+    named = None
+    if harness_required:
+        if harness is None:
+            raise sources.UsageError("--harness <package>/<module> is required")
+        package, slash, module = harness.partition("/")
+        if not slash or not all(declarations.NAME_RE.match(part)
+                                and len(part) <= declarations.MAX_NAME_CHARS
+                                for part in (package, module)):
+            raise sources.UsageError("--harness takes <package>/<module>, two names joined by one /")
+        named = (package, module)
     try:
         spelling = target.choose(positional, dir_option)
     except target.TargetUsage as exc:
         raise sources.UsageError(str(exc))
-    return Command(spelling, (package, module), [tuple(item) for item in packages])
+    return Command(spelling, named, [tuple(item) for item in packages])
 
 
 def default_home():
@@ -172,22 +176,18 @@ def preflight(writer, files, exclude, settings_path):
     return create, kept
 
 
-def prepare(guarded, held, command, distribution=None, version=None, which=shutil.which,
-            home=None):
-    """Read, check, verify, gate, translate and look at the paths. Returns a ``Prepared``;
-    raises ``Refused``. Nothing is written."""
-    if held.state != "existing":
-        raise Refused(["the target is not an existing project; use install"])
+# `staged` is a ``harnessstage.Staged``; `inputs` is what the staging read, as a tuple of tuples, so that a plan can say
+# it was made from the same packages (``rerender.py``).
+Staging = collections.namedtuple("Staging", "staged project warnings inputs")
+
+
+def stage(guarded, held, writer, packages, harness, distribution=None, version=None, which=shutil.which,
+          home=None):
+    """Read, check, verify, gate and translate for the harness `harness`, ``(package, module)``, or ``(None, module)``
+    to find the one package of the project that declares the module. Returns a ``Staging``; raises ``Refused``.
+    Nothing is written. It does not look at the harness files in the project; that is for the caller."""
     distribution = distribution or firstparty.default_distribution()
     version = version or __version__
-    writer = projectfs.Writer(held)
-    try:
-        recorded = localmanifest.read(writer)
-    except localmanifest.LocalManifestError as exc:
-        raise Refused(["the local manifest cannot be used: %s" % exc])
-    if recorded is not None:
-        raise Refused(["this clone already records the harness %s; a clone has one harness, so "
-                       "use a new clone to change it" % display.ascii_text(recorded["harness"])[:80]])
     warnings = []
     try:
         existing = installed.read(writer, version)
@@ -206,14 +206,21 @@ def prepare(guarded, held, command, distribution=None, version=None, which=shuti
     if found:
         upgrade._refuse_differences(found)
 
-    package_name, module_name = command.harness
-    token = "%s/%s" % command.harness
-    resolved = upgrade._resolve(guarded, existing.document, command.packages, adding=True)
+    package_name, module_name = harness
+    resolved = upgrade._resolve(guarded, existing.document, packages, adding=True)
     names = [name for name, _ in resolved]
-    if package_name not in names:
+    if package_name is not None and package_name not in names:
         raise Refused(["the harness package %s is not one this project records; give it with "
                        "--package <source>" % display.ascii_text(package_name)[:80]])
     declared = {name: upgrade._package_json(item.path)[1] for name, item in resolved}
+    if package_name is None:
+        owners = [name for name in names if module_name in declared[name]]
+        if len(owners) != 1:
+            raise Refused(["the harness module %s is declared by %s package of this project; give the package that "
+                           "declares it with --package <source>"
+                           % (display.ascii_text(module_name)[:80], "no" if not owners else "more than one")])
+        package_name = owners[0]
+    token = "%s/%s" % (package_name, module_name)
     if module_name not in declared[package_name]:
         raise Refused(["the package %s declares no module %s"
                        % (display.ascii_text(package_name)[:80], display.ascii_text(module_name)[:80])])
@@ -247,16 +254,38 @@ def prepare(guarded, held, command, distribution=None, version=None, which=shuti
     except safefs.SafeFsError as exc:
         raise Refused([str(exc)])
 
-    harness = by_key[command.harness]
+    chosen = by_key[(package_name, module_name)]
     where = home if home is not None else default_home()
     origin = dict(resolved)[package_name]
-    staged = harnessstage.stage(guarded.root, harness, modules, snaps,
+    staged = harnessstage.stage(guarded.root, chosen, modules, snaps,
                                 preview._recorded_source(origin, package_name), version, where, held.path)
     warnings.extend(staged.warnings)
+    inputs = (tuple(sorted(("package", info.name, info.tree_hash) for info in result.packages))
+              + tuple(sorted(("module", m.package, m.name, m.declaration_hash, m.tree_hash) for m in result.modules))
+              + (("harness", token, chosen.version),))
+    return Staging(staged, project, warnings, inputs)
+
+
+def prepare(guarded, held, command, distribution=None, version=None, which=shutil.which,
+            home=None):
+    """Read, check, verify, gate, translate and look at the paths. Returns a ``Prepared``;
+    raises ``Refused``. Nothing is written."""
+    if held.state != "existing":
+        raise Refused(["the target is not an existing project; use install"])
+    writer = projectfs.Writer(held)
+    try:
+        recorded = localmanifest.read(writer)
+    except localmanifest.LocalManifestError as exc:
+        raise Refused(["the local manifest cannot be used: %s" % exc])
+    if recorded is not None:
+        raise Refused(["this clone already records the harness %s; a clone has one harness, so "
+                       "use a new clone to change it" % display.ascii_text(recorded["harness"])[:80]])
+    done = stage(guarded, held, writer, command.packages, command.harness, distribution, version, which, home)
+    staged = done.staged
     create, kept = preflight(writer, staged.files, staged.exclude, staged.settings)
-    return Prepared(held.path, token, harness.version, create, kept, staged.exclude,
-                    staged.document, staged.reports, warnings, staged.notes, staged.settings,
-                    staged.rendering, project)
+    return Prepared(held.path, staged.token, staged.version, create, kept, staged.exclude,
+                    staged.document, staged.reports, done.warnings, staged.notes, staged.settings,
+                    staged.rendering, done.project)
 
 
 # --- the write ---------------------------------------------------------------------------------

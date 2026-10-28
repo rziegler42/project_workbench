@@ -27,7 +27,9 @@ Rules:
 
 - `extend`, `reset`, `archive`, `prune` and `amend` are the owner's. Never run them; ask the owner when
   one is needed. When a review is at its bound, closed, unsealed or rolled back, report that to
-  the owner.
+  the owner. `preview` shows, and changes nothing, what an owner-run argument would do and a digest of it
+  (`preview extend <document> <n>`, and the same for `reset`, `archive`, `amend` and `prune`); show it to the owner when
+  they ask what one of them would do.
 - When the engine refuses (`refused: ...`), stop and report the reason. Do not retry with changed options,
   edit the review's files, or look for another route to a review.
 - `status` says when the setting differs from what the last round asked. Report that to the owner.
