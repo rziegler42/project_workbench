@@ -1,6 +1,6 @@
 # Close the three Low findings of the refresh security review
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-28
 Candidate: none — the deferred Lows 2 to 4 of the security review of Increment B of `2026-10-28-refresh-rendered-harness`, not a roadmap candidate
 Specs: harness-refresh, harness-rerender
@@ -184,5 +184,10 @@ the same gap); the descriptor leak on an interrupt between `os.open` and the nex
 `test_refresh`'s `Partial` test still simulates the old in-place write with a mock.
 
 **Not done.** Not run on Linux or a filesystem without hard links. `tests/test_projectfs.py` still lacks an `import unittest.mock`
-(one test errors when the file runs alone; unrelated). The `Partial` message still says "may be partly written". The plan's
-`Status:` line still says `Proposed`.
+(one test errors when the file runs alone; unrelated). The `Partial` message still says "may be partly written".
+
+### Plan as a whole
+
+Increments A (`802c89c`), B (`cf4bf39`) and C (`d3d451d`) are committed, and Lows 4, 3 and 2 of the refresh review are closed in
+code, tests and `harness-refresh.md`. The full suite last ran 5925 OK at C. The owner-run `wb preview rerender` on this clone,
+named under "Verification for the plan as a whole", has not been run yet. Status set to `Completed` on the owner's word.
