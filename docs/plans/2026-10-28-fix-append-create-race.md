@@ -1,6 +1,6 @@
 # Retry the first append when a racing creator makes the open fail
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-28
 Candidate: none — a defect found while investigating a flaky test, not a roadmap candidate
 Specs: none
