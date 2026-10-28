@@ -12,6 +12,7 @@
     "action-review",
     "mempalace",
     "remote-runner",
-    "security-review"
+    "security-review",
+    "verilog"
   ]
 }
