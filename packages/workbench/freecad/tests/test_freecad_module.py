@@ -3,6 +3,8 @@
 approvals are stale until the last increment of that plan. The tests prove structure and scope; the skills' technical
 advice is checked by running FreeCAD 1.1.4 where the plan says so, and that is recorded in the plan, not tested here."""
 
+import ast
+import hashlib
 import json
 import os
 import re
@@ -18,8 +20,12 @@ PACKAGE = os.path.join(ROOT, "packages", "workbench")
 MODULE = os.path.join(PACKAGE, "freecad")
 NEUTRAL = os.path.join(MODULE, "harness", "neutral")
 SKILLS = ("freecad-python", "freecad-part", "freecad-sketcher", "freecad-partdesign",
-          "freecad-parameters")
-BUNDLED = {}  # skill name -> files it ships below its folder besides SKILL.md and reference.md
+          "freecad-parameters", "freecad-mesh", "freecad-reverse-engineering")
+BUNDLED = {"freecad-reverse-engineering": ("scripts/mesh_report.py",)}  # files below a skill besides SKILL.md and reference.md
+SCRIPT = os.path.join(NEUTRAL, "skills", "freecad-reverse-engineering", "scripts", "mesh_report.py")
+# The sha-256 of the owner's script as read on 2026-10-28 (plan 2026-10-28-freecad-module, Assumptions).
+SCRIPT_SHA256 = "4f7930f406d4ef099bedc5c577fb7cbbb539f2fdc28edb5929f3e9206f362667"
+SCRIPT_IMPORTS = {"json", "os", "math", "sys", "FreeCAD", "Mesh", "numpy", "Part"}
 
 
 def read(*parts):
@@ -157,6 +163,47 @@ class Skills(unittest.TestCase):
         for name in SKILLS:
             for text in (skill_text(name), reference_text(name)):
                 self.assertIsNone(re.search(r"\binstall(ing)?\b", text, re.IGNORECASE), name)
+
+
+class Script(unittest.TestCase):
+    """The one script the module ships. It runs only under FreeCAD's own interpreter, so these tests read it as text."""
+
+    def source(self):
+        with open(SCRIPT, "rb") as handle:
+            return handle.read()
+
+    def test_it_is_byte_identical_to_the_script_that_was_read(self):
+        self.assertEqual(SCRIPT_SHA256, hashlib.sha256(self.source()).hexdigest())
+
+    def test_it_is_the_only_script_in_the_module(self):
+        found = []
+        for base, dirs, files in os.walk(MODULE):
+            if base == MODULE:
+                dirs.remove("tests")
+            dirs[:] = [d for d in dirs if d != "__pycache__"]
+            found += [os.path.relpath(os.path.join(base, n), MODULE) for n in files if not n.endswith(".md") and n != "module.json"]
+        self.assertEqual(["harness/neutral/skills/freecad-reverse-engineering/scripts/mesh_report.py"], found)
+
+    def test_it_imports_only_what_it_needs(self):
+        tree = ast.parse(self.source().decode("utf-8"))
+        imported = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported |= {alias.name.split(".")[0] for alias in node.names}
+            elif isinstance(node, ast.ImportFrom):
+                imported.add((node.module or "").split(".")[0])
+        self.assertEqual(set(), imported - SCRIPT_IMPORTS)
+
+    def test_it_starts_no_program_and_uses_no_network_or_evaluation(self):
+        text = self.source().decode("utf-8")
+        for word in ("subprocess", "socket", "urllib", "ftplib", "shutil", "http", "os.system", "os.popen",
+                     "exec(", "eval(", "__import__"):
+            self.assertNotIn(word, text, word)
+
+    def test_it_keeps_its_guard_on_the_json_target(self):
+        text = self.source().decode("utf-8")
+        for fragment in ("refusing --json target", "os.path.islink(target)", "os.path.abspath(path)", '!= ".json"'):
+            self.assertIn(fragment, text, fragment)
 
 
 if __name__ == "__main__":

@@ -501,3 +501,59 @@ companion plan will not complete without it.
 - **Gate:** the owner ran `wb release-approvals` once for this increment. Ten records are reported stale; none was removed.
   Increment I removes them after a preview.
 - **Not done:** no independent review of the increment (only when the owner asks); no run in the GUI.
+
+### Increment D
+
+- **Read (2026-10-28):** the hashes of `mesh-reverse-engineering.md`, `geometry-and-shapes.md` and `scripts/mesh_report.py`
+  matched the plan at the start. `mesh-reverse-engineering.md` was read in full, and the script was read in full when the
+  plan was drafted.
+- **Rewritten, not copied.** `freecad-mesh` covers loading, making and writing a mesh, the mesh and shape conversions, the
+  operations, the health checks, the repair steps and the reading calls. `freecad-reverse-engineering` covers the script, the
+  seven-step workflow, what to expect from fitting, repair, choosing features, and the report to the owner. The worked
+  example of the source uses neutral names (`Dims`) and finds the script beside the skill (`<skill folder>/scripts`)
+  where the source used a path under the owner's configuration. The wiki-style links and the owner's convention
+  (a VarSet named `VarSet`) are not carried.
+- **The script is copied, not rewritten.** `scripts/mesh_report.py` in `freecad-reverse-engineering` is byte-identical to
+  the source (sha-256 `4f7930f406d4ef099bedc5c577fb7cbbb539f2fdc28edb5929f3e9206f362667`, checked by `cmp` and by a test).
+  It is the only script in the module. Tests read it as text: the hash; that it imports only `json`, `os`, `math`, `sys`,
+  `FreeCAD`, `Mesh`, `numpy` and `Part`; that it holds no `subprocess`, `socket`, `urllib`, `ftplib`, `shutil`, `http`,
+  `os.system`, `os.popen`, `exec(`, `eval(` or `__import__`; and that its `--json` guard is present.
+- **Written:** the two skill directories (a `SKILL.md` and a `reference.md` each), `scripts/mesh_report.py`, and the module's
+  tests (19 in all, five of them new for the script).
+- **Verification as run:**
+  - Test first: 3 failures and 12 errors before the skills and the script existed.
+  - Module tests, 19, OK; package tests, 29, OK; the full suite, 5860 tests in 13 roots, OK; `wb run code-work check` (61 plans)
+    and `wb check` found no problems; `git diff --check` printed nothing.
+- **Run against FreeCAD 1.1.4 (revision 20260928), headless, at the owner's word, from a scratch directory:** 15 example blocks
+  (8 mesh, 7 reverse engineering; the mesh file was run twice after corrections), none raising. Confirmed: mesh read,
+  write, make and health calls; meshing a cylinder (1564.9 against the shape's 1570.8); a `makeSolid` result is valid and
+  faceted (164 planar faces for 164 facets); the repair sequence removing a duplicated facet and a stray triangle;
+  `crossSections`, `getPlanarSegments`, `getCurvaturePerVertex`, `wireFromMesh`, `trimByPlane` and `projectShapeOnMesh`; the
+  script's `triage`, `repair`, `fit_primitives` and `deviation` on a generated box with a boss and a hole (radii 4.0 and
+  8.0, coverage 0.992, all grades good); the worked rebuild (volume 13005.31 equal to the source's, three fully
+  constrained sketches, deviation 0.0 within tolerance 1.0, and 14136.28 after the boss radius became 10); and all
+  seven `ReverseEngineering` function names, with `approxSurface` and `normalEstimation` documented.
+- **The script from the command line**, on generated STL files: with `--repair --json report.json` it printed the JSON and wrote
+  the same JSON to the file, removed a stray triangle (1025 to 1024 facets, then a closed solid) and fitted the three
+  planes and the two cylinders; it refused `--json` aimed at the input file, at `out.txt`, at a symbolic link and with
+  no path, and the input file's hash was the same afterwards.
+- **Found wrong, too strong, or not stated in the source, corrected in the skills:**
+  1. `unite`, `intersect` and `difference` return a new mesh and do not change the mesh they are called on. On two boxes with
+     coincident faces they gave 1166.7, 541.7 and 333.3 (right: 1500, 500, 500) and open meshes.
+  2. `removeComponents(n)` removes every component of fewer than `n` facets; `removeComponents(20)` removed a whole
+     12-facet box. The script's default `min_component_facets` of 20 does the same to a coarse mesh.
+  3. The script's `tiny_components` counts any component of 20 facets or fewer, so a very coarse part is reported as debris.
+  4. `smooth()` collapsed a 12-facet cube to 95.4 from 1000.0, and shrank a finely meshed sphere by 2.6%.
+  5. `getPlanarSegments(0.05, 30)` found no plane in a 12-facet cube because its minimum is in facets, and the volume of a
+     mesh trimmed with `trimByPlane` is meaningless because the mesh is open.
+  6. The built-in `getSegmentsOfType("Cylinder", 0.05, 30)` found no cylinder in the generated part; the source says it
+     breaks a clean cylinder into fragments. Both say it is unreliable; the numbers differ, and the skill says what was seen.
+- **Not run, marked read:** the owner's measurements on a real scan (`removeNeedles` removing about a quarter of the facets,
+  `optimizeTopology` bringing back self-intersections, `fixSelfIntersections` leaving `isSolid()` false), that drifting
+  cylinder radii mean the surface is not a cylinder, the table of features to choose from the fits, and the behaviour of
+  `approxCurve`, `poissonReconstruction`, `regionGrowingSegmentation`, `sampleConsensus` and `featureSegmentation`.
+- **Added by the author:** none beyond rewording and the corrections above.
+- **Gate:** the owner ran `wb release-approvals` once for this increment. Twelve records are reported stale; none was
+  removed. Increment I removes them after a preview.
+- **Not done:** no independent review of the increment (only when the owner asks); no run in the GUI; a missing input file
+  to the script printed no error line in what I looked at, which was not investigated.
