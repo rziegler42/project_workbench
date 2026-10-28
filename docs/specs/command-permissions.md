@@ -6,8 +6,9 @@ Written by plan `2026-10-26-command-permission-levels` (Increment H), which buil
 rendering record, the command gate and `approve-plan` at the levels `ask` and `none`, and extended by plan
 `2026-10-27-a-level-for-every-command`, which built a level for every command (the section "A level for every command"): a key for
 every command and subcommand the owner can govern, the agent-safe ones included, a default that suits each, and `none` for every
-owner-run installer command and for `accept-decision`. `approve-plan` alone offers `ask` and `delegated`. The keys that still offer
-`block` only are listed under "Not built". The design is `docs/decisions/2026-10-26-per-command-permission-levels.md`, as refined by
+owner-run installer command and for `accept-decision`, and by the plan `2026-10-27-rerender-attached-harness`, which built
+`wb rerender` ("Re-rendering an attached clone"). `approve-plan` alone offers `ask` and `delegated`. The keys that still offer
+`block` only are listed under "Not built"; `wb rerender` offers it by design and is described in its own section. The design is `docs/decisions/2026-10-26-per-command-permission-levels.md`, as refined by
 `docs/decisions/2026-10-26-permission-levels-as-built.md` and `docs/decisions/2026-10-26-a-level-for-every-command.md` (all accepted),
 which state what stands, what changed and what was not built; where they differ on the defaults or the offered levels, this spec
 follows the later record.
@@ -88,7 +89,7 @@ separated by single spaces, at most 96 characters.
    keep their default `none`, so that the agent can still run `wb settings` and `wb check` to report the damage (the owner's decision,
    Increment C). An explicit `block` the owner wrote for such a key is therefore not honored while the file or the table is
    damaged, even when the damage is one mistyped key elsewhere; it applies again once the file is repaired and the harness is
-   attached again, and a `deny` already rendered into an attached clone stays until then. A value that is not one of the four levels reads as `block` for that key. A key that is not a valid name blocks
+   attached again or re-rendered (`wb rerender`), and a `deny` already rendered into an attached clone stays until then. A value that is not one of the four levels reads as `block` for that key. A key that is not a valid name blocks
    the whole table, because a mistyped key must never leave a default of `ask` in force. `wb settings` reports each.
 2. A key with no table entry reads as its checkpoint reading if the file sets one, and otherwise as its shipped default (below).
 3. A level the key does not offer reads as `block` with a note.
@@ -101,7 +102,7 @@ separated by single spaces, at most 96 characters.
 - `delegated`: `approve-plan` only, whose gate is a converged, sealed review of the exact bytes (`delegation.py`). The gate must
   pass at the moment of the run, and the run counts only while the table still reads `delegated`.
 - `ask`: `approve-plan` only. `none`: `approve-plan`, `wb install`, `wb adopt` (built by Increment F), `wb upgrade` and `wb add` (built by Increment G), `wb approve` and `wb pin` (built by Increment H), `acknowledge-first-tier`, `acknowledge-second-tier`, `wb recover`, `wb attach` and `wb release-approvals` (built by Increment J), `accept-decision` (built by Increment K), every agent-safe action and
-  every declared module argument that is not owner-run; the keys under "Not built" offer `block` only. A key offers a level only
+  every declared module argument that is not owner-run; the keys under "Not built" offer `block` only, and so does `wb rerender`. A key offers a level only
   from the version that builds it for that command.
 
 ### Shipped defaults
@@ -155,7 +156,7 @@ with arguments, only when the owner has set the key to `block`; at its default `
 rendered table, in the record's `keys` (as `deny`) and in the table digest only while it is not at its default, so the default table,
 its digest and the command gate (which counts only keys at `ask` and `none`) are what they were before these keys had a level, and a
 clone attached earlier keeps its record. Setting an agent-safe key to `block` after attach changes the digest, so a relaxed key then
-reads `block` until the harness is attached again, as for any change to the table. The hook entry points `gate`, `agent-gate` and
+reads `block` until the harness is attached again or re-rendered (`wb rerender`), as for any change to the table. The hook entry points `gate`, `agent-gate` and
 `gate-command` are not keys, so a `deny` for another key never stops a rendered hook.
 
 **The rendering record.** At attach, before the files, the installer writes `projects/<id>/rendering` in the guarded store, strict
@@ -275,7 +276,8 @@ contract has no read-only declaration, so none is used. An undeclared command or
 checks its own pin, defaults to `none`. The owner-run commands, the checkpoints and the owner-run module arguments keep their
 default of `block`. `approve-plan` stays `block`; the default is not raised to `ask` (see "Shipped defaults").
 
-**Levels offered.** Every key offers `block` and `none`, except the owner-run arguments of module commands (`wb run <command>
+**Levels offered.** Every key offers `block` and `none`, except `wb rerender`, which offers `block` only for good (see "Re-rendering an
+attached clone"), and the owner-run arguments of module commands (`wb run <command>
 <argument>` where the argument is owner-run), which offer `block` only until a later plan gives the module contract a way to pass a
 level to a helper (the clarification note of `2026-10-26-a-level-for-every-command`, and "Not built"). `delegated` stays `approve-plan` only, and `ask` is offered by a key once
 that key has a preview digest of its own, built as `approve-plan`'s is. Every key built by the plan offers `none`; the keys that still offer `block` only are listed under "Not built". The order of building the digests is for a plan **(call)**: `install` and `adopt` first, because they already have a
@@ -408,8 +410,8 @@ when any other has none.
 P2. With no settings, every agent-safe command reads `none` and every other key reads as it does today, `block`.
 P3. A table entry sets the level of its key in either direction, whatever the key's checkpoint says; a version 1 `stop` or
 `delegate` for a key the table does not mention reads as `block` or `delegated`, with a note.
-P4. Every key except the owner-run arguments of module commands accepts `block` and `none`, and a level a key does not yet offer
-reads as `block` with a note.
+P4. Every key except `wb rerender` and the owner-run arguments of module commands accepts `block` and `none`, and a level a key
+does not offer reads as `block` with a note.
 P5. With every such key set to `none`, no command refuses for want of a terminal or a harness `deny`, the floor still applies, and
 each run that changes something is logged.
 P6. `accept-decision` set to `none` lets an agent accept a decision, and at `block` it does not.
@@ -419,8 +421,32 @@ registry, the settings and `wb settings` (Increments A and B); P4 is the offers 
 `test_approve_levels`; P5 is `tests/test_install_levels.py`, `test_upgrade_levels.py`, `test_approve_pin_levels.py`,
 `test_ack_recover_levels.py` and the command-gate tests, with the owner's trials in the plan's Result (Increments D to J); P6 is the
 offers test for the key and the draft-decision skill test of the groundwork module (Increment K). P5 holds for every key that offers
-`none`; it does not hold for the keys under "Not built", which offer `block` only. P6 is guidance, not enforcement: the test pins
+`none`; it does not hold for the keys under "Not built" or for `wb rerender`, which offer `block` only. P6 is guidance, not enforcement: the test pins
 what the skill says.
+
+## Re-rendering an attached clone
+
+Built by the plan `2026-10-27-rerender-attached-harness` (the design is [`harness-rerender.md`](harness-rerender.md)). A level in the
+table is rendered into one file, the harness's permissions file, and into the rendering record, so a change to the table after attach
+leaves `ask` and `none` reading `block` until both are rendered again. `wb rerender` does that for the harness the clone already
+records; `wb check` names it (`rendering: out of date; the settings table differs from the rendered one (wb rerender)`, a warning
+and not a problem, because the stale state is already safe).
+
+- **The key `wb rerender`** is owner-run, defaults to `block` and offers `block` only. It is the second exception to decision 3 of
+  `2026-10-26-a-level-for-every-command` (every key offers `block` and `none`), beside the owner-run arguments of module commands, and
+  for a different reason, recorded in `2026-10-27-rerender-is-terminal-only` (accepted): at `none` the level would be read through the
+  record, which reads `block` whenever the table or the permissions file differs, and those are the two ordinary reasons to run a
+  re-render. A level written for it other than `block` reads as `block` with a note. It writes no level-log entry.
+- **`wb preview rerender`** is the read-only plan and is its own agent-safe key, default `none`.
+- **It runs only at a terminal**, on standard input and output, at every level; the owner types the first 12 characters of the
+  preview's digest. Before the first write it rebuilds the plan and refuses unless the digest is the one confirmed.
+- **The plan lists** each key whose rule moves, the three files it changes (the permissions file, the local manifest's hash for it,
+  the rendering record), every `allow` rule of the live file, which it keeps, and every other live entry the new file will not have,
+  which it removes, each shown whole. It notes the shared settings file when the record watched another version of it: a re-render
+  records that file as it is now and does not write it.
+- **The write order** is the permissions file, the local manifest, then the record. The record is last, so a stop at any step leaves
+  every relaxed key reading `block` and never looser. Exit 0 done or nothing to change, 1 refused or cancelled, 2 usage, 3 stopped
+  after writing (the report lists what was and was not written), 130 interrupted before writing.
 
 ## Not built
 
@@ -438,8 +464,9 @@ what the skill says.
   installer runs, so a `none` for them has nothing to change. The accepted decision says no key should be limited to `block`; this
   list is the gap, and the owner decides whether a later plan closes it.
 - The rule that a command reaching more than one key takes the strictest level of them: each command reaches one key today.
-- A command that re-renders an attached clone, so a table or module change leaves `ask` and `none` reading `block` until a new clone
-  is attached.
+- `none` for `wb rerender`, if a way to authorize a stale rendering without a terminal is ever wanted: the key reads its level
+  through the record that a re-render repairs (see "Re-rendering an attached clone"), and it needs its own decision.
+- Picking up a module or package change in an attached clone, which `upgrade` covers; `wb rerender` re-renders for the table only.
 - A provenance check inside `approve-plan`, managed settings, and a store whose approvals a shell cannot forge.
 
 ## Limits

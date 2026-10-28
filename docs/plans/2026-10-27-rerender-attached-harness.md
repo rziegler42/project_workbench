@@ -350,7 +350,7 @@ that the first had, while both digests were equal; I took it for a trimmed paste
 **Not done.** `wb check` does not yet name the command (Increment C); the specs, `docs/development.md` and the spec index
 (Increment D).
 
-### Increment C — `wb check` names the command (not committed)
+### Increment C — `wb check` names the command (committed as `5d193e2`)
 
 **Done.**
 - `workbench/check.py`: `_stale_table` compares the record's `table_digest` with `rendering.digest` of
@@ -381,3 +381,45 @@ check of the problem line; `ApprovalError` added to the table-cannot-be-built te
 records had a table digest is not valid and gives no line (nothing is printed for it, and no test covers it).
 
 **Not done.** The specs, `docs/development.md` and the spec index (Increment D).
+
+### Increment D — The specs, the guide and the plan's acceptance (not committed)
+
+**Done.**
+- `docs/specs/harness-rerender.md`: status `Current`; the header says what built it; "Not decided" is replaced by "As built" (how the
+  manifest's hash is replaced, how the preview shows the change, the level wiring, the shared settings file, a failed write, `wb check`)
+  and "Limits as built"; the early sections are marked as the state before a re-render; one sentence about what `wb check` reads is
+  settled.
+- `docs/specs/command-permissions.md`: a section "Re-rendering an attached clone" (the key and why it offers `block` only, the
+  preview key, terminal-only, what the plan lists, the write order and exit codes); `wb rerender` named in the header, in "Levels
+  offered", in the none-list sentence and in P4 and P5; the "Not built" item on re-rendering is gone, replaced by two deferred items
+  (a `none` for the key; a module or package change); the two sentences that said a clone must be attached again now say attached
+  again or re-rendered.
+- `docs/specs/installer-interface.md`: the `rerender` row of the command table, a `### rerender` section (needs, reads, the preview's
+  lines, the write, exit codes, who may run it), the stale-rendering warning under `check`, `rerender` in the preview verbs, in the
+  section "The preview and approval" and in the list of commands the harness denies.
+- `docs/specs/README.md`: a row for the spec. `docs/development.md`: two command rows, the sequence "edit the settings, preview,
+  re-render", the key in the list of those that offer `block` only, and the text on "Yes, and don't ask again", which no longer
+  needs a new clone.
+
+**Verification as run.**
+- `git diff --check`, `wb check`, `wb run code-work check`, `doccheck` and `refcheck`: no output or no problems, run after the last
+  edit. `tests.test_docset_fixture`: 15 OK.
+- Full suite on the tree, in a scratch copy: 5681 tests in 11 roots, two failures, both recorded under B: the Claude module test (also
+  fails on a clean `HEAD`) and the intermittent `test_levellog` parallel append test. Four small document edits made after that run
+  changed no code; `tests.test_docset_fixture` was run again after them.
+
+**Review.** The `reviewer` agent, one exchange (cap 6): no blocking findings, and every claim it was asked to check against the code
+matched (exit codes, write order, what the preview prints, what `wb check` reads, the key's offers, the deny in five spellings, the
+terminal refusal before the store). Applied: the exit codes now say an interrupt once the writes begin is 3 even if nothing was
+renamed; the early sections of the spec are marked as history and its "Not built" sentence corrected; P4 and P5 name `wb rerender`; the
+"Not built" wording about the key is one sentence; the section "The preview and approval" names `rerender`. Not checked by it: it ran
+nothing, and it did not read `attach.stage`.
+
+**Completion criteria of the plan.** 1 to 7: the tests of B, on a synthetic harness and on real pseudo-terminals, and the owner's
+run on this clone's real harness. 8: the tests of C and `wb check` on this clone. 9: Increment D. 10: the full suite passes except
+two failures that are not from this plan: the Claude module test, which expects a module list without `action-review` and needs a
+change in a first-party package (so the owner's `release-approvals`), and the intermittent levellog test.
+
+**Not done.** The Claude module test is not fixed. Nothing is pushed. The plan's `Decisions:` line still says the decision is
+`Proposed`; it was accepted on 2026-10-27 (`6f14476`), and the line is in the approved part of the plan. The plan's status is left for
+the owner.

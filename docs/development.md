@@ -38,6 +38,8 @@ ambiguous blank.
 | Owner-run: accept changes made to a project (terminal only; with the checkpoint `acknowledge-first-tier` set to `none`, an agent may run it with no terminal, which lets an agent accept changes to instruction-bearing and executable files) | `python3 -m workbench acknowledge [<target> \| --dir <path>]` |
 | Owner-run: clear the marker of an unfinished write (terminal only; at `wb recover` set to `none`, an agent may run it with no terminal) | `python3 -m workbench recover [<target> \| --dir <path>]` |
 | Owner-run: attach the harness to a clone (no terminal test, denied to the agent by the harness; at `wb attach` set to `none` the `deny` is not rendered and an unattended run is logged) | `python3 -m workbench attach [<target> \| --dir <path>] --harness <package>/<module>` |
+| Preview a re-render of an attached clone's permissions (read-only) | `python3 -m workbench preview rerender [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
+| Owner-run: re-render an attached clone's permissions after changing the settings (terminal only at every level; the key `wb rerender` offers `block` only) | `python3 -m workbench rerender [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
 | Check a clone (read-only) | `python3 -m workbench check [<target> \| --dir <path>]` |
 | Preview an upgrade (read-only) | `python3 -m workbench preview upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
 | Owner-run: upgrade a project (terminal only; at `wb upgrade` set to `none`, as for install, with the plan for the project it is run from) | `python3 -m workbench upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
@@ -632,9 +634,14 @@ the records are read from the installed workbench, never copied into the guarded
 `docs/specs/command-permissions.md` is the specification. In practice:
 
 - **Turning a level on.** Back up `~/.config/project-workbench/settings`, change `"version"` to 2 and add `"levels": {"approve-plan": "ask"}`
-  (or `"none"`). Nothing changes in a project until the harness is attached again, which writes the rendering record and the harness
-  files; `wb attach` refuses a clone that already records a harness, so use a new clone. `wb settings` prints a `level <key>:
-  <level>` line for every key. The default is `block`, except for an agent-safe action and a declared module argument that is not owner-run, which default to `none`. A `block` set on an agent-safe action or a declared module argument is rendered as a `deny` at the next attach; at its default `none` nothing is rendered. A damaged settings file blocks every owner-run key and leaves the agent-safe ones at `none`, so `wb settings` and `wb check` still run to report it; an explicit `block` on an agent-safe key is not honored until the file is repaired. The checkpoint `accept-decision` offers `block` (the default) and `none`: at `none`, `wb settings` prints `level accept-decision: none` and the `draft-decision` skill lets an agent mark a decision it drafted `Accepted`; otherwise only the owner accepts a decision (`AGENTS.md`). Not every key offers `none`: the owner-run arguments of module commands, `push-shared-branch`, `submit-remote-job`, `fetch-remote-output` and `change-direction` offer `block` only (`docs/specs/command-permissions.md`, "Not built").
+  (or `"none"`). Nothing changes in a project until its harness is rendered again. A new clone is rendered by `wb attach`, which
+  writes the rendering record and the harness files. A clone that already records a harness is rendered again by `wb rerender`:
+  edit the settings, run `python3 -m workbench preview rerender --package <source>` and read the plan (the keys that move, the
+  `allow` rules it keeps, the entries it removes, the shared settings file if it changed), then run `python3 -m workbench rerender
+  --package <source>` from your terminal and type the first 12 characters of the digest. `wb check` says `rendering: out of date`
+  and names the command when the settings and the rendering differ. `wb rerender` needs a terminal at every level (its key offers
+  `block` only), and a clone attached before the command existed lacks its `deny` until it is re-rendered once. `wb settings` prints a `level <key>:
+  <level>` line for every key. The default is `block`, except for an agent-safe action and a declared module argument that is not owner-run, which default to `none`. A `block` set on an agent-safe action or a declared module argument is rendered as a `deny` at the next attach or re-render; at its default `none` nothing is rendered. A damaged settings file blocks every owner-run key and leaves the agent-safe ones at `none`, so `wb settings` and `wb check` still run to report it; an explicit `block` on an agent-safe key is not honored until the file is repaired. The checkpoint `accept-decision` offers `block` (the default) and `none`: at `none`, `wb settings` prints `level accept-decision: none` and the `draft-decision` skill lets an agent mark a decision it drafted `Accepted`; otherwise only the owner accepts a decision (`AGENTS.md`). Not every key offers `none`: the owner-run arguments of module commands, `push-shared-branch`, `submit-remote-job`, `fetch-remote-output`, `change-direction` and `wb rerender` offer `block` only (`docs/specs/command-permissions.md`, "Not built" and "Re-rendering an attached clone").
 - **What it asks of the agent.** The agent runs `wb plan-status <plan> --digest`, shows you the preview, and runs
   `wb approve-plan <plan> --digest <digest>` as one simple command on its own; the harness then prompts you. A command that wraps or
   rewrites it (`bash -c`, `env`, a quote splice, an escape, an expansion) is blocked by `wb gate-command`, and a command that only
@@ -650,7 +657,7 @@ the records are read from the installed workbench, never copied into the guarded
 - **When Bash calls are blocked.** While a key is relaxed, `wb gate-command` runs on every Bash call. If the store, the settings file
   or the installed modules cannot be read, it blocks every call, `wb check` included. Fix it from your own terminal. "Yes, and don't
   ask again" in the prompt writes an allow rule into `.claude/settings.local.json`; the changed file makes the keys read `block`
-  until the harness is attached again in a new clone.
+  until you run `wb rerender`, which keeps the allow rule and lists it in the plan.
 - **The level log.** `~/.config/project-workbench/level-log` is plain text, one line per attempt and one per outcome. It is not
   pruned; it holds about 4 MiB, and a full log refuses runs above `block`, so rotate it by hand.
 - **Where the level code lives.** The level log's line format and its append, and the rule that a verified level of `none` runs

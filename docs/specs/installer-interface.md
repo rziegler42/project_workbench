@@ -162,9 +162,10 @@ says so.
 | command | kind | takes | writes | terminal only | state |
 |---|---|---|---|---|---|
 | `install` | project | target, a module selection | committed content, manifest, the project's store directory, then per-clone harness files | yes, owner-run; the owner may set `wb install` to `none` | built |
-| `preview` | project | `install`, `adopt`, `upgrade` or `add` and their arguments | nothing; no network, it reads only the approved cache | no | built |
+| `preview` | project | `install`, `adopt`, `upgrade`, `add` or `rerender` and their arguments | nothing; no network, it reads only the approved cache | no | built |
 | `adopt` | project | target, a module selection (as `install`) | committed content for the paths that are missing, manifest, the project's store directory; never an existing file and no harness file | yes, owner-run; the owner may set `wb adopt` to `none` | built (`adopt-existing-repository`) |
 | `attach` | project | target, `--harness` | per-clone harness files, `.git/info/exclude`, the local manifest | no, but owner-run (harness deny rule) | built |
+| `rerender` | project | target, `--package` | the harness's permissions file, the local manifest's hash for it, then the rendering record in the guarded store | yes, owner-run at every level; the key offers `block` only | built (`rerender-attached-harness`) |
 | `check` | project | target | nothing | no | built |
 | `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run; the owner may set it to `none` | built |
 | add a module | project | target, a module | the same as `upgrade`, new files and blocks only | yes, owner-run; the owner may set `wb add` to `none` | built |
@@ -422,6 +423,30 @@ plan made and the owner may still change.
   attach` is the barrier, as it is for `approve`. It is not terminal-gated, because setting up
   a clone is routinely scripted by the owner.
 
+### `rerender` (built by plan `2026-10-27-rerender-attached-harness`)
+
+`wb preview rerender [<target> | --dir <path>] [--package <source> [--ref <ref>]] ...` and
+`wb rerender <the same arguments>`. The design is `harness-rerender.md` and the key is in `command-permissions.md`,
+"Re-rendering an attached clone".
+
+- **Needs:** an existing project whose local manifest records a harness; a clone with none is refused and pointed at `wb attach`.
+  The harness is the one the clone records, so there is no `--harness`. The packages are given as for `upgrade` and `attach`.
+  It refuses unacknowledged differences, as `attach` does.
+- **Reads** the harness and the effective table now, stages as `attach` does, and reads the live permissions file (a link, a file
+  that is not valid JSON or not an object, or a missing file is refused). It carries the live file's `allow` rules into the new file.
+- **The preview prints,** after `project: <resolved target>`, the harness, each key whose rule moves (`old -> new`), the files it
+  changes with old and new hash (or `left as it is`), the `allow` rules kept (`kept:`), every other live entry the new file will not
+  have (`removed:`), notes, a summary of the inputs read and a 64-character `digest:`. Nothing to change says so. It writes nothing.
+- **`wb rerender` writes** in this order: the permissions file (`replace_file` with the hash the plan read), the local manifest's hash
+  for it, then the rendering record. It needs a terminal on both standard input and output at every level, asks for the first 12
+  characters of the digest, rebuilds the plan and refuses unless the digest is unchanged, and writes no level-log entry. A stop after
+  writing began lists what was and was not written and how to finish; running the command again finishes it.
+- **Exit codes:** 0 done or nothing to change, 1 refused or cancelled (a failure of the first replacement, a conflict for
+  example, is a refusal: nothing was renamed), 2 usage, 3 stopped after writing (an interrupt once the writes begin is 3 even if
+  nothing was renamed yet), 130 interrupted before the writes begin. `preview rerender` exits 0 or 1.
+- **Agent may run it:** the preview, yes (its key defaults to `none`). The write, no: it is owner-run and terminal-only, and the
+  harness renders a `deny` for it in every spelling.
+
 ### `check` (built by `claude-harness`)
 
 `wb check [<target> | --dir <path>]`
@@ -456,6 +481,9 @@ plan made and the owner may still change.
   over 50 MiB in all and an entry with no license are warnings. A project without the module gets
   none of these, and one with the module and none of the folders gets none either. The rules are
   in `groundwork.md`, and the bounds and what is not detected under "As built, and its limits".
+- **A stale rendering** is a warning, `rendering: out of date; the settings table differs from the rendered one (wb rerender)`,
+  when the rendering record was made from another table than the settings give now. It is not a problem, and it changes no exit
+  code, because a key then reads `block`; `wb rerender` makes the record current.
 - It exits 1 when it reports a problem and 0 when it reports none (exit codes).
 
 ### `upgrade` and adding a module (built by `ownership-and-upgrade`)
@@ -681,10 +709,11 @@ the rules above are named so a later plan can change them; this plan changes non
 
 ## The preview and approval
 
-Applies to `install`, `adopt`, `upgrade` and adding a module. The split between a read-only
+Applies to `install`, `adopt`, `upgrade`, adding a module and `rerender` (which never runs without a terminal, at any level;
+see its section). The split between a read-only
 `preview` and an owner-run write is a **rule** *(owner)*; the layout of the text is a proposal.
 
-1. **Two verbs.** `wb preview <install | adopt | upgrade | add> ...` takes the same arguments as the
+1. **Two verbs.** `wb preview <install | adopt | upgrade | add | rerender> ...` takes the same arguments as the
    command it previews. It is read-only, may be run by an agent, and prints the preview. It
    exits 0 when a preview was produced and 1 when the command would have been refused. It
    prints no typing token. **rule:** it contacts no network and writes nothing, not even a
@@ -698,7 +727,7 @@ Applies to `install`, `adopt`, `upgrade` and adding a module. The split between 
    standard input and standard output, checked on file descriptors as `approve` does, and
    refuse with `refused:` and exit 1 otherwise. They are denied to an agent by the harness,
    exactly as `approve`, `pin` and `attach` are. **rule:** the harness modules render a `deny`
-   for `wb install`, `wb adopt`, `wb upgrade`, `wb add`, `wb attach`, `wb acknowledge`, `wb approve`,
+   for `wb install`, `wb adopt`, `wb upgrade`, `wb add`, `wb attach`, `wb rerender`, `wb acknowledge`, `wb approve`,
    `wb pin` and `wb release-approvals`, and the neutral rule list carries them (`harness-modules.md`,
    "Permissions"; `trust-and-approval.md`, "Rendering rules"). *(This requirement is not yet
    in those two specifications; the plan `2026-10-20-installer-interface` adds it.)*
