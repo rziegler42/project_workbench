@@ -448,6 +448,62 @@ and not a problem, because the stale state is already safe).
   every relaxed key reading `block` and never looser. Exit 0 done or nothing to change, 1 refused or cancelled, 2 usage, 3 stopped
   after writing (the report lists what was and was not written), 130 interrupted before writing.
 
+## The planning workflow without a terminal
+
+What an agent can do, and what stops it, when the owner has no terminal (a phone or the web). It covers drafting, reviewing and
+approving a roadmap, spec, design, plan or decision. The "Key and level" column gives the shipped default, and says where the owner's
+table (the personal settings read now) differs: today it differs for `approve-plan` only, which is `ask`. An `ask` prompt reaches the
+owner's remote channel (see "Assumptions and constraints"), so a key at `ask` does not need a terminal; a command at `block` does, and
+so does an edit of a file the owner makes themselves.
+
+**Preconditions of every "no terminal" row that is not at its shipped default.** `ask`, `delegated` and `none` hold only after the
+owner has set the level in the personal settings (version 2, `levels`) and the harness has been attached or re-rendered since
+(`wb rerender`, which is terminal-only at every level). While the rendering is stale or missing, a relaxed key reads `block` and the
+row falls back to the terminal command ("Rendering"). `wb check` says when the rendering is out of date.
+
+*Provenance: the levels were read with `wb settings`, and the rows from this spec, `review-engine.md`, `trust-and-approval.md`,
+`harness-modules.md`, `installer-interface.md` and the skills of this repository, at commit `3bd4185a121c` on 2026-10-27. Nothing
+owner-run was run to build the table. A reading from the code or a spec is stated as such; an inference is marked.*
+
+| Action | What does it | Key and level | Needs a terminal | What can block |
+|---|---|---|---|---|
+| Draft a roadmap, spec, decision or plan | the `draft-roadmap`, `draft-spec`, `draft-decision` and `draft-plan` skills. As rendered in this clone they run no command, except `wb run code-work check` for a plan; the packaged `draft-decision` also runs `wb settings` (`none`) | no key for the edits; `wb run code-work check` and `wb settings` `none` | no | the edit gate (`wb gate`) refuses an edit while a plan under way is not approved (`harness-modules.md`, "The edit gate hook"); a decision is written `Proposed` and stops |
+| Change a spec's or roadmap's direction | the checkpoint `change-direction` | `change-direction`, `block` only | no | an agent checkpoint, not a terminal gate: the agent stops and asks the owner in the conversation, and no installer command is behind it (`code-work.md`, "Checkpoints") |
+| Brainstorm a design | the `brainstorm` skill: reads, asks, writes a spec | no key | no | nothing; the owner's approval of the design is their statement in the conversation |
+| Read the plans | `wb run code-work plans`, `report`, `active`, `region`, `delegable`, `shared`; `wb plan-status` | `none` | no | nothing |
+| Start a review | `wb run review-engine init`, `review-plan`, `review-spec`, `review-roadmap`, `review-adr` | `none` | no | the model bridge (`ask-codex`) must be installed, pinned and signed in on this machine, and `.workbench/review.json` must exist; the review spends one of the bound's rounds |
+| Read a review | `wb run review-engine status`, `convergence` | `none` | no | nothing |
+| Record what was done about a finding | `wb run review-engine decide` (once per finding) | `none` | no | a `blocker` or `major` finding with no decision refuses the next round |
+| Ask a second reader | the `reviewer` agent (`request-review`) | no key; read-only | no | the reviewer-exchange cap (`wb settings`) |
+| Raise the bound of a review | `wb run review-engine extend <document> <n>` | `wb run review-engine extend`, `block` only | **yes** | at the bound (3 rounds, ceiling 5) no further round runs until the owner extends it at a terminal |
+| Open a fresh window of rounds | `wb run review-engine reset <document>` | `block` only | **yes** | as `extend` |
+| Close a review | `wb run review-engine archive <document>` | `block` only | **yes** | a review stays open until the owner closes it; nothing else is stopped by it *(inference)* |
+| Change a recorded decision | `wb run review-engine amend <document> <finding> …` | `block` only | **yes** | a wrong `decide` cannot be corrected by the agent |
+| Delete closed reviews | `wb run review-engine prune [--apply]` | `block` only | **yes** | nothing else is stopped by it; old reviews stay *(inference)* |
+| Approve a plan, at a terminal | `wb approve-plan <plan>` | `approve-plan`, any level | **yes** | the owner types the first 12 characters of the region hash |
+| Approve a plan, at `ask` | `wb approve-plan <plan> --digest <32 hex>` after `wb plan-status <plan> --digest` | `approve-plan`, `ask` (the owner's table now) | no | the owner's confirmation on the harness prompt; the digest binds the plan, not what the owner read; a stale rendering makes the key read `block` |
+| Approve a plan, at `delegated` | `wb delegate-approve-plan <plan>` | `approve-plan`, `delegated` | no | a converged, sealed review of the exact bytes (`trust-and-approval.md`), and the preconditions of the `delegate-approval` skill (a `peer-review` provider, a Risks section, no `Hard stop:` line); it counts only while the table reads `delegated`, so not while it reads `ask` *(the last clause is an inference from `trust-and-approval.md`)* |
+| Approve a plan, at `none` | `wb approve-plan <plan>`, no terminal | `approve-plan`, `none` | no | nothing; the run is logged |
+| Approve a roadmap, a spec or a design | none exists | no key | not applicable | a roadmap and a spec have no status gate (`AGENTS.md`); a design is approved by the owner's word in the conversation. Nothing records it |
+| Accept a decision | the owner edits its `Status:` line and the index | `accept-decision`, `block`; offers `block` and `none` | **yes, or an editor** *(inference)* | the rule that an agent may not accept one at `block` is guidance in `AGENTS.md` and the skill; the installer enforces nothing here. No command with an `ask` level exists for it. The owner's other route is their own edit of the personal settings to `none` (a terminal or an editor), which lets the packaged `draft-decision` accept a record; the copy rendered in this clone says never to accept one and has no such route, so the clone's skill is out of date with the package |
+
+Two things this map shows:
+
+- **Not blocked without a terminal:** drafting, starting and reading a review, and recording decisions, at their shipped levels; and
+  approving a plan at `ask` (the owner's table now, with the rendering current as `wb check` reports today), or at `delegated` or
+  `none` once the owner sets and renders them.
+- **Blocked without a terminal:** the five owner-run arguments of the review engine, and accepting a decision. The first five are
+  the subject of the plan `2026-10-27-levels-for-the-review-workflow`; accepting a decision has no command to give a level to.
+
+Also, in the same flow:
+
+- `evaluate-findings` runs no command; it applies a finding by editing the document and records it with `decide`.
+- Editing an approved plan beyond its status line, review record and result voids its approval, and approving it again is a row above.
+- `run-increment`, `security-review` and committing or pushing (`safe-git`, `push-shared-branch`) are not part of drafting,
+  reviewing or approving, and are governed elsewhere.
+- The "yes" in "Needs a terminal" for the review engine's owner-run arguments rests on `review-engine.md`, "Owner-run commands". In
+  the code the test is made by the launcher (`commands.owner_refusal`); the spec's wording places it in the helper.
+
 ## Not built
 
 - `none` for the owner-run arguments of module commands (`wb run mempalace init`, `mine`, `wb run remote-runner fetch-overwrite`

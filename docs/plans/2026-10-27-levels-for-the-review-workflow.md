@@ -1,6 +1,6 @@
 # Levels for the review engine's owner-run commands and the planning workflow
 
-Status: Proposed
+Status: In Progress
 Created: 2026-10-27
 Candidate: none (an owner request from the "Not built" list of `command-permissions.md`; no roadmap candidate names it)
 Specs: command-permissions, module-contract, review-engine
@@ -254,4 +254,22 @@ approval; the plan stays `Proposed` until the owner approves it.
 
 ## Result
 
-Empty until work starts.
+### Increment A — built, not committed (2026-10-27)
+
+- **Done.** `docs/specs/command-permissions.md` has a new section, "The planning workflow without a terminal", before "Not built": a
+  table of 19 actions in drafting, reviewing and approving (shipped level, the owner's level where it differs, whether a terminal is
+  needed, what can block), the preconditions that make a relaxed level hold, and a list of what the map shows. Where a row has no key
+  it says so (approving a roadmap, spec or design). The plan's status line is `In Progress`.
+- **Verification run.** `wb settings`: every `level` line compared with its row, twice (at the start and after the edits);
+  `wb run code-work check` (54 plans, no problems); `doccheck` and `refcheck` (silent); `git diff --check` (clean);
+  `wb plan-status` (`approved`, unchanged); `wb check` (no problems, so the rendering is current today). Nothing owner-run was run.
+- **Review.** One `reviewer` exchange of six. Seven findings, all applied: (1) blocking, the checkpoint `change-direction` had no row;
+  (2) blocking, the `ask`, `delegated` and `none` rows omitted that they hold only once set and rendered, and the shipped and the
+  owner's levels were mixed; (3) the accept-decision row now says the rule is guidance and not enforced; (4) the draft row names the
+  commands each skill runs; (5) a note for `evaluate-findings`, re-approval of an edited plan and the skills outside the flow; (6) the
+  `delegated` row names its further preconditions and marks its last clause an inference; (7) the section states that the code makes
+  the terminal test in the launcher while the spec says the helper.
+- **Found, not fixed.** The `draft-decision` skill rendered in this clone (`.claude/skills/draft-decision/SKILL.md`) is older than the
+  packaged one: it says never to accept a record and has no `wb settings` route, while the package accepts at `accept-decision:
+  none`. Refreshing it is the owner's `wb upgrade` and re-render; this increment did not touch it.
+- **Not done.** Nothing in code. No owner-run command was run. Not committed.
