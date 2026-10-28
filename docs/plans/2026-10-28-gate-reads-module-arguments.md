@@ -160,4 +160,16 @@ Empty until a review is asked for.
 
 ## Result
 
-Empty until work starts.
+### Increment A — drafted, waiting for the owner (2026-10-28)
+
+- Wrote `docs/decisions/2026-10-28-gate-reads-module-arguments.md` as `Proposed` and added its row to `docs/decisions/README.md`.
+  It refines `2026-10-27-command-gate-literal-arguments` without editing it.
+- Probe: `judge` at commit `49cbf62` (Python 3.15.0) with `wb run review-engine extend` and `... reset` relaxed. Today it blocks
+  `preview extend` (key `extend`) and `preview reset` (key `reset`), blocks a `decide` whose reason says `extend`, and allows
+  `status`, the exact simple forms and `wb run other preview extend`. Every quoted, compound, substituted and newline spelling is
+  blocked. The proposed rule was not built or tested.
+- Verification: `doccheck`, `refcheck` and `git diff --check` clean.
+- Review: one `reviewer` exchange, no blocking finding. Applied: the "same limit on the characters" wording (there is no per-token
+  limit, only the 64 KiB cap), the `wb run --provides` case, the per-key consequence, and that the helper's read-only `preview` is
+  known by reading. Not applied: a re-runnable probe (Increment B's tests are the durable record).
+- Not done: the record is not accepted. Increment B cannot start until the owner accepts it.
