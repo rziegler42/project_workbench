@@ -557,3 +557,57 @@ companion plan will not complete without it.
   removed. Increment I removes them after a preview.
 - **Not done:** no independent review of the increment (only when the owner asks); no run in the GUI; a missing input file
   to the script printed no error line in what I looked at, which was not investigated.
+
+### Increment E
+
+- **Read (2026-10-28):** the hashes of `SKILL.md`, `images-to-cad.md`, `workbenches-and-advanced.md` and
+  `assembly-and-3mf.md` matched the plan at the start. Read in full: `images-to-cad.md` and `assembly-and-3mf.md`; from
+  `workbenches-and-advanced.md`, the "Common Recipes" part (the distance, colour and batch-export recipes); from `SKILL.md`,
+  the export snippets and units.
+- **Rewritten, not copied.** `freecad-image-to-model` covers the workflow, pixel measurement, a reference image plane,
+  comparing with the image, and shapes that cannot be measured. `freecad-import-export` covers STEP, IGES, BREP, STL, OBJ
+  and 3MF, 3MF for printing, exporting every solid, whole documents, and the `Import` module. The 3MF section follows
+  `assembly-and-3mf.md`; the assembly material of that file is left to `freecad-assembly`. `freecad-measure-and-inspection`
+  has little in the source (a distance recipe, the deviation function of the script, validity calls), so most of it was
+  found by running; it says so. The wiki-style links, the sentence naming an assistant, the MCP tool names and the
+  owner's conventions are not carried.
+- **Written:** the three skill directories (a `SKILL.md` and a `reference.md` each) and the module's tests (19, with three
+  more skills in the list).
+- **Verification as run:**
+  - Test first: 2 failures and 8 errors before the skills existed.
+  - Module tests, 19, OK; package tests, 29, OK; the full suite, 5860 tests in 13 roots, OK; `wb run code-work check` (61 plans)
+    and `wb check` found no problems; `git diff --check` printed nothing.
+- **Run against FreeCAD 1.1.4 (revision 20260928), headless, at the owner's word, from a scratch directory, every file in a
+  temporary folder removed afterwards:** 15 example blocks and one shared prelude in the final run of the final files, none
+  raising, after one block was corrected and one added (the `Measure.Measurement` block, first explored with a separate
+  script, then run as written). Confirmed: the pixel measurement of a synthetic image (a scale of 10.0
+  px/mm, a part of 64.0 by 48.0 mm and a hole of 15.99 mm at (32.0, 24.0), against the true 64, 48 and 16); `PIL`, `numpy`
+  and `scipy` importable; `Image::ImagePlane` made headless with `XSize` 90 and `YSize` 70; the overlap of two shifted
+  outlines (0.8462); STEP, IGES and BREP export and read-back with equal volume (4492.04); STL, OBJ and 3MF export of a
+  cylinder (500 facets, volume 6280.6); the 3MF XML holding `unit="millimeter"`; a controlled 3MF (280 facets, solid, no
+  non-manifold edges, volume 6275.0 against 6283.2, a bounding box of 19.99 by 20 by 20); the export of every solid in a
+  document; saving and reopening a document; the `Import` names and `Import.insert`; shape validity, an open shell,
+  `distToShape` between shapes and from points, `isInside`, the comparison with computed values, and the
+  `Measure.Measurement` calls with the values stated in the skill.
+- **Found wrong, too strong, or not stated in the source, corrected in the skills:**
+  1. The source says the default 3MF export of a 20 mm cylinder gives 124 facets and a controlled export 280. Here the
+     default gave 500 (finer than the controlled 280, and closer to the true volume). The default comes from FreeCAD's own
+     tessellation setting, so the skill tells the reader to mesh the shape with chosen deflections for a repeatable result.
+  2. A Boolean (`cut`) returns a `Compound`, which has no `CenterOfMass`; take `.Solids[0]` first.
+  3. The vertices of a mesh made from a shape lie on the shape, so a vertex-to-surface deviation reads 0.0 even though the
+     mesh volume is 0.3% smaller. The same is true of the script's `deviation` function. The skill calls it a one-way
+     measure, right for scan points against a rebuilt model and wrong for a tessellation.
+  4. `Inspection` exposes no public Python names on 1.1.4 headless, and `Measure` exposes `MeasureBase` and `Measurement`.
+     `Measurement.addReference3D` takes the object's name as a string and raises `TypeError` for the object.
+  5. A point inside a solid has distance 0.0 against the solid but 10.0 against a compound of its faces, and 10.0 against a
+     `Compound` that wraps the solid. The first version of the example used the wrapped form and was wrong.
+  6. IGES and BREP files read back as a `Compound`, and STEP as a `Solid`.
+- **Not run, marked read:** that OpenCV is not bundled, the orientation of an image plane and keeping it out of exports,
+  the GUI `saveImage` route and capturing a model view for an overlap check, the printer resolution and wall advice,
+  the `lineLineDistance` and `delta` calls, and the DXF functions of `Import`.
+- **Added by the author:** none beyond rewording and the corrections above.
+- **Seen outside this increment:** `freecad-part` (increment B) does not say that a Boolean returns a `Compound`
+  without a `CenterOfMass`. It was not changed here; the owner decides whether to correct it in increment I.
+- **Gate:** the owner ran `wb release-approvals` once for this increment. Fourteen records are reported stale; none was
+  removed. Increment I removes them after a preview.
+- **Not done:** no independent review of the increment (only when the owner asks); no run in the GUI.

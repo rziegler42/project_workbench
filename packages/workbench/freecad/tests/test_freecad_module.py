@@ -20,7 +20,8 @@ PACKAGE = os.path.join(ROOT, "packages", "workbench")
 MODULE = os.path.join(PACKAGE, "freecad")
 NEUTRAL = os.path.join(MODULE, "harness", "neutral")
 SKILLS = ("freecad-python", "freecad-part", "freecad-sketcher", "freecad-partdesign",
-          "freecad-parameters", "freecad-mesh", "freecad-reverse-engineering")
+          "freecad-parameters", "freecad-mesh", "freecad-reverse-engineering",
+          "freecad-image-to-model", "freecad-measure-and-inspection", "freecad-import-export")
 BUNDLED = {"freecad-reverse-engineering": ("scripts/mesh_report.py",)}  # files below a skill besides SKILL.md and reference.md
 SCRIPT = os.path.join(NEUTRAL, "skills", "freecad-reverse-engineering", "scripts", "mesh_report.py")
 # The sha-256 of the owner's script as read on 2026-10-28 (plan 2026-10-28-freecad-module, Assumptions).
