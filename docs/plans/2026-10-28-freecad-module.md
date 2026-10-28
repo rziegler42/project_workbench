@@ -375,4 +375,49 @@ companion plan will not complete without it.
 
 ## Result
 
-Empty until work starts.
+### Increment A
+
+- **Read (2026-10-28):** the source `SKILL.md`, `scripting-fundamentals.md`; the three hashes matched the plan at the start.
+  `geometry-and-shapes.md` was not needed for this skill (units and the document model are in `scripting-fundamentals.md`).
+- **Rewritten, not copied.** `SKILL.md` has the run-headless-first rules, the document and recompute rule, units, the
+  compare-and-report rule, the table of removed, renamed and deprecated APIs, the shorthand-to-API mapping and common
+  mistakes. `reference.md` has the module layout, documents, vectors and placements, units, properties, the console and a
+  script template. The owner's conventions are not carried. The MCP advice, the macro and GUI material and the generic
+  API tutorial sections are left to later skills.
+- **Dropped or changed:** every wiki link; the `PartDesign::Pad` "must be in a Body" row left the table of removed APIs
+  (see below); the source's `getTypeOfProperty` note was wrong on 1.1.4 and is replaced.
+- **Bundled-script check (the plan's stop condition):** a test builds a temporary package with a `scripts/probe.py` beside
+  a `SKILL.md`; the neutral reader stages it and `wb verify` accepts it with no `ships` entry. So the bundled script of
+  increment D is allowed.
+- **Written:** `packages/workbench/freecad/` (`module.json`, the skill, `tests/test_freecad_module.py`, 14 tests),
+  `"freecad"` in `packages/workbench/package.json`, and `"freecad"` in the four lists of module names in the tests of
+  `claude`, `code-work` and `groundwork`.
+- **Verification as run:**
+  - Test first: 4 failures and 10 errors before the module existed.
+  - Module tests, 14, OK; `tests.test_package tests.test_skill_names tests.test_boundary`, 29, OK; the full suite
+    `python3 -B -W error tests/run_all.py`, 5855 tests in 13 roots, OK; `wb run code-work check` (61 plans) and `wb check`
+    found no problems; `git diff --check` printed nothing.
+- **Run against FreeCAD 1.1.4 (revision 20260928), headless with `freecadcmd`, at the owner's word, from a scratch
+  directory** (Python 3.11.14, numpy 1.26.4): 23 checks, then a follow-up printing 17 lines. Matched the skill: `GuiUp` false and
+  `ViewObject` `None` headless; arguments after `--` reach `sys.argv`; `PySide2` absent and `PySide`, `PySide6` present;
+  `import FEM` fails and `Fem`, `ObjectsFem` import; `makeSolverCalculixCcxTools` absent and the two newer names present;
+  `Drawing` and `importOBJ` absent and `TechDraw` present; `Mesh.export` to `.obj`; `sketch.Support` absent and
+  `AttachmentSupport` set; `Constraint("Fixed")` raises `TypeError` while `Block` and a `Coincident` to the origin are
+  accepted; the shorthand methods exist (volumes 1000, 1571, 4189); documents, objects, vectors, placements, units
+  (`1 in` = 25.4 mm), properties and console calls behave as the reference shows.
+- **Found wrong or too strong, corrected in the skill:**
+  1. `import FreeCADGui` succeeds headless but has none of the GUI parts (no `Selection`, `Control`, main window); the
+     skill had said it is "not usable".
+  2. `Draft.makeArray` and the camelCase Draft names still exist in 1.1.4; they are deprecated, not removed. The table
+     heading and two rows now say so.
+  3. A `PartDesign::Pad` made with `doc.addObject` and given a profile recomputed to a valid 500 mm³ solid; the Body rule is
+     a modelling convention (marked read), not an error the tool raises.
+  4. In the source, `getTypeOfProperty` is said to return the type name; it returns the property flags (`[]` here).
+     `getTypeIdOfProperty` returns `App::PropertyFloat`.
+- **Not run, marked (read) in the skill:** `dialog.exec_()`, `getStandardButtons`, `ViewObject.DiffuseColor`, the icon path,
+  `Std_Macro`, the Gmsh `mesh.Part` row, the statement that a modal dialog blocks the GUI thread, the other property
+  statuses, and `FreeCADGui.SendMsgToActiveView` in the script template.
+- **Added by the author:** none beyond rewording and the corrections above.
+- **Gate:** the owner ran `wb release-approvals` twice for this increment (after the copy, and after the corrections).
+  Six records are reported stale; none was removed. Increment I removes them after a preview.
+- **Not done:** no independent review of the increment (only when the owner asks); no run in the GUI.

@@ -1,0 +1,6 @@
+{
+  "name": "freecad",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Advice for scripting FreeCAD 1.1 from Python: a core skill now, with skills for single workbenches and tasks added to it."
+}

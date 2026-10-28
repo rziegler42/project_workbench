@@ -13,6 +13,7 @@
     "mempalace",
     "remote-runner",
     "security-review",
-    "verilog"
+    "verilog",
+    "freecad"
   ]
 }
