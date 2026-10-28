@@ -41,7 +41,23 @@
         "prune"
       ],
       "levels": {
+        "amend": [
+          "ask",
+          "none"
+        ],
+        "archive": [
+          "ask",
+          "none"
+        ],
         "extend": [
+          "ask",
+          "none"
+        ],
+        "prune": [
+          "ask",
+          "none"
+        ],
+        "reset": [
           "ask",
           "none"
         ]

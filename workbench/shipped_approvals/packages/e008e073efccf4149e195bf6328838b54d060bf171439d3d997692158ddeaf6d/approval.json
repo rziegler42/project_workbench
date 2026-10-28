@@ -1,10 +1,10 @@
 {
   "approver": "workbench-release",
-  "declaration_hash": "1eecf591cf06d8af8e33abc844c1ad551c5feab798617e707ab9d91c2c3d922c",
+  "declaration_hash": "7af5f9f0a3e840f58f1808a7ebabc589416a1188813a08222504c742caa1d311",
   "format": 1,
   "kind": "module",
   "subject": "workbench/review-engine",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "29bb05d0ea827cf4c7ecfd280ff4541dd174e7ccbaa02574da9561ae3fd2ce5e",
+  "tree_hash": "2752b03db3a33e641e94aa03451fb81051cb24d592b0560725e987f87d7bc86e",
   "workbench_version": "0.1.0"
 }

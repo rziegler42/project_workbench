@@ -354,7 +354,7 @@ approval; the plan stays `Proposed` until the owner approves it.
   `--root` belongs to the pinned project when the pin was typed by the owner (no declaration to compare); this predates D and is
   left to the owner to decide.
 
-### Increment E — landed, not committed (2026-10-28)
+### Increment E — committed as 54baf80 (2026-10-28)
 
 - **Done.** In a scratch copy, then landed with `cp` into `packages/workbench/review-engine`: the helper gains `preview extend
   <document> <n>` (read-only, no lock: it prints the lines of the extension and ends with `digest: <32 hex>`, the first 32
@@ -381,3 +381,32 @@ approval; the plan stays `Proposed` until the owner approves it.
   `release-approvals`; then `wb acknowledge` and `wb upgrade` for this clone (the declaration hash changed), and, to use the level,
   an edit of the personal settings (`wb run review-engine extend: ask`) and `wb rerender`. Not changed here: the "Not built" items
   of `command-permissions.md` for `extend` (Increment G consolidates). No security review has been run for E.
+
+### Increment F — landed, not committed (2026-10-28)
+
+- **Done.** In a scratch copy, then landed with `cp` into `packages/workbench/review-engine`: `reset`, `archive`, `amend` and
+  `prune --apply` take a trailing `--digest <hex>` (`OWNER_DIGEST`; `decide` still takes none; `prune --digest` without
+  `--apply` is a usage refusal). `preview` takes `extend`, `reset`, `archive`, `amend` or `prune` with that command's own
+  arguments, is read-only and takes no lock. `mutate` gained `lines` and `given`: after the command's own access checks and
+  inside the lock it compares the digest of the preview lines (`confirm`, `hmac.compare_digest`) before `make`; `prune`
+  recomputes its list inside the lock and compares that. The digests bind: `reset` the window it starts and, for an
+  unsealed or rolled-back review, what it replaces and a SHA-256 of the content it would seal; `archive` the generation,
+  rounds, decisions and undecided count; `amend` the finding, the decision now and the one it becomes, each reason by the
+  SHA-256 of all of it; `prune` the sorted list of key, path and closing time. `module.json` declares `ask` and `none` for all
+  five (the shipped default stays `block`). Spec: `review-engine.md` (levels row, the command table, a paragraph under
+  "Owner-run commands"). Tests: `tests/test_review_owner_digest.py` (new, 56 tests) and adjustments to `test_review_digest.py`
+  (two obsolete tests) and `test_review_module.py`.
+- **Verification run (scratch copy).** The new tests failed before the helper change. Review-engine tests: 404 OK. Full suite
+  (`python3 -B -W error tests/run_all.py`, after the review fix): 5814 tests in 11 roots, OK. `doccheck`, `refcheck` and `git
+  diff --check` clean on the real tree before the landing.
+- **Review.** One `reviewer` exchange (five of six in all). One blocking finding, applied: for an unsealed or rolled-back
+  review the `reset` digest bound only counts, so an edit of `state.json` that kept them was re-sealed under the old digest; a
+  test reproduced it, and the digest now binds a hash of the content. Non-blocking: tests for long `amend` reasons, a rolled-back
+  review with no state, an edit after the preview, and `archive` and `amend` of an unsealed review: added. The `prune` digest does
+  not bind each review's rounds, decisions or generation: not changed, because a pruned review is sealed and closed and cannot
+  change between the preview and the apply; the owner sees less than is deleted.
+- **Not done, owner's steps.** After the landing the command gate refuses every Bash call until the owner runs
+  `release-approvals`; then `wb acknowledge` and `wb upgrade`, and, to use a level, an edit of the personal settings and `wb
+  rerender`. A plain `prune` (the list) cannot run at `ask` from a phone, because the launcher wants a digest and the helper
+  takes one only with `--apply`: use `preview prune`. The plan recommends `prune` and `reset` stay at `block`. No security review
+  has been run for E or F. Stale text left for G: "the twelve arguments" in `review-engine.md`.

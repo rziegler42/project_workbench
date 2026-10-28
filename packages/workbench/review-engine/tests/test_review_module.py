@@ -67,13 +67,14 @@ class Declaration(unittest.TestCase):
                           "amend", "extend", "reset", "archive", "prune", "convergence", "preview"], command["arguments"])
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
 
-    def test_extend_offers_ask_and_none_and_names_preview_as_its_preview(self):
+    def test_every_owner_argument_offers_ask_and_none_and_names_preview_as_its_preview(self):
         command = declaration()["commands"]["review-engine"]
-        self.assertEqual({"extend": ["ask", "none"]}, command["levels"])
+        owner = ["amend", "archive", "extend", "prune", "reset"]
+        self.assertEqual({name: ["ask", "none"] for name in owner}, command["levels"])
         self.assertEqual("preview", command["preview"])
         parsed = d.parse_module(json.dumps(declaration()).encode("utf-8"), "workbench", "review-engine",
                                 first_party=True).commands[0]
-        self.assertEqual((("extend", ("ask", "none")),), parsed.levels)
+        self.assertEqual(tuple((name, ("ask", "none")) for name in owner), parsed.levels)
         self.assertEqual("preview", parsed.preview)
         self.assertNotIn("preview", parsed.owner)
 

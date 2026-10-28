@@ -37,7 +37,7 @@ Non-goals:
 | ships | `helper/review-engine` and the neutral skill `peer-review` |
 | commands | `review-engine`, with `helper` `helper/review-engine`, `runtime` `python`, `kit` 1 and the first `arguments` below |
 | owner-run arguments | `amend`, `extend`, `reset`, `archive`, `prune` (see "Owner-run commands") |
-| levels | `{"extend": ["ask", "none"]}`: `extend` offers `ask` and `none` beside `block` (see "Owner-run commands"); the other four offer `block` only until the plan `2026-10-27-levels-for-the-review-workflow` builds them (Increment F) |
+| levels | `amend`, `archive`, `extend`, `prune` and `reset` each offer `["ask", "none"]` beside `block` (see "Owner-run commands"); the shipped default of every one stays `block` |
 | preview | `preview`, the read-only argument that prints the digest an `ask` run carries |
 | convergence | `{"command": "review-engine", "argument": "convergence"}`, the argument the installer asks for a delegated plan approval (see "Convergence") |
 
@@ -58,12 +58,12 @@ review's own directory, and none changes the reviewed document.
 | `init <document>` | makes the review's directory and state without calling a model |
 | `review-plan\|spec\|roadmap\|adr <document>` | runs one round (below) |
 | `decide <document> <finding> applied\|rejected [--reason <text>]` | records a decision once; a second call on the same finding is refused |
-| `amend <document> <finding> applied\|rejected [--reason <text>]` | changes a recorded decision and keeps the earlier one in the ledger (owner-run) |
+| `amend <document> <finding> applied\|rejected [--reason <text>] [--digest <digest>]` | changes a recorded decision and keeps the earlier one in the ledger (owner-run); with a digest, only if it is that of this amendment of the decision now |
 | `extend <document> <n> [--digest <digest>]` | raises the bound by 1 to 5 rounds, never above the ceiling (owner-run); with a digest, only if it is that of this extension of the review now |
-| `preview extend <document> <n>` | prints what the extension would change as lines of text, the last being `digest: <32 lowercase hex>`, and writes nothing; refused where `extend` would be |
-| `reset <document>` | opens a fresh window of the default number of rounds (owner-run) |
-| `archive <document>` | closes the review: the ledger is its summary, and no further round, decision or change is taken (owner-run) |
-| `prune [--apply]` | lists, and with `--apply` deletes, closed reviews closed 90 days ago or more (owner-run) |
+| `preview extend <document> <n>`, `preview reset <document>`, `preview archive <document>`, `preview amend <document> <finding> applied\|rejected [--reason <text>]`, `preview prune` | prints what the command with those arguments would change as lines of text, the last being `digest: <32 lowercase hex>`, and writes nothing; refused where the command would be |
+| `reset <document> [--digest <digest>]` | opens a fresh window of the default number of rounds (owner-run); with a digest, only if it is that of this reset of the review now |
+| `archive <document> [--digest <digest>]` | closes the review: the ledger is its summary, and no further round, decision or change is taken (owner-run); with a digest, only if it is that of this closing of the review now |
+| `prune [--apply [--digest <digest>]]` | lists, and with `--apply` deletes, closed reviews closed 90 days ago or more (owner-run); with a digest, which only `--apply` takes, only if it is that of the list it would delete now |
 | `convergence <document>` | prints whether the last review of a plan converged, for the installer's delegated approval (read-only; see "Convergence") |
 
 `<document>` is a path relative to the project root. It must be a regular file with no link in any component, inside
@@ -237,9 +237,9 @@ one) are separate arguments. The rule is restrictive and is a mistake guard, not
 it does not match runs. The agent's `decide` is allowed. This repository's owner may, by habit, run `decide` themselves;
 nothing in the engine requires it.
 
-**`extend` at a level** (plan `2026-10-27-levels-for-the-review-workflow`, Increment E; decision
+**The five at a level** (plan `2026-10-27-levels-for-the-review-workflow`, Increments E and F; decision
 `2026-10-27-owner-run-arguments-take-a-level`). The launcher, not the helper, reads the owner's level for the key
-`wb run review-engine extend` and tests the terminal (`command-permissions.md`); the helper is not told the level. At `ask`
+`wb run review-engine <argument>` and tests the terminal (`command-permissions.md`); the helper is not told the level. At `ask`
 and without a terminal the launcher starts the helper only when the last two arguments are `--digest` and 32 lowercase
 hexadecimal characters, and passes them on unchanged. The helper takes a trailing `--digest <digest>` off before it counts
 its other arguments (a digest of another shape is refused before anything is read; a `--digest` anywhere but last is an
@@ -251,6 +251,18 @@ the review before any later save is therefore refused. `preview extend` takes th
 review as `status` does and writes nothing. At a terminal `extend` without a digest works as before, and at `none` the
 launcher requires none; the helper checks one it is given at either. The prompt shows the command and the digest, not the
 preview, so the agent shows the preview first; no code enforces that.
+
+The other four work the same way, each with the preview and digest of what it changes: `reset` of the window it
+starts again and, for a review that was not sealed, of what it replaces and a hash of the content it would seal (nothing
+vouches for that content, so an edit after the preview changes the digest); `archive` of the review it closes with its
+rounds, decisions and undecided findings; `amend` of the finding, the decision it has now and the one it becomes; `prune`
+of the reviews it would delete, in order of key, each with its path and when it was closed. The digests of `amend` also
+bind the whole of each reason, by its SHA-256, though the preview shows it cut short. Each command's own checks are
+made first and the digest is compared inside the lock, on the state or the list that is then written or deleted, so a
+review that changed after the preview, or a list that gained or lost a review, is refused with nothing changed. Only
+`prune --apply` takes a digest; to see the list at `ask`, an agent runs `preview prune`, because the plain list is an
+owner-run argument too and needs a digest of its own. `decide` is not owner-run and takes none. The plan recommends
+leaving `prune` and `reset` at `block`: both destroy history, and a phone prompt shows the digest, not the list.
 
 ## What leaves the machine
 

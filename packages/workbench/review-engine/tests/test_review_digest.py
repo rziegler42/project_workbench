@@ -79,9 +79,9 @@ class Preview(support_review.Review):
         for number in ("0", "6", "x", "", "01", "1 "):
             self.refused("preview", "extend", PLAN, number, contains="1 to 5")
 
-    def test_only_extend_can_be_previewed_in_this_version(self):
+    def test_an_extension_is_previewed_with_exactly_a_document_and_a_number(self):
         self.reviewed()
-        for argv in (["preview"], ["preview", "extend"], ["preview", "extend", PLAN], ["preview", "reset", PLAN],
+        for argv in (["preview"], ["preview", "extend"], ["preview", "extend", PLAN],
                      ["preview", "extend", PLAN, "1", "2"], ["preview", "extend", PLAN, "1", "--digest", GUESS]):
             self.refused(*argv, contains="usage")
 
@@ -166,10 +166,8 @@ class Digest(support_review.Review):
         self.document("extend", PLAN, "1")
         self.refused("extend", PLAN, "3", "--digest", digest, contains="ceiling of 5")
 
-    def test_the_other_owner_arguments_take_no_digest_yet(self):
+    def test_decide_takes_no_digest(self):
         self.reviewed()
-        for argv in (["reset", PLAN], ["archive", PLAN]):
-            self.refused(*argv, "--digest", GUESS, contains="usage")
         self.refused("decide", PLAN, "R1-F1", "applied", "--digest", GUESS, contains="usage")
 
     def test_the_digest_is_compared_with_the_state_that_is_written(self):
