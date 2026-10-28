@@ -611,3 +611,53 @@ companion plan will not complete without it.
 - **Gate:** the owner ran `wb release-approvals` once for this increment. Fourteen records are reported stale; none was
   removed. Increment I removes them after a preview.
 - **Not done:** no independent review of the increment (only when the owner asks); no run in the GUI.
+
+### Increment F
+
+- **Read (2026-10-28):** the hashes of `assembly-and-3mf.md` and `workbenches-and-advanced.md` matched the plan at the start.
+  `assembly-and-3mf.md` was read in full (its 3MF part went to `freecad-import-export` in increment E), and from
+  `workbenches-and-advanced.md` the FEM section.
+- **Rewritten, not copied.** `freecad-assembly` covers the structure, the one correct reference form and the silent failure of a
+  wrong one, choosing faces and vertices by geometry, and the flip, offset, Revolute and expression behaviour.
+  `freecad-fem` covers building the analysis, the force units, generating the mesh, running CalculiX, reading the result, and
+  checking it against a hand calculation. The owner's conventions (the object named `VarSet`) and the MCP tool names are
+  not carried.
+- **The solver could be run.** The plan expected the FEM solver step to be marked not run. The AppImage of FreeCAD 1.1.4 carries the
+  CalculiX (`ccx`) and Gmsh programs in its `usr/bin`, and with that folder on `PATH` the whole analysis ran. FreeCAD wrote
+  its own temporary files for the mesher and the solver under the system temporary folder; the solver's working folder
+  was one the examples made and removed.
+- **Written:** the two skill directories (a `SKILL.md` and a `reference.md` each) and the module's tests (19, with two more skills
+  in the list).
+- **Verification as run:**
+  - Test first: 2 failures and 8 errors before the skills existed.
+  - Module tests, 19, OK; package tests, 29, OK; the full suite, 5860 tests in 13 roots, OK; `wb run code-work check` (61 plans)
+    and `wb check` found no problems; `git diff --check` printed nothing.
+- **Run against FreeCAD 1.1.4 (revision 20260928), headless, at the owner's word, from a scratch directory:** assembly, 6 blocks and a
+  shared prelude, none raising; FEM, 8 blocks and a shared prelude, none raising, after the force units were corrected;
+  and a separate script that solved the same beam five times with different forces and element sizes. Two comments of the FEM
+  file were reworded after its last run; its code is as run.
+- **Found wrong, too strong, or not stated in the source, corrected in the skills:**
+  1. `force.Force = 1000.0  # Newtons` is 1 N: a bare number is stored in kg*mm/s^2 (`1000.0 mm*kg/s^2`). `"1000 N"` and
+     `Quantity(1000, "N")` are stored as `1000000.0 mm*kg/s^2`. With 1 N the tip deflection of the beam was 0.0012 mm; with
+     1000 N it was about 1.15 mm on a 5 mm mesh. The source's recipe is described as verified end to end (one result
+     object), and that was true, but its load is 1 N and the displacement it would print is a thousand times too small.
+  2. Against beam theory (1.905 mm for a cantilever of 100 by 10 by 10 mm, 1000 N, 210000 MPa) the tip deflection was
+     about 0.60, 0.84 and 0.94 of the theoretical value at element sizes 5, 2.5 and 1.5 mm (about 500, 3600 and 15300
+     elements). Gmsh varied by about 1% between runs (3561, 3586 and 3593 elements at 2.5 mm).
+  3. Joint creation works headless; the source reports that it was exercised only in the GUI.
+  4. The source says a solve without a generated mesh fails with a missing node set; `check_prerequisites()` caught it first
+     with "FEM mesh has neither volume nor shell or edge elements" and nothing ran.
+  5. Confirmed from the source: a wrong reference form (`"Pad.Face5."`) is accepted, `solve()` returns 0, both joint
+     placements are the identity and the block lands inside the base (z 0 to 10 instead of 10 to 20); a Revolute joint's
+     `Angle` does not turn the part; a flip moves the part to the other side and a second flip restores it; `Offset2`
+     moves the mate; and an expression on `Offset2.Base.x` follows a named value.
+  6. `mesh.Part = obj` raises an `AttributeError` and `mesh.Shape` is the property; the table of removed APIs in
+     `freecad-python` still marks that row as read.
+- **Not run, marked read:** `ObjectsFem.makeSolverCalculiX` (the newer solver), posing a mechanism with an Angle joint, and
+  parts in other documents.
+- **Added by the author:** the comparison with beam theory and the mesh refinement table, which are results of the runs.
+- **For increment I (the owner decides):** `freecad-part` should say that a Boolean returns a `Compound` without a
+  `CenterOfMass` (found in increment E), and the Gmsh row of `freecad-python` can drop its "read" mark (found here).
+- **Gate:** the owner ran `wb release-approvals` once for this increment. Sixteen records are reported stale; none was
+  removed. Increment I removes them after a preview.
+- **Not done:** no independent review of the increment (only when the owner asks); no run in the GUI.
