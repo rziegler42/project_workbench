@@ -1,7 +1,8 @@
 # Roadmaps
 
 A roadmap lists candidates, each sized to be one unit of work, with no required order. It
-expresses direction. It does not authorize work and does not change work in progress.
+expresses direction. It does not authorize work and does not change work in progress. A
+roadmap is a tracked, committed document, kept with the project's documentation.
 
 ## Naming
 
@@ -23,5 +24,16 @@ changed when the title is reworded. Refer to a candidate as `<roadmap>#<id>`, fo
 `first-release#pick-a-board`. An abandoned candidate is marked dropped with a reason and
 stays in the file.
 
+A roadmap keeps no implementation file lists, detailed acceptance criteria or executable
+commands; they belong in the plan written when a candidate is promoted.
+
 Completion is never written into a roadmap. The file changes only when direction changes,
 and changing direction needs the owner.
+
+## Retiring a roadmap
+
+Retire a roadmap by setting its status to `Archived`, as a plan is archived by status. Never
+move or rename the file: a candidate is cited as `<roadmap>#<id>`, so the name stays. Keep
+one roadmap that is not archived for each scope and update it in place; a replacement takes a
+new name, and the old one is archived when it is written. Retiring or replacing a roadmap
+changes direction, so it needs the owner.

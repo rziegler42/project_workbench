@@ -11,7 +11,7 @@ candidate becomes a verified, reviewed, committed result.
 - Several plans may be active at once. There is no fixed single-plan file and no
   hand-maintained index. Active plans are found by listing plans by `Status:`.
 - Planning tools and skills may supply a method or content structure, but they do not
-  override this location.
+  override this location. Do not create a tool-owned or parallel plan directory.
 
 ## Content
 
