@@ -1,6 +1,6 @@
 # Re-render an attached harness after a settings change
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-27
 Candidate: none (an owner request, found while building the per-command levels; no roadmap candidate names it)
 Specs: harness-rerender, command-permissions, installer-interface
