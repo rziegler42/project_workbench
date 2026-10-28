@@ -692,3 +692,55 @@ companion plan will not complete without it.
   removed. Increment I removes them after a preview.
 - **Not done:** no independent review of the increment (only when the owner asks); no run of the addons, which would need
   them added to the FreeCAD used for checking (the owner's step, and not requested); no run in the GUI.
+
+### Increment H
+
+- **Read (2026-10-28):** the hashes of `SKILL.md`, `gui-and-interface.md`, `parametric-objects.md` and
+  `workbenches-and-advanced.md` matched the plan at the start. Read in full: `gui-and-interface.md`; `parametric-objects.md`
+  (from its templates on); from `workbenches-and-advanced.md` the custom-workbench part and the recipes; from `SKILL.md`
+  the macro, selection and console parts. The MCP server was read in the owner's clone: upstream `freecad-mcp` (MIT licence,
+  `https://github.com/neka-nat/freecad-mcp`), version 0.1.28, commit `8babe9927ce8e6e8fe7dd6ae2ffa2c93776e845a`, read on
+  2026-10-28. Only `src/freecad_mcp/server.py` (sha-256
+  `80aba311dd4e88a6d5908d5b53b6b959733bacff65ecb128679352491a26f84f`) was read: its tool definitions and docstrings in full
+  and its option handling. The other files of the server were not read.
+- **Rewritten, not copied.** `freecad-macros` covers the macro layout, the selection API, console messages, running a macro file and
+  where FreeCAD looks. `freecad-gui-and-workbenches` covers scripted objects, commands, task panels, view providers, Coin3D
+  nodes and workbenches. `freecad-mcp` covers choosing among the execute tools, the limits, testing headless first, views,
+  and credentials. Not carried: the wiki links, the macOS-style folder paths, the sentence naming an assistant, the owner's
+  conventions, and the mirror, array and tube recipes of the source (see "For increment I").
+- **Written:** the three skill directories (a `SKILL.md` and a `reference.md` each) and the module's tests (19, with the skill list now at
+  the full seventeen).
+- **Verification as run:**
+  - Test first: 2 failures and 8 errors before the skills existed.
+  - Module tests, 19, OK; package tests, 29, OK; the full suite, 5860 tests in 13 roots, OK; `wb run code-work check` (61 plans)
+    and `wb check` found no problems; `git diff --check` printed nothing.
+- **Run against FreeCAD 1.1.4 (revision 20260928), headless, at the owner's word, from a scratch directory, files in temporary
+  folders removed afterwards:** 22 example blocks, of which 13 ran and 9 are marked `# (read)` and were skipped by the runner; none
+  raised in the final run. A first run raised in two blocks whose read marker was misplaced, and exposed three mistakes in
+  the examples, corrected before the files were copied in. No virtual display or offscreen Qt was used.
+  Confirmed: a macro file run with `runpy` from an explicit path, with and without an active document; the console print
+  calls; the three folder functions; a scripted object with properties and `onChanged` (showing a hidden property); a
+  scripted object saved, closed and reopened with its proxy class imported from a module, and migrated in
+  `onDocumentRestored`; 32 of 32 property types added; an enumeration set in the right order; `InList` and `OutList`; the
+  attach extension on a scripted object; Coin3D nodes built without a view; `addImportType` and `addExportType`; and two
+  scripts as `execute_code` and `execute_code_headless` would run them.
+- **Found wrong, too strong, or not stated in the source, corrected in the skills:**
+  1. A property changed in `onDocumentRestored` does not mark the object for recompute: after reopening, the shape kept its old
+     volume (1000.0) until `touch()` and a recompute (27000.0). The source's migration recipe does not say so.
+  2. `FreeCAD.Console` exposes only `GetObservers` here; no function registers an observer, so the source's observer class
+     registers nothing.
+  3. A migration example of mine tested for `Label2`, which every object already has, so nothing was added. It was renamed.
+  4. The server's own descriptions add what the source lacks: `execute_code` has a 90 s budget (a `timeout` up to 1800 s),
+     a timed-out call loses its result, `execute_code_async` must hand every write to `commit()`, `run_fem_analysis` blocks the
+     GUI thread, and `get_view` has nine views (the source's image reference lists seven).
+- **Not run, marked read:** the commands, task panels, dialogs, view providers, the 3D view calls, workbench loading and the
+  Coin3D scenegraph of a view (all need a GUI, a display or the loader); the selection API and the macro dialog; and
+  everything about the MCP tools, since the server was not run (only the scripts sent through it were).
+- **Added by the author:** none beyond rewording and the corrections above.
+- **For increment I (the owner decides; these need a new approval of this plan if made an increment):** `freecad-part` could
+  carry the mirror, linear-array and polar-array recipes of the source, run before they are kept, and a sentence that a
+  Boolean returns a `Compound` without a `CenterOfMass` (found in increment E); the Gmsh row of `freecad-python` can drop its
+  "read" mark (found in increment F).
+- **Gate:** the owner ran `wb release-approvals` once for this increment. Twenty records are reported stale; none was
+  removed. Increment I removes them after a preview.
+- **Not done:** no independent review of the increment (only when the owner asks); no run in the GUI; the MCP server was not run.
