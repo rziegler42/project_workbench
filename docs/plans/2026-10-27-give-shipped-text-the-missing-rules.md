@@ -295,4 +295,21 @@ session). Findings are advice, judged by the author; the review is not an approv
   clean. `doccheck` and `refcheck` were run as module checks inside `check`, not alone.
 - **Not done:** the upgrade preview; the Increment B and C work.
 
-Increments B and C: empty until work starts.
+### Increment B (plan-directory rule in `code-work`)
+
+- **Edits:** the plans README, `## Names and location`: "Do not create a tool-owned or parallel plan directory." after the
+  sentence that planning tools do not override the location; the `draft-plan` skill, a rules bullet: "Write the plan in
+  `docs/plans/` only. Do not create a plan in a tool-owned or parallel directory." No `code-work` test asserts either text, so
+  no test was changed.
+- **Approvals:** the owner had `release-approvals` run (10 approvals written for 1 package; two obsolete shipped records
+  warned). Those two were removed with `safe-git remove --recursive --confirm` on the owner's approval; two regenerated package
+  records are added. The edit gate did not refuse any edit. One of the two removed records was committed in Increment A.
+- **Verification run:** `python3 -m workbench check` and `python3 -m workbench run code-work check` (53 plans) clean; `git diff
+  --check` clean. The full suite (`python3 -B -W error tests/run_all.py`) ran 4856 tests in 10 roots and **failed in one test**,
+  `test_levellog.ConcurrencyTest.test_parallel_appends_keep_every_line` (`FileNotFoundError: 'level-log'` in
+  `safefs.append_line`); every other root passed. The test is flaky and not caused by this increment: alone, on the working
+  tree, it failed 2 of 5 runs; on a clean export of the commit of A (`0f5e570`, without B's edits) it failed 3 of 8. Not
+  fixed here: `levellog` and `safefs` are outside this plan's scope, and the failure is a candidate for its own work.
+- **Not done:** Increment C.
+
+Increment C: empty until work starts.
