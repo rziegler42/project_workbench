@@ -254,7 +254,7 @@ approval; the plan stays `Proposed` until the owner approves it.
 
 ## Result
 
-### Increment A — built, not committed (2026-10-27)
+### Increment A — committed as 32ac021 (2026-10-27)
 
 - **Done.** `docs/specs/command-permissions.md` has a new section, "The planning workflow without a terminal", before "Not built": a
   table of 19 actions in drafting, reviewing and approving (shipped level, the owner's level where it differs, whether a terminal is
@@ -272,4 +272,21 @@ approval; the plan stays `Proposed` until the owner approves it.
 - **Found, not fixed.** The `draft-decision` skill rendered in this clone (`.claude/skills/draft-decision/SKILL.md`) is older than the
   packaged one: it says never to accept a record and has no `wb settings` route, while the package accepts at `accept-decision:
   none`. Refreshing it is the owner's `wb upgrade` and re-render; this increment did not touch it.
-- **Not done.** Nothing in code. No owner-run command was run. Not committed.
+- **Not done.** Nothing in code. No owner-run command was run.
+
+### Increment B — built, not committed (2026-10-27)
+
+- **Done.** `docs/decisions/2026-10-27-owner-run-arguments-take-a-level.md`, status `Proposed`, and its row in
+  `docs/decisions/README.md`. It decides: the launcher stays the one place that reads the terminal and the level (the helper has no
+  terminal test, so the spec text is wrong); a `levels` field on a command (`ask` and `none`, never `delegated`) and a `preview`
+  field naming a non-owner-run argument; the helper checks the digest inside its lock and the launcher requires it; the log attempt
+  and outcome are written by the launcher; `none` is offered; `wb launch` stays terminal-only; the effect on the declaration hash.
+- **Verification run.** `doccheck` and `refcheck` (silent), `git diff --check` (clean), `wb plan-status` (`approved`). No code and no
+  test, because this increment is a document.
+- **Review.** One `reviewer` exchange of six. Five findings: (1) blocking, `wb launch` has no `ask` rule, so a digest through
+  that route would skip the prompt: applied (decision 7, launch stays terminal-only); (2) `launch.launch` prepares and starts the
+  helper in one function, so the log attempt needs a change to `workbench/launch.py`: applied in the record (Increment D already
+  lists that file, so the plan needs no edit); (3) what the digest binds and how `--digest` is parsed: applied
+  (decision 8); (4) `ask` inherits the spelling limit: applied (decision 9, a recommendation to keep `prune` and `reset` at `block`);
+  (5) evidence wording: confirmed, no change.
+- **Not done.** The decision is not accepted; that is the owner's act. Increments C to G wait for `Accepted`. Not committed.

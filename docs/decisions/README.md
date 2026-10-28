@@ -97,3 +97,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-27-command-gate-command-position](2026-10-27-command-gate-command-position.md) | The command gate reads a single-word command in command position, not the word alone | Accepted by the owner on 2026-10-27 |
 | [2026-10-27-command-gate-literal-arguments](2026-10-27-command-gate-literal-arguments.md) | The command gate leaves a literal `wb run` command and a sibling command name alone | Accepted by the owner on 2026-10-27 |
 | [2026-10-27-rerender-is-terminal-only](2026-10-27-rerender-is-terminal-only.md) | `wb rerender` offers `block` only and always needs a terminal | Accepted by the owner on 2026-10-27 |
+| [2026-10-27-owner-run-arguments-take-a-level](2026-10-27-owner-run-arguments-take-a-level.md) | The owner-run arguments of a module's commands take a level, and the launcher enforces it | Accepted by the owner on 2026-10-27 |
