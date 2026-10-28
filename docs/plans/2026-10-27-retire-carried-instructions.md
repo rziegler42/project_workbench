@@ -1,6 +1,6 @@
 # Retire the global instruction text the policy blocks carry (moves M5, M6 and M7)
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-27
 Candidate: none (these are moves M5, M6 and M7 of the move list in `global-config-inventory`, a follow-on to `workbench-v1#global-config-migration`; whether the roadmap gains a candidate for them is the owner's call and a roadmap edit stops for the owner)
 Specs: global-config-inventory

@@ -1,6 +1,6 @@
 # Give the shipped plan and roadmap text the rules the user-level file still carries alone
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-27
 Candidate: none (a follow-on to `2026-10-27-retire-carried-instructions`, whose Increment B held M5 until the shipped text gained four rules; whether the roadmap gains a candidate for it is the owner's call, and a roadmap edit stops for the owner)
 Specs: global-config-inventory, groundwork, code-work
