@@ -302,5 +302,59 @@ build. Noted, not changed: the link tests look for "link" in a message `classify
 created file's mode is confirmed against attach's output in A, and no test does it, so it moves to Increment B (the Risks text is
 not edited); behavior on a case-insensitive filesystem was not examined. Not done by the reviewer: it ran nothing.
 
-**Not done.** Increments B to D. The mode of a created file. The plan's step 5 names "the writer's exclude check", which does not
-test coverage; the deviation is above.
+**Checkpoint before B.** The owner accepted the interim guard (2026-10-28) and answered "run a security review of B": after B is
+built, the `security-reviewer` agent reviews it, besides the mandatory `reviewer` pass.
+
+**Not done (Increment A).** Increments B to D. The mode of a created file (done in B). The plan's step 5 names "the writer's
+exclude check", which does not test coverage; the deviation is above.
+
+### Increment B — `wb rerender` writes the files (not committed)
+
+**Done.**
+- `workbench/refresh.py`: `recheck` reads every stale, created and applied row again without following a link and raises
+  `Changed` on any difference; `write` replaces a stale file with `Writer.replace_file` and the hash the plan read, creates a
+  new or missing file with `Writer.create_file`, and touches no current, applied or orphaned file. A create that failed after
+  the file was made raises `Partial` (the path is listed as written and named as possibly partly written).
+- `workbench/rerender.py`: `_write` re-reads, writes the files, the permissions file, the manifest and the record, in that
+  order; an applied file is read again just before the manifest write (a `reviewer` finding, applied, test first). `_steps`
+  gives the write order, which `_reconcile` (the next step only) and `_failed` (the not-written list) use. A failure of the
+  re-read refuses with "nothing was written". The success report has one `files:` line (replaced, created, recreated, recorded
+  as applied). The interim guard and the `Interim` test class are gone.
+- My reading of "the one stale count that remains" (plan step 4): the `files:` line; nothing is stale after a complete run.
+- After a stop past the manifest the files read `current`, not `applied`, because the manifest already holds their hashes
+  (criterion 7 says `applied`; it holds for a stop before the manifest).
+
+**Verification as run** (Python 3.15.0, warnings as errors). `tests.test_refresh` 61 OK; with `test_rerender`, `test_attach`,
+`test_check`, `test_rendering`, `test_levels`: 376 OK; `tests/test_cli.py` 33 OK and `tests/test_settings.py` 82 OK (as scripts,
+`PYTHONPATH` set). Written first: the new tests failed (23 of 28) with the guard in place. Twelve deliberate breaks in a scratch
+copy, each caught: record before files; re-read left out; digest comparison left out; files before the confirmation; applied
+written like stale; stale replaced with the wrong expected hash; created file not read as absent; applied file not read; partial
+create not reported; interrupted rename not reconciled; lists without the files; summary left out. Full suite
+`python3 -B -W error tests/run_all.py` in the real tree (before the applied-file hardening): 5901 tests in 12 roots OK, which
+also clears A's `review.json` error (a fault of the scratch copy). `git diff --check`, `wb check` and `wb run code-work check`
+(60 plans) report no problems. Not run: the plan's scratch-clone run (upgrade, preview, refresh, preview, `wb check`), and the
+full suite after the last hardening (the 376-test group above was).
+
+**Reviews.** `reviewer` agent, one exchange: no blocking findings. Applied: finding 5 (re-read applied files before the
+manifest). Not applied, not blocking: a failed create that made only parent directories reports "nothing was written" with exit
+1 (finding 1); an interrupt between `O_EXCL` open and the writer's record of it, and the record step, are reported as not
+written (2); `_reconcile` infers from content (3); an interrupt inside the re-read exits 3 where 130 would fit (4); a `Partial`
+path is listed under "written" (6).
+`security-reviewer` agent, one exchange, experiments on a scratch copy, tree unchanged. No critical or high finding. Sound by
+test: links, hard links, FIFOs, directories, hostile staged paths, a parent swapped for a link before create and before replace,
+modes (umask 077, 022; a stale 0755 file comes back 0644), output escaping, the three stops leaving relaxed keys at `block`.
+Open for the owner:
+- **Medium 1.** The edited-file test trusts the local manifest. Anyone who can write `.workbench/local/harness.json` can record
+  an owner's edit as the file's hash; the row then reads `stale` and the file is replaced (tested). Bytes written are always the
+  staged ones, the preview shows the diff and the owner types the digest. The fixture harness does not deny agent writes to that
+  file; the real harness was not checked. Corrections offered: corroborate the hash in the guarded store, or deny agent writes to
+  `.workbench/local/**`.
+- **Low 2.** A created file is not atomic; a crash leaves a short file the next run refuses and names (an agent file without its
+  `tools:` line may load with every tool). Offered: write a private sibling and `link()` it into place.
+- **Low 3.** Created files are checked against the layout's exclude entries, not the clone's `.git/info/exclude` (tested: with
+  the lines removed a created file is not excluded). Offered: require the line on disk, or add it as attach does.
+- **Low 4.** `_changed` splits on any line separator, so a change in CR/VT/U+2028 shows `(stale)` with no changed lines; cut at 40.
+- Informational: `Planned.sha256` is trusted (the three real constructors hash their own data); a rendered file is written
+  before the permissions file by design, so a stop between leaves new instructions under the old permissions, never a looser key.
+
+**Not done.** Increments C and D. The findings above, apart from 5, are not applied; none was asked for.

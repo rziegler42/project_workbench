@@ -283,17 +283,37 @@ def render(plan):
     return "\n".join(lines) + "\n"
 
 
+def _steps(plan):
+    """``(name, hash it will have or None)`` for everything a write acts on, in the order it is written: the stale, new and
+    missing files, the permissions file, the local manifest, then the record (whose hash is not a file's)."""
+    steps = [(row.path, row.new) for row in plan.rows if row.state in refresh.WRITES]
+    changing = {name for name, old, new in plan.files if old != new}
+    if plan.settings in changing:
+        steps.append((plan.settings, _sha(plan.data)))
+    if localmanifest.PATH in changing:
+        steps.append((localmanifest.PATH, _sha(localmanifest.serialize(plan.manifest))))
+    if RECORD in changing:
+        steps.append((RECORD, None))
+    return steps
+
+
 def _write(guarded, held, plan, done):
-    """Write what `plan` changes, in this order: the permissions file, the local manifest's hash for it, then the record.
-    A key is relaxed only while the record, the permissions file and the shared settings file agree, so until the record
-    is written the old one names a hash the replaced file no longer has and every relaxed key reads ``block``: a stop at
-    any step leaves the clone stricter than the table says and never looser. `done` lists the names written so far."""
+    """Write what `plan` changes, in this order: the stale, new and missing files, the permissions file, the local manifest
+    (which lists the new hash of every file written and of every applied one), then the record. Every file the write acts on
+    is read again first and nothing is written if one differs from the plan. A key is relaxed only while the record, the
+    permissions file and the shared settings file agree, so until the record is written the old one names a hash the replaced
+    file no longer has and every relaxed key reads ``block``: a stop at any step leaves the clone stricter than the table says
+    and never looser. `done` lists the names written so far."""
     writer = projectfs.Writer(held)
     changing = [name for name, old, new in plan.files if old != new]
+    refresh.recheck(writer, plan.rows)
+    refresh.write(writer, plan.rows, done)
     if plan.settings in changing:
         writer.replace_file(plan.settings, plan.old_hash, plan.data)
         done.append(plan.settings)
     if localmanifest.PATH in changing:
+        # An applied file is not written, so it is read again here: the manifest must not name a hash the disk lacks.
+        refresh.recheck(writer, [row for row in plan.rows if row.state == refresh.APPLIED])
         localmanifest.replace(writer, plan.old_manifest_hash, plan.manifest)
         done.append(localmanifest.PATH)
     if RECORD in changing:
@@ -314,20 +334,28 @@ def _listed(out, title, items):
 def _reconcile(held, plan, done):
     """Add to `done` a file that was renamed into place although the call did not return (an interrupt right after the
     rename), so that the report of a stop says what is on disk."""
-    changing = {name for name, old, new in plan.files if old != new}
-    expected = ((plan.settings, _sha(plan.data)), (localmanifest.PATH, _sha(localmanifest.serialize(plan.manifest))))
-    for index, (path, wanted) in enumerate(expected):
-        if path in changing and path not in done and rendering.live_hash(held.path, path) == wanted:
-            done.insert(min(index, len(done)), path)
+    # The writes happen in order, so only the step after the last one done can have been renamed without returning.
+    for name, wanted in _steps(plan)[len(done):len(done) + 1]:
+        if wanted is not None and rendering.live_hash(held.path, name) == wanted:
+            done.append(name)
 
 
 def _failed(cause, plan, done, err):
     """Report a stop after writing began: what was written, what was not, and how to finish."""
     err.write("failed: %s\n" % _shown(cause))
     _listed(err, "written", done)
-    _listed(err, "not written", [name for name, old, new in plan.files if old != new and name not in done])
+    _listed(err, "not written", [name for name, _ in _steps(plan) if name not in done])
     err.write("if the failure came while a file was being written, nothing was renamed over the original, so the original "
               "file is as it was\n%s\n" % AGAIN)
+
+
+def _summary(rows):
+    """One line counting the files by what the run did, or nothing when it did nothing to a file."""
+    counts = [(len([row for row in rows if row.state == state]), word) for state, word in (
+        (refresh.STALE, "replaced"), (refresh.NEW, "created"), (refresh.MISSING, "recreated"),
+        (refresh.APPLIED, "recorded as applied"))]
+    shown = ["%d %s" % (count, word) for count, word in counts if count]
+    return "files: %s\n" % ", ".join(shown) if shown else ""
 
 
 def _refuse(err, text):
@@ -349,10 +377,6 @@ def run(guarded, command, stdin, out, err, distribution=None, version=None, whic
             out.write(render(plan))
             if not plan.changes:
                 return 0
-            if pending(plan.rows):
-                # Increment B writes these files; until then a write would record hashes of files it did not write.
-                return _refuse(err, "writing the other rendered files is not built yet, so nothing was written; "
-                                    "`wb preview rerender` shows the plan")
             out.write("\nTo re-render, type the first %d characters of the digest shown above and press Enter.\n"
                       "Anything else cancels and writes nothing.\n> " % confirm.CONFIRM_CHARS)
             out.flush()
@@ -372,15 +396,17 @@ def run(guarded, command, stdin, out, err, distribution=None, version=None, whic
             try:
                 _write(guarded, held, again, done)
             except (Exception, KeyboardInterrupt) as exc:
-                _reconcile(held, again, done)
+                if not isinstance(exc, refresh.Changed):
+                    _reconcile(held, again, done)
                 if not done and not isinstance(exc, KeyboardInterrupt):
-                    # The first replacement failed (a conflict, say): nothing was renamed over anything.
+                    # The re-read or the first write failed (a conflict, say): nothing was renamed over anything.
                     return _refuse(err, "%s; nothing was written" % _shown(exc))
                 _failed("interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc), again, done, err)
                 return 3
             try:
                 out.write("re-rendered %s in %s\n" % (_shown(again.token), display.ascii_text(held.path)))
                 _listed(out, "wrote %d paths" % len(done), done)
+                out.write(_summary(again.rows))
                 out.write("nothing was committed\n")
                 out.flush()
             except (BrokenPipeError, KeyboardInterrupt):

@@ -20,6 +20,7 @@ CURRENT, APPLIED, STALE, EDITED, MISSING, NEW, UNRECORDED, ORPHANED = (
 # manifest). Created files are those a write makes.
 RECORDS = (STALE, APPLIED, MISSING, NEW)
 CREATES = (MISSING, NEW)
+WRITES = (STALE,) + CREATES
 REFUSED = (EDITED, UNRECORDED)
 SHOWN_LINES = 40
 
@@ -93,6 +94,51 @@ def classify(writer, listed, files, settings, exclude):
             problems.append("%s: not covered by the harness's exclude lines, so git would see the file it would create"
                             % display.ascii_text(row.path)[:200])
     return rows, problems
+
+
+class Changed(Exception):
+    """A file differs from what the plan read; raised before anything is written."""
+
+
+class Partial(Exception):
+    """Creating a file failed after the path may have been made. `create_file` writes into the final name, so a failure
+    midway can leave a short file there; the next run reads it as unrecorded or edited and refuses until it is removed."""
+
+
+def recheck(writer, rows):
+    """Read again every file a write acts on, without following a link, and raise `Changed` naming the first one that is not
+    as the plan read it: a stale file with its old bytes, a created one still absent, an applied one still equal to the staged
+    bytes. Nothing has been written when this is called."""
+    for row in rows:
+        if row.state not in RECORDS:
+            continue
+        found = writer.read_file(row.path)
+        wanted = row.new if row.state == APPLIED else row.old
+        if (found.hash if found else None) != wanted:
+            raise Changed("%s changed after the plan was made" % display.ascii_text(row.path)[:200])
+
+
+def write(writer, rows, done):
+    """Write the rows in order, appending each path to `done` once it is on disk: a stale file is replaced with the hash the
+    plan read, a new or missing one is created, and a current, applied or orphaned one is not touched (an applied file only
+    takes its hash into the manifest, written by the caller). A failed create that may have left a file raises `Partial`."""
+    for row in rows:
+        if row.state == STALE:
+            writer.replace_file(row.path, row.old, row.data)
+            done.append(row.path)
+        elif row.state in CREATES:
+            mark = len(writer.written)
+            try:
+                writer.create_file(row.path, row.data)
+            except (Exception, KeyboardInterrupt) as exc:
+                # `create_file` records the path as soon as it has made the file, before it writes into it.
+                if row.path in writer.written[mark:]:
+                    done.append(row.path)
+                    cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
+                    raise Partial("%s; %s may be partly written: remove it, then run again"
+                                  % (cause, display.ascii_text(row.path)[:200])) from exc
+                raise
+            done.append(row.path)
 
 
 _WHY = {

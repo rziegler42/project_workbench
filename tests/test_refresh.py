@@ -6,6 +6,7 @@ returns, since the fixture's packages are verified against what the project reco
 
 import contextlib
 import hashlib
+import json
 import os
 import re
 import unittest
@@ -13,7 +14,7 @@ import unittest.mock
 
 from tests import test_attach, test_rerender
 from tests.test_rerender import DIGEST, LOCAL, SETTINGS
-from workbench import attach, harnessplan, rerender, target
+from workbench import attach, harnessplan, localmanifest, projectfs, rendering, rerender, target
 
 SKILL = ".fixture/skills/sample/SKILL.md"
 AGENT = ".fixture/agents/reviewer.md"
@@ -21,6 +22,16 @@ COMMAND = ".fixture/commands/ship.md"
 ROOT = "FIXTURE.md"
 EXTRA = ".fixture/skills/extra/SKILL.md"
 OLD_TEXT = b"Do the thing."
+NEW_TEXT = b"A new skill.\n"
+
+
+def chained(*changes):
+    """One change to the staged files that applies each of `changes` in turn."""
+    def change(files):
+        for each in changes:
+            files = each(files)
+        return files
+    return change
 
 
 def planned(path, data):
@@ -296,25 +307,311 @@ class Digest(Base):
         self.assertEqual(self.digest(self.newer(SKILL)), self.digest(self.newer(SKILL)))
 
 
-class Interim(Base):
-    """Until Increment B writes the files, `wb rerender` must not write a manifest that names hashes of files it did not
-    write. This class is removed by that increment."""
+class Writes(Base):
+    """``wb rerender`` writes the files (increment B). The table is loosened after attach where the test says so, so that the
+    permissions file and the record change with the rendered files and a stop leaves a relaxed key reading ``block``."""
+    terminal, level, rerender, stopped, loosened = (test_rerender.Write.terminal, test_rerender.Write.level,
+                                                     test_rerender.Write.rerender, test_rerender.Write.stopped,
+                                                     test_rerender.Write.loosened)
 
-    def test_rerender_refuses_a_plan_with_files_to_write_and_writes_nothing(self):
-        from workbench import approve, cli
-        import io
+    def setUp(self):
+        super().setUp()
+        self.terminal(True)
+
+    def run_with(self, change, **kwargs):
+        with self.staged_as(change):
+            return self.rerender(**kwargs)
+
+    def mode(self, rel):
+        return os.stat(self.full(rel)).st_mode & 0o777
+
+    def listed(self):
+        return {item["path"]: item["hash"] for item in json.loads(self.disk(LOCAL))["files"]}
+
+    def agrees(self):
+        """Every file the manifest lists is on disk with the hash the manifest records (what `wb check` asks)."""
+        for path, recorded in self.listed().items():
+            self.assertEqual(recorded, sha(self.disk(path)), path)
+
+    def all_changed(self):
+        return chained(self.newer(AGENT), self.adding(EXTRA, NEW_TEXT), self.newer(SKILL))
+
+    def swap_for_link(self, rel):
+        elsewhere = os.path.join(self.outside, "elsewhere")
+        with open(elsewhere, "wb") as handle:
+            handle.write(self.disk(rel))
+        os.remove(self.full(rel))
+        os.symlink(elsewhere, self.full(rel))
+
+    def test_a_stale_file_is_replaced_and_the_preview_then_reads_it_current(self):
+        change = self.newer(SKILL)
+        data = self.disk(SKILL) + b"More.\n"
+        mode = self.mode(SKILL)
+        code, out, err = self.run_with(change)
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertEqual(data, self.disk(SKILL))
+        self.assertEqual(mode, self.mode(SKILL))
+        self.assertIn("(stale)", out)
+        self.agrees()
+        with self.staged_as(change):
+            after = self.shown()
+        self.assertIn("  %s: left as it is\n" % SKILL, after)
+        self.assertIn("nothing to change", after)
+
+    def test_a_new_file_is_created_with_its_parent_directories_and_the_mode_attach_gives(self):
+        self.assertFalse(os.path.exists(self.full(".fixture/skills/extra")))
+        code, out, err = self.run_with(self.adding(EXTRA, NEW_TEXT))
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertEqual(NEW_TEXT, self.disk(EXTRA))
+        self.assertEqual(self.mode(SKILL), self.mode(EXTRA))
+        self.agrees()
+
+    def test_a_missing_file_is_recreated_with_the_mode_attach_gave_it(self):
+        was, mode = self.disk(AGENT), self.mode(AGENT)
         os.remove(self.full(AGENT))
-        patch = unittest.mock.patch.object(approve, "is_terminal", lambda stream: True)
-        patch.start()
-        self.addCleanup(patch.stop)
-        before = self.snapshot()
-        out, err = io.StringIO(), io.StringIO()
-        code = cli.main(["rerender", self.place, "--package", self.pkg, "--package", self.synth], out, err,
-                        store_root=self.store_root, home=self.home, distribution=self.dist,
-                        stdin=test_rerender.Ticks(out, None, None))
-        self.assertEqual(1, code, out.getvalue() + err.getvalue())
-        self.assertIn("not built", err.getvalue())
+        code, out, err = self.rerender()
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertEqual((was, mode), (self.disk(AGENT), self.mode(AGENT)))
+        self.assertIn("missing; recreated", out)
+        self.agrees()
+
+    def test_an_orphan_is_left_alone_and_keeps_its_manifest_entry(self):
+        before, entry = self.disk(COMMAND), self.listed()[COMMAND]
+        code, out, err = self.run_with(chained(self.without(COMMAND), self.newer(SKILL)))
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertEqual((before, entry), (self.disk(COMMAND), self.listed()[COMMAND]))
+        self.assertIn("orphaned", out)
+
+    def test_an_applied_file_is_not_touched_and_only_its_hash_goes_into_the_manifest(self):
+        data = self.disk(SKILL) + b"More.\n"
+        self.put_disk(SKILL, data)
+        info = os.stat(self.full(SKILL))
+        code, out, err = self.run_with(self.with_data(SKILL, data))
+        self.assertEqual((0, ""), (code, err), out)
+        after = os.stat(self.full(SKILL))
+        self.assertEqual((info.st_ino, info.st_mtime_ns), (after.st_ino, after.st_mtime_ns))
+        self.assertEqual(sha(data), self.listed()[SKILL])
+
+    def test_the_report_counts_the_files_by_what_was_done(self):
+        os.remove(self.full(COMMAND))
+        code, out, err = self.run_with(chained(self.newer(AGENT), self.adding(EXTRA, NEW_TEXT)))
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertIn("files: 1 replaced, 1 created, 1 recreated\n", out)
+        self.assertLess(out.index("files: "), out.index("nothing was committed"))
+
+    def test_the_permissions_file_the_record_and_the_files_are_written_in_one_run(self):
+        self.edit_live(lambda doc: doc["permissions"].__setitem__("allow", ["Bash(ls)"]))
+        self.levels(wb_install="none")
+        code, out, err = self.run_with(self.newer(SKILL))
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertEqual(["Bash(ls)"], self.live()["permissions"]["allow"])
+        self.assertEqual("none", self.level("wb install"))
+        self.agrees()
+
+    def test_a_run_with_nothing_to_change_writes_nothing(self):
+        change = self.newer(SKILL)
+        self.assertEqual(0, self.run_with(change)[0])
+        asked, before = [], self.snapshot()
+        code, out, err = self.run_with(change, during=lambda: asked.append(1))
+        self.assertEqual((0, []), (code, asked), err)
+        self.assertIn("nothing to change", out)
         self.assertEqual(before, self.snapshot())
+
+    def test_no_level_log_line_is_written(self):
+        before = self.log_lines()
+        self.assertEqual(0, self.run_with(self.newer(SKILL))[0])
+        self.assertEqual(before, self.log_lines())
+
+    def test_a_wrong_digest_writes_nothing(self):
+        with self.staged_as(self.newer(SKILL)):
+            self.stopped(1, "cancelled: nothing was written", answer="not the digest")
+
+    def test_a_run_without_a_terminal_writes_nothing_and_asks_nothing(self):
+        self.terminal(False)
+        asked = []
+        with self.staged_as(self.newer(SKILL)):
+            self.stopped(1, "refused: ", during=lambda: asked.append(1))
+        self.assertEqual([], asked)
+
+    def test_an_edited_file_refuses_the_run_and_writes_nothing(self):
+        self.put_disk(AGENT, b"edited by the owner\n")
+        with self.staged_as(self.newer(SKILL)):
+            self.stopped(1, AGENT)
+
+    def test_nothing_is_written_before_the_confirmation(self):
+        before, asked = self.snapshot(), []
+        with self.staged_as(self.all_changed()):
+            self.stopped(1, "cancelled", answer="no", during=lambda: asked.append(self.snapshot()))
+        self.assertEqual([before], asked)
+
+    # --- a change between the plan and the write ---
+
+    def test_a_file_changed_while_the_plan_was_shown_writes_nothing(self):
+        with self.staged_as(self.newer(SKILL)):
+            self.stopped(1, "nothing was written", during=lambda: self.put_disk(SKILL, b"changed meanwhile\n"))
+
+    def test_a_file_deleted_while_the_plan_was_shown_writes_nothing(self):
+        with self.staged_as(self.newer(SKILL)):
+            self.stopped(1, "nothing was written", during=lambda: os.remove(self.full(SKILL)))
+
+    def test_a_file_swapped_for_a_link_while_the_plan_was_shown_writes_nothing(self):
+        with self.staged_as(self.newer(SKILL)):
+            self.stopped(1, "nothing was written", during=lambda: self.swap_for_link(SKILL))
+
+    def late(self, change, tamper):
+        """Run with `tamper` called after the plan was rebuilt and before the first write. The run must refuse and leave the
+        tree as `tamper` left it."""
+        real, seen = rerender._write, []
+
+        def write(*args, **kwargs):
+            tamper()
+            seen.append(self.snapshot())
+            return real(*args, **kwargs)
+
+        with unittest.mock.patch.object(rerender, "_write", write):
+            code, out, err = self.run_with(change)
+        self.assertEqual(1, len(seen), out + err)
+        self.assertEqual(1, code, out + err)
+        self.assertIn("nothing was written", err)
+        self.assertEqual(seen[0], self.snapshot(), "a refused run wrote something")
+        return err
+
+    def test_a_stale_file_changed_after_the_rebuild_is_found_by_the_re_read(self):
+        err = self.late(self.newer(SKILL), lambda: self.put_disk(SKILL, b"changed late\n"))
+        self.assertIn(SKILL, err)
+
+    def test_a_stale_file_deleted_after_the_rebuild_is_found_by_the_re_read(self):
+        self.late(self.newer(SKILL), lambda: os.remove(self.full(SKILL)))
+
+    def test_a_stale_file_swapped_for_a_link_after_the_rebuild_is_found_by_the_re_read(self):
+        self.late(self.newer(SKILL), lambda: self.swap_for_link(SKILL))
+
+    def test_a_file_that_appeared_at_the_path_of_a_new_file_is_found_by_the_re_read(self):
+        err = self.late(self.adding(EXTRA, NEW_TEXT), lambda: self.put_disk(EXTRA, b"somebody's file\n"))
+        self.assertIn(EXTRA, err)
+
+    def test_an_applied_file_changed_after_the_rebuild_is_found_by_the_re_read(self):
+        data = self.disk(SKILL) + b"More.\n"
+        self.put_disk(SKILL, data)
+        self.late(self.with_data(SKILL, data), lambda: self.put_disk(SKILL, b"changed late\n"))
+
+    def test_a_file_changed_after_the_first_replacement_stops_the_run_with_the_two_lists(self):
+        self.loosened()
+        real = projectfs.Writer.replace_file
+
+        def replace(writer, rel, expected, data, **kwargs):
+            real(writer, rel, expected, data, **kwargs)
+            if rel == AGENT:
+                self.put_disk(SKILL, b"changed after the first replacement\n")
+
+        with unittest.mock.patch.object(projectfs.Writer, "replace_file", replace):
+            code, out, err = self.run_with(chained(self.newer(AGENT), self.newer(SKILL)))
+        self.assertEqual(3, code, out)
+        self.assertIn("failed: ", err)
+        self.assertRegex(err, r"(?s)written:\n  %s\n.*not written:\n  %s\n  %s\n  %s\n  rendering record" % (
+            re.escape(AGENT), re.escape(SKILL), re.escape(SETTINGS), re.escape(LOCAL)))
+        self.assertEqual(b"changed after the first replacement\n", self.disk(SKILL))
+        self.assertEqual("block", self.level("wb install"))
+
+    def test_an_applied_file_changed_after_the_first_replacement_stops_before_the_manifest_names_its_hash(self):
+        data = self.disk(SKILL) + b"More.\n"
+        self.put_disk(SKILL, data)
+        real = projectfs.Writer.replace_file
+
+        def replace(writer, rel, expected, data, **kwargs):
+            real(writer, rel, expected, data, **kwargs)
+            self.put_disk(SKILL, b"changed after the first replacement\n")
+
+        with unittest.mock.patch.object(projectfs.Writer, "replace_file", replace):
+            code, out, err = self.run_with(chained(self.newer(AGENT), self.with_data(SKILL, data)))
+        self.assertEqual(3, code, out)
+        self.assertRegex(err, r"(?s)written:\n  %s\n.*not written:\n  %s\n" % (re.escape(AGENT), re.escape(LOCAL)))
+        self.assertNotEqual(sha(data), self.listed()[SKILL])
+
+    # --- a stop partway, and the run that finishes it ---
+
+    def fail_replacing(self, rel):
+        real = projectfs.Writer.replace_file
+
+        def replace(writer, path, expected, data, **kwargs):
+            if path == rel:
+                raise OSError("forced")
+            return real(writer, path, expected, data, **kwargs)
+
+        return unittest.mock.patch.object(projectfs.Writer, "replace_file", replace)
+
+    def stops_then_finishes(self, patch, applied):
+        change = self.all_changed()
+        self.loosened()
+        with patch:
+            code, out, err = self.run_with(change)
+        self.assertEqual(3, code, out + err)
+        self.assertIn("failed: forced", err)
+        self.assertEqual("block", self.level("wb install"))
+        code, out, err = self.run_with(change)
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertEqual("none", self.level("wb install"))
+        for path in applied:
+            self.assertIn("  %s: left as it is (applied)\n" % path, out)
+        self.agrees()
+        with self.staged_as(change):
+            self.assertIn("nothing to change", self.shown())
+
+    def test_a_stop_after_some_files_leaves_the_keys_at_block_and_a_second_run_finishes(self):
+        self.stops_then_finishes(self.fail_replacing(SKILL), (AGENT, EXTRA))
+
+    def test_a_stop_after_the_permissions_file_leaves_the_keys_at_block_and_a_second_run_finishes(self):
+        self.stops_then_finishes(unittest.mock.patch.object(localmanifest, "replace", side_effect=OSError("forced")),
+                                 (AGENT, EXTRA, SKILL))
+
+    def test_a_stop_after_the_manifest_leaves_the_keys_at_block_and_a_second_run_finishes(self):
+        # The manifest was written before the stop, so the second run finds every file current and only the record to write.
+        self.stops_then_finishes(unittest.mock.patch.object(rendering, "write", side_effect=OSError("forced")), ())
+
+    def test_the_manifest_is_complete_when_the_record_is_written(self):
+        self.loosened()
+        seen = []
+        real = rendering.write
+
+        def write(*args, **kwargs):
+            self.agrees()
+            seen.append(1)
+            return real(*args, **kwargs)
+
+        with unittest.mock.patch.object(rendering, "write", write):
+            self.assertEqual(0, self.run_with(self.all_changed())[0])
+        self.assertEqual([1], seen)
+
+    def test_an_interrupt_right_after_a_file_was_renamed_is_reported_as_written(self):
+        real = projectfs.Writer.replace_file
+
+        def replace(writer, rel, expected, data, **kwargs):
+            real(writer, rel, expected, data, **kwargs)
+            raise KeyboardInterrupt
+
+        with unittest.mock.patch.object(projectfs.Writer, "replace_file", replace):
+            code, out, err = self.run_with(self.newer(SKILL))
+        self.assertEqual(3, code, out)
+        self.assertRegex(err, r"(?s)written:\n  %s\n.*not written:\n  %s\n" % (re.escape(SKILL), re.escape(LOCAL)))
+
+    def test_a_file_partly_written_when_the_create_failed_is_named_and_must_be_removed_before_the_next_run(self):
+        change = self.adding(EXTRA, NEW_TEXT)
+
+        def create(writer, rel, data, executable=False):
+            self.put_disk(rel, data[:3])
+            writer.written.append(rel)
+            raise OSError("forced")
+
+        with unittest.mock.patch.object(projectfs.Writer, "create_file", create):
+            code, out, err = self.run_with(change)
+        self.assertEqual(3, code, out)
+        self.assertIn("failed: forced", err)
+        self.assertIn("%s may be partly written" % EXTRA, err)
+        with self.staged_as(change):
+            self.assertIn("unrecorded", self.refuses(EXTRA))
+        os.remove(self.full(EXTRA))
+        self.assertEqual(0, self.run_with(change)[0])
+        self.agrees()
 
 
 class Nothing(Base):
