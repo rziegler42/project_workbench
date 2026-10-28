@@ -113,10 +113,19 @@ levels from `ask` and `none`; the key `wb run <command> <argument>` then offers 
 that command and an unknown level. A command that offers `ask` also gives `preview`, the name of a declared argument that is
 neither owner-run nor `describe`; `verify` refuses `ask` without it and `preview` without `ask`. The preview argument is an
 ordinary declared argument, so its key defaults to `none`. A command without these fields offers `block` only, as before, and
-its declaration hashes as before. **Until the launcher is built (Increment D) a table level of `ask` or `none` for such a key
-renders its rule but the launcher still refuses the argument without a terminal; no first-party module declares the field yet.**
-The terminal test and the level are read by the launcher, not by the helper
-(`commands.owner_refusal`).
+its declaration hashes as before. **No first-party module declares the field yet, so no such key offers more than `block` today.**
+The terminal test and the level are read by the launcher, not by the helper. `wb run <command> <argument>`, with a command whose
+argument offers a level (`ownerargs.py`, built by Increment D), runs an owner-run argument without a terminal only when the key
+reads `ask` or `none` through `rendering.effective_level` (the record, the table, the permissions file and the command gate agree
+and the key is listed) and the level is one the declaration offers; anything else reads `block` and the refusal is the one the
+terminal test gives (`commands.owner_refusal`). At `ask` the last two arguments must be `--digest` and 32 lowercase hexadecimal
+characters; the launcher checks their form and passes every argument to the helper unchanged, and does not compute or compare the
+digest (the helper recomputes it inside the lock that guards its change, Increment E). The launcher writes the attempt line to the
+level log after the pin and the bytes are checked and just before the helper starts (`launch.launch`'s `before`), key
+`wb run <command> <argument>`, level and `digest:<hex>` at `ask`, and the outcome line after: `done` for exit 0, otherwise `refused`
+with the exit code. If the attempt cannot be written the helper is not started; if the outcome cannot be written after the helper ran,
+the exit code is 3 (a helper that itself exits 3 gives the same code; the line on standard error tells them apart). A run at a terminal reads no level and writes no entry. `wb launch` stays terminal-only for an owner-run argument at
+every level, because the `ask` rule is rendered for the `wb run` spelling only.
 
 ### Shipped defaults
 
@@ -525,9 +534,9 @@ Also, in the same flow:
 - `none` for the owner-run arguments of module commands (`wb run mempalace init`, `mine`, `wb run remote-runner fetch-overwrite`
   and the review engine's `reset`, `archive`, `prune`, `amend`, `extend`). The declaration field that gives them levels is built
   (`levels` and `preview`, Increment C of the plan `2026-10-27-levels-for-the-review-workflow`), and the terminal test is the
-  launcher's (`commands.owner_refusal`), not the helper's. Still to build, by Increments D to F of that plan: the launcher reading
-  the level and logging the run, and a declaration of `levels` and a preview with a digest in the review engine. Until then these
-  keys offer `block` only.
+  launcher's (`commands.owner_refusal`), not the helper's. The launcher reads the level and logs the run (`ownerargs.py`, Increment
+  D). Still to build, by Increments E and F of that plan: a declaration of `levels` and a preview with a digest in the review engine.
+  Until then these keys offer `block` only.
 - `wb run review-engine extend` at `ask` and `none` (Increments D and E of the plan `2026-10-27-levels-for-the-review-workflow`): a
   helper that prints and checks a digest of the review's `status` and `n`, and the log attempt written before the helper is
   launched.

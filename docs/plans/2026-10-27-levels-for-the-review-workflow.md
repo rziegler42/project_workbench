@@ -292,7 +292,7 @@ approval; the plan stays `Proposed` until the owner approves it.
 - **Not done.** Accepting the decision was the owner's act, made by the owner's edit of the record's status line and its index row on
   2026-10-27, before this commit; the agent wrote it `Proposed`.
 
-### Increment C — committed (2026-10-27)
+### Increment C — committed as f1ef6cc (2026-10-27)
 
 - **Done.** `workbench/declarations.py`: `Command` gains `levels` (`((argument, (level, ...)), ...)`) and `preview`, both defaulted
   so older constructions are unchanged; `_argument_levels` refuses a non-object, a key that is not an `owner` argument, an empty or
@@ -317,3 +317,39 @@ approval; the plan stays `Proposed` until the owner approves it.
   declaration as written); (4) stale text in `settings.py` and one overstated sentence in `command-permissions.md`.
 - **Not done.** Nothing takes effect yet: the launcher (Increment D) still refuses an owner-run argument without a terminal, and no
   first-party module declares the field. Not committed.
+
+### Increment D — done, not committed (2026-10-28)
+
+- **Done.** New `workbench/ownerargs.py`: `permit` lets `wb run` start an owner-run argument without a terminal only when the
+  declaration gives that argument a level, `levelrun.level_now` reads the key `wb run <command> <argument>` at a level the
+  declaration offers (so the record, table, permissions file and gate agree), the project and root match the request, and, at `ask`,
+  the last two arguments are `--digest` and 32 lowercase hex; anything else refuses with today's terminal text. `run_logged` starts
+  the helper with the arguments unchanged between an attempt line (`digest:<hex>` at `ask`) and an outcome line (`done`, or
+  `refused` with the exit code or the exception). `launch.launch` gained a `before` callback, called after the pin and bytes are
+  checked and the copy is written and just before the helper starts; if it raises, no helper starts. `commands.Request` carries
+  `levels` and `preview`; `commands.run` imports `ownerargs` at call time because `levelrun` reaches `commands` through
+  `approvalcmd`. `wb launch` is unchanged and stays terminal-only. Specs: `command-permissions.md` and `module-contract.md`.
+  Tests: `tests/test_owner_argument_run.py`, 25 tests.
+- **Verification run.** On the code before the change, the first 23 tests gave 18 failures and 1 error (the rest pin unchanged
+  refusals). With the change all 25 pass, with `tests.test_run` and `tests.test_owner_run_code` (78 tests). `git diff --check`,
+  `wb check`, `wb run code-work check`, `doccheck` and `refcheck` are clean. Full suite (`python3 -B -W error tests/run_all.py`,
+  scratch copy taken before the last two tests and one spec sentence were added): 5733 tests in 11 roots, all OK. This run did not
+  hit the known `levellog` flake.
+- **Review.** One `reviewer` exchange of six (one used for B, one for C; this is the third, so three of six in all), no blocking
+  finding, four non-blocking: (1) exit code 3 means both "outcome not logged" and a helper that exits 3: stated in the spec;
+  (2) an interrupt between `levellog.begin` returning and the id being kept leaves an attempt with no outcome: accepted, the log's
+  "unfinished" convention covers it; (3) missing tests: added a subdirectory run, a start failure after the attempt, and an exact
+  outcome reason; the `--provides` form and a project or root mismatch have no test (the code paths are shared with the tested ones);
+  (4) the spec lines read match the code.
+- **Not done.** Nothing takes effect: no first-party module declares `levels`, and the helper does not yet check a digest
+  (Increments E and F). Security review: a trust boundary changed (who may run an owner-run argument, and how a digest binds it);
+  the owner asked for one on 2026-10-28 and a `security-reviewer` ran it on a scratch copy: no Critical, High or Medium finding;
+  fail-closed on every exception path, the level is read for the launched project, the attempt precedes the helper and an outcome
+  follows on every path, and `wb launch`, `wbkit.call` and `launch_captured` do not reach an owner-run argument. Four Low
+  findings, none changed in this increment: (1) at `none` a looping agent can fill the 4 MiB level log, after which every run
+  above `block` refuses until the owner rotates it (the same exposure as the other `none` keys); (2) exit code 3 is ambiguous
+  (stated in the spec); (3) at `ask` the launcher proves only the digest's form, because the agent can run the preview itself, so
+  the real checks are the harness prompt and the helper's recomputation (Increment E); (4) a helper runs with the caller's
+  environment, as before. Outside this increment, read and not tested: `commands.launch_refusal` does not check that a
+  `--root` belongs to the pinned project when the pin was typed by the owner (no declaration to compare); this predates D and is
+  left to the owner to decide.

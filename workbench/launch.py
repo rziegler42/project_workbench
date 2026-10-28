@@ -144,15 +144,22 @@ def _prepare(guarded, project_id, name, root, kit):
     return path, directory, kit
 
 
-def launch(guarded, project_id, name, root, args, *, stdin=None, stdout=None, stderr=None, kit=None):
+def launch(guarded, project_id, name, root, args, *, stdin=None, stdout=None, stderr=None, kit=None, before=None):
     """Run the pinned helper. Returns its exit code. Raises LaunchError if it was not run.
 
     How it runs is the pin's: a pin that records a kit API number runs the helper through the runner,
     which refuses unless that number equals the workbench's kit API; a pin without one runs it as it
     is. `kit` is what the caller expects, and a caller that expects another way is refused; None
-    accepts whatever the pin records."""
+    accepts whatever the pin records.
+
+    `before`, when given, is called with no argument after the pin and the bytes are checked and the private copy
+    is written, and just before the helper starts: this is where ``wb run`` writes the attempt line of a run
+    without a terminal (``ownerargs.py``). Whatever it raises stops the run, the copy is removed and the helper
+    does not start."""
     path, directory, kit = _prepare(guarded, project_id, name, root, kit)
     try:
+        if before is not None:
+            before()
         try:
             done = subprocess.run(_command(path, args, kit), stdin=stdin, stdout=stdout,
                                   stderr=stderr)

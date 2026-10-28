@@ -306,7 +306,11 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   refused. `preview` names one of the command's `arguments` that is neither in `owner` nor `describe`; it is required exactly when some
   argument offers `ask`, and the argument it names is the read-only preview whose last line is `digest: <32 lowercase hex>`. Both are
   covered by the declaration hash as written, so a declaration without them hashes as before. A workbench that predates them refuses a
-  package that has them, because it refuses an unknown field.
+  package that has them, because it refuses an unknown field. The launcher (`wb run`, Increment D) reads the level of the key
+  `wb run <command> <argument>`; the helper is not told it. At `ask` and without a terminal the helper is started with the
+  arguments unchanged and its last two arguments are `--digest <32 lowercase hex>`: it takes them off before it counts its other
+  arguments, recomputes the digest of what the argument would change now inside the lock that guards the change, and changes
+  nothing unless the two are equal. At a terminal a `--digest` is checked the same way and a run without one works as before.
 
 - `approval` *(built)*: an object with exactly the fields `command` (the key of one of this module's `commands`)
   and `argument` (one of that command's `arguments`), and refused on any module type but `process`. It names the
