@@ -11,6 +11,7 @@ The staged hash is of the translated file, so the comparison goes through the re
 import collections
 import difflib
 
+from . import projectfs
 from .wbkit import display, safefs
 
 CURRENT, APPLIED, STALE, EDITED, MISSING, NEW, UNRECORDED, ORPHANED = (
@@ -30,13 +31,31 @@ SHOWN_LINES = 40
 Row = collections.namedtuple("Row", "path state old new data lines more detail", defaults=(None, None, (), 0, ""))
 
 
-def covered(path, exclude):
-    """Whether one of the layout's exclude entries names `path` or a directory above it."""
+def covered(path, exclude, lines=None):
+    """Whether one of the layout's exclude entries names `path` or a directory above it. With `lines` (the set of lines of the
+    clone's ``.git/info/exclude``, as bytes) the entry's own line must be among them too, since git reads that file and not the
+    layout."""
     for entry in exclude:
         body = entry[:-1] if entry.endswith("/") else entry
         if path == body or path.startswith(body + "/"):
-            return True
+            if lines is None:
+                return True
+            try:
+                if projectfs.exclude_line(entry).encode("utf-8") in lines:
+                    return True
+            except (safefs.SafeFsError, UnicodeEncodeError):
+                pass
     return False
+
+
+def _exclude_lines(writer):
+    """``(lines, why)`` for the clone's ``.git/info/exclude``: the set of its lines (a CR at the end of a line is not part of
+    the line git reads; a missing file has none), or ``(None, why)`` when it cannot be read as a plain regular file."""
+    try:
+        data = writer.git_bytes("info/exclude", safefs.MAX_FILE_BYTES)
+    except safefs.SafeFsError as exc:
+        return None, display.ascii_text(str(exc))[:300]
+    return {line[:-1] if line.endswith(b"\r") else line for line in (data or b"").split(b"\n")}, None
 
 
 def _changed(old, new):
@@ -89,12 +108,21 @@ def classify(writer, listed, files, settings, exclude):
             rows.append(Row(path, STALE, disk, item.sha256, item.data, lines, more))
         else:
             rows.append(Row(path, EDITED if known is not None else UNRECORDED, disk, item.sha256, item.data))
+    lines, unreadable = _exclude_lines(writer) if any(row.state in CREATES for row in rows) else (None, None)
     for row in rows:
+        shown = display.ascii_text(row.path)[:200]
         if row.state in REFUSED:
-            problems.append("%s: %s" % (display.ascii_text(row.path)[:200], _WHY[row.state]))
-        elif row.state in CREATES and not covered(row.path, exclude):
-            problems.append("%s: not covered by the harness's exclude lines, so git would see the file it would create"
-                            % display.ascii_text(row.path)[:200])
+            problems.append("%s: %s" % (shown, _WHY[row.state]))
+        elif row.state in CREATES:
+            if not covered(row.path, exclude):
+                problems.append("%s: not covered by the harness's exclude lines, so git would see the file it would create"
+                                % shown)
+            elif unreadable:
+                problems.append("%s: .git/info/exclude cannot be read (%s), so it is not known that git would not see the "
+                                "file it would create" % (shown, unreadable))
+            elif not covered(row.path, exclude, lines):
+                problems.append("%s: not covered by the lines in .git/info/exclude, so git would see the file it would "
+                                "create" % shown)
     return rows, problems
 
 

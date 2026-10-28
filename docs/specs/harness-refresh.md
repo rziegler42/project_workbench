@@ -197,7 +197,10 @@ for the owner to decide:
   `(`, `)`, `#`, `'` or a non-ASCII character is refused by `wb attach` and `wb rerender`, as it already was with a hook.
 - **A new file is not written atomically.** `create_file` writes into the final name, so a crash can leave a short file, which the
   next run refuses and names. An agent file without its `tools:` line might load with every tool.
-- **A new file is checked against the layout's exclude entries and not the clone's `.git/info/exclude`.**
+- **A new file is checked against the clone's `.git/info/exclude` as well as the layout's exclude entries.** Both the preview
+  and the run refuse a file they would create unless the entry that covers it has its line in that file (read without following
+  a link, at most the file size limit; a CR at the end of a line is not part of it), or when the file cannot be read as a plain
+  regular file; a missing file has no lines. A run with nothing to create does not read it. Nothing is written to `.git`.
 - **The changed lines of a stale file are split on the newline only**, so a change of a carriage return, a vertical tab or another
   line separator shows as a changed line, written as its JSON string when it is not plain. A change of only the final newline
   shows as one added or removed empty line.

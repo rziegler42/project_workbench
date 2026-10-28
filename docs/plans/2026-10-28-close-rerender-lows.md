@@ -135,3 +135,27 @@ digest holds no lines, so it cannot change. Applied: the literal U+2028 characte
 applied: an end-to-end test through `render` for a CR change (the existing `\x01` test covers the same display path).
 
 **Not done.** Increments B and C. The plan's `Status:` line still says `Proposed`.
+
+### Increment B — Require the exclude lines on disk (Low 3)
+
+**Done.** Step 1 found that `Writer.git_bytes("info/exclude", limit)` already reads the file read-only, without following a link, with
+a size limit, so nothing was widened. `refresh.classify` reads `.git/info/exclude` once, only when some row would be created, and
+refuses a created file unless the layout entry that covers it has its own line there (`projectfs.exclude_line`, the line
+`add_exclude` writes; a CR at the end of a line is ignored, a missing file has no lines), or when the file cannot be read as a plain
+regular file. `covered` gained an optional `lines` argument and an entry that cannot be written as a line (`SafeFsError`,
+`UnicodeEncodeError`) covers nothing. The preview and the run agree because both call `classify` (`rerender.py:148`, the only caller),
+and the run rebuilds the plan after the typed digest. Nothing is written to `.git`. Tests first, in `tests/test_refresh.py` (`New`):
+a file missing the lines, a missing exclude file and an exclude file that is a link were red (nothing refused) and are green; CRLF
+endings with other lines, a clone with nothing to create and no exclude file, a `.git` that is a file (refused earlier, by the existing
+check) and an entry that cannot be a line guard the other side. `harness-refresh.md` ("Limits as built") says what is checked.
+
+**Verification as run.** `tests.test_refresh`, `tests.test_rerender`, `tests.test_boundary` and `tests.test_attach` 245 OK after the last
+edit; the full suite `python3 -B -W error tests/run_all.py` 5919 tests in 12 roots OK (started before the last two tests, the `.git` file
+and the unwritable entry, were added; those ran in the 245); `git diff --check` clean; `wb check` no problems.
+
+**Review.** One `reviewer` exchange, no blocking findings. Applied: `UnicodeEncodeError` is caught when an entry is turned into a line
+(fail-closed), and a test for a `.git` that is a file (the reviewer assumed this run's message would be the one shown; an earlier check
+refuses it, so the test asserts that refusal). Not applied: naming "invalid entry" in the message, since the layout's entries are
+validated at attach.
+
+**Not done.** Increment C. Not exercised on a real worktree or submodule clone. The plan's `Status:` line still says `Proposed`.

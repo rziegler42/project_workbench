@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import unittest
 import unittest.mock
 
@@ -204,6 +205,44 @@ class New(Base):
     def test_a_path_outside_the_exclude_lines_refuses_when_it_would_be_created(self):
         err = self.refused_with("docs/new.md", self.adding("docs/new.md", b"x\n"))
         self.assertIn("exclude", err)
+
+    def test_a_file_the_layout_excludes_is_refused_when_the_clones_exclude_file_lacks_the_line(self):
+        # The layout's entries cover the path, but git reads the clone's own file: with the lines gone it would see the file.
+        self.put_disk(".git/info/exclude", b"# mine\n*.log\n")
+        err = self.refused_with(EXTRA, self.adding(EXTRA, b"A new skill.\n"))
+        self.assertIn(".git/info/exclude", err)
+
+    def test_a_file_the_layout_excludes_is_refused_when_the_clone_has_no_exclude_file(self):
+        os.remove(self.full(".git/info/exclude"))
+        err = self.refused_with(EXTRA, self.adding(EXTRA, b"A new skill.\n"))
+        self.assertIn(".git/info/exclude", err)
+
+    def test_the_lines_are_found_in_a_file_with_crlf_endings_and_other_lines(self):
+        lines = self.disk(".git/info/exclude").decode().splitlines()
+        self.put_disk(".git/info/exclude", ("# mine\r\n" + "\r\n".join(lines) + "\r\n").encode())
+        self.assertRegex(self.row(self.out_of(self.adding(EXTRA, b"A new skill.\n")), EXTRA), r"\(new\)$")
+
+    def test_an_exclude_file_that_is_a_link_refuses_and_names_it(self):
+        os.remove(self.full(".git/info/exclude"))
+        os.symlink(self.full("FIXTURE.md"), self.full(".git/info/exclude"))
+        err = self.refused_with(".git/info/exclude", self.adding(EXTRA, b"A new skill.\n"))
+        self.assertIn("exclude", err)
+
+    def test_a_clone_whose_git_is_a_file_is_refused_before_the_exclude_file_is_read(self):
+        # A worktree or submodule keeps its exclude file elsewhere; an earlier check already refuses it, so the run does not guess.
+        shutil.rmtree(self.full(".git"))
+        self.put_disk(".git", b"gitdir: elsewhere\n")
+        err = self.refused_with(".git is not a real directory", self.adding(EXTRA, b"A new skill.\n"))
+        self.assertIn("not a real directory", err)
+
+    def test_an_entry_that_cannot_be_written_as_a_line_covers_nothing(self):
+        self.assertTrue(refresh.covered("a/b", ["a/"], {b"/a/"}))
+        self.assertFalse(refresh.covered("a/b", ["a/"], {b"/other/"}))
+        self.assertFalse(refresh.covered("a\ud800/b", ["a\ud800/"], {b"/a/"}))
+
+    def test_a_clone_with_nothing_to_create_does_not_need_the_exclude_file(self):
+        os.remove(self.full(".git/info/exclude"))
+        self.assertIn("nothing to change\n", self.shown())
 
     def test_a_missing_file_outside_the_exclude_lines_refuses_too(self):
         # A recorded file the layout no longer excludes would be written where git sees it.
