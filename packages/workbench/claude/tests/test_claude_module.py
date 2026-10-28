@@ -63,7 +63,7 @@ class Shipped(unittest.TestCase):
                                        first_party=firstparty.is_first_party(PACKAGE))
         self.assertTrue(result.accepted, [str(p) for p in result.problems])
         self.assertEqual([m.name for m in result.modules], ["ask-codex", "claude", "code-work", "groundwork", "safe-git", "review-engine",
-                                                            "mempalace", "remote-runner", "security-review"])
+                                                            "action-review", "mempalace", "remote-runner", "security-review"])
 
     def test_the_shipped_records_match_the_current_hashes(self):
         support.require_release(self)
