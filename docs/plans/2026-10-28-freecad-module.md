@@ -461,3 +461,43 @@ companion plan will not complete without it.
 - **Gate:** the owner ran `wb release-approvals` once for this increment. Eight records are reported stale; none was
   removed. Increment I removes them after a preview.
 - **Not done:** no independent review of the increment (only when the owner asks); no run in the GUI.
+
+### Increment C
+
+- **Read (2026-10-28):** the hash of `partdesign-and-parameters.md` matched the plan at the start. It was read in full.
+- **Rewritten, not copied.** `freecad-partdesign` covers building inside a Body, the features that use a sketch (Pad,
+  Pocket, Hole, Revolution, AdditivePipe, AdditiveLoft), datum planes, Fillet, Chamfer and Thickness, the patterns and
+  MultiTransform, several Bodies, and checking the result. `freecad-parameters` covers VarSet and Spreadsheet as two
+  ways to hold dimensions, binding them with expressions, derived values, and a bad expression. The sketch material of
+  the same source file went to `freecad-sketcher` in increment B.
+- **Dropped or changed:** the owner's conventions (the object named `VarSet`, PascalCase names, "VarSets preferred, a
+  Spreadsheet only if asked"); the example names in the source's VarSet section are replaced by neutral ones; the
+  "multi-body modelling" section no longer says "the user's models".
+- **Method:** as in increment B. The examples of both reference files are self-contained blocks (with a shared
+  "Helpers" prelude) that a runner extracted and ran in FreeCAD 1.1.4 (revision 20260928, headless, at the owner's
+  word, from a scratch directory) before the files were copied into the module, so the increment needed one release.
+- **Verification as run:**
+  - Test first: 2 failures and 8 errors before the skills existed.
+  - Module tests, 14, OK; package tests, 29, OK; the full suite, 5855 tests in 13 roots, OK; `wb run code-work check`
+    (61 plans) and `wb check` found no problems; `git diff --check` printed nothing.
+- **Run against FreeCAD 1.1.4:** 18 blocks, none raising. Confirmed with the volumes the geometry gives: a Pad (4000), Hole
+  and Pocket (3874.34, 3803.65), Chamfer (3961.33), Thickness (1952.0), LinearPattern and MultiTransform (3905.75), PolarPattern
+  (251.3), Mirrored (3748.67), Revolution (6283.2), straight and curved AdditivePipe (848.2, 394.8), AdditiveLoft (3665.2),
+  a datum plane (5.0), SubShapeBinder and Boolean (2000.0, 3000.0); a failed feature (`['Touched', 'Invalid']`,
+  `isValid()` false, "Wire is not closed" in the console); VarSet-driven and derived dimensions (6000.0, 9000.0, 5280.0);
+  Spreadsheet cells, aliases and formulas driving a Pad and a sketch constraint (6000.0, 9000.0, 22.0 mm and 2640.0).
+- **Settled by running:** a feature made with `doc.addObject` belongs to no Body (its parent group is `None`, it is not in
+  the Body's group list and the Tip is unchanged), and when its profile sketch is inside a Body the recompute reports
+  the links as out of scope. The source's "unlinked" is right. The increment A finding, that a loose Pad recomputed
+  fine, holds only when its sketch is outside a Body too.
+- **Found by running (not in the source):** `setExpression` accepts an expression that names a property which does not
+  exist; the failure shows only at the recompute, as `['Touched', 'Invalid']` with a console message.
+- **Added by the author:** the Spreadsheet section of `freecad-parameters` (create a sheet, set cells, alias a cell,
+  formulas with a leading `=`, binding by expression) and the neutral comparison of a VarSet and a Spreadsheet. The
+  snippets were run; the comparison is the author's judgement and is stated as such in the skill.
+- **Not run, marked read:** that a sheet can import and export files (the two methods exist, which was checked, but they
+  were not exercised), that a mirror plane that misses the part does nothing, that a binder cuts nothing by itself, and
+  that face and edge names change when the model changes.
+- **Gate:** the owner ran `wb release-approvals` once for this increment. Ten records are reported stale; none was removed.
+  Increment I removes them after a preview.
+- **Not done:** no independent review of the increment (only when the owner asks); no run in the GUI.
