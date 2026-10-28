@@ -1,0 +1,258 @@
+# Refresh the rendered skills and agents of an attached clone
+
+Status: Proposed
+Created: 2026-10-28
+Candidate: none (an owner request, found when a rendered skill stayed behind its source after `wb upgrade`; no roadmap candidate names it)
+Specs: harness-refresh, harness-rerender, installer-interface, command-permissions
+
+## Goal
+
+An owner whose installed modules changed (after `wb upgrade`) can bring the rendered skills, agents and root file of an attached
+clone up to date with one owner-run command, `wb rerender`, and can see beforehand, with `wb preview rerender`, which rendered
+files are behind. When the plan is done the design in `docs/specs/harness-refresh.md` is built, its acceptance criteria 1 to 9
+pass, and the specs say it as built.
+
+## Scope
+
+- A per-file state for every staged file except the permissions file (current, applied, stale, edited, missing, new, unrecorded,
+  orphaned), tried in the spec's order after a link check of every staged and listed path.
+- `wb preview rerender` listing those states with old and new hash, the changed lines of a stale file and one digest that covers
+  the permissions file, the other files, the manifest and the record.
+- `wb rerender` writing it all under the one digest the owner types at a terminal: stale files replaced, new and missing files
+  created, the manifest, then the rendering record. Nothing is written when any file is edited, unrecorded or a link.
+- A re-read of every file to replace or create, and a rebuild of the plan, immediately before the first write.
+- One line printed by `wb upgrade` after it wrote a module's harness items, naming `wb preview rerender`. It stages and writes
+  nothing under `.claude/`.
+- The specs, `docs/development.md` and tests that say and check the above.
+
+## Non-goals
+
+- A change of harness, or a clone with no recorded harness (`attach` stays for that).
+- A new command, a new key, or any level other than `block` for `wb rerender`; no agent-run refresh.
+- Any change to what `wb upgrade` writes, beyond the one printed line.
+- `wb check` reporting staleness. It needs a manifest format change (spec, "Open questions" 1).
+- Deleting an orphaned rendered file, or a command that does.
+- A force option to overwrite an edited file.
+- Rollback of a partly written refresh. A second run finishes it.
+- Any change to the permissions file's rules (`harness-rerender`): they are kept as built.
+
+## Assumptions and constraints
+
+- The owner approved the design in `docs/specs/harness-refresh.md` on 2026-10-28, the calls in it included. It was reviewed in three
+  rounds, which stopped at the bound; the fixes of the last round were not reviewed again. Where this plan and the spec differ,
+  the spec wins and the plan is corrected. The approval of the spec is not the approval of this plan.
+- Read in the code at `df82594`, not run: `rerender.build` calls `attach.stage`, which already stages every harness file
+  (`Staged.files`, each a `harnessplan.Planned` with `path`, `data`, `sha256`) and the document for the local manifest, and then
+  keeps only the permissions file. `localmanifest.replace(writer, expected_hash, document)` and `Writer.replace_file` exist;
+  `Writer.create_file` makes missing parent directories and refuses an existing path, and does not set a mode other than 0644 or
+  0755 (so a newly created file gets 0644, as attach gives it). `Writer.replace_file` keeps the original's mode without execute,
+  group-write or other-write bits.
+- `wb check` reads from the local manifest the `files` list: a listed file that is gone or whose hash differs is a problem
+  (`check._drift`), and a file below a generated directory that is not listed is a problem (`check._strays`). So every file the
+  refresh creates must be in the manifest before the command ends, and a manifest hash must be current once its file is replaced.
+- **(call) The manifest's other fields stay as attach wrote them** (`tree`, `module_version`, `source`, `workbench`), as `rerender`
+  keeps them today; only the `files` entries change. A refresh from a harness module that differs from the recorded one still prints
+  the note, reworded because the other harness files are now replaced (the note says "only the permissions file is replaced" today).
+  An orphaned file keeps its manifest entry.
+- **(call) Where the new code lives.** The states are built in a new `workbench/refresh.py`, called by `rerender.build`; `rerender.py`
+  keeps the permissions file, the digest, the prompt and the exit codes. Tests are in a new `tests/test_refresh.py` and, where they
+  touch the command, `tests/test_rerender.py`.
+- The exclude lines (`.git/info/exclude`) that attach added come from the layout. A created file must fall under them; if a
+  created path would not, the run refuses and names it (Increment A checks this with the writer's exclude check).
+- The installer source and its tests may not name a module, a helper, a harness or a path (`tests/test_boundary.py`,
+  `tests/test_run.py`); tests use stand-ins.
+- Code is the Python standard library only; checks run with `python3 -B -W error tests/run_all.py`. The code in `workbench/` is in
+  the agent's write scope in this repository.
+- Discovery tooling: skipped. No discovery module is installed and the files the plan touches are named below.
+- The change decides which instructions the agent loads and writes into the filesystem, so it touches a permission boundary and the
+  filesystem; see "Risks and sensitive actions" for the checkpoint before Increment B.
+
+## Completion criteria
+
+1. After a package skill changed and `wb upgrade` ran, `wb preview rerender` lists the rendered skill as stale, and after
+   `wb rerender` it lists it as current (spec criterion 1).
+2. The preview shows every stale, applied, new, recreated and orphaned file with its old and new hash (`none` for one that does
+   not exist), the changed lines of a stale file and one digest, and writes nothing; a run with nothing to change says so
+   (criterion 2).
+3. `wb rerender` at a terminal, with the digest, replaces each stale file, creates each new file, writes the manifest and then the
+   rendering record, and leaves an orphaned file alone (criterion 3).
+4. An edited file, an unrecorded file at a staged path, or a link at any staged or listed path refuses the whole run with nothing
+   written and names the file; a missing file is recreated (criteria 4 and 5).
+5. A file that changes after the plan, found by the re-read before the first write, refuses with nothing written; one that changes
+   after the first replacement stops the run with exit 3 and the written and not-written lists (criterion 5).
+6. A run without a terminal is refused at every level and no level is offered (criterion 6).
+7. After a failure partway, every relaxed key reads `block`, and a second run reads each replaced or created file as applied and
+   finishes the job (criterion 7).
+8. `wb upgrade` writes nothing under `.claude/` and prints one line that names `wb preview rerender` after it wrote a harness item
+   (criterion 8).
+9. The comparison uses the real renderer, so a quoting or `tools:` translation is not stale (criterion 9).
+10. The specs, `docs/development.md` and `wb settings` describe the built behavior, and `wb check` reports no problems.
+11. The full suite passes with warnings as errors.
+
+## Increments
+
+### Increment A — The states of the rendered files, in the preview
+
+**Outcome:** `wb preview rerender` lists, besides the permissions file, the manifest and the record, every other staged file with
+its state (current, applied, stale, edited, missing, new, unrecorded) and every orphaned manifest path, each with old and new hash
+(`none` where a hash does not exist), the changed lines of a stale file, a note for a refused state, and a digest that covers all
+of it. A link at any staged or listed path, an edited file or an unrecorded one makes the preview refuse and name the file.
+Nothing is written by anything in this increment.
+**Dependencies:** none (this plan is approved).
+**Affected areas:** a new `workbench/refresh.py`; `workbench/rerender.py` (`build`, `Plan`, `render`, the digest body, the note
+about a differing harness module); `tests/test_refresh.py` (new); `tests/test_rerender.py` (the existing plan tests keep passing).
+**Steps:**
+1. Write the tests first, on the synthetic harness of the test fixtures: one test for each state in the table, built by attaching
+   at one set of sources and previewing at another (stale), by deleting a rendered file (missing), by editing one (edited), by
+   writing a file at a staged path that the manifest does not list (unrecorded), by adding a source file (new), by removing a
+   source file (orphaned, present on disk and already gone), and by leaving a file equal to the staged bytes while the manifest
+   records another hash (applied). The order of the table holds: an orphan is orphaned whether or not its file is on disk; a link
+   is refused even when its content equals the staged and recorded hash and even when nothing else would change; the link check
+   covers every staged path and every path the manifest lists. The changed lines of a stale file are shown and a line that is not
+   plain printable ASCII is shown as its JSON string (`rerender._whole`). The comparison goes through the renderer: a file whose
+   only difference from its source is the translation (quoted names, `tools:`) is current. The digest changes when any state, any
+   hash or any listed line changes, and covers the manifest that would be written. A refused state names the path and writes
+   nothing. The permissions file is outside the table: a live `allow` rule is never an edit, and a refresh with no change to it
+   leaves it as it is. A created path outside the exclude lines refuses and is named. The existing tests of `rerender` still pass.
+2. Add `refresh.py`: `classify(writer, recorded, staged_files, settings_path)` reads every staged and listed path without following
+   a link (`Writer.read_file`), tries the states in the spec's order, and returns the rows and the refusals. Orphans are decided
+   first; the permissions file is skipped.
+3. In `rerender.build` call it, add the rows to the plan, build the manifest that would be written (the old one with the `files`
+   entries of stale, applied, missing, new and the permissions file changed, entries sorted as `localmanifest` requires, the
+   orphaned entries kept, every other field kept), and put the rows and that manifest in the digest body.
+4. Print each row in `render` in the same style as the existing lines ("left as it is" for current, hashes for the rest, the
+   changed lines under a stale file, `no longer shipped` with the on-disk state for an orphan). Reword the harness-module note.
+5. Check the created paths against the exclude lines through the writer's exclude check and refuse a path that falls outside.
+6. Read the layout for any rendered file marked as the owner's to edit (spec, "Open questions" 3) and record the answer in the
+   Result. The root file is covered by the table; an edited one refuses.
+**Verification:** `python3 -B -W error -m unittest tests.test_refresh tests.test_rerender tests.test_attach tests.test_check
+tests.test_rendering`, then the full suite. Break `refresh.py` on purpose in each of the ways the tests claim to catch (the order
+of the states, the link check, the orphan rule, a hash left out of the digest, the renderer bypassed) and show each caught.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-28-refresh-rendered-harness#A`.
+
+### Increment B — `wb rerender` writes the files
+
+**Outcome:** `wb rerender` at a terminal, with the digest typed, replaces each stale file, creates each new and each missing file,
+writes the manifest (which also takes an applied file's hash), then the rendering record, and leaves current, applied and orphaned
+files as they are. Immediately before the first write it re-reads every
+file it will replace or create and rebuilds the plan, and refuses with nothing written on any difference. A failure after one
+replacement exits 3 with the written and not-written lists; a second run reads each replaced or created file as applied and
+finishes the job. It writes nothing when the plan has no change, and offers no level.
+**Dependencies:** A, and the owner's answer on a security review (the checkpoint below): this increment stops before it starts until
+the owner has said whether to run one.
+**Affected areas:** `workbench/rerender.py` (`_write`, `_reconcile`, `_failed`, `run`); `workbench/refresh.py` (the write order and
+the re-read); `workbench/localmanifest.py` only if the replacing write needs more than it has; `tests/test_refresh.py`,
+`tests/test_rerender.py`.
+**Steps:**
+1. Write the tests first: the digest typed lets it write; a wrong digest and no terminal write nothing; after a stale file is
+   replaced the preview reports it current; a new file is created with its parent directories; a missing file is recreated; an
+   orphan is left; a file changed (content, deleted, or swapped for a link) between the plan and the first write refuses with
+   nothing written; a file changed after the first replacement fails that replacement, exits 3 and lists written and not written;
+   a forced failure after a file, after the manifest and before the record each leaves every relaxed key reading `block` through
+   `rendering.effective_level`; a second run after each such failure finishes the job and reports the replaced and created files as
+   applied; the permissions file and its kept `allow` rules behave as in `harness-rerender`; a re-run with no change writes
+   nothing; the target rules and exit codes of `rerender` hold; no level-log entry is written.
+2. Write in this order: the files (each stale file with `Writer.replace_file` and the hash the plan read, each new or missing file
+   with `Writer.create_file`; a current or applied file is not touched, and an applied file's hash goes only into the
+   manifest), the permissions file as today, the manifest with `localmanifest.replace`, then
+   the record last. Keep `_reconcile` correct for the new files, so that the report of a stop says what is on disk.
+3. Before the first write re-read every file the plan replaces or creates and compare its hash with the one the plan read, then
+   rebuild the plan and compare the digest with the one typed, as `run` does now.
+4. Make the report list the files written by state (replaced, created, recreated) and the one stale count that remains.
+**Verification:** `python3 -B -W error -m unittest tests.test_refresh tests.test_rerender tests.test_levels tests.test_settings
+tests.test_cli tests.test_rendering tests.test_check`, then the full suite. Run it once in a scratch clone attached to a copy of this
+repository's harness: change a source skill, run `wb upgrade` or its equivalent on the copy, preview, refresh, preview again, and read
+`wb check`; record the output. Deliberate breaks as in Increment A (the record written before the files; the re-read left out; the
+digest comparison left out; a file written before the confirmation), each shown caught.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-28-refresh-rendered-harness#B`.
+
+### Increment C — `wb upgrade` points at the preview
+
+**Outcome:** after an upgrade that wrote a path under a module's `harness/` folder (a neutral skill, agent or command), `wb upgrade`
+prints one line saying the rendered copies may be behind and naming `wb preview rerender`. An upgrade that wrote no harness item
+prints no such line. It stages nothing, compares nothing and writes nothing under `.claude/`.
+**Dependencies:** B.
+**Affected areas:** `workbench/upgrade.py` (`_finish`); `tests/test_upgrade.py` (or the file that holds the upgrade report tests).
+**Steps:**
+1. Write the tests first: an upgrade that writes a harness item prints the line once; one that writes only other paths does not;
+   the line does not appear in `wb preview upgrade`; an upgrade writes no path under the harness's own folders (the tree is
+   compared before and after); the exit codes and the other lines are unchanged.
+2. Decide from the written paths (`progress.writer.written`) whether one lies under `.workbench/<package>/<module>/harness/`, and
+   print the line after the "wrote N paths" line.
+**Verification:** `python3 -B -W error -m unittest tests.test_upgrade tests.test_install_attach tests.test_cli`, then the full suite.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-28-refresh-rendered-harness#C`.
+
+### Increment D — The specs, the guide and the plan's acceptance
+
+**Outcome:** the specs, `docs/development.md` and the spec index say what is built; `harness-refresh.md` says "As built" and lists
+its remaining limits; `harness-rerender.md` keeps its scope and has no statement left that the build made false.
+**Dependencies:** C.
+**Affected areas:** `docs/specs/harness-refresh.md`, `docs/specs/harness-rerender.md`, `docs/specs/installer-interface.md`,
+`docs/specs/command-permissions.md`, `docs/specs/README.md`, `docs/development.md`.
+**Steps:**
+1. In `installer-interface.md`, under `rerender`, describe the states, the extra files written, the order of the writes, the exit
+   codes and the `upgrade` line; correct the table row that names only the permissions file.
+2. `harness-rerender.md` keeps its scope (the permissions file and the table; the owner chose a spec of its own for this design).
+   Only the statements that have become false are corrected, for example that the other harness files stay as attach wrote them,
+   with a pointer to `harness-refresh.md`; a change beyond that stops for the owner. In `command-permissions.md` correct the
+   sentences about what a re-render writes.
+3. In `harness-refresh.md` add "As built" (the calls settled during the build, the manifest fields kept, the owner-editable
+   question answered) and set what remains open.
+4. In `docs/development.md` add the sequence "upgrade, preview rerender, rerender".
+5. Run the plan check, `wb check`, `doccheck` and `refcheck`.
+**Verification:** `git diff --check`, `wb check`, `wb run code-work check`, `doccheck` and `refcheck`, then the full suite.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-28-refresh-rendered-harness#D`.
+
+## Verification for the plan as a whole
+
+- `python3 -B -W error tests/run_all.py` passes in a scratch copy.
+- `wb check`, `wb run code-work check`, `doccheck` and `refcheck` report no problems.
+- The scratch-clone run of Increment B is repeated on the final tree: change a source skill, upgrade, preview (stale), refresh,
+  preview (current), then edit a rendered file and see the preview refuse.
+- The owner runs `wb preview rerender --package packages/workbench` and `wb rerender --package packages/workbench` in a terminal on
+  this clone, whose rendered `draft-decision`, `draft-plan` and `draft-roadmap` are behind their sources, and reads `wb check`.
+
+## Risks and sensitive actions
+
+- **A permission boundary and the filesystem.** The command rewrites the instructions the agent loads (skills, agents, the root
+  file). A defect could replace an owner's edited file, write outside the clone through a link, or leave the clone looser than the
+  table says. Mitigations: terminal only with a typed digest and no level; a link at any staged or listed path is refused; an edited
+  or unrecorded file refuses the whole run; the plan is re-read and rebuilt before the first write; the record is written last.
+  A module providing `security-review` is installed, and the spec says a review is asked for when this is built and only if the
+  owner asks. The run therefore stops after Increment A and asks whether to run a security review on Increment B before B starts.
+  The owner's answer goes in the Result.
+- **A partly written refresh.** There is no rollback. Mitigation: the order of writes keeps relaxed keys at `block`, and a second
+  run finishes the job; both are tested.
+- **Window after `replace_file`'s comparison.** A write that lands between the comparison and the rename is overwritten without
+  notice, as for the permissions file. Accepted and listed in the spec's limits.
+- **A newly created file's mode.** `Writer.create_file` gives 0644. This is what attach gives; no execute bit is needed for a
+  skill or an agent. Confirmed in Increment A's tests against attach's own output.
+- **Not reviewed.** The fixes of the spec's third review round were not reviewed again. The plan's review record should say so.
+- No secret, host name or token is written anywhere in this plan. The code in `workbench/` is in the agent's write scope, and the
+  owner runs `release-approvals` if the edit gate asks.
+
+## Review record
+
+An independent review with the project's review bridge (model `gpt-5.6-terra`), asked for by the owner on 2026-10-28; two rounds
+of a bound of three, converged.
+
+- Round 1: two major findings, both applied. R1-F1: Increment D revised `harness-rerender.md` although the refresh spec records the
+  owner's choice to leave its scope alone; D now corrects only statements the build made false and stops for the owner beyond that.
+  R1-F2: Increment B named an undefined "applied-pending" replacement; the write set is now stale replaced, new and missing
+  created, current and applied untouched, and an applied file's hash goes only into the manifest.
+- Round 2: no meaningful finding.
+
+The review is advice and not an approval. The fixes of the spec's own third round were not reviewed again (the spec's header says
+so); this review read the plan against the spec as it stands.
+
+## Deferred work
+
+- `wb check` reporting a stale rendered file, which needs the manifest to record a hash of each file's source (spec, "Open
+  questions" 1).
+- Removing the rendered copy of a skill or agent whose source is gone (spec, "Open questions" 2).
+- A `--force` or an adopt path for an edited rendered file; the owner moves the file aside today.
+- Closing the window between `replace_file`'s comparison and its rename.
+
+## Result
+
+Empty until work starts.
