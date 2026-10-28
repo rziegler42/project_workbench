@@ -14,7 +14,7 @@ import unittest.mock
 
 from tests import test_attach, test_rerender
 from tests.test_rerender import DIGEST, LOCAL, SETTINGS
-from workbench import attach, harnessplan, localmanifest, projectfs, rendering, rerender, target
+from workbench import attach, harnessplan, localmanifest, projectfs, refresh, rendering, rerender, target
 
 SKILL = ".fixture/skills/sample/SKILL.md"
 AGENT = ".fixture/agents/reviewer.md"
@@ -135,6 +135,20 @@ class Stale(Base):
     def test_a_changed_line_that_is_not_plain_is_shown_as_its_json_string(self):
         out = self.out_of(self.with_data(SKILL, self.disk(SKILL).replace(OLD_TEXT, b"Do it \xc3\xa9\x01.")))
         self.assertIn('    +"Do it \\u00e9\\u0001."\n', out)
+
+    def test_a_change_of_one_line_separator_for_another_is_shown(self):
+        # Splitting on every separator made these two texts equal line by line, so a stale file showed no changed line.
+        cases = (
+            (b"a\x0bb\n", b"a\x0cb\n", (("-", "a\x0bb"), ("+", "a\x0cb"))),
+            (b"a\rb\n", b"a\xe2\x80\xa8b\n", (("-", "a\rb"), ("+", "a\u2028b"))),
+            (b"a\r\nb\n", b"a\nb\n", (("-", "a\r"), ("+", "a"))),
+        )
+        for old, new, expected in cases:
+            self.assertEqual((expected, 0), refresh._changed(old, new), (old, new))
+
+    def test_a_changed_final_newline_is_shown(self):
+        lines, more = refresh._changed(b"a\nb", b"a\nb\n")
+        self.assertEqual((("+", ""),), lines)
 
     def test_a_stale_file_still_lists_the_manifest_as_changing(self):
         out = self.out_of(self.newer(SKILL))

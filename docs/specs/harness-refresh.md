@@ -198,8 +198,9 @@ for the owner to decide:
 - **A new file is not written atomically.** `create_file` writes into the final name, so a crash can leave a short file, which the
   next run refuses and names. An agent file without its `tools:` line might load with every tool.
 - **A new file is checked against the layout's exclude entries and not the clone's `.git/info/exclude`.**
-- **The changed lines of a stale file are split on any line separator**, so a change of only a carriage return or a vertical tab
-  shows `(stale)` with no changed lines.
+- **The changed lines of a stale file are split on the newline only**, so a change of a carriage return, a vertical tab or another
+  line separator shows as a changed line, written as its JSON string when it is not plain. A change of only the final newline
+  shows as one added or removed empty line.
 - A write that lands between `replace_file`'s comparison and its rename is overwritten without notice (as for the permissions file).
 - The fixes of the third review round of this spec were not reviewed again.
 

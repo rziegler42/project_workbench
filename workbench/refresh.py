@@ -41,8 +41,10 @@ def covered(path, exclude):
 
 def _changed(old, new):
     """The changed lines of two texts as ``(sign, text)``, `SHOWN_LINES` of them at most, and the number cut."""
-    before = old.decode("utf-8", "replace").splitlines()
-    after = new.decode("utf-8", "replace").splitlines()
+    # Split on the newline only: `splitlines` also splits on CR, VT, FF and U+2028, so two texts that differ only in which of
+    # them they hold would compare equal line by line and a stale file would show no changed line.
+    before = old.decode("utf-8", "replace").split("\n")
+    after = new.decode("utf-8", "replace").split("\n")
     found = []
     for line in list(difflib.unified_diff(before, after, n=0, lineterm=""))[2:]:
         if not line.startswith("@@"):
