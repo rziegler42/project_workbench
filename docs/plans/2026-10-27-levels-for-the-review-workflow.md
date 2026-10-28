@@ -411,7 +411,7 @@ approval; the plan stays `Proposed` until the owner approves it.
   takes one only with `--apply`: use `preview prune`. The plan recommends `prune` and `reset` stay at `block`. No security review
   has been run for E or F. Stale text left for G: "the twelve arguments" in `review-engine.md`.
 
-### Increment G — edited, not committed (2026-10-28)
+### Increment G — committed as 874f241 (2026-10-28)
 
 - **Done.** Documents only; no package was edited, so no landing and no `release-approvals`. `command-permissions.md`: the
   header, "Levels offered" and "The levels an owner-run argument offers" now say the review engine declares `levels` and
@@ -432,3 +432,13 @@ approval; the plan stays `Proposed` until the owner approves it.
   the owner: `module-boundary.md` (lines ~312) and `trust-and-approval.md` (lines ~231) still say `wb run` and `wb launch` run an
   owner-run argument only when both streams are terminals, which is no longer true of `wb run` at `ask` or `none`; neither file is
   in this increment's affected areas.
+- **Found after G, in use (2026-10-28): the preview cannot be run by an agent at `ask`.** The owner set the five review-engine
+  keys to `ask` and re-rendered (`wb check`: no problems). An agent's `wb run review-engine preview extend <document> <n>` was
+  then refused by the command gate: the text contains the letters of `review-engine extend` in order, so the gate takes the
+  read-only preview for the relaxed command and refuses anything that is not exactly the simple command the `ask` rule matches.
+  This is the accepted limit "A command that merely names the word … is blocked while a key is relaxed"
+  (`command-permissions.md`, "Limits"); the same holds for `preview reset`, `archive`, `amend` and `prune`. The flow in which an
+  agent shows the preview and then runs the command with `--digest` therefore works only if the owner runs the preview. Until a
+  later change gives the preview a spelling the gate does not read as the key's word, the owner either runs the preview and passes
+  on the digest, or confirms a digest of a preview that was not shown. Not fixed here; a fix is a new plan increment and the
+  owner's call. Keep `prune` and `reset` at `block` while it stands.
