@@ -382,7 +382,7 @@ approval; the plan stays `Proposed` until the owner approves it.
   an edit of the personal settings (`wb run review-engine extend: ask`) and `wb rerender`. Not changed here: the "Not built" items
   of `command-permissions.md` for `extend` (Increment G consolidates). No security review has been run for E.
 
-### Increment F — landed, not committed (2026-10-28)
+### Increment F — committed as e8485bd (2026-10-28)
 
 - **Done.** In a scratch copy, then landed with `cp` into `packages/workbench/review-engine`: `reset`, `archive`, `amend` and
   `prune --apply` take a trailing `--digest <hex>` (`OWNER_DIGEST`; `decide` still takes none; `prune --digest` without
@@ -410,3 +410,25 @@ approval; the plan stays `Proposed` until the owner approves it.
   rerender`. A plain `prune` (the list) cannot run at `ask` from a phone, because the launcher wants a digest and the helper
   takes one only with `--apply`: use `preview prune`. The plan recommends `prune` and `reset` stay at `block`. No security review
   has been run for E or F. Stale text left for G: "the twelve arguments" in `review-engine.md`.
+
+### Increment G — edited, not committed (2026-10-28)
+
+- **Done.** Documents only; no package was edited, so no landing and no `release-approvals`. `command-permissions.md`: the
+  header, "Levels offered" and "The levels an owner-run argument offers" now say the review engine declares `levels` and
+  `preview` for its five owner-run arguments and no other first-party module does; the map rows for `extend`, `reset`, `archive`,
+  `amend` and `prune` show `block` (shipped), `ask` and `none`, with the digest forms; the two "Two things this map shows" bullets
+  and the closing note on where the terminal test is made are brought up to date; "Not built" no longer lists the review engine's
+  five or `extend` and now names what remains (the other modules' owner-run arguments, the `prune` digest limit and the plain
+  `prune` list at `ask`). `review-engine.md`: "the twelve arguments" became the fourteen. `development.md`: the launch row and the
+  levels paragraph. `installer-interface.md`: the `launch` entry says the level is read by `run` only. The Increment F Result heading now says committed as e8485bd.
+- **Not changed.** `module-contract.md` was compared with the code and needed no edit (its `levels` and `preview` entry was
+  written by Increment C). `docs/decisions/README.md` is unchanged: the decision was accepted before Increment C.
+- **Verification run (on the working tree at e8485bd, 2026-10-28).** `doccheck` and `refcheck` (`env PYTHONPATH=workbench python3 -B
+  packages/workbench/groundwork/helper/…`): silent, clean. `wb run code-work check`: 54 plans, no problems. `wb check`: no
+  problems. `git diff --check`: clean. Run again after the review edits. No test suite was run: no code changed.
+- **Review.** One `reviewer` exchange (six of six in all). No blocking finding. Applied (wording): the stale "order of building
+  the digests" sentence, "Three things this map shows" and "These five", "at the shipped level `block`" for the rendered `deny`
+  in `review-engine.md` (two places), "when their declaration says so", and a finished-plan clause in `development.md`. Left for
+  the owner: `module-boundary.md` (lines ~312) and `trust-and-approval.md` (lines ~231) still say `wb run` and `wb launch` run an
+  owner-run argument only when both streams are terminals, which is no longer true of `wb run` at `ask` or `none`; neither file is
+  in this increment's affected areas.

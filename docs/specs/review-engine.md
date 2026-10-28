@@ -230,7 +230,7 @@ setting now differs from what the last round asked.
 ## Owner-run commands
 
 `amend`, `extend`, `reset`, `archive` and `prune` change what a review allows or destroys what it recorded, so they are
-the owner's. The declaration lists them as owner-run arguments, and the installer renders a `deny` rule for
+the owner's. The declaration lists them as owner-run arguments, and at the shipped level `block` the installer renders a `deny` rule for
 `wb run review-engine <argument>` in each harness that provides `permissions`, as it does for the installer's own owner-run
 commands. The rule names the first argument only, which is why `decide` (a once-only record) and `amend` (a change of
 one) are separate arguments. The rule is restrictive and is a mistake guard, not a security boundary: a command spelling
@@ -285,7 +285,7 @@ program can read"). So:
 
 The module conforms when tests against a fake bridge, installed as a real pinned module in a temporary project, show:
 
-1. The declaration is as above, and the installer renders a deny rule for each owner-run argument and none for the
+1. The declaration is as above, and at the shipped level `block` the installer renders a deny rule for each owner-run argument and none for the
    others.
 2. A document outside the project, in the wrong directory, a link, a non-regular file or over the bound is refused and
    no bridge runs; a path with `..` or an absolute path is refused.
@@ -338,7 +338,7 @@ The module conforms when tests against a fake bridge, installed as a real pinned
 Built by plan `2026-10-23-review-engine`, increments C to G (the module `review-engine`, version 0.1.0):
 
 - The declaration provides `peer-review`, requires `model-bridge` (hard) and declares the command `review-engine` with
-  the twelve arguments of "The commands" and the `owner` list `amend`, `extend`, `reset`, `archive`, `prune`. It ships
+  the arguments of "The commands" (fourteen now: `preview` and `convergence` came later) and the `owner` list `amend`, `extend`, `reset`, `archive`, `prune`. It ships
   the neutral skill `peer-review`. The package approval is shipped (`workbench/shipped_approvals/`), released by the owner at increment G.
   Plan `2026-10-23-delegated-approval` adds the thirteenth argument, `convergence`, and the declaration field that names
   it (increment B, below); that edit makes the shipped approval stale until the owner releases it again in that plan's

@@ -7,7 +7,8 @@ rendering record, the command gate and `approve-plan` at the levels `ask` and `n
 `2026-10-27-a-level-for-every-command`, which built a level for every command (the section "A level for every command"): a key for
 every command and subcommand the owner can govern, the agent-safe ones included, a default that suits each, and `none` for every
 owner-run installer command and for `accept-decision`, and by the plan `2026-10-27-rerender-attached-harness`, which built
-`wb rerender` ("Re-rendering an attached clone"). `approve-plan` alone offers `ask` and `delegated`. The keys that still offer
+`wb rerender` ("Re-rendering an attached clone"), and by the plan `2026-10-27-levels-for-the-review-workflow`, which built `ask` and
+`none` for the review engine's five owner-run arguments. `approve-plan` alone offers `delegated`, and it and those five offer `ask`. The keys that still offer
 `block` only are listed under "Not built"; `wb rerender` offers it by design and is described in its own section. The design is `docs/decisions/2026-10-26-per-command-permission-levels.md`, as refined by
 `docs/decisions/2026-10-26-permission-levels-as-built.md` and `docs/decisions/2026-10-26-a-level-for-every-command.md` (all accepted),
 which state what stands, what changed and what was not built; where they differ on the defaults or the offered levels, this spec
@@ -113,7 +114,7 @@ levels from `ask` and `none`; the key `wb run <command> <argument>` then offers 
 that command and an unknown level. A command that offers `ask` also gives `preview`, the name of a declared argument that is
 neither owner-run nor `describe`; `verify` refuses `ask` without it and `preview` without `ask`. The preview argument is an
 ordinary declared argument, so its key defaults to `none`. A command without these fields offers `block` only, as before, and
-its declaration hashes as before. **No first-party module declares the field yet, so no such key offers more than `block` today.**
+its declaration hashes as before. **The review engine declares it for its five owner-run arguments (`amend`, `archive`, `extend`, `prune`, `reset`, each `ask` and `none`, with `preview` as the preview argument; `review-engine.md`, "Owner-run commands"). No other first-party module does, so the owner-run arguments of `mempalace` and `remote-runner` offer `block` only.**
 The terminal test and the level are read by the launcher, not by the helper. `wb run <command> <argument>`, with a command whose
 argument offers a level (`ownerargs.py`, built by Increment D), runs an owner-run argument without a terminal only when the key
 reads `ask` or `none` through `rendering.effective_level` (the record, the table, the permissions file and the command gate agree
@@ -301,11 +302,10 @@ default of `block`. `approve-plan` stays `block`; the default is not raised to `
 **Levels offered.** Every key offers `block` and `none`, except `wb rerender`, which offers `block` only for good (see "Re-rendering an
 attached clone"), and the owner-run arguments of module commands (`wb run <command>
 <argument>` where the argument is owner-run), which offer `block` only unless the command's declaration gives `levels` (built by
-Increment C of the plan `2026-10-27-levels-for-the-review-workflow`; "Which levels a key offers"; no module declares it yet).
+Increment C of the plan `2026-10-27-levels-for-the-review-workflow`; "Which levels a key offers"; only the review engine declares it).
 `delegated` stays `approve-plan` only, and `ask` is offered by a key once
 that key has a preview digest of its own, built as `approve-plan`'s is (for an owner-run argument of a module's command, once its
-declaration names a `preview` argument; `verify` checks the name, and the digest the argument prints is the module's to build). Every key built by the plan offers `none`; the keys that still offer `block` only are listed under "Not built". The order of building the digests is for a plan **(call)**: `install` and `adopt` first, because they already have a
-preview, then the module arguments and `extend` (the deferred Increment G). At `none` an owner-run command runs without a terminal
+declaration names a `preview` argument; `verify` checks the name, and the digest the argument prints is the module's to build). Every key built by the plan offers `none`; the keys that still offer `block` only are listed under "Not built". Only the review engine's five owner-run arguments have a digest of their own and so offer `ask` besides `approve-plan` (built by Increments E and F of the plan `2026-10-27-levels-for-the-review-workflow`). At `none` an owner-run command runs without a terminal
 and without a harness `deny`; the command's own checks of its input and its log entry apply, and the terminal prompt does not.
 `accept-decision` offers `block` and `none`, and `AGENTS.md` says that the owner decides who accepts a decision.
 
@@ -499,11 +499,11 @@ owner-run was run to build the table. A reading from the code or a spec is state
 | Read a review | `wb run review-engine status`, `convergence` | `none` | no | nothing |
 | Record what was done about a finding | `wb run review-engine decide` (once per finding) | `none` | no | a `blocker` or `major` finding with no decision refuses the next round |
 | Ask a second reader | the `reviewer` agent (`request-review`) | no key; read-only | no | the reviewer-exchange cap (`wb settings`) |
-| Raise the bound of a review | `wb run review-engine extend <document> <n>` | `wb run review-engine extend`, `block` only | **yes** | at the bound (3 rounds, ceiling 5) no further round runs until the owner extends it at a terminal |
-| Open a fresh window of rounds | `wb run review-engine reset <document>` | `block` only | **yes** | as `extend` |
-| Close a review | `wb run review-engine archive <document>` | `block` only | **yes** | a review stays open until the owner closes it; nothing else is stopped by it *(inference)* |
-| Change a recorded decision | `wb run review-engine amend <document> <finding> …` | `block` only | **yes** | a wrong `decide` cannot be corrected by the agent |
-| Delete closed reviews | `wb run review-engine prune [--apply]` | `block` only | **yes** | nothing else is stopped by it; old reviews stay *(inference)* |
+| Raise the bound of a review | `wb run review-engine extend <document> <n>`; at `ask` also `--digest <32 hex>` after `wb run review-engine preview extend <document> <n>` | `wb run review-engine extend`, `block` (shipped) or `ask` or `none` | **yes at `block`**; no at `ask` or `none` | at the bound (3 rounds, ceiling 5) no further round runs until the owner extends it; at `ask` the owner's confirmation on the harness prompt, with the digest bound to the review as it is saved *(built by Increments E and F)* |
+| Open a fresh window of rounds | `wb run review-engine reset <document>`, and at `ask` `--digest` after `preview reset` | `block` (shipped), `ask` or `none` | **yes at `block`**; no at `ask` or `none` | as `extend`; the plan recommends keeping it at `block`, because it discards the history of a window |
+| Close a review | `wb run review-engine archive <document>`, and at `ask` `--digest` after `preview archive` | `block` (shipped), `ask` or `none` | **yes at `block`**; no at `ask` or `none` | a review stays open until the owner closes it; nothing else is stopped by it *(inference)* |
+| Change a recorded decision | `wb run review-engine amend <document> <finding> …`, and at `ask` `--digest` after `preview amend` | `block` (shipped), `ask` or `none` | **yes at `block`**; no at `ask` or `none` | a wrong `decide` cannot be corrected by the agent unless the owner relaxes the level |
+| Delete closed reviews | `wb run review-engine prune [--apply]`; at `ask` `prune --apply --digest` after `preview prune` | `block` (shipped), `ask` or `none` | **yes at `block`**; no at `ask` or `none` | nothing else is stopped by it; old reviews stay *(inference)*; the plan recommends keeping it at `block`; the plain list needs a digest too at `ask`, so an agent uses `preview prune` |
 | Approve a plan, at a terminal | `wb approve-plan <plan>` | `approve-plan`, any level | **yes** | the owner types the first 12 characters of the region hash |
 | Approve a plan, at `ask` | `wb approve-plan <plan> --digest <32 hex>` after `wb plan-status <plan> --digest` | `approve-plan`, `ask` (the owner's table now) | no | the owner's confirmation on the harness prompt; the digest binds the plan, not what the owner read; a stale rendering makes the key read `block` |
 | Approve a plan, at `delegated` | `wb delegate-approve-plan <plan>` | `approve-plan`, `delegated` | no | a converged, sealed review of the exact bytes (`trust-and-approval.md`), and the preconditions of the `delegate-approval` skill (a `peer-review` provider, a Risks section, no `Hard stop:` line); it counts only while the table reads `delegated`, so not while it reads `ask` *(the last clause is an inference from `trust-and-approval.md`)* |
@@ -511,13 +511,15 @@ owner-run was run to build the table. A reading from the code or a spec is state
 | Approve a roadmap, a spec or a design | none exists | no key | not applicable | a roadmap and a spec have no status gate (`AGENTS.md`); a design is approved by the owner's word in the conversation. Nothing records it |
 | Accept a decision | the owner edits its `Status:` line and the index | `accept-decision`, `block`; offers `block` and `none` | **yes, or an editor** *(inference)* | the rule that an agent may not accept one at `block` is guidance in `AGENTS.md` and the skill; the installer enforces nothing here. No command with an `ask` level exists for it. The owner's other route is their own edit of the personal settings to `none` (a terminal or an editor), which lets the packaged `draft-decision` accept a record; the copy rendered in this clone says never to accept one and has no such route, so the clone's skill is out of date with the package |
 
-Two things this map shows:
+Three things this map shows:
 
 - **Not blocked without a terminal:** drafting, starting and reading a review, and recording decisions, at their shipped levels; and
   approving a plan at `ask` (the owner's table now, with the rendering current as `wb check` reports today), or at `delegated` or
   `none` once the owner sets and renders them.
-- **Blocked without a terminal:** the five owner-run arguments of the review engine, and accepting a decision. The first five are
-  the subject of the plan `2026-10-27-levels-for-the-review-workflow`; accepting a decision has no command to give a level to.
+- **Blocked without a terminal:** the five owner-run arguments of the review engine at their shipped level `block`, and accepting a
+  decision. These five are the subject of the plan `2026-10-27-levels-for-the-review-workflow`, which built `ask` and `none` for
+  them; the owner opts in per key in the personal settings and runs `wb rerender`. Accepting a decision has no command to give a level to.
+- **Not blocked, once the owner sets a level:** any of the five at `ask` (with the preview digest) or `none`.
 
 Also, in the same flow:
 
@@ -526,22 +528,19 @@ Also, in the same flow:
 - `run-increment`, `security-review` and committing or pushing (`safe-git`, `push-shared-branch`) are not part of drafting,
   reviewing or approving, and are governed elsewhere.
 - The "yes" in "Needs a terminal" for the review engine's owner-run arguments rests on `review-engine.md`, "Owner-run commands". In
-  the code the test is made by the launcher (`commands.owner_refusal`); any wording in `review-engine.md` that places it in the helper
-  is corrected by Increment G of the plan `2026-10-27-levels-for-the-review-workflow`.
+  the code the test is made by the launcher (`commands.owner_refusal`), not the helper, as `review-engine.md` now says.
 
 ## Not built
 
-- `none` for the owner-run arguments of module commands (`wb run mempalace init`, `mine`, `wb run remote-runner fetch-overwrite`
-  and the review engine's `reset`, `archive`, `prune`, `amend`, `extend`). The declaration field that gives them levels is built
-  (`levels` and `preview`, Increment C of the plan `2026-10-27-levels-for-the-review-workflow`), and the terminal test is the
-  launcher's (`commands.owner_refusal`), not the helper's. The launcher reads the level and logs the run (`ownerargs.py`, Increment
-  D). Still to build, by Increments E and F of that plan: a declaration of `levels` and a preview with a digest in the review engine.
-  Until then these keys offer `block` only.
-- `wb run review-engine extend` at `ask` and `none` (Increments D and E of the plan `2026-10-27-levels-for-the-review-workflow`): a
-  helper that prints and checks a digest of the review's `status` and `n`, and the log attempt written before the helper is
-  launched.
-- The keys `submit-remote-job` and `push-shared-branch`, and the review engine's `wb run review-engine reset`, `archive`, `prune` and
-  `amend` (already in the first item): each needs its own preview digest for `ask` and offers `block` only. The checkpoints `fetch-remote-output` and `change-direction` also offer `block` only: the plan
+- `ask` and `none` for the owner-run arguments of the other module commands (`wb run mempalace init`, `mine`, and
+  `wb run remote-runner fetch-overwrite`). The declaration fields (`levels` and `preview`), the launcher that reads the level and logs the run,
+  and the review engine's five (`extend`, `reset`, `archive`, `amend`, `prune`, each with a preview and a digest) are built by the plan
+  `2026-10-27-levels-for-the-review-workflow`, Increments C to F. A module that wants them declares `levels` and a `preview` argument
+  that prints a digest and checks it inside its own lock; until it does, its keys offer `block` only. Two limits of the review engine's
+  keys are not built: the `prune` digest does not bind each review's rounds, decisions or generation (a pruned review is sealed and
+  closed, so it cannot change between the preview and the apply), and the plain `prune` list cannot run at `ask` without a terminal (an
+  agent uses `preview prune`).
+- The keys `submit-remote-job` and `push-shared-branch`: each needs its own preview digest for `ask` and offers `block` only. The checkpoints `fetch-remote-output` and `change-direction` also offer `block` only: the plan
   built `none` for the installer commands and for `accept-decision`, and these two are agent checkpoints that no command of the
   installer runs, so a `none` for them has nothing to change. The accepted decision says no key should be limited to `block`; this
   list is the gap, and the owner decides whether a later plan closes it.

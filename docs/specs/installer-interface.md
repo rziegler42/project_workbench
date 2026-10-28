@@ -696,7 +696,8 @@ the rules above are named so a later plan can change them; this plan changes non
   may be empty. Returns the helper's own exit code, or 1 with a `refused:` line if nothing was
   run. Agent may run it. For a pin the installer made, it first requires the declaration installed at
   `--root` to be the one the owner confirmed, and it runs an owner-run argument of the command only when standard
-  input and output are both terminals, as `run` does, and the declared `arguments` list applies as for `run`. A pin
+  input and output are both terminals, at every level (the `ask` rule is rendered for the `wb run` spelling only; `run` alone reads
+  the level, `command-permissions.md`), and the declared `arguments` list applies as for `run`. A pin
   the owner typed for a declared command's helper uses the project's own declaration; a typed pin for any other helper
   is left alone (plan `2026-10-24-owner-run-in-code`).
 - **`release-approvals`** Writes the shipped first-party approval records into the workbench
