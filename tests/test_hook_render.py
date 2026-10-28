@@ -290,6 +290,21 @@ class Attached(test_gate_hook.Gated):
             self.assertIn("Edit(/%s/%s)" % (real, path), deny)
             self.assertIn("Edit(%s)" % path, deny)
 
+    def test_the_local_manifest_is_denied_in_the_three_spellings(self):
+        self.use()
+        self.assertEqual(0, self.attach_hooked()[0])
+        deny = self.settings()["permissions"]["deny"]
+        path = ".workbench/local/harness.json"
+        for rule in ("Edit(%s)" % path, "Edit(**/%s)" % path, "Edit(/%s/%s)" % (os.path.realpath(self.place), path)):
+            self.assertIn(rule, deny)
+
+    def test_the_local_manifest_is_denied_without_a_hook_too(self):
+        self.use(approval=None)
+        self.assertEqual(0, self.attach_hooked()[0])
+        deny = self.settings()["permissions"]["deny"]
+        self.assertIn("Edit(.workbench/local/harness.json)", deny)
+        self.assertEqual([], [rule for rule in deny if "exclude" in rule])
+
     def test_the_local_manifest_records_the_hash_of_the_file_with_the_hook(self):
         self.use()
         self.assertEqual(0, self.attach_hooked()[0])

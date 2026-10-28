@@ -397,7 +397,8 @@ review or in the security pass:
   boundary; see "Verified rendering rules".
 - **The rendered rules deny edits to `.claude/settings.local.json` and `.git/info/exclude` only
   together with the edit gate hook** ("The edit gate hook"). Without a hook, Claude prompts for an
-  edit, but an agent that has been allowed edits could change its own deny rules.
+  edit, but an agent that has been allowed edits could change its own deny rules. The deny of the local manifest
+  (`.workbench/local/harness.json`) is rendered with or without the hook (plan `2026-10-28-protect-local-manifest`).
 - **`.git/info/exclude` has the lowest precedence of git's ignore sources,** so a committed
   `.gitignore` can re-include a path with `!`. `wb check` reports such a file once it is tracked.
   An exclude file that already holds a later `!` line defeats an exclude line that is present.

@@ -208,7 +208,8 @@ def stage(store_root, harness, modules, snaps, source, version, home, root):
             data = harnessplan.render_permissions(
                 owner_rules(modules) + [neutral.Rule("deny", "shell", pattern) for pattern in built.deny],
                 layout, os.path.realpath(store_root), os.path.realpath(home),
-                hook_for=harness.name if hook else None, root=os.path.realpath(root), protect=done.confined,
+                hook_for=harness.name if hook else None, root=os.path.realpath(root),
+                protect=tuple(done.confined) + (localmanifest.PATH,),
                 ask_patterns=built.ask, open_patterns=built.open,
                 command_gate_for=harness.name if gated else None)
             settings = harnessplan.Planned(local["path"], data, harnessplan.FILE_MODE,

@@ -486,6 +486,11 @@ and not a problem, because the stale state is already safe).
 - **The write order** is the rendered files, the permissions file, the local manifest, then the record. The record is last, so a stop at any step leaves
   every relaxed key reading `block` and never looser. Exit 0 done or nothing to change, 1 refused or cancelled, 2 usage, 3 stopped
   after writing (the report lists what was and was not written), 130 interrupted before writing.
+- **The local manifest is denied.** Every rendered permissions file denies the harness's write tool on
+  `.workbench/local/harness.json` in the three spellings of the other protected files, with or without the edit gate hook, because the
+  edited-file test of `wb rerender` trusts the hashes it records (plan `2026-10-28-protect-local-manifest`). The installer's own
+  writes do not go through that tool. A clone gets the rule when its permissions file is next rendered, which `wb preview rerender`
+  shows as a change of that file. The deny covers the harness's write tool and not a write by the shell.
 
 ## The planning workflow without a terminal
 
