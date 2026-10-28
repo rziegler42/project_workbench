@@ -18,7 +18,8 @@ import hashlib
 import json
 import shutil
 
-from . import approve, attach, confirm, declarations, localmanifest, preview, projectfs, refusal, rendering, target
+from . import (approve, attach, confirm, declarations, localmanifest, preview, projectfs, refresh, refusal, rendering,
+               target)
 from .wbkit import display, safefs
 
 Command = attach.Command
@@ -35,7 +36,7 @@ def parse(tokens):
 # `kept` are the rules carried over; `removed` are ``(path, text)`` entries of the live file the new one will not have.
 Plan = collections.namedtuple(
     "Plan", "path token version files keys kept removed notes warnings inputs digest changes settings data record "
-            "manifest old_hash project old_manifest_hash")
+            "manifest old_hash project old_manifest_hash rows", defaults=((),))
 
 NOTHING = "nothing to change"
 ALLOW = "allow"
@@ -142,6 +143,14 @@ def build(guarded, held, command, distribution=None, version=None, which=shutil.
     if not isinstance(live, dict) or not isinstance(fresh, dict):
         raise Refused(["%s: the file is not a JSON object" % _shown(path)])
 
+    # The other rendered files (`docs/specs/harness-refresh.md`). The permissions file is not one of them.
+    try:
+        rows, problems = refresh.classify(writer, recorded["files"], staged.files, path, staged.exclude)
+    except safefs.SafeFsError as exc:
+        raise Refused([_shown(exc)])
+    if problems:
+        raise Refused(problems)
+
     # With no `deny` list in the fresh file there is no `allow` to carry into; the live `allow` rules are then listed as
     # removed. The layout always renders a deny for the guarded store, so this does not arise with a harness we ship.
     allow = _allow_path(fresh)
@@ -180,6 +189,12 @@ def build(guarded, held, command, distribution=None, version=None, which=shutil.
     if len(listed) != 1:
         raise Refused(["the local manifest does not list %s once, so it cannot record the new file" % _shown(path)])
     listed[0]["hash"] = new_hash
+    hashes = {row.path: row.new for row in rows if row.state in refresh.RECORDS}
+    for item in entries:
+        if item["path"] in hashes:
+            item["hash"] = hashes.pop(item["path"])
+    entries.extend({"hash": value, "path": name} for name, value in hashes.items())
+    entries.sort(key=lambda item: item["path"].encode("utf-8"))
     new_manifest = dict(recorded, files=entries)
     try:
         old_manifest_hash = _sha(localmanifest.serialize(recorded))
@@ -200,16 +215,43 @@ def build(guarded, held, command, distribution=None, version=None, which=shutil.
                      "does not write it and records it as it is now, so read it before you confirm"
                      % (new_shared["path"], (old_shared["hash"] or "none")[:12], (new_shared["hash"] or "none")[:12]))
     if harness_differs(recorded, staged.document):
-        notes.append("the harness module differs from the one recorded at attach; only the permissions file is "
-                     "replaced, and the other harness files stay as attach wrote them")
-    changes = any(old != new for _, old, new in files)
+        notes.append("the harness module differs from the one recorded at attach; the files are compared with what this "
+                     "harness module renders, and the manifest keeps the harness fields as attach wrote them")
+    changes = any(old != new for _, old, new in files) or bool(pending(rows))
     body = {"project": held.path, "harness": staged.token, "table": new_record["table_digest"],
             "files": [[name, old, new] for name, old, new in files], "kept": carried,
+            "rows": [[row.path, row.state, row.old, row.new, row.detail] for row in rows],
             "removed": [[list(where), text] for where, text in removed], "record": new_record,
             "manifest": new_manifest, "inputs": [list(item) for item in done.inputs]}
     return Plan(held.path, staged.token, staged.version, files, keys, carried, removed, notes, done.warnings,
                 done.inputs, digest_of(body), changes, path, data, new_record, new_manifest, state.hash, done.project,
-                old_manifest_hash)
+                old_manifest_hash, rows)
+
+
+def pending(rows):
+    """The rows a write has to act on: a stale file is replaced, a new or missing one created, and an applied one only
+    takes its hash into the manifest. A current file and an orphan need nothing."""
+    return [row for row in rows if row.state in refresh.RECORDS]
+
+
+def _row_lines(row):
+    """The lines of one rendered file other than the permissions file: its state with the old and new hash (`none` for a
+    hash that does not exist), and for a stale file the changed lines, each as plain text or its JSON string."""
+    name = _shown(row.path)
+    old, new = (row.old or "none")[:12], (row.new or "none")[:12]
+    if row.state == refresh.CURRENT:
+        return ["  %s: left as it is" % name]
+    if row.state == refresh.APPLIED:
+        return ["  %s: left as it is (applied)" % name]
+    if row.state == refresh.ORPHANED:
+        return ["  %s: %s -> none (orphaned; no longer shipped, %s)" % (name, old, row.detail)]
+    if row.state == refresh.STALE:
+        lines = ["  %s: %s -> %s (stale)" % (name, old, new)]
+        lines.extend("    %s%s" % (sign, _whole(text)) for sign, text in row.lines)
+        if row.more:
+            lines.append("    and %d more changed lines" % row.more)
+        return lines
+    return ["  %s: none -> %s (%s)" % (name, new, "missing; recreated" if row.state == refresh.MISSING else row.state)]
 
 
 def render(plan):
@@ -225,6 +267,8 @@ def render(plan):
             lines.append("  %s: left as it is" % _shown(name))
         else:
             lines.append("  %s: %s -> %s" % (_shown(name), (old or "none")[:12], new[:12]))
+    for row in plan.rows:
+        lines.extend(_row_lines(row))
     lines.extend("kept: %s" % _whole(rule) for rule in plan.kept)
     lines.extend("removed: %s = %s" % (_whole(".".join(where)), _whole(text)) for where, text in plan.removed)
     lines.extend("note: %s" % _shown(note) for note in plan.notes)
@@ -305,6 +349,10 @@ def run(guarded, command, stdin, out, err, distribution=None, version=None, whic
             out.write(render(plan))
             if not plan.changes:
                 return 0
+            if pending(plan.rows):
+                # Increment B writes these files; until then a write would record hashes of files it did not write.
+                return _refuse(err, "writing the other rendered files is not built yet, so nothing was written; "
+                                    "`wb preview rerender` shows the plan")
             out.write("\nTo re-render, type the first %d characters of the digest shown above and press Enter.\n"
                       "Anything else cancels and writes nothing.\n> " % confirm.CONFIRM_CHARS)
             out.flush()

@@ -255,4 +255,52 @@ so); this review read the plan against the spec as it stands.
 
 ## Result
 
-Empty until work starts.
+### Increment A — The states of the rendered files, in the preview (not committed)
+
+**Done.**
+- `workbench/refresh.py` (new): `classify(writer, listed, files, settings, exclude)` reads every staged path and every manifest
+  path with `Writer.read_file` (no link followed, at any component) and returns the rows and the refusals. Order: orphaned (a
+  listed path no longer staged, present or already gone); equal to the staged bytes (current, or applied when the manifest records
+  another hash or none); gone (missing when listed, new when not); equal to the recorded hash (stale, with the changed lines,
+  40 at most); anything else (edited when listed, unrecorded when not). The permissions file is left out. A created path
+  (missing or new) that the layout's exclude entries do not cover is refused.
+- `workbench/rerender.py`: `build` calls it and raises `Refused` on any refusal; the manifest of the plan takes the new hash of
+  every stale, applied, missing and new file, gets the new entries in `localmanifest`'s order and keeps the orphans' entries; the
+  digest body and the `Plan` carry the rows; `render` prints each row (`left as it is`, `(applied)`, `old -> new (stale)` with
+  `-`/`+` lines, `none -> new (new)`, `none -> new (missing; recreated)`, `old -> none (orphaned; no longer shipped, present |
+  already gone)`); an orphan alone is no change; the harness-differs note is reworded.
+- **Interim guard, removed by Increment B (not in the plan):** `run` refuses a plan with rows to write ("not built yet") before
+  the prompt. Without it `wb rerender` would have written a manifest naming hashes of files it did not write, and `wb check` would
+  have reported them. The cost: until B, `wb rerender` also refuses on a clone with any file behind its source, this one included.
+  `tests/test_refresh.py` has a test for it (`Interim`), which B deletes.
+- Calls of mine: a staged file equal to the disk and not in the manifest is `applied` (the spec's table is silent; spec lines on
+  a created file reading as applied need it), which also adopts an owner-placed file with identical bytes; Increment D adds one
+  sentence to the spec's table. The exclude check is my own `covered()` against the layout's entries, not `check_exclude`, which
+  only checks that the exclude file can be written. The live `.git/info/exclude` is not read.
+- Step 6, the owner-editable question: no layout field and no sentence in `harness-modules.md` marks a rendered file as the
+  owner's to edit (searched the `claude` package and the spec). The root file is a row like the rest; an edited one refuses.
+
+**Verification as run** (Python 3.15.0, warnings as errors).
+- Tests first: with `refresh.py` absent 27 of the new tests failed and 1 errored (after the fixture was given a module with
+  neutral items); they then passed. `tests.test_refresh tests.test_rerender tests.test_attach tests.test_check
+  tests.test_rendering tests.test_levels`: 348 tests OK, and `tests.test_refresh` 33 OK after the review edits.
+- Ten deliberate breaks, in a scratch copy, each caught by a failing test: links ignored; orphan only when absent from disk;
+  orphan decided after the edit test; current judged by the recorded hash only; stale and edited swapped; exclude check removed;
+  rows left out of the digest; manifest ignoring the rows; unrecorded treated as new; missing treated as new. **Not run:** the
+  plan's "renderer bypassed" break. Criterion 9 rests on the all-current test, where the staged file is the renderer's output
+  and the disk is not the neutral source (asserted for the agent's `tools` line).
+- Full suite in a scratch copy of the tree: 5874 tests in 12 roots; one error, `test_actionreview_bridge.Setting.
+  test_the_real_projects_file_is_read`, which opens the project's own `.workbench/review.json`, a file my scratch copy lacks.
+  Not rerun in the real tree. A first full run failed in 1682 tests because the copy lacked `base/`; it was a fault of the copy.
+- `git diff --check`, `wb check` and `wb run code-work check` (60 plans) report no problems. `doccheck` and `refcheck` were not
+  run; no document but this plan changed.
+
+**Review.** The `reviewer` agent, one exchange (cap 6): no blocking findings. Applied: a vacuous assertion (a line compared with a
+whole file) replaced by assertions on the neutral and the rendered agent; a self-comparison replaced by bytes captured before the
+build. Noted, not changed: the link tests look for "link" in a message `classify` adds itself, so they do not prove which error
+`read_file` raised; no test for a link at a new file's path or a non-regular file (`read_file` covers both); the plan's Risks say a
+created file's mode is confirmed against attach's output in A, and no test does it, so it moves to Increment B (the Risks text is
+not edited); behavior on a case-insensitive filesystem was not examined. Not done by the reviewer: it ran nothing.
+
+**Not done.** Increments B to D. The mode of a created file. The plan's step 5 names "the writer's exclude check", which does not
+test coverage; the deviation is above.
