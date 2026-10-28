@@ -60,12 +60,22 @@ class Declaration(unittest.TestCase):
         for field in ("writes", "fills", "checks", "helpers", "blocks", "slots", "layout"):
             self.assertNotIn(field, document)
 
-    def test_the_command_has_its_own_name_and_the_thirteen_arguments(self):
+    def test_the_command_has_its_own_name_and_the_fourteen_arguments(self):
         self.assertEqual(["review-engine"], list(declaration()["commands"]))
         command = declaration()["commands"]["review-engine"]
         self.assertEqual(["status", "init", "review-plan", "review-spec", "review-roadmap", "review-adr", "decide",
-                          "amend", "extend", "reset", "archive", "prune", "convergence"], command["arguments"])
+                          "amend", "extend", "reset", "archive", "prune", "convergence", "preview"], command["arguments"])
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
+
+    def test_extend_offers_ask_and_none_and_names_preview_as_its_preview(self):
+        command = declaration()["commands"]["review-engine"]
+        self.assertEqual({"extend": ["ask", "none"]}, command["levels"])
+        self.assertEqual("preview", command["preview"])
+        parsed = d.parse_module(json.dumps(declaration()).encode("utf-8"), "workbench", "review-engine",
+                                first_party=True).commands[0]
+        self.assertEqual((("extend", ("ask", "none")),), parsed.levels)
+        self.assertEqual("preview", parsed.preview)
+        self.assertNotIn("preview", parsed.owner)
 
     def test_amend_extend_reset_archive_and_prune_are_owner_run_and_the_others_are_not(self):
         command = declaration()["commands"]["review-engine"]

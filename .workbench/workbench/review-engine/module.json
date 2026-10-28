@@ -30,7 +30,8 @@
         "reset",
         "archive",
         "prune",
-        "convergence"
+        "convergence",
+        "preview"
       ],
       "owner": [
         "amend",
@@ -38,7 +39,14 @@
         "reset",
         "archive",
         "prune"
-      ]
+      ],
+      "levels": {
+        "extend": [
+          "ask",
+          "none"
+        ]
+      },
+      "preview": "preview"
     }
   },
   "convergence": {

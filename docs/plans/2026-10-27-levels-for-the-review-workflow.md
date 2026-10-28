@@ -318,7 +318,7 @@ approval; the plan stays `Proposed` until the owner approves it.
 - **Not done.** Nothing takes effect yet: the launcher (Increment D) still refuses an owner-run argument without a terminal, and no
   first-party module declares the field. Not committed.
 
-### Increment D — done, not committed (2026-10-28)
+### Increment D — committed as dc7c17d (2026-10-28)
 
 - **Done.** New `workbench/ownerargs.py`: `permit` lets `wb run` start an owner-run argument without a terminal only when the
   declaration gives that argument a level, `levelrun.level_now` reads the key `wb run <command> <argument>` at a level the
@@ -353,3 +353,31 @@ approval; the plan stays `Proposed` until the owner approves it.
   environment, as before. Outside this increment, read and not tested: `commands.launch_refusal` does not check that a
   `--root` belongs to the pinned project when the pin was typed by the owner (no declaration to compare); this predates D and is
   left to the owner to decide.
+
+### Increment E — landed, not committed (2026-10-28)
+
+- **Done.** In a scratch copy, then landed with `cp` into `packages/workbench/review-engine`: the helper gains `preview extend
+  <document> <n>` (read-only, no lock: it prints the lines of the extension and ends with `digest: <32 hex>`, the first 32
+  characters of the SHA-256 of those lines), and `extend <document> <n> --digest <hex>`: `run` strips a trailing `--digest <hex>`
+  for `extend` only (a digest of another shape is refused before anything is read; a `--digest` elsewhere fails the count), and
+  `extend`'s `make` recomputes the digest inside the lock, on the state about to be written, and compares it with
+  `hmac.compare_digest`; a mismatch changes nothing. The digest binds the document and kind, the review key, the generation (every
+  save raises it), the rounds and the window, the bound now, the number and the bound after. `module.json` adds the argument
+  `preview`, `levels: {extend: [ask, none]}` and `preview: "preview"`; the skill gains one sentence on `preview`. `reset`, `archive`,
+  `amend`, `decide` and `prune` take no digest yet (Increment F). Spec: `review-engine.md` (the table, the argument list and a
+  paragraph "`extend` at a level"). Tests: `tests/test_review_digest.py` (24 tests) and two in `test_review_module.py`.
+- **Verification run (scratch copy).** On the old helper 18 of the first 22 digest tests failed (the rest pin unchanged refusals).
+  With the change the review-engine tests give 348 OK (`PYTHONPATH=. python3 -B -W error -m unittest discover -s
+  packages/workbench/review-engine/tests -t packages/workbench/review-engine/tests`), again after the review fixes. Full suite
+  (`python3 -B -W error tests/run_all.py`, scratch copy before the review fixes): 5758 tests in 11 roots; one failure, the known
+  `test_levellog.ConcurrencyTest.test_parallel_appends_keep_every_line` flake; every other root passed, the review-engine root
+  with 348.
+- **Review.** One `reviewer` exchange (four of six in all), no blocking finding, four non-blocking: (1) the helper's docstring
+  still said every command prints one JSON object: fixed; (2) the no-write test could not see a lock or directory created by
+  `preview`: it now makes the lock raise; (3) a test name overclaimed: it now also covers an unsealed and a rolled-back review;
+  (4) the skill names `preview extend <document> <n>` without `wb run review-engine`, because the module test restricts that
+  spelling to the four commands the agent runs: left as is.
+- **Not done, owner's steps.** After the landing the command gate refuses every Bash call until the owner runs
+  `release-approvals`; then `wb acknowledge` and `wb upgrade` for this clone (the declaration hash changed), and, to use the level,
+  an edit of the personal settings (`wb run review-engine extend: ask`) and `wb rerender`. Not changed here: the "Not built" items
+  of `command-permissions.md` for `extend` (Increment G consolidates). No security review has been run for E.

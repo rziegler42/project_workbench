@@ -16,11 +16,15 @@ private copy of it through the kit runner with nothing beside it.
     review-engine amend|extend|reset|archive <document> ...    (the owner's) change a decision, the bound or
                                          the window, or close the review
     review-engine prune [--apply]        (the owner's) list, or delete, closed reviews past their retention
+    review-engine preview extend <document> <n>
+                                         say what an extension would change and print its digest (read-only)
+    review-engine extend <document> <n> --digest <digest>
+                                         extend only if the digest is that of the review now
 
 The contract is ``docs/specs/review-engine.md``. A review lives in the project, in
 ``.workbench/workbench/review-engine/<key>/``, and is sealed with a key kept in the guarded store, together with
-a mark of the most it has ever sealed, so that an edited or restored state is seen. Every command prints one
-JSON object, or a ``refused:`` line and nothing on standard output. Whatever is read from the project is
+a mark of the most it has ever sealed, so that an edited or restored state is seen. Every command but ``preview``
+prints one JSON object, or a ``refused:`` line and nothing on standard output; ``preview`` prints lines of text. Whatever is read from the project is
 data: it is parsed strictly, bounded and checked, never run and never believed.
 """
 
@@ -56,8 +60,8 @@ NAMESPACE = ".workbench/workbench/review-engine"
 STORE_NAME = "review-engine"
 USAGE = ("usage: review-engine status|init|convergence|review-plan|review-spec|review-roadmap|review-adr|reset|archive "
          "<document>, "
-         "decide|amend <document> <finding> applied|rejected [--reason <text>], extend <document> <1 to 5>, "
-         "or prune [--apply]")
+         "decide|amend <document> <finding> applied|rejected [--reason <text>], "
+         "extend <document> <1 to 5> [--digest <digest>], preview extend <document> <1 to 5>, or prune [--apply]")
 FIELDS = {"format", "kind", "path", "window", "rounds", "decisions", "closed", "generation", "seal"}
 CHOICES = ("applied", "rejected")
 DECISION_FIELDS = {"finding", "choice", "reason", "at", "earlier"}
@@ -65,6 +69,8 @@ EARLIER_FIELDS = {"choice", "reason", "at"}
 FINDING = r"R[1-9][0-9]{0,3}-F[1-9][0-9]{0,2}"
 MAX_REASON = 2000
 MAX_EARLIER = 20
+DIGEST_CHARS = 32
+DIGEST = r"[0-9a-f]{32}"
 RETENTION_DAYS = 90
 REVIEW_DIR = re.compile(r"(plan|spec|roadmap|adr)-[0-9a-f]{16}")
 FILE_NAME = re.compile(r"state\.json|ledger\.md|schema\.json|round-[1-9][0-9]{0,3}\.json")
@@ -987,17 +993,63 @@ def decide(root, project_id, argv, out):
     return mutate(root, project_id, argv, out, command, make)
 
 
-def extend(root, project_id, argv, out):
-    if not re.fullmatch("[1-5]", argv[2]):
-        raise Refused("extend takes a number of rounds from 1 to 5, not %s" % shown(argv[2]))
-    more = int(argv[2])
+def split_digest(argv):
+    """``(argv without a trailing --digest <digest>, the digest or None)``. A digest is exactly 32 lowercase hexadecimal
+    characters; only the last two arguments are read, so a `--digest` anywhere else stays an argument."""
+    if len(argv) >= 3 and argv[-2] == "--digest":
+        if not re.fullmatch(DIGEST, argv[-1]):
+            raise Refused("the digest is %d lowercase hexadecimal characters, as `preview` prints it" % DIGEST_CHARS)
+        return argv[:-2], argv[-1]
+    return argv, None
+
+
+def extension(document, state, more):
+    """The lines that say what extending the open review `state` of `document` by `more` rounds would change, and
+    their digest: the first 32 characters of the SHA-256 of the lines. The digest binds the document, the review's
+    key, its generation (every save raises it), its rounds and window, and the number, so a digest of another
+    document, number or state is another digest. Refused, as `extend` refuses, if the bound would pass the ceiling."""
+    window = state["window"]
+    bound = window["bound"]
+    if bound + more > CEILING:
+        raise Refused("the bound is %d and %d more would pass the ceiling of %d" % (bound, more, CEILING))
+    lines = ["preview of extend", "document: %s (%s)" % (shown(document.path), document.kind),
+             "review: %s" % document.key, "generation: %d" % state["generation"],
+             "rounds: %d, window first: %d" % (len(state["rounds"]), window["first"]),
+             "bound now: %d" % bound, "extend by: %d" % more, "bound after: %d (ceiling %d)" % (bound + more, CEILING)]
+    return lines, hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()[:DIGEST_CHARS]
+
+
+def number_of(argument):
+    if not re.fullmatch("[1-5]", argument):
+        raise Refused("extend takes a number of rounds from 1 to 5, not %s" % shown(argument))
+    return int(argument)
+
+
+def extend(root, project_id, argv, out, given=None):
+    """Raise the bound. With `given`, only if it is the digest of this extension of the review as it is now: it is
+    compared inside the lock, on the state that is then written."""
+    more = number_of(argv[2])
 
     def make(document, state):
+        _, digest = extension(document, state, more)
+        if given is not None and not hmac.compare_digest(given, digest):
+            raise Refused("the digest does not match the review as it is now; preview it again with `preview extend`; "
+                          "nothing was changed")
         bound = state["window"]["bound"]
-        if bound + more > CEILING:
-            raise Refused("the bound is %d and %d more would pass the ceiling of %d" % (bound, more, CEILING))
         return dict(state, window=dict(state["window"], bound=bound + more)), {}
     return mutate(root, project_id, argv, out, "extend", make)
+
+
+def preview(root, project_id, argv, out):
+    """`preview extend <document> <n>`: what the extension would change, then ``digest: <digest>``. It reads the
+    review as `status` does and writes nothing."""
+    more = number_of(argv[3])
+    document = resolve(root, argv[2])
+    loaded = load(root, Guarded(project_id), document)
+    state, _ = changeable(document, loaded, "extend")
+    lines, digest = extension(document, state, more)
+    out.write("\n".join(lines + ["digest: %s" % digest]) + "\n")
+    return 0
 
 
 def reset(root, project_id, argv, out):
@@ -1158,12 +1210,17 @@ def emit(out, found):
 
 def run(argv, cwd, out):
     command = argv[0] if argv else ""
+    given = None
+    if command == "extend":
+        argv, given = split_digest(argv)
     if command == "prune":
         fits = argv[1:] in ([], ["--apply"])
     elif command in ("decide", "amend"):
         fits = len(argv) == 4 or (len(argv) == 6 and argv[4] == "--reason")
     elif command == "extend":
         fits = len(argv) == 3
+    elif command == "preview":
+        fits = len(argv) == 4 and argv[1] == "extend"
     elif command in ("status", "init", "convergence", "reset", "archive") or command in ROUND_COMMANDS:
         fits = len(argv) == 2
     else:
@@ -1179,8 +1236,11 @@ def run(argv, cwd, out):
         return run_round(root, project_id, ROUND_COMMANDS[command], argv[1], out)
     if command == "convergence":
         return convergence(root, project_id, argv[1], out)
-    commands = {"decide": decide, "amend": decide, "extend": extend, "reset": reset, "archive": archive,
-                "prune": prune}
+    if command == "preview":
+        return preview(root, project_id, argv, out)
+    if command == "extend":
+        return extend(root, project_id, argv, out, given)
+    commands = {"decide": decide, "amend": decide, "reset": reset, "archive": archive, "prune": prune}
     if command in commands:
         return commands[command](root, project_id, argv, out)
     document = resolve(root, argv[1])

@@ -37,18 +37,20 @@ Non-goals:
 | ships | `helper/review-engine` and the neutral skill `peer-review` |
 | commands | `review-engine`, with `helper` `helper/review-engine`, `runtime` `python`, `kit` 1 and the first `arguments` below |
 | owner-run arguments | `amend`, `extend`, `reset`, `archive`, `prune` (see "Owner-run commands") |
+| levels | `{"extend": ["ask", "none"]}`: `extend` offers `ask` and `none` beside `block` (see "Owner-run commands"); the other four offer `block` only until the plan `2026-10-27-levels-for-the-review-workflow` builds them (Increment F) |
+| preview | `preview`, the read-only argument that prints the digest an `ask` run carries |
 | convergence | `{"command": "review-engine", "argument": "convergence"}`, the argument the installer asks for a delegated plan approval (see "Convergence") |
 
 The arguments are `status`, `init`, `review-plan`, `review-spec`, `review-roadmap`, `review-adr`, `decide`,
-`amend`, `extend`, `reset`, `archive`, `prune` and `convergence`. The engine is run as
+`amend`, `extend`, `reset`, `archive`, `prune`, `convergence` and `preview`. The engine is run as
 `wb run review-engine <argument> [...]`.
 
 ## The commands
 
-Every command prints one JSON object on standard output and exits 0, or prints a `refused:` line on standard error and
-exits 1 with nothing on standard output. Every string in an object is display-cleaned (control characters removed
-except newline and tab in a multi-line field) and bounded. None of them changes any file outside the review's own
-directory, and none changes the reviewed document.
+Every command but `preview` prints one JSON object on standard output and exits 0, or prints a `refused:` line on
+standard error and exits 1 with nothing on standard output. Every string in an object is display-cleaned (control
+characters removed except newline and tab in a multi-line field) and bounded. None of them changes any file outside the
+review's own directory, and none changes the reviewed document.
 
 | command | effect |
 |---|---|
@@ -57,7 +59,8 @@ directory, and none changes the reviewed document.
 | `review-plan\|spec\|roadmap\|adr <document>` | runs one round (below) |
 | `decide <document> <finding> applied\|rejected [--reason <text>]` | records a decision once; a second call on the same finding is refused |
 | `amend <document> <finding> applied\|rejected [--reason <text>]` | changes a recorded decision and keeps the earlier one in the ledger (owner-run) |
-| `extend <document> <n>` | raises the bound by 1 to 5 rounds, never above the ceiling (owner-run) |
+| `extend <document> <n> [--digest <digest>]` | raises the bound by 1 to 5 rounds, never above the ceiling (owner-run); with a digest, only if it is that of this extension of the review now |
+| `preview extend <document> <n>` | prints what the extension would change as lines of text, the last being `digest: <32 lowercase hex>`, and writes nothing; refused where `extend` would be |
 | `reset <document>` | opens a fresh window of the default number of rounds (owner-run) |
 | `archive <document>` | closes the review: the ledger is its summary, and no further round, decision or change is taken (owner-run) |
 | `prune [--apply]` | lists, and with `--apply` deletes, closed reviews closed 90 days ago or more (owner-run) |
@@ -233,6 +236,21 @@ commands. The rule names the first argument only, which is why `decide` (a once-
 one) are separate arguments. The rule is restrictive and is a mistake guard, not a security boundary: a command spelling
 it does not match runs. The agent's `decide` is allowed. This repository's owner may, by habit, run `decide` themselves;
 nothing in the engine requires it.
+
+**`extend` at a level** (plan `2026-10-27-levels-for-the-review-workflow`, Increment E; decision
+`2026-10-27-owner-run-arguments-take-a-level`). The launcher, not the helper, reads the owner's level for the key
+`wb run review-engine extend` and tests the terminal (`command-permissions.md`); the helper is not told the level. At `ask`
+and without a terminal the launcher starts the helper only when the last two arguments are `--digest` and 32 lowercase
+hexadecimal characters, and passes them on unchanged. The helper takes a trailing `--digest <digest>` off before it counts
+its other arguments (a digest of another shape is refused before anything is read; a `--digest` anywhere but last is an
+argument and fails the count), then, inside the review's lock and on the state it is about to write, recomputes the digest
+and changes nothing unless the two are equal. The digest is the first 32 characters of the SHA-256 of the lines
+`preview extend` prints before its last line: the document and its kind, the review's key and generation (every save raises
+it), its rounds and window, the bound now, the number and the bound after. A digest of another document, another number, or
+the review before any later save is therefore refused. `preview extend` takes the same arguments as `extend`, reads the
+review as `status` does and writes nothing. At a terminal `extend` without a digest works as before, and at `none` the
+launcher requires none; the helper checks one it is given at either. The prompt shows the command and the digest, not the
+preview, so the agent shows the preview first; no code enforces that.
 
 ## What leaves the machine
 
