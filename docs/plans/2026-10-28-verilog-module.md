@@ -200,4 +200,27 @@ Empty until a review is asked for.
 
 ## Result
 
-Empty until work starts.
+### Increment A
+
+- **Read:** the source `SKILL.md` and `reference.md` of the simulation skill, read 2026-10-28. Hashes at the start matched the
+  plan: `SKILL.md` `e7f8546221e53d650936c8b17ddc99f523940fcdcfbafc749b49e55342860165`, `reference.md`
+  `d367e0031204321d44de74fefc534fbb64860ffaee2819c7cd3d7f75ec7f19db`. The skill is rewritten; no text is copied, and the
+  testbench in `reference.md` is a new one of the same shape (a counter, a wider model cut to width, a check on the falling
+  edge, reset released on a falling edge).
+- **Reference file:** `workbench/neutral.py` takes bundled files anywhere below `skills/<name>/`, and `workbench/harnessplan.py`
+  stages them with the item. A test reads both files through `neutral.read_items` and finds `reference.md` bundled.
+- **Changed or dropped from the source:** the source's claim that the testbench "builds cleanly under `verilator --binary
+  --timing -Wall` and passes 40/40 checked cycles" is dropped, because nothing was run here; every tool behaviour is marked
+  as read, not run. The source's list of three web pages is dropped, because the module's text carries no link. The source
+  description (over the 300-character limit of the neutral reader) is shortened. The source's `--threads` and
+  `--x-assign fast` remarks are kept as read advice; the "fast" remark is reworded as a trade of speed against reset-bug
+  detection.
+- **Written:** `packages/workbench/verilog/module.json`, the skill and its `reference.md`, the module's tests (11), and
+  `"verilog"` in `packages/workbench/package.json`.
+- **Verification as run:** the module's tests, 11, OK; `tests.test_package tests.test_skill_names tests.test_boundary`, 29, OK.
+  Test first: before the skill files existed the module tests failed (1 failure, 7 errors).
+- **Incident:** adding any file under `packages/workbench/` made the package tree differ from its shipped approval, so the
+  workbench stopped treating the clone's `claude` harness as known and the command and edit gates refused every call. The
+  owner ran `wb release-approvals` twice (once before the skill files, once after) to open the gate. Increment C still runs it
+  once more for the final tree. Five stale shipped records are reported as not part of the release; none was removed.
+- **Not done:** no independent review (AGENTS.md: only when the owner asks); no tool was run against any design.
