@@ -189,5 +189,7 @@ the same gap); the descriptor leak on an interrupt between `os.open` and the nex
 ### Plan as a whole
 
 Increments A (`802c89c`), B (`cf4bf39`) and C (`d3d451d`) are committed, and Lows 4, 3 and 2 of the refresh review are closed in
-code, tests and `harness-refresh.md`. The full suite last ran 5925 OK at C. The owner-run `wb preview rerender` on this clone,
-named under "Verification for the plan as a whole", has not been run yet. Status set to `Completed` on the owner's word.
+code, tests and `harness-refresh.md`. The full suite last ran 5925 OK at C. The owner ran `wb acknowledge` (the 2 review-engine
+paths changed by the earlier `extend`) and then `wb rerender --package packages/workbench` on this clone, after C: every file
+"left as it is" and "nothing to change", so the new exclude-line check passed on a real clone. Nothing was created, so the
+atomic create was covered by the suite and not by this run. Status set to `Completed` on the owner's word.
