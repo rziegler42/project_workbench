@@ -225,9 +225,9 @@ read the user-level file). Findings are advice, judged by the author; the review
 
 ## Result
 
-### Increment A (done, commit `c5cd3fc`)
+### Increment A (done, commit `ed955e9`)
 
-**Provenance.** Read on 2026-10-27 at commit `bcc2d43` (Python 3, Darwin 25.6.0). The owner's user-level instruction file
+**Provenance.** Read on 2026-10-27 at commit `0f6193c` (Python 3, Darwin 25.6.0). The owner's user-level instruction file
 (owner-local, no URL, 281 lines, 22,808 bytes) has SHA-256 `853a66eed1d602f1cf77bb013a763bab9fe346352cdaf46aec096139eb935db1`
 at the start of this increment, equal to the value `global-config-inventory` recorded on 2026-10-25, so the groups below are
 the groups the inventory compared. Hashes 2 and 3 are recorded below, after the probe. Shipped texts read in full or in the cited lines: `docs/plans/README.md`, `docs/roadmaps/README.md`,
@@ -373,10 +373,10 @@ module declares them, and its output does not say whether it ran them for this r
 the conclusion, tense of two paragraphs, the "plan-boundary level" row, and this paragraph). It could not run commands, so the
 exit codes and hashes rest on this author.
 
-**State.** Increment A is committed (`c5cd3fc`). B (M5) and C (M6) are next; D (M7) is held. The scratch directory stays in
+**State.** Increment A is committed (`ed955e9`). B (M5) and C (M6) are next; D (M7) is held. The scratch directory stays in
 place for reuse.
 
-### Increment B (run recorded; the owner held M5, commit `ebfeacc`)
+### Increment B (run recorded; the owner held M5, commit `976deea`)
 
 **Finding while writing the steps.** `docs/plans/README.md`, the cover for RP1a, is shipped by `code-work`, not `groundwork`
 (`packages/workbench/code-work/module.json`, `writes`). So the M5 gate project needs `groundwork` and `code-work`, and
@@ -448,7 +448,7 @@ already committed; this paragraph supersedes the affected rows. The Increment A 
 blocks and skills, not READMEs, and are not touched by this finding, but their line references were not re-checked here.
 
 **The gate session** (owner's session of 2026-10-27, Claude Code 2.1.311, Sonnet 5.5, `/tmp/wb-gate-b` outside the home directory,
-installed from this repository at `c5cd3fc` with `claude groundwork code-work safe-git`, auto permission mode, the scratch instruction
+installed from this repository at `ed955e9` with `claude groundwork code-work safe-git`, auto permission mode, the scratch instruction
 file `3b84a575…f346` selected through the configuration-directory variable). Hash 1 `853a66ee…db1`; hash 2 `3b84a575…f346`. The
 `diff` against the real file showed exactly the planned edits (lines 62, 64, 67, 71-73), the `/clear` removal and the marker.
 - **Controls.** Marker answered: `SCRATCH-MARKER-1`. `/permissions` showed the copied Allow, Ask and Deny rules and the project's
@@ -493,9 +493,9 @@ is rerun with the Read calls expanded so each trigger shows, and M5 is carried o
 its own candidate or stated reason and the owner's approval. This increment's evidence is the correction above and the recorded run;
 it changes no removal. Hash 3 (end of B): `853a66ee…db1`, unchanged, so nothing changed at the user level.
 
-### Increment C (run recorded; CI3's covered items removed, the rest held, commit `4f379b0`)
+### Increment C (run recorded; CI3's covered items removed, the rest held, commit `2a9772a`)
 
-**Provenance.** Read on 2026-10-27 at commit `ebfeacc`. The user-level file has SHA-256 `853a66ee…db1` (the same as at A and B).
+**Provenance.** Read on 2026-10-27 at commit `976deea`. The user-level file has SHA-256 `853a66ee…db1` (the same as at A and B).
 The shipped texts compared are the files in `packages/workbench/`, not this repository's own: `code-work/files/blocks/policy.md`
 (29 lines), the skills `test-first`, `verify-before-claiming`, `push-changes` (`code-work`) and `commit-changes` (`safe-git`),
 `run-increment`, and `docs/specs/code-work.md` and `safe-git.md`. Increment A's OP, IV and CI line references were re-checked
@@ -613,7 +613,7 @@ was `853a66ee…db1` before the same script and `d5764d16…9ef7` after, and it 
 lines replaced by two, on both. The mirror's change is in its working tree and uncommitted; its commit is the owner's, and it
 also holds earlier uncommitted edits there. Nothing else changed at the user level.
 
-**State.** Increment C is committed with this record. A (`c5cd3fc`) and B (`ebfeacc`, M5 held) precede it. M6 is carried out for
+**State.** Increment C is committed with this record. A (`ed955e9`) and B (`976deea`, M5 held) precede it. M6 is carried out for
 CI3's covered items only; OP4, OP8, IV1, IV16 and CI4 are held. D (M7) was then held until the owner said (see Increment D below).
 Next candidates: a separate plan that gives the shipped text the rules M5 found missing, and the memory-wording plan.
 

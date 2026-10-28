@@ -308,13 +308,13 @@ session). Findings are advice, judged by the author; the review is not an approv
   --check` clean. The full suite (`python3 -B -W error tests/run_all.py`) ran 4856 tests in 10 roots and **failed in one test**,
   `test_levellog.ConcurrencyTest.test_parallel_appends_keep_every_line` (`FileNotFoundError: 'level-log'` in
   `safefs.append_line`); every other root passed. The test is flaky and not caused by this increment: alone, on the working
-  tree, it failed 2 of 5 runs; on a clean export of the commit of A (`0f5e570`, without B's edits) it failed 3 of 8. Not
+  tree, it failed 2 of 5 runs; on a clean export of the commit of A (`c41e15d`, without B's edits) it failed 3 of 8. Not
   fixed here: `levellog` and `safefs` are outside this plan's scope, and the failure is a candidate for its own work.
 - **Not done:** Increment C.
 
 ### Increment C (rerun the M5 gate; run recorded 2026-10-28, owner's decision pending)
 
-**Provenance.** Read on 2026-10-28 at commit `bee035f` (B). The owner's user-level instruction file has SHA-256
+**Provenance.** Read on 2026-10-28 at commit `7cb8dce` (B). The owner's user-level instruction file has SHA-256
 `d5764d16baad7b7fca4789982eb1ac882843e54aad0c64a741af234aad339ef7` (hash 1), equal to the value recorded after the CI3 removal.
 `python3 -m workbench preview install /tmp/wb-gate-c --package packages/workbench --select claude groundwork code-work safe-git`
 (read-only, wrote nothing) was accepted for a fresh target: 45 files, 4 modules, 3 guarded-store writes, no identity refusal. The
@@ -322,7 +322,7 @@ README it would seed is the committed one (`docs/roadmaps/README.md`, 2002 bytes
 
 **The table, re-checked against the files as committed at B.** Each "remove" sentence has this shipped text:
 
-| group | sentence removed from the scratch copy | shipped text at `bee035f` |
+| group | sentence removed from the scratch copy | shipped text at `7cb8dce` |
 |---|---|---|
 | RP1a | follow the repository's plan convention; one file per plan, several active | `docs/plans/README.md`, `## Names and location`, first two bullets |
 | RP1a | no tool-owned or parallel plan directory | the same section's third bullet; `draft-plan` rules, the "only in `docs/plans/`" bullet |
@@ -355,7 +355,7 @@ edit matches exactly once; the script is untracked and not cited here.
 
 **Owner steps** (all in your terminal; the agent runs none of them and writes nothing at the user level).
 
-1. Make the throwaway gate project, outside your home directory, from the checkout of this repository at `bee035f`. Preview first:
+1. Make the throwaway gate project, outside your home directory, from the checkout of this repository at `7cb8dce`. Preview first:
    `python3 -m workbench preview install /tmp/wb-gate-c --package packages/workbench --select claude groundwork code-work safe-git`,
    then the same line with `install` in place of `preview install`. It has no remote and nothing is committed to it.
 2. Record the start hash of the user-level file (`shasum -a 256`); it should be hash 1.
@@ -389,7 +389,7 @@ and two skills), so a pass says the agent reads them when the task calls for it,
 Whether the edited skills reach a project that already has a harness attached is unverified (Increment A, deviation).
 
 **The gate run** (owner's session of 2026-10-28, Claude Code 2.1.312, Sonnet 5.5, auto permission mode, `/tmp/wb-gate-c` outside the
-home directory, installed from this repository at `bee035f` with `claude groundwork code-work safe-git`, the scratch instruction
+home directory, installed from this repository at `7cb8dce` with `claude groundwork code-work safe-git`, the scratch instruction
 file selected through the configuration-directory variable; the export was read by the agent and its paths are not reproduced).
 Hash 1 `d5764d16…339ef7`; hash 2 `f49b8852…cafce3`. The owner's `diff` of the scratch file against the real one showed exactly the
 marker line, the `/clear` sentence and the table's edits. The agent did not run the session.
@@ -438,7 +438,7 @@ showed and hold the rest (RP3a's renumbering and "tracked, committed" and RP5's 
 M5 and keep the weak gate recorded. The gate is weak in all cases: on-demand cover, one sample, no README Read visible, the guard
 control not shown. The user-level sentence about archiving is the owner's to drop or keep as a rule, separately.
 
-**Follow-up check, 2026-10-28, read-only, from this checkout at `bee035f`:** `python3 -m workbench check /tmp/wb-gate-c` (the gate
+**Follow-up check, 2026-10-28, read-only, from this checkout at `7cb8dce`:** `python3 -m workbench check /tmp/wb-gate-c` (the gate
 project as the run left it: an archived roadmap and its replacement both holding `fetch-retry`, the plan citing the replacement) exited
 0 with "check found no problems" and a warning that 47 manifest files are not tracked by git yet (a fresh, uncommitted project). The
 `groundwork` spec says a candidate ID is unique within its roadmap (Roadmaps section), so the same slug in two roadmaps is not a

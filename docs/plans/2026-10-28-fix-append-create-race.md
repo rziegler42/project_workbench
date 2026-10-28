@@ -112,7 +112,7 @@ No independent review. One happens only if the owner asks.
 
 ### Increment A — Retry the creating open once on ENOENT
 
-Provenance: Darwin 25.6.0, Python 3.15.0, on top of `46c592c`, 2026-10-28.
+Provenance: Darwin 25.6.0, Python 3.15.0, on top of `4805a1a`, 2026-10-28.
 
 - Tests first: the two new tests in `AppendCreateRaceTest` failed before the change. The first failed
   with the unhandled `ENOENT` raised as `SafeFsError`, and the second saw one open where two were
