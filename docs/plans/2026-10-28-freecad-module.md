@@ -661,3 +661,34 @@ companion plan will not complete without it.
 - **Gate:** the owner ran `wb release-approvals` once for this increment. Sixteen records are reported stale; none was
   removed. Increment I removes them after a preview.
 - **Not done:** no independent review of the increment (only when the owner asks); no run in the GUI.
+
+### Increment G
+
+- **Read (2026-10-28):** the hash of `curves-and-curved-shapes.md` matched the plan at the start, and the file was read in
+  full.
+- **Rewritten, not copied.** `freecad-curves` covers choosing between the addon and core PartDesign, where the features can
+  run, the `...Command.make...Feature` calling pattern, what the owner measured, and the tools not to present as working.
+  `freecad-curved-shapes` covers when to use it, where it can run, the rules for `makeCurvedArray` (above all that `Axis`
+  is a direction mask and not a length), and the constructors that were not checked. The macOS addon paths and the table
+  of tested versions with paths are not carried; the versions (Curves 0.6.71, Curved Shapes 1.00.14) are named in the
+  text, with the instruction to read `package.xml` and to re-test when the version differs.
+- **Nothing was run.** The two addons are not part of FreeCAD 1.1.4 and are not present in the FreeCAD used for checking
+  (its `Mod` folder holds only the built-in modules, and the user data folder has no `Mod`). As the plan said, every
+  statement of both skills is read from the owner's source, is marked as read, and each skill says so in its opening
+  paragraph. Every Python block of both references starts with `# (read)`. No FreeCAD run was made for this increment,
+  and the owner was not asked for one.
+- **Written:** the two skill directories (a `SKILL.md` and a `reference.md` each) and the module's tests (19, with two more skills
+  in the list).
+- **Verification as run:**
+  - Test first: 2 failures and 8 errors before the skills existed.
+  - Module tests, 19, OK; package tests, 29, OK; the full suite, 5860 tests in 13 roots, OK; `wb run code-work check` (61 plans)
+    and `wb check` found no problems; `git diff --check` printed nothing.
+- **Marked read:** all of it, in particular the four Curves features and their measured results (areas of 1000.0 and 1066.7,
+  a joined length of 20.0, 100.01 and 100.0, 200.0 after moving curves), the Curved Shapes example (a solid of volume
+  62,758 against an expected 62,832), the empty result for a long `Axis`, the headless and GUI-only split, and the list of
+  tools not verified.
+- **Added by the author:** none.
+- **Gate:** the owner ran `wb release-approvals` once for this increment. Eighteen records are reported stale; none was
+  removed. Increment I removes them after a preview.
+- **Not done:** no independent review of the increment (only when the owner asks); no run of the addons, which would need
+  them added to the FreeCAD used for checking (the owner's step, and not requested); no run in the GUI.
