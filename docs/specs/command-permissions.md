@@ -237,8 +237,9 @@ name of the form a pin or a command has that is not a launcher, a verb of `rules
 (`[A-Za-z0-9._/:=@,+-]+`) or single-quoted strings (any character, a newline included), names the word only as data: `wb run` runs a
 declared, pinned module command and never an owner-run verb. So `wb run safe-git commit --subject 'Add tests' -- tests/test_add.py`
 passes with `wb add` relaxed, whatever words the subject and paths hold. An operator, a substitution, a double-quoted or escaped
-argument, a trailing newline or any other form is judged as before, and the keys `wb run <command> <argument>` and `approve-plan` are
-not exempted, nor is `wb run --provides <capability> <name> ...` (a name does not start with `-`). And a launcher followed by the exact
+argument, a trailing newline or any other form is judged as before, and `approve-plan` is not exempted, nor is `wb run --provides
+<capability> <name> ...` (a name does not start with `-`). The keys `wb run <command> <argument>` are exempted only in the narrower way
+described after this paragraph. And a launcher followed by the exact
 token of a command that continues the word (`wb approve-plan` for `wb approve`, taken from `rules`) is removed before the search, as
 `preview <action>` is, so relaxing `wb approve` does not block `wb approve-plan`; the token alone stays, so `A=approve-plan; wb ${A%-plan}`
 is still seen however far apart they are, and the in-order rule still reads the text as written. What stays blocked with such a key relaxed: any other command that holds a launcher and the word
@@ -246,6 +247,19 @@ is still seen however far apart they are, and the in-order rule still reads the 
 for `wb add` (the skeleton joins `new base`), and a command with `$ ? * [ {` and scattered letters. The reason the gate prints for a
 key at `none` does not name an `ask` rule: it says the form cannot be told from a call and that a path with `~` or `$VAR`, a wrapper or a
 compound command is read that way.
+
+A key `wb run <command> <argument>` (today the review engine's five) reads the first argument as data (built by Increment B of the plan
+`2026-10-28-gate-reads-module-arguments`; decision `2026-10-28-gate-reads-module-arguments`, which refines the one above). A command that
+is exactly one literal `wb run <command> <first> ...`, in the form above, whose `<command>` equals the key's and whose `<first>` is a plain
+token other than the key's `<argument>`, is not searched for the key's words. The launcher takes the module's action from the first
+argument alone and tests the owner-run list on it, so such a call never runs `<argument>`. With `extend` at `ask` or `none`, an agent can
+therefore run `wb run review-engine preview extend <document> <n>` (and the other four previews), `status`, and a `decide` whose reason says
+`extend`. The rule is applied per key: with `extend` and `reset` both relaxed, `wb run review-engine reset <document>` is freed for the `extend` key but still read for the `reset` key. Still judged as before: the exact simple form of the relaxed command (at `ask` the harness prompts), a quoted or otherwise non-plain first
+token (`'extend'`, `ext''end`, `$'\x65xtend'`, which bash would turn into the argument), a double-quoted or substituted argument, a
+compound or multi-line command, `wb run --provides`, and a differently named command that holds the same words, so a renamed pin of the
+helper is not freed. The rule assumes that a module command takes its action from its first argument alone; a command whose helper took it
+from a later position would need its key left out. The prompt of an `ask` shows the command and the digest and not the preview, so the
+agent runs and shows the preview first (`review-engine.md`).
 
 ### The log
 
@@ -519,7 +533,8 @@ Three things this map shows:
 - **Blocked without a terminal:** the five owner-run arguments of the review engine at their shipped level `block`, and accepting a
   decision. These five are the subject of the plan `2026-10-27-levels-for-the-review-workflow`, which built `ask` and `none` for
   them; the owner opts in per key in the personal settings and runs `wb rerender`. Accepting a decision has no command to give a level to.
-- **Not blocked, once the owner sets a level:** any of the five at `ask` (with the preview digest) or `none`.
+- **Not blocked, once the owner sets a level:** any of the five at `ask` (with the preview digest) or `none`. Their read-only
+  `preview <argument>` runs at either level too, and is not stopped by the command gate (see "The command gate").
 
 Also, in the same flow:
 
@@ -559,6 +574,10 @@ clarification note) and are tested where a test can show them (`tests/test_comma
   apart than the window, a script file or program that makes the call (`python3 x.py` ran with no prompt in the owner's probe), a
   function or alias defined earlier, and a `*` standing for more than three letters are not seen.
 - A command that merely names the word, such as a `grep` or a commit message, is blocked while a key is relaxed; the owner runs it.
+  Two forms are exceptions: a literal `wb run` call for a single-word key, and a literal call of the key's own command whose first
+  argument is a plain token other than the key's argument, for a `wb run <command> <argument>` key (see "The command gate"). A call of
+  a differently named command that holds the words of such a key (`wb run safe-git commit --subject 'review-engine extend'`) stays
+  blocked.
 - A hook is not a boundary. The `ask` rule and the gate are best-effort matches; the auto-mode classifier remained the barrier for the
   rest (it denied the script and base64 cases in the owner's probe, which the gate did not control).
 - A store or settings file that cannot be read blocks every Bash call while a key is relaxed, `wb check` included; the recovery is

@@ -252,6 +252,12 @@ review as `status` does and writes nothing. At a terminal `extend` without a dig
 launcher requires none; the helper checks one it is given at either. The prompt shows the command and the digest, not the
 preview, so the agent shows the preview first; no code enforces that.
 
+An agent can run each `preview <argument>` at any level, `ask` and `none` included, because the command gate reads the first argument of a
+literal `wb run review-engine <first> ...` as data when `<first>` is a plain token other than the key's argument (plan
+`2026-10-28-gate-reads-module-arguments`; `command-permissions.md`, "The command gate"). `status` and a `decide` whose reason says
+`extend` pass the same way. The gate still blocks the argument itself in any spelling but the exact simple form, so the order is: the
+agent runs the preview, shows it, then runs the owner-run command with `--digest` and the owner confirms the harness prompt.
+
 The other four work the same way, each with the preview and digest of what it changes: `reset` of the window it
 starts again and, for a review that was not sealed, of what it replaces and a hash of the content it would seal (nothing
 vouches for that content, so an edit after the preview changes the digest); `archive` of the review it closes with its

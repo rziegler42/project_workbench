@@ -202,3 +202,18 @@ Empty until a review is asked for.
   its pinned probes, so it could not run the real launcher or helper. It reported that a stale script from an earlier session ran
   once by mistake and wrote nothing outside the scratch directory.
 - Not done: the harness's own `ask` rule firing on the freed preview was not exercised. Increment C (the specs) is not started.
+  (Increment B was committed as `91b8157`.)
+
+### Increment C — built, waiting for the owner's commit (2026-10-28)
+
+- Changed: `docs/specs/command-permissions.md` ("The command gate": the paragraph on literal `wb run` calls no longer says the
+  `wb run <command> <argument>` keys are not exempted, and a new paragraph states the rule, what stays blocked, the per-key
+  behavior and the first-argument assumption; the "Not blocked, once the owner sets a level" bullet; the first "Limits" bullet) and
+  `docs/specs/review-engine.md` (a paragraph that an agent can run each `preview` at any level and the order preview, show,
+  run with `--digest`). Each sentence was compared with `reads_argument_as_data`, `judge` and the tests of `ModuleArgumentIsData`.
+- Verification: `doccheck`, `refcheck`, `wb run code-work check` (55 plans) and `git diff --check` clean.
+- Review: one `reviewer` exchange, no blocking finding. Applied: "at `ask` the harness prompts" (nothing prompts at `none`),
+  "today the review engine's five", and the per-key sentence. Not applied: the map rows' cells in "What can block" were left as
+  they are, since the bullet below the table covers the previews and row text stays true.
+- Closes the gap recorded in the Result of `2026-10-27-levels-for-the-review-workflow`: an agent can run the previews at `ask` and
+  `none`. Not done: the harness `ask` rule on the freed preview was not exercised; the two older specs (see Deferred work).
