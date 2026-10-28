@@ -1,11 +1,13 @@
 # Refreshing the rendered skills and agents of an attached clone
 
-Status: Draft
+Status: Current
 Updated: 2026-10-28
 
-A design draft. **(call)** marks a choice the owner did not make themselves; the owner's own words are under "Intent". The
-owner chose to put this in a spec of its own and not to revise [`harness-rerender.md`](harness-rerender.md), whose scope is
-the permissions file and the table. Nothing here is built.
+A design, approved by the owner on 2026-10-28 as it stands, the calls included. It was reviewed in three rounds with the
+project's review bridge, which stopped at its bound; the fixes of the last round were not reviewed again. **(call)** marks a choice
+the owner did not make themselves; the owner's own words are under "Intent". The owner chose to put this in a spec of its own and
+not to revise [`harness-rerender.md`](harness-rerender.md), whose scope is the permissions file and the table. Nothing here is
+built, and the approval of the design is not the approval of a plan.
 
 ## Intent
 

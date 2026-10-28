@@ -146,7 +146,7 @@ it covers loosening and tightening both, since the owner asked for loosening and
   notice. The command is owner-run; the window is small and is not closed here.
 - A change to a module or a package is not a table change. This command re-renders for the table only; picking up a module
   change is `upgrade`'s work and is not covered here. Refreshing the rendered skills and agents is a separate design
-  ([`harness-refresh.md`](harness-refresh.md), a draft).
+  ([`harness-refresh.md`](harness-refresh.md)).
 
 ## As built
 
