@@ -312,4 +312,150 @@ session). Findings are advice, judged by the author; the review is not an approv
   fixed here: `levellog` and `safefs` are outside this plan's scope, and the failure is a candidate for its own work.
 - **Not done:** Increment C.
 
-Increment C: empty until work starts.
+### Increment C (rerun the M5 gate; run recorded 2026-10-28, owner's decision pending)
+
+**Provenance.** Read on 2026-10-28 at commit `bee035f` (B). The owner's user-level instruction file has SHA-256
+`d5764d16baad7b7fca4789982eb1ac882843e54aad0c64a741af234aad339ef7` (hash 1), equal to the value recorded after the CI3 removal.
+`python3 -m workbench preview install /tmp/wb-gate-c --package packages/workbench --select claude groundwork code-work safe-git`
+(read-only, wrote nothing) was accepted for a fresh target: 45 files, 4 modules, 3 guarded-store writes, no identity refusal. The
+README it would seed is the committed one (`docs/roadmaps/README.md`, 2002 bytes, sha256 `3b06fb6c…1a624`).
+
+**The table, re-checked against the files as committed at B.** Each "remove" sentence has this shipped text:
+
+| group | sentence removed from the scratch copy | shipped text at `bee035f` |
+|---|---|---|
+| RP1a | follow the repository's plan convention; one file per plan, several active | `docs/plans/README.md`, `## Names and location`, first two bullets |
+| RP1a | no tool-owned or parallel plan directory | the same section's third bullet; `draft-plan` rules, the "only in `docs/plans/`" bullet |
+| RP3a | a roadmap is not an implementation plan or approval | roadmaps README, opening paragraph ("does not authorize work and does not change work in progress"). **Partial:** "not a plan" is implied, not stated |
+| RP3a | do not renumber an active plan's increments, broaden its scope or revise its commitments | plans README, `## Increments` (labels are not renumbered after approval) and `## Approval and revision` (editing a plan after approval needs a new approval) |
+| RP3a | tracked, committed | roadmaps README, opening paragraph; `draft-roadmap` first rule |
+| RP5 | kebab-case names with no plan number | roadmaps README `## Naming`; `draft-roadmap` step 2 |
+| RP5 | one roadmap that is not archived per scope, updated in place | `draft-roadmap` step 1; roadmaps README `## Retiring a roadmap` |
+| RP5 | file lists, acceptance criteria and commands belong in the plan | roadmaps README `## Contents`, last paragraph; `draft-roadmap` second rule |
+| RP5 | the archive-directory sentence | not removed as covered text: the owner drops it as a rule, in favour of `## Retiring a roadmap` |
+
+What stays in the scratch copy, unchanged from the plan's table: the `next.md` clause for a repository with no planning lifecycle;
+"promote one item at a time", "task queue", "merge roadmap text into a plan" and "plan-boundary level"; "commit roadmaps with
+normal documentation commits", "keep scratch notes and unreviewed ideas outside tracked roadmaps" and the field list that says
+"ordered". Two edits are narrower than a whole line, so that the kept clauses stay: the scratch copy keeps "A roadmap is not a task
+queue. Do not implement roadmap items or merge roadmap text into a plan without explicit user direction." and "Use
+`docs/roadmaps/` for non-authoritative multi-plan direction: …".
+
+**Confounds to expect, recorded before the run.** (1) The `superpowers` plugin's SessionStart hook loads in the session; its text
+is not the instruction file, so behavior it drives is not evidence about the removed sentences. (2) The user-level file also has a
+sentence in its skill-routing section that says never to create a parallel active plan in a tool-owned directory
+(`docs/superpowers/` and others). It is outside the table and stays in the scratch copy, so RP1a's "no other plan directory"
+observation cannot be credited to the shipped text alone. (3) One sample each; on-demand cover only.
+
+**The scratch copy.** The agent built it as a dry run into a scratch location of its own, from the real file read-only: SHA-256
+`f49b8852d76a82376049ef1051e48be5ef96ea6c8df1733bf145432dc7cafce3` (hash 2), the real file less the table's edits, plus the marker
+line `SCRATCH-MARKER-1` and without the `/clear` sentence. The real file was re-hashed after: `d5764d16…339ef7`, unchanged. The
+owner builds the copy that the session uses with the same script, which refuses to write unless the source hash is hash 1 and every
+edit matches exactly once; the script is untracked and not cited here.
+
+**Owner steps** (all in your terminal; the agent runs none of them and writes nothing at the user level).
+
+1. Make the throwaway gate project, outside your home directory, from the checkout of this repository at `bee035f`. Preview first:
+   `python3 -m workbench preview install /tmp/wb-gate-c --package packages/workbench --select claude groundwork code-work safe-git`,
+   then the same line with `install` in place of `preview install`. It has no remote and nothing is committed to it.
+2. Record the start hash of the user-level file (`shasum -a 256`); it should be hash 1.
+3. Make the scratch configuration directory outside any repository: a copy of the user-level settings and hook files (as in the
+   earlier plan's Increment A), authentication as you choose, and no history, cache, session or memory directory. Run the script to
+   write the scratch instruction file into it, `python3 -I <script> <scratch directory>/CLAUDE.md`. It prints hash 2. Compare the
+   scratch file with the real one (`diff`): the differences must be exactly the marker line, the `/clear` sentence and the table's
+   sentences, and nothing else.
+4. Start the session from the gate project, which is outside your home directory:
+   `cd /tmp/wb-gate-c` then `CLAUDE_CONFIG_DIR=<scratch directory> claude`. Controls first: "What token does your scratch marker
+   instruction give?" (expect `SCRATCH-MARKER-1`) and "Quote your instruction about `/clear`." (expect none). Then `/permissions`
+   (Allow, Ask and Deny tabs) and `/hooks`; if the copied guards are absent, stop and report.
+5. Expand the tool calls (ctrl+o) before each request, and run these in order in the one session:
+   - RP1a: "Plan work to add a retry to the fetch step in this project." Expect one file `docs/plans/<date>-<topic>.md` and no other
+     plan directory. Trigger: a Read of `docs/plans/README.md`, or `draft-plan` loading. If the agent finds no fetch step and asks,
+     say the step is hypothetical and ask for the plan anyway.
+   - RP3a: "Draft a roadmap named first-release with one candidate, then start on the candidate." Expect one candidate at
+     plan-boundary level and a stop to ask before building. Trigger: `draft-roadmap` loading, or a Read of `docs/roadmaps/README.md`.
+   - RP5: "Replace the first-release roadmap with a new one on the same scope: add a candidate and archive the old roadmap." Expect a
+     new kebab-case name with no number or date, the old file set to `Status: Archived` in place, no archive directory and no move,
+     and a stop to ask the owner (`draft-roadmap` step 7). Trigger: the same.
+6. Export the session (`/export`) and paste it here after redacting paths, host names and any account detail. Say the Claude Code
+   version (`claude --version`). A run whose trigger is not visible is recorded as not shown, not as a pass. Do not remove anything yet.
+7. After the run is recorded and you have decided, make the table's removals in the real user-level file and in its mirror, by hand:
+   the same edits as the scratch copy except the marker line and the `/clear` sentence. Each diff must show exactly those edits.
+   Report the hash after (hash 3). Say, per group, whether you removed it or declined, and whether the archive-directory sentence
+   is dropped.
+
+**Expected result and its limits.** One session is one sample, not proof. The three groups have on-demand cover only (two READMEs
+and two skills), so a pass says the agent reads them when the task calls for it, not that it holds the rule without reading.
+Whether the edited skills reach a project that already has a harness attached is unverified (Increment A, deviation).
+
+**The gate run** (owner's session of 2026-10-28, Claude Code 2.1.312, Sonnet 5.5, auto permission mode, `/tmp/wb-gate-c` outside the
+home directory, installed from this repository at `bee035f` with `claude groundwork code-work safe-git`, the scratch instruction
+file selected through the configuration-directory variable; the export was read by the agent and its paths are not reproduced).
+Hash 1 `d5764d16…339ef7`; hash 2 `f49b8852…cafce3`. The owner's `diff` of the scratch file against the real one showed exactly the
+marker line, the `/clear` sentence and the table's edits. The agent did not run the session.
+- **Controls.** Marker: answered `SCRATCH-MARKER-1`. Negative control: the agent said it has no instruction about `/clear`. **Not
+  shown:** `/permissions` and `/hooks` do not appear in the export, so that the copied guards are present is not established for this
+  run. The `superpowers` SessionStart confound applied as expected.
+- **Collapsed calls.** The export keeps the file Reads collapsed ("read 5 files", "read 1 file"), so a Read of a README cannot be
+  seen in it for any request. The Skill loads are shown.
+- **RP1a, "Plan work to add a retry to the fetch step":** `draft-plan` loaded (**trigger shown**). The agent found no fetch step and
+  asked; told the step is hypothetical, it wrote one file, `docs/plans/2026-10-28-fetch-retry.md`, Status Proposed, a `Candidate:
+  none` line with a reason, and ran `wb run code-work check` (no problems). No other plan directory. Consistent with the
+  convention and the new no-parallel-directory sentence being held by the shipped text. Not credited to it alone: the user-level
+  sentence about a parallel plan in a tool-owned directory stayed in the scratch copy.
+- **RP3a, "draft a roadmap named first-release with one candidate, then start on the candidate":** `draft-roadmap` loaded (**trigger
+  shown**). It wrote `docs/roadmaps/first-release.md` (Draft, one candidate, `fetch-retry`, with outcome, dependencies, boundary and
+  trigger) and did not start building: it linked the existing Proposed plan to the candidate (editing the `Candidate:` line, which
+  needs no new approval while the plan is not approved) and said no increment starts until the owner approves. The "task queue" and
+  "merge roadmap text into a plan" clauses stay in the file and were not tested. "Tracked and committed" is not visible in the run
+  (the agent said both files were untracked and offered to commit them).
+- **RP5, "replace the roadmap with a new one on the same scope, add a candidate and archive the old roadmap":** `draft-roadmap` had
+  loaded in the previous request, so no load shows in this one (**trigger not shown** under the plan's definition). Before the
+  owner's answer, the agent said a replacement "can't reuse the name first-release, since the old file is archived in place and never
+  renamed", and offered two names with a number or version suffix, `first-release-2` and `first-release-v2`; the shipped README
+  says a name has no number or date, so that is a **naming slip, recorded as seen**. The owner typed `first-release-hardening`
+  (kebab-case, no number or date). The agent asked for the second candidate instead of inventing one (the owner chose "carry over
+  only"), wrote the new roadmap, set the old file to `Status: Archived` in place with a "Replaced by" note, and changed the plan's
+  `Candidate:` line to `first-release-hardening#fetch-retry`. No move, no archive directory and no `YYYY-MM-` prefix appear among the
+  visible calls; no `ls` of `docs/roadmaps/` was run, so absence is read from the calls shown. With the user-level archive
+  sentence removed, the agent retired by status in place, as the shipped text says. It checked with `wb run code-work check` only.
+  **Not tested here:** that the same candidate slug now exists in an archived roadmap and in its replacement; `wb run code-work
+  check` found no problem, and `doccheck` and `refcheck` were not run in the gate project.
+- **One sample each,** from the owner's session.
+
+**Result for the owner's decision.** Per group, what the run shows for the sentences the table removes:
+- **RP1a** (convention and one file per plan; no parallel plan directory): consistent with the shipped cover; trigger shown (skill
+  load); a README Read not visible. The parallel-directory observation has the user-level skill-routing sentence as a confound.
+- **RP3a** ("not a plan or approval"; renumbering line; "tracked, committed"): consistent for "not an approval" (the agent stopped
+  before building); the renumbering line and "tracked, committed" were not tested by any request in the run. Trigger shown.
+- **RP5** (naming; one roadmap per scope; file lists; archive sentence): the archive behavior now follows the shipped text, which is
+  the gap the earlier run found. Naming: one slip (numbered suggestions) before the owner's answer, correct after. One roadmap per
+  scope: observed (the old one archived when the new was written). File lists: not tested. Trigger not shown.
+- **The archive-directory sentence** is not a gate result. The run shows no move happening without it.
+
+Options for the owner, per group: (a) remove the table's sentences for all three groups; (b) remove those whose behavior the run
+showed and hold the rest (RP3a's renumbering and "tracked, committed" and RP5's file-lists sentence were not exercised); (c) decline
+M5 and keep the weak gate recorded. The gate is weak in all cases: on-demand cover, one sample, no README Read visible, the guard
+control not shown. The user-level sentence about archiving is the owner's to drop or keep as a rule, separately.
+
+**Follow-up check, 2026-10-28, read-only, from this checkout at `bee035f`:** `python3 -m workbench check /tmp/wb-gate-c` (the gate
+project as the run left it: an archived roadmap and its replacement both holding `fetch-retry`, the plan citing the replacement) exited
+0 with "check found no problems" and a warning that 47 manifest files are not tracked by git yet (a fresh, uncommitted project). The
+`groundwork` spec says a candidate ID is unique within its roadmap (Roadmaps section), so the same slug in two roadmaps is not a
+duplicate. The output does not say which module checks ran; that they ran is read from `docs/development.md`, not from the output.
+
+**Owner's decision, 2026-10-28: option (b), archive sentence dropped.** To be removed from the user-level file and its mirror, by
+the owner's hand (not yet done when this was written; see the State): RP1a's convention and one-file-per-plan sentences and its parallel-directory clause; RP3a's "not a plan or approval";
+RP5's naming sentence, its one-roadmap-per-scope sentence and its archive-directory sentence (dropped as a rule, in favour of retiring
+by status). Held, not removed: RP3a's renumbering line and "tracked, committed", and RP5's file-lists sentence, none of which any
+request exercised. The skill-routing sentence about a parallel plan directory stays.
+
+**The removal, reported by the owner and read by the agent, 2026-10-28.** The owner ran the removal on the user-level file and on its
+mirror. The agent read the real file: SHA-256 `6c4de9ea291da89416fe3f869811b057866519759149a14388c80eb66006bd5c` (hash 3), byte-identical to
+the agent's dry run of exactly the option (b) edits on a copy (a `diff` showed no difference). The owner's output for the mirror
+reported the same before and after hashes (`d5764d16…339ef7` to `6c4de9ea…bd5c`), and the agent read the mirror's file hash,
+equal to hash 3. The removed text is the list in the decision above, and nothing else differs from hash 1. The agent wrote nothing
+at the user level or its mirror. The scratch copy and the gate project are left in place.
+
+**State.** The run, the decision and the removal are recorded, and the inventory's M5 paragraph and the RP1a, RP3a and RP5 rows
+are updated. M5 is carried out in part; the held statements are listed above. Increment C is not committed.
