@@ -17,7 +17,7 @@ ROOT = support_install.ROOT
 PACKAGE = os.path.join(ROOT, "packages", "workbench")
 MODULE = os.path.join(PACKAGE, "freecad")
 NEUTRAL = os.path.join(MODULE, "harness", "neutral")
-SKILLS = ("freecad-python",)
+SKILLS = ("freecad-python", "freecad-part", "freecad-sketcher")
 BUNDLED = {}  # skill name -> files it ships below its folder besides SKILL.md and reference.md
 
 

@@ -421,3 +421,43 @@ companion plan will not complete without it.
 - **Gate:** the owner ran `wb release-approvals` twice for this increment (after the copy, and after the corrections).
   Six records are reported stale; none was removed. Increment I removes them after a preview.
 - **Not done:** no independent review of the increment (only when the owner asks); no run in the GUI.
+
+### Increment B
+
+- **Read (2026-10-28):** the hashes of `SKILL.md`, `geometry-and-shapes.md` and `partdesign-and-parameters.md` matched the plan
+  at the start. Read in full: `geometry-and-shapes.md`; from `partdesign-and-parameters.md`, the opening example, "Sketch
+  health", "Sketcher beyond rectangles" and "Common failures".
+- **Rewritten, not copied.** `freecad-part` covers the shape hierarchy, building from the bottom up, combining and
+  finishing, reading a shape, and putting a shape in the document. `freecad-sketcher` covers attaching a sketch,
+  geometry and constraints, sketch health, naming a constraint, and external geometry. The Mesh operations of
+  `geometry-and-shapes.md` are left to `freecad-mesh`, and the constraints reference table is in the sketcher's reference.
+- **Method:** every example in the two reference files is a self-contained block, and a runner extracted and ran each block
+  in a fresh namespace in FreeCAD 1.1.4 (revision 20260928, headless, at the owner's word, from a scratch directory). The
+  runs were made before the files were copied into the module, so the increment needed one release of approvals.
+- **Verification as run:**
+  - Test first: 2 failures and 8 errors before the skills existed.
+  - Module tests, 14, OK; package tests, 29, OK; the full suite, 5855 tests in 13 roots, OK; `wb run code-work check` (61
+    plans) and `wb check` found no problems; `git diff --check` printed nothing.
+- **Run against FreeCAD 1.1.4:** 13 blocks, then two follow-up scripts and two added blocks, 15 blocks in the final run, none
+  raising. Confirmed: the primitives, curves, wires, faces, solids, booleans, fillets, chamfers, thickness, offset,
+  section, extrude, revolve, loft, `makePipeShell` and the topology readers (volumes and lengths checked against the
+  geometry, for example a frustum loft of 408.4 and a revolve of 942.5); `Part.show` headless; a rectangle in a Body
+  (8 degrees of freedom before dimensions, 0 and fully constrained after); conflicting constraints (`solve()` negative,
+  `ConflictingConstraints` `[1, 2]`); a constraint driven by a VarSet property (40.0 then 55.0); the names that fail as
+  constraint names (`h m s l t g in mm N V`) and the ones that do not (`width len w r`); a construction line, a tangent
+  arc and line, a spline; external geometry from a sketch edge and a Body origin axis.
+- **Found wrong or too strong in the source, corrected in the skills:**
+  1. `Part.Face([outer, hole])` with two wires of the same direction gave an invalid face (`isValid()` False, area
+     112.566, not 87.434). The hole wire must be reversed, or a face made from it cut from the outer face.
+  2. `makePipe` returns an open `Shell` whose `Volume` equals its area (377.0); `makePipeShell(..., True, ...)` gives the
+     solid (565.5).
+  3. An edge of a Pad was accepted as external geometry (the source says it raised); the claim is dropped and the
+     advice to prefer a sketch edge or an origin axis is marked read.
+  4. An extra `Coincident` beside an end-point `Tangent` made `solve()` return `-2` and appeared in
+     `RedundantConstraints`, which confirms the source's advice.
+  5. The degrees of freedom of four coincident lines are 8, not the 4 first written in a comment.
+- **Not run, marked read:** that edge names change when the model changes.
+- **Added by the author:** none beyond rewording and the corrections above.
+- **Gate:** the owner ran `wb release-approvals` once for this increment. Eight records are reported stale; none was
+  removed. Increment I removes them after a preview.
+- **Not done:** no independent review of the increment (only when the owner asks); no run in the GUI.
