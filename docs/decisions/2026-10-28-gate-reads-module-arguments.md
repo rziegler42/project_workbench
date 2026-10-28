@@ -1,6 +1,6 @@
 # The command gate reads the first argument of a module command as data
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-28
 
 ## Context
 
