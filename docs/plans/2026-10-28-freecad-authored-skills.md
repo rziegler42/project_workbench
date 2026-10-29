@@ -1,6 +1,6 @@
 # The freecad module: authored skills
 
-Status: Completed
+Status: In Progress
 Created: 2026-10-28
 Candidate: workbench-v1#cad-modules
 Specs: module-contract
@@ -277,9 +277,17 @@ Remaining disagreement: none.
 - **Verification as run:** the full suite, 5864 tests in 13 roots, OK, with no stale-approval skip; `wb run code-work check`
   (61 plans) and `wb check` found no problems; `git diff --check` printed nothing; `python3 -m workbench verify
   packages/workbench --select freecad --select claude` accepted the module.
-- **Roadmap:** criterion 6 is met. I drafted text for the `cad-modules` entry in chat; the owner asked me to make the edit
-  with the wording I recommended (the "completed by" line left out, since completion is derived from completed plans), and
-  the entry in `docs/roadmaps/workbench-v1.md` now describes the `freecad` module of twenty skills. The plan is `Completed`.
+- **Roadmap:** I drafted text for the `cad-modules` entry in chat; the owner asked me to make the edit with the wording I
+  recommended (the "completed by" line left out, since completion is derived from completed plans). That text wrongly said
+  "no bundled script": the module bundles `freecad-reverse-engineering/scripts/mesh_report.py`, as criterion 6 says. The
+  independent review (2026-10-29) found it; the entry now says the mesh script is bundled as a plain file, not a pinned helper.
+  The plan was marked `Completed` on the wrong entry and is set back to `In Progress`.
+- **Independent review (2026-10-29, the `reviewer` agent, read-only):** one blocking finding (the roadmap clause above,
+  confirmed and corrected). Not blocking, confirmed: a Surface `Extend` result in `SKILL.md` (`ExtendUPos` alone gave area
+  150.0) that the shipped `reference.md` does not show, which breaks criterion 3; the Draft signature table for `make_circle`
+  omits `face`; "six extend values" in the Surface table. Reported and not yet judged one by one: facts in the three
+  `SKILL.md` files that no shipped block shows (to be run or marked read), a Draft "Common mistakes" row, small wording points
+  and a weak test of description distinctness. These need edits to the skill files, which are outside increments A to D.
 - **Verification after the roadmap edit:** `wb run code-work check` (61 plans) and `wb check` found no problems; `git diff
   --check` printed nothing.
 - **Not done:** no independent review (only when the owner asks).

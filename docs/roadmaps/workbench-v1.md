@@ -654,8 +654,8 @@ them. The skills are split by the rule of `2026-10-23-one-owner-per-skill-name`.
 
 **Outcome:** an optional `freecad` module of twenty skills for scripting FreeCAD 1.1 from Python without the interface: the
 original seventeen, plus `freecad-draft`, `freecad-surface` and `freecad-techdraw`. Each example was run headless on
-FreeCAD 1.1.4, and anything not run is marked "read, not run". There is no base `cad` module, no bundled script and no
-owner conventions. The advice about the FreeCAD MCP server is kept as the `freecad-mcp` skill.
+FreeCAD 1.1.4, and anything not run is marked "read, not run". There is no base `cad` module and no owner conventions; the mesh
+script is bundled as a plain file, not a pinned helper. The advice about the FreeCAD MCP server is kept as the `freecad-mcp` skill.
 **Dependencies:** `claude-harness`, `groundwork-module`.
 **Boundary:** the `freecad` module and its tests. No program is installed or pinned. A way of working for CAD (`cad-work`)
 and skills for CAM, BIM, OpenSCAD and Material stay deferred.
