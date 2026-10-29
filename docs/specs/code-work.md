@@ -509,6 +509,12 @@ installer's and is replaced on upgrade only while unedited.
   three failed fixes; `verify-before-claiming` is the rule under `run-increment`'s report. Limits: the skills are
   advice, and nothing forces an agent to load one or follow it; whether Claude loads them when it should is
   unverified; the superpowers plugin is still enabled in `~/.claude` until `global-config-migration`.
+- Built, from plan `2026-10-29-debug-artifacts`: a seventh step of `diagnose-failure` says where retained diagnostics go,
+  `.workbench/local/debug/<YYYY-MM-DD>-<topic>/` (the scratch place in `repository-boundary.md`), with a local README that
+  gives the commit, the commands and tool versions, the purpose and the conclusion, and that a durable finding is recorded
+  in a tracked document, a decision or a test and cites no path into scratch. The policy block is not changed: it is at
+  the length its test allows. Limits: advice only. Nothing makes an agent keep the evidence or write the README, and no
+  check flags a missing one.
 - Built, from plan `2026-10-23-push-checkpoint`: `wb run safe-git push-check` (`safe-git.md`, "Push check"), the
   helper's `shared` subcommand, the file `.workbench/shared-branches.json`, and the neutral skill `push-changes`.
   Limits: the skill is advice and no rule is added, so the enforced stop is the floor's `ask` on every push, which

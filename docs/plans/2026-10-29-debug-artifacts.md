@@ -112,7 +112,20 @@ test, the two specs and the new shipped records, after the owner has released th
 
 ## Review record
 
-Empty until a review is asked for.
+Increment A, reviewed by the read-only `reviewer` agent: one round and one exchange (caps: 3 rounds, 6 exchanges).
+Outcome: one blocking finding, applied; the rest are answers for the owner.
+
+- **Applied.** The inventory still listed IV3 under `keep global` in its coverage list and counts after the row was
+  changed to `move`, so the spec contradicted itself. I checked it against the file and it held. IV3 is now in the
+  `code-work` text list M6 (6 to 7 items), and the counts follow: 48 `move`, 108 `keep global`, part C 23 and 35,
+  75 rows in a move. The plan's step 7 named only the row and missed this; the fix stays inside the spec the plan
+  lists.
+- **Answered, not a change.** Four new untracked records stand under `workbench/shipped_approvals/packages/`: two from
+  the first release of this increment and two from the final one. The release warned that the first two are not part of
+  it. Only the two that match the final package belong in the commit; the stale ones are the owner's to remove.
+- **Noted.** `README.md.old` is untracked, is in no plan's scope and stays out of the commit.
+- **Not checked by the reviewer.** The test results, which it was told and not shown; the full suite; and the rendered
+  skill in an attached project (the owner's `wb upgrade` run).
 
 ## Deferred work
 
@@ -123,4 +136,21 @@ Empty until a review is asked for.
 
 ## Result
 
-Empty until work starts.
+Increment A is implemented and verified; the commit waits for the owner's word.
+
+- **Done.** `diagnose-failure` has a step 7 (retained diagnostics under `.workbench/local/debug/<YYYY-MM-DD>-<topic>/`
+  with a local README; scratch grants no authority; a durable finding goes into a tracked document, a decision or a
+  test). The practice test pins five phrases of it. `code-work.md` has a "Built" bullet with its limit (advice only), and
+  inventory row IV3 is `move`, placed in the text list M6 with the counts corrected after the review. The owner ran
+  `wb release-approvals` twice, once after the test edit and once after the skill edit.
+- **Verification as run.** The practice test failed for the missing phrase before the skill edit and passed after it.
+  The code-work root ran 339 tests, OK, 2 skipped. `wb check` and `wb run code-work check` report no problems, and
+  `wb verify packages/workbench` ran with no refusal, so the package is first-party again. `tests/run_all.py` ran 5,931
+  tests in 12 roots, OK, with 3 skipped; the skips are filesystem and account cases and were not listed one by one.
+- **Not done.** Completion criterion 4, a rendered skill in an attached project, is the owner's `wb upgrade` run. The
+  two stale shipped records the release reported from its first run, and the earlier stale ones, are not removed; that
+  is the owner's. The deferred items below were not started.
+- **Review.** One round of the `reviewer` agent and one finding, applied (see the review record). No second round was
+  asked for.
+- **Commit.** Not made. It needs the owner's word, the trailer `Plan: 2026-10-29-debug-artifacts#A`, and these paths:
+  the skill, the practice test, `code-work.md`, the inventory, this plan, and the two records of the final release.

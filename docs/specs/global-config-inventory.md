@@ -363,7 +363,7 @@ boundary".
 |---|---|---|---|
 | IV1: prefer test-driven development when a meaningful test is practical | TDD | `test-first` | `move` |
 | IV2: smallest change supported by evidence; no new dependencies or wider public behavior without approval | change size | none as a block; this repository's `AGENTS.md` states it | `keep global`, with OP1 |
-| IV3: retained local diagnostics in `/.debug/<date>-<topic>/`, excluded in `.git/info/exclude` with a README | diagnostics | no module block; `repository-boundary.md` names the path (`.workbench/local/debug/<date>-<topic>/`) and `docs/development.md` ("Local debug artifacts") describes the practice; this repository's `AGENTS.md` no longer states it | `keep global`: nothing a module carries |
+| IV3: retained local diagnostics in `/.debug/<date>-<topic>/`, excluded in `.git/info/exclude` with a README | diagnostics | `diagnose-failure` of `code-work` (step 7), `repository-boundary.md` (the path `.workbench/local/debug/<date>-<topic>/`) and `docs/development.md` ("Local debug artifacts"); this repository's `AGENTS.md` no longer states it | `move`. Gate: a read of the rendered `diagnose-failure` skill of an attached project showing the step. The owner moved the path from `/.debug/` to `.workbench/local/debug/` on 2026-10-29, so no `.git/info/exclude` entry is needed. Carried out by plan `2026-10-29-debug-artifacts`; the step is advice and no check enforces it. |
 | IV4: when a test or build fails, use Superpowers systematic debugging and an evidence loop | debugging | `diagnose-failure` | `redesign`: names the plugin skill |
 | IV5: offload long verification to a declared `remote-runner` profile when the project's remote-runner file defines one | when to offload | `remote-runner` module and `run-remote-job` | `move`, once the program reads the project file at its new path (M16; F-C6). The program itself stays. |
 | IV6: `recommend --profile`, `submit --best --profile`, select by declared labels | remote selection | the module's `recommend` and `submit` | `move`, with IV5 |
@@ -780,7 +780,7 @@ Each row of the tables in parts A, B and C appears below exactly once. Items are
 - **M3: the `security-reviewer` agent** (1): `security-reviewer`
 - **M4: the decision-record rules** (3): `architecture-decisions`; RP4; SA7
 - **M5: instruction text the `groundwork` module carries** (3): RP1a; RP3a; RP5
-- **M6: instruction text the `code-work` module carries** (6): OP4; OP8; IV1; IV16; CI3; CI4
+- **M6: instruction text the `code-work` module carries** (7): OP4; OP8; IV1; IV3; IV16; CI3; CI4
 - **M7: instruction text the `mempalace` module carries** (3): ME2; ME4; ME5
 - **M8: the install prompts** (13): `Bash(pip install:*)`; `Bash(pip3 install:*)`; `Bash(python3 -m pip install:*)`; `Bash(npm install:*)`; `Bash(npm ci:*)`; `Bash(cargo install:*)`; `Bash(cargo add:*)`; `Bash(brew install:*)`; `Bash(apt install:*)`; `Bash(apt-get install:*)`; `Bash(uv pip install:*)`; `Bash(uv add:*)`; `Bash(pipx install:*)`
 - **M9: the `git push` prompt** (1): `Bash(git push:*)`
@@ -796,18 +796,18 @@ Each row of the tables in parts A, B and C appears below exactly once. Items are
 - **containers, placed by their entries** (2): `permissions`; `enabledPlugins`
 - **`keep global`, part A** (15): `safe-committer`; `technical-researcher`; `review_agent_guard.py`; `codex_approver.py`; approver configuration file; approver rule `git-push`; `knowledge-base-authoring`; `knowledge-base-authoring` reference: create and upgrade; `knowledge-base-authoring` reference: domain; harness-synced bundle: manifest; `remote-runner`; `opencode-workflow`; `graphify`, `graphify-mcp`; `mempalace`, `mempalace-mcp`, `mempalace-light-mcp`; `uv`, `uvx`
 - **`keep global`, part B** (58): `permissions.defaultMode`; `hooks`; `advisorModel`, `model`, `modelSettings`; `theme`, `agentPushNotifEnabled`; read of the user-level skills directory (1); read-only git (13); raw `git add` and `git mv` (2); search (1); project check runners (14); `claude-workflow` read subcommands (2); `ask-codex` review and status subcommands (8); `remote-runner` read subcommands (5); `claude-workflow commit`; `claude-workflow remove`; `claude-workflow amend-message`; `remote-runner submit`; `remote-runner cancel`; `remote-runner prune`; `remote-runner fetch`; `Bash(git commit:*)`; `Bash(git tag:*)`; `Bash(git switch:*)`; `Bash(git stash:*)`; `Bash(git branch -d:*)`; `Bash(git branch -D:*)`; `Bash(git branch --delete:*)`; `Bash(gh:*)`; `Bash(ssh:*)`; `Bash(scp:*)`; `Bash(rsync:*)`; `Bash(go install:*)`; an `Edit` rule on the approver's data directory; an `Edit` rule on the approver hook program; an `Edit` rule on the commit helper program; `Read(./.env)`; `Read(./.env.*)`; `Read(**/.env)`; `Read(**/.env.*)`; a read of the owner's SSH key directory; a read of the owner's cloud-credentials directory; a read of the owner's GitHub command-line configuration; a read of the Codex sign-in file; `Bash(git reset:*)`; `Bash(git clean:*)`; `Bash(git checkout:*)`; `Bash(git restore:*)`; `Bash(git merge:*)`; `Bash(git rebase:*)`; `Bash(rm:*)`; `Bash(rmdir:*)`; `Bash(unlink:*)`; `Bash(shred:*)`; `PermissionRequest`; `PostToolUse`; `PostToolUseFailure`; `design` (synced); `pdf-viewer` (synced); `clangd-lsp` (official marketplace)
-- **`keep global`, part C** (36): title; CS1a; CS1b; CS2; CS3; OP1; OP3; OP6; SR1; RP1b; RP3b; SA5; SA10; IV2; IV3; IV11; IV12; IV13; IV14; DI1; DI5; DI6; CI1; CI2; CI5; ME1; ME3; ME6; ME7; ME8; ME9; ME10; ME11; ME12; RB1; RB2
+- **`keep global`, part C** (35): title; CS1a; CS1b; CS2; CS3; OP1; OP3; OP6; SR1; RP1b; RP3b; SA5; SA10; IV2; IV11; IV12; IV13; IV14; DI1; DI5; DI6; CI1; CI2; CI5; ME1; ME3; ME6; ME7; ME8; ME9; ME10; ME11; ME12; RB1; RB2
 
-Counts (script) over the 185 rows of parts A, B and C, of which 183 have a disposition: 47 `move`, 27 `redesign`, 109 `keep global`, none `drop`. The other two rows, the container keys `permissions` and `enabledPlugins`, have none of their own and are placed by their entries, so the "rows" column below counts the 183.
+Counts (script) over the 185 rows of parts A, B and C, of which 183 have a disposition: 48 `move`, 27 `redesign`, 108 `keep global`, none `drop`. The other two rows, the container keys `permissions` and `enabledPlugins`, have none of their own and are placed by their entries, so the "rows" column below counts the 183.
 
 | part | rows | `move` | `redesign` | `keep global` | `drop` |
 |---|---|---|---|---|---|
 | A: agents, hooks, skills, helpers | 33 | 7 | 11 | 15 | 0 |
 | B: the settings file | 77 | 18 | 1 | 58 | 0 |
-| C: the instruction file | 73 | 22 | 15 | 36 | 0 |
-| all | 183 | 47 | 27 | 109 | 0 |
+| C: the instruction file | 73 | 23 | 15 | 35 | 0 |
+| all | 183 | 48 | 27 | 108 | 0 |
 
-In the moves: 74 rows are in a move (47 `move`, 27 `redesign`); 109 are `keep global`. These are counts of table rows, not of entries: a row of part B can hold several entries (five spellings of one command; an `allow` group), whose counts are in part B itself (46 `allow`, 84 `ask`, 18 `deny`, 73 hook entries).
+In the moves: 75 rows are in a move (48 `move`, 27 `redesign`); 108 are `keep global`. These are counts of table rows, not of entries: a row of part B can hold several entries (five spellings of one command; an `allow` group), whose counts are in part B itself (46 `allow`, 84 `ask`, 18 `deny`, 73 hook entries).
 
 ## What the building plans said they would let this work retire
 

@@ -19,6 +19,11 @@ fix. A fix tried without a cause often hides the fault or moves it.
    did it. If it was wrong, form a new hypothesis from what you learned; do not stack fixes.
 6. When the cause is known, write the test that fails for it, following `test-first`, and then fix the cause
    and not the symptom. Run the narrowest check and then the plan's verification.
+7. When the diagnosis leaves evidence worth keeping, such as a trace, a log or the output of a probe, keep it untracked
+   under `.workbench/local/debug/<YYYY-MM-DD>-<topic>/`, with a local README that gives the commit, the commands and
+   tool versions, the purpose and the conclusion. That place is scratch and grants no authority: nothing read there
+   approves or allows anything. Record a durable finding in a tracked document, a decision or a test, and cite no path
+   into scratch from a tracked file.
 
 Stop at a limit:
 
