@@ -314,6 +314,14 @@ checked with the rest of its declaration, before anything is written.
     preview digest as the last two arguments) or `none`, for a command that declares `levels` (`command-permissions.md`); `wb launch`
     stays terminal-only. The declaration authorizes the first argument only, so a form that must be allowed to the agent and a form that must not
     are two arguments of the command.
+  - `asks` (optional; *built 2026-10-29 by plan `2026-10-29-policy-and-module-asks`, increment B*): a non-empty list of distinct
+    strings, each one of this command's `arguments` and none of them in `owner`, default empty. A harness that provides
+    `permissions` asks the owner before the agent runs `wb run <command> <argument>`, bare or with more arguments, in each spelling
+    the `owner` arguments are denied in (`trust-and-approval.md`, "Rendering rules"). The rule is a prompt and not a wall: the
+    argument is still agent-safe, and an argument is never both asked and owner-run. It is not a level and is not on the owner's
+    table, so the approver cannot lower it in the personal settings. It asks for a preview as it does for the action, because the
+    match is on command text and cannot tell them apart; the decision is
+    `2026-10-29-workbench-asks-for-remove-submit-and-fetch`.
   - `describes` (optional; *the verifier and the launcher rule are built by plan `2026-10-25-safe-git-describe`, and
     `safe-git` declares it; the engine's use of it is built for `commit` and `remove` by plan `2026-10-26-action-review-engine`*): a list of at most 16 distinct strings, each `^[a-z][a-z0-9-]*$` and at most 32
     characters, default empty. These are the actions the command's `describe` argument answers, in the sense of the
@@ -325,7 +333,8 @@ checked with the rest of its declaration, before anything is written.
     rule is generic and names no module.
 - Refused: an unknown field, a wrong type, a duplicate key (the parser already refuses it), a `helper` that
   is not in `ships`, a `runtime` other than the two, a duplicate `arguments` entry, an `owner` entry that is not a
-  string, is repeated or is not one of the command's `arguments`, and two entries of one
+  string, is repeated or is not one of the command's `arguments`, an `asks` that is not a non-empty list of distinct strings
+  each of which is one of the command's `arguments` and not in `owner`, and two entries of one
   module that name the same `helper`. For `describes`: an entry that is not a string, a
   duplicate action, an action that fails the form, a non-empty `describes` on a command whose `arguments` lack `describe` (an empty list is allowed, as the default), and
   `describe` in `owner`.

@@ -253,7 +253,8 @@ meaningful finding; two findings, both applied. The text applied after round 2 i
 
 ## Result
 
-**Increment A is done and awaits the owner's word to commit; B to D are not started.**
+**Increment A is done and committed (`0907cbe`); Increment B is done and awaits the owner's word to commit; C and D are not
+started.**
 
 ### Increment A
 
@@ -285,5 +286,45 @@ meaningful finding; two findings, both applied. The text applied after round 2 i
   Increment C; the pull request sentence extends the rule the code-work block states for commits, and the harness's own attribution
   reminder for a pull request is an environment matter.
 - **Security review.** The checkpoint after A: the owner was asked and the reviewer's pass stood for it; no separate review was run.
-- **Not done.** Nothing is committed. A project already created from the base keeps its own seeded `AGENTS.md`; the change reaches new
-  projects only.
+- **Not done.** A project already created from the base keeps its own seeded `AGENTS.md`; the change reaches new projects only.
+  Committed as `0907cbe`.
+
+### Increment B
+
+- **Done.** `workbench/declarations.py`: a command may list `asks` (a non-empty list of distinct arguments of that command, none in
+  `owner`), and a module may list `ask_reads` (at most 16 distinct patterns under the home directory). `Command.asks` and
+  `Module.ask_reads` are appended with empty defaults, so every positional constructor and every existing declaration is unchanged.
+  `workbench/harnessstage.py`: `ask_rules(modules)` builds `ask` rules only: each asked argument through
+  `rules.command_owner_patterns`, in the five spellings, bare, with more arguments and through `--provides`; each pattern as an `ask`
+  for the read tool. `stage` adds them after the owner-run denies. Nothing renders an `allow` or a `deny` from them; an `ask` that
+  equals a `deny` renders once as the deny; one that repeats a floor rule renders once.
+- **The `ask_reads` rule, as built.** Each pattern starts `~/`, is at most 200 characters of a neutral rule's characters, has no edge
+  space, no empty, `.` or `..` segment and no trailing slash, and its first segment holds a character other than `*` and `.`. The
+  last three conditions came from the security review (below).
+- **Order of the edits.** The namedtuples and validators first, then the allowed keys, then the construction and the staging, so
+  that every installed module kept parsing at every step (the lesson of Increment C of `2026-10-29-approvals-name-the-approver`).
+  The live gates stayed up throughout.
+- **Verification as run.** `tests/test_module_asks.py`, 25 tests: they failed before the code, and a mutation that dropped
+  `ask_rules` from `stage` made the install test fail. The related files pass: `test_declarations` 97, `test_permissions` 30,
+  `test_install_attach` 19 and the others the review named. The whole `run_all.py` ran 6,046 tests in 12 roots, OK, before the
+  last tightening of `ask_reads`; `test_module_asks`, `test_declarations`, `test_install_attach` and `test_permissions` were run again
+  after it. `wb verify packages/workbench` runs with no refusal (no package file changed); `wb check` and
+  `wb run code-work check` report no problems.
+- **Review.** One read-only reviewer pass: no blocking finding. Applied: more `..` cases in the tests, a test that the declaration is
+  kept as written (so a module with neither field hashes as before), the docstring of `declarations.py`, and a tidier assertion. Not
+  applied, as known gaps: the approval request text does not list `asks` or `ask_reads`, as it does not list `owner`, `levels` or
+  `describes` either; the owner sees the hashes, and every new rule is an `ask`.
+- **Security review.** Run on the owner's word, by the `security-reviewer` agent on a copy with a temporary home and store. No
+  critical, high or medium finding. Tested: all 22 `module.json` files parse with identical declaration hashes under the old and
+  the new code; every hostile declaration (10,000-entry lists, a 5 MB string, deep nesting, NUL, lone surrogates, duplicate keys,
+  booleans for lists) ends in a clean `DeclarationError`; rendering on the real Claude layout with six odd home paths leaves the
+  deny set equal to the baseline and adds only `Read(//<home>/<rest>)` lines, with clean JSON and no `allow`. Applied: refuse
+  empty, `.` and trailing-slash forms (Low 1), and refuse a first segment of only `*` and `.`, so `~/.*` and `~/*.*` cannot flood the
+  owner with prompts (Low 2). Not applied: a single module can emit up to about 5,120 ask rules (about 680 KB), because the 200-rule
+  cap applies per call and not to the whole list; the owner-run arguments already have the same exposure (Low 3). Not checked: how
+  Claude Code itself matches a rendered `Read` or `Bash` pattern, which the plan calls a first line, and the owner's check after
+  `wb rerender` covers.
+- **Specs.** `module-boundary.md` (the `asks` field and its refusals), `module-contract.md` (the `ask_reads` row),
+  `trust-and-approval.md` ("Rendering rules") and `command-permissions.md` (a declared ask is not a level; `wb settings` prints no
+  line for it).
+- **Not done.** Nothing is committed. No package uses the fields yet: Increment C does.

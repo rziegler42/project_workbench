@@ -80,6 +80,7 @@ Each module has one declaration file, `module.json`, at the root of its director
 | `checkpoints` | Process modules only: the names of the checkpoints it asks the owner about. *(built by plan `2026-10-22-checkpoint-settings-and-caps`)* |
 | `caps` | Process modules only: the loop caps it enforces, each with a default and a ceiling. *(built by plan `2026-10-22-checkpoint-settings-and-caps`)* |
 | `layout` | Harness modules only: the layout description (see `harness-modules.md`). It is part of the declaration and its hash. |
+| `ask_reads` | A non-empty list of at most 16 distinct patterns under the home directory, each starting `~/` (at most 200 characters from the characters of a neutral rule, a path of non-empty segments with no `.` or `..` segment and no trailing slash, a first segment that holds a character other than `*` and `.`, and no edge space), for which a harness that provides `permissions` asks before its read tool reads a path that matches. A rule is restrictive: a prompt, never an `allow`. A command's `asks` is the same for an argument of its own (`module-boundary.md`, "Declaration schema"). *(built 2026-10-29 by plan `2026-10-29-policy-and-module-asks`, increment B)* |
 
 `provides`, `requires` and `blocks` are lists of capability names. A module that
 provides nothing, requires nothing and blocks nothing is valid.

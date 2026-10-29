@@ -153,6 +153,23 @@ def owner_rules(modules):
     return found
 
 
+def ask_rules(modules):
+    """The ``ask`` rules for what the installed modules declare they want asked, in install order: each argument a command
+    lists in ``asks``, in every spelling the owner-run arguments are denied in, and each pattern a module lists in
+    ``ask_reads``, for the harness's read tool.
+
+    The rules are restrictive only and a prompt is not a level: the owner's table does not carry them. They are a best-effort
+    match on command text, as the rest of ``rules.py`` is. Nothing here names a module."""
+    found = []
+    for item in modules:
+        for command in item.module.commands:
+            for pattern in rules.command_owner_patterns(command.name, command.asks):
+                found.append(neutral.Rule("ask", "shell", pattern))
+        for pattern in item.module.ask_reads:
+            found.append(neutral.Rule("ask", "read", pattern))
+    return found
+
+
 def confinement_notes(done):
     """One note for each agent file that carries a hook: the harness runs an agent's own hook only in a folder it
     trusts, and says nothing when it skips it, so the limit holds only there."""
@@ -206,7 +223,8 @@ def stage(store_root, harness, modules, snaps, source, version, home, root):
             built = rendering.plan(table, gated=can_gate)
             gated = can_gate and bool(built.ask or built.open)
             data = harnessplan.render_permissions(
-                owner_rules(modules) + [neutral.Rule("deny", "shell", pattern) for pattern in built.deny],
+                owner_rules(modules) + ask_rules(modules)
+                + [neutral.Rule("deny", "shell", pattern) for pattern in built.deny],
                 layout, os.path.realpath(store_root), os.path.realpath(home),
                 hook_for=harness.name if hook else None, root=os.path.realpath(root),
                 protect=tuple(done.confined) + (localmanifest.PATH,),

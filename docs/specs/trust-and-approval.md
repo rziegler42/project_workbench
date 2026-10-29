@@ -240,6 +240,14 @@ Rules:
   to `ask` (with the preview digest as the last two arguments) or `none`, for a command that declares `levels`
   (`command-permissions.md`), and `wb launch` stays terminal-only; for a pin the installer made, `wb launch` first
   requires the declaration at its root to be the one the owner confirmed, so a copy that drops the list is refused.
+  A module may also declare asks, which the harness renders as `ask` rules and never as `deny` or `allow` *(built 2026-10-29 by
+  plan `2026-10-29-policy-and-module-asks`, increment B)*: a command's `asks` arguments, rendered like the owner-run arguments
+  (`wb run <command> <argument>` bare, with more arguments and through `--provides`, in the same five spellings;
+  `rules.command_owner_patterns`), and the module's `ask_reads` patterns under the home directory, rendered for the read tool like
+  the floor's own home paths (`harnessstage.ask_rules`). Like the owner-run rules they are restrictive, they depend on the modules
+  installed when the harness was attached (a module added later needs `wb attach` again, and an existing clone needs
+  `wb rerender`), and they are a best-effort match on command text, so a preview that begins with the asked argument asks too. An
+  `ask` rule that is also a `deny` renders once, as the deny; one that repeats a floor rule renders once.
   For a pin the owner typed (which holds no declaration, and replaces an installer's pin when the owner re-pins), `wb run` and
   `wb launch` use the declaration in the project's own files, which an agent can edit: the owner who pins a command's
   helper approves how it handles any first argument. `wb launch` also applies the declared `arguments` list, and refuses

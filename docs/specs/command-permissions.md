@@ -77,6 +77,11 @@ each such reading (it is not a problem, so it is not a `settings:` line). When a
 notes that the level applies. `delegate` still takes effect for `approve-plan` only; a `delegate` that cannot take effect has its own note
 and no `translated` line.
 
+A module can also declare a prompt that is not a key: a command's `asks` (an argument that is asked and not owner-run) and a
+module's `ask_reads` (a read under the home directory) render as `ask` rules and are not levels, so the table does not carry them and
+the approver cannot lower them from the personal settings (`trust-and-approval.md`, "Rendering rules"; built 2026-10-29 by plan
+`2026-10-29-policy-and-module-asks`, increment B). `wb settings` prints no line for them.
+
 A key is a process module's declared checkpoint name (`approve-plan`, `accept-decision` and the others), or the command in the `wb`
 spelling: `wb install`, `wb adopt`, `wb add`, `wb upgrade`, `wb attach`, `wb rerender`, `wb approve`, `wb pin`, `wb recover`,
 `wb release-approvals`, and `wb run <command> <argument>` for each owner-run argument that an installed module declares. The key
