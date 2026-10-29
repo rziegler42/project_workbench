@@ -729,6 +729,22 @@ is already asked. Reads of the Codex login file are left out of the installer to
 action. A clone receives the rules after the owner's re-render. Matching stays a best-effort match on command text.
 **Promotion trigger:** the owner chooses to begin it.
 
+### docs-cleanup-after-reset — Specs and roadmap that match what is built and what the global reset changed
+
+**Outcome:** the specifications and this roadmap say what is true on 2026-10-29. Statements that call built work "not built",
+"proposed" or "draft", statements that depend on the owner's former global configuration or on the old template, and passages
+that contradict each other or the modules, are corrected or marked as history; and `terms.md` defines the words the other specs
+use, including the owner, the approver and an owner-run command (which the owner may let an agent run, level by level). The
+inventory of the global configuration is marked as the record of a state that the reset ended. This follows the audit of
+2026-10-29 and the owner's six decisions in session.
+**Dependencies:** none. The decisions it rests on are accepted (`2026-10-29-workbench-asks-for-remove-submit-and-fetch`,
+`2026-10-29-accept-decision-offers-the-ask-level`, `2026-10-29-approvals-name-the-approver-by-git-identity`).
+**Boundary:** documents under `docs/specs/` and this roadmap only. No package, no code, no seeded README text and no change to the
+base. It leaves to later candidates: the citations of `AGENTS.md` sections that the base will restore, the rule for who accepts a
+decision, the identity convention in the module READMEs, the `verilog` module description, and any spec status that only the
+owner can set to `Current`. Accepted decisions are not edited.
+**Promotion trigger:** the owner chooses to begin it.
+
 ### global-config-migration — Move the owner's global Claude configuration into modules
 
 **Outcome:** a working vision, which may change as the design is worked out: the owner maintains `~/.claude` and the

@@ -137,7 +137,7 @@ approval again, because the edit changes its scope; the earlier approval no long
 
 ## Result
 
-Increment A is implemented and verified; the commit waits for the owner's word.
+Increment A is implemented, verified and committed as `fe966b0`. Completion criterion 4, the owner's re-render, is open.
 
 - **Security review.** The owner answered the checkpoint on 2026-10-29: no security review is needed.
 - **Done.** `FLOOR_RULES` in `workbench/rules.py` has `rmdir`, `unlink` and `shred`, each bare and with arguments, under the stop
