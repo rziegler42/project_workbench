@@ -244,4 +244,24 @@ applied; the third round's finding was applied after the last round, so no round
   developer tools might exit 1 and be reported as a missing value was not tested here.
 - **Not checked.** A symlinked parent such as `~/.config` is not refused, only the file. A person who keeps their dotfiles as links
   will see the symbolic-link refusal; the owner's `~/.gitconfig` is a regular file.
-- **For the owner.** The checkpoint after A: whether to run a security review before B.
+- **Committed as `6f2e957`.** The owner asked for the security review; it ran after that commit.
+
+### Increment A, follow-up after the security review
+
+- **Security review (2026-10-29).** The `security-reviewer` agent ran a copy of the module against real git (Apple Git 2.54.0, Python
+  3.15.0) in temporary homes. Held: includes and `includeIf` not followed, the project's and `~/.git/config` not read, a `git`
+  earlier on the caller's `PATH` not run, controls, NUL, CRLF and invalid UTF-8 refused, no hostile character reflected in a message.
+  Found, all low or by its rating medium in a narrow case: unbounded memory from endless output (3.6 GB in 3 s); exit 1 with a
+  message reported as a missing value; the symbolic-link check does not see a link at `~/.config` or at home and cannot close a
+  check-to-read swap; Homebrew's git path is user-writable; Unicode data drifts by Python version; the grammar admits invisible-only
+  names, names padded with spaces, lookalike brackets and long combining runs.
+- **Applied (code, tests first).** A bounded read that kills the child at 4,096 bytes of output, 1,024 of messages or the timeout;
+  "missing" only for exit 1 with no output and no message, otherwise "could not read" with git's message escaped and cut to 40
+  characters; six new tests, of which four failed before the change; header notes for the limits. 37 tests in the file pass.
+- **Not applied.** Owner and permission checks on the config files and the git path: they stop only an attacker who can plant a
+  link but not write the file, and a root-owner rule would refuse Homebrew's git.
+- **Waits for the owner.** The grammar points are a clarification note on the accepted decision, written as proposed and headed "not
+  yet approved by the owner" (invisible-only names and padded names refused; lookalikes and combining runs left). The code does not
+  hold that rule until the owner approves the note.
+- **Verification as run.** `tests/test_identity.py`, 37 tests, OK; the whole `run_all.py`, 5,969 tests in 12 roots, OK; `wb check` and
+  `wb run code-work check` report no problems.

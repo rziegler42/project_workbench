@@ -3,6 +3,7 @@
 import os
 import stat
 import tempfile
+import time
 import unittest
 import unicodedata
 import unittest.mock
@@ -177,6 +178,13 @@ class Reading(unittest.TestCase):
         with self.assertRaises(identity.IdentityError):
             identity.read(home=self.home)
 
+    def test_a_global_file_that_is_a_directory_is_not_reported_as_a_missing_value(self):
+        os.remove(self.config)
+        os.makedirs(self.config)
+        with self.assertRaises(identity.IdentityError) as seen:
+            identity.read(home=self.home)
+        self.assertNotIn("has no", str(seen.exception))
+
     def test_no_git_at_the_fixed_locations_refuses(self):
         with unittest.mock.patch.object(identity, "GIT_LOCATIONS", (os.path.join(self.base, "absent"),)):
             with self.assertRaises(identity.IdentityError) as seen:
@@ -226,6 +234,44 @@ class Invocation(unittest.TestCase):
         self.stand_in("head -c 100000 /dev/zero | tr '\\0' a\n")
         with self.assertRaises(identity.IdentityError):
             identity.read(home=self.home)
+
+    def test_endless_output_is_stopped_at_the_bound_and_not_at_the_timeout(self):
+        self.stand_in("yes aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n")
+        began = time.monotonic()
+        with unittest.mock.patch.object(identity, "TIMEOUT", 8):
+            with self.assertRaises(identity.IdentityError) as seen:
+                identity.read(home=self.home)
+        self.assertLess(time.monotonic() - began, 4)
+        self.assertIn("longer than", str(seen.exception))
+
+    def test_endless_error_output_is_stopped_too(self):
+        self.stand_in("yes bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb >&2\n")
+        began = time.monotonic()
+        with unittest.mock.patch.object(identity, "TIMEOUT", 8):
+            with self.assertRaises(identity.IdentityError):
+                identity.read(home=self.home)
+        self.assertLess(time.monotonic() - began, 4)
+
+    def test_exit_one_with_no_message_is_a_missing_value(self):
+        self.stand_in("exit 1\n")
+        with self.assertRaises(identity.IdentityError) as seen:
+            identity.read(home=self.home)
+        self.assertIn("has no user.name", str(seen.exception))
+
+    def test_exit_one_with_a_message_is_not_reported_as_missing(self):
+        self.stand_in("echo 'fatal: the file is bad' >&2\nexit 1\n")
+        with self.assertRaises(identity.IdentityError) as seen:
+            identity.read(home=self.home)
+        self.assertIn("could not read user.name", str(seen.exception))
+        self.assertNotIn("has no", str(seen.exception))
+        self.assertIn("fatal: the file is bad", str(seen.exception))
+
+    def test_the_message_shown_from_git_is_escaped_and_short(self):
+        self.stand_in("printf 'bad \\033[31m%s\\n' \"$(head -c 500 /dev/zero | tr '\\0' z)\" >&2\nexit 1\n")
+        with self.assertRaises(identity.IdentityError) as seen:
+            identity.read(home=self.home)
+        self.assertNotIn("\x1b", str(seen.exception))
+        self.assertLess(len(str(seen.exception)), 400)
 
     def test_a_run_that_does_not_end_is_stopped(self):
         self.stand_in("sleep 30\n")
