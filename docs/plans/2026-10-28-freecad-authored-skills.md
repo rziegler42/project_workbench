@@ -1,6 +1,6 @@
 # The freecad module: authored skills
 
-Status: Proposed
+Status: In Progress
 Created: 2026-10-28
 Candidate: workbench-v1#cad-modules
 Specs: module-contract
@@ -178,4 +178,31 @@ Remaining disagreement: none.
 
 ## Result
 
-Empty until work starts.
+### Increment A
+
+- **Read (2026-10-28):** the sha-256 of the owner's source `SKILL.md` matched the plan (`8d4a3576…`). Its Draft snippet and its
+  deprecated-API rows were the only source; plan one has status `Completed`. FreeCAD's source tree was not fetched. The
+  skill rests on the runs below and on `inspect.signature` of the installed `Draft` module.
+- **Written:** `freecad-draft` (`SKILL.md` and `reference.md`), and its name in the module's tests (18 skills now).
+- **Run against FreeCAD 1.1.4 (revision 20260928), headless with `freecadcmd`, at the owner's word, from a scratch directory,
+  in memory only:** three probe runs (12, 11 and 7 blocks; one raised, because it read a property `Link` that does not
+  exist, and was dropped), then the 19 blocks of the shipped `reference.md` (none raised, every printed value equals the
+  comment in the file). Confirmed: the 2D objects and their shape types; `MakeFace`; extrusion to a solid (150.0) and
+  `Draft.extrude`; `make_sketch`; `move`, `rotate` and `scale` in place and with `copy=True`, and on a list; `offset` and
+  its side rule, the notice for a vector parallel to the first edge, and `AttributeError` before a recompute; the ortho, polar,
+  circular and path arrays, `NumberX` changed and the base object's `Length` followed; `use_link=False`; clone and mirror; the
+  signatures of 14 functions; that the camelCase names run are the same objects as the snake_case ones, while
+  `makeArray` is another function that prints a notice.
+- **Found, not in the source:** the source says "camelCase names are legacy aliases", but `makeArray` is a separate function
+  with an older argument order; the source's offset note ("must be a recomputed 2D object") is right and the failure is an
+  `AttributeError`; `offset` and `move` change the object unless `copy=True`; `offset` takes a vector whose component across
+  the first edge picks the side; a circular array's number is its number of rings.
+- **Not run, marked read in the skill:** `autoconstraints=True` of `make_sketch`, array properties other than `NumberX`, `Fuse`
+  on touching copies, dimensions, text, labels, hatches, layers, working plane proxies, shape strings, `make_shape2dview`,
+  `upgrade`, `downgrade` (one call returned a tuple and was not examined) and everything that needs the interface.
+- **Verification as run:** test first, 23 tests with 2 failures and 8 errors; then the module tests, 23, OK; package tests,
+  29, OK; the full suite, 5864 tests in 13 roots, OK; `wb run code-work check` (61 plans) and `wb check` found no problems;
+  `git diff --check` printed nothing.
+- **Gate:** the owner ran `wb release-approvals` once for this increment. Two records (`969bbb13…`, `abaaf2b7…`) are reported
+  stale; none was removed. Increment D removes them after a preview.
+- **Not done:** no independent review (only when the owner asks); no run in the GUI.
