@@ -1,10 +1,10 @@
 {
   "approver": "workbench-release",
-  "declaration_hash": "56198469236c21632edd088a610737b27597365ad5b608fd7a2a8d7e0bd6c877",
+  "declaration_hash": "900839874d3d1aa7cb173ae96d9e670256977bc334539b38a3d360fd9ffe62a5",
   "format": 1,
   "kind": "module",
   "subject": "workbench/ask-codex",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "34d0cc7b223ccbe75a188c5d457eda95dea309a6052393f26d1de40b28316391",
+  "tree_hash": "012a252e7fd21f00281990ba5c04e8cbcde1fa32d3e6ff02a80ef8dc27b8c1a0",
   "workbench_version": "0.1.0"
 }

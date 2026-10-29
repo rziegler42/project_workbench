@@ -930,7 +930,10 @@ failed remote checks); it says nothing about a push with a remote configured (pl
   set out in the `Proposed` decision `2026-10-25-module-commands-and-the-approver`. *Status, 2026-10-29: decided. That decision was
   accepted on 2026-10-25 with the owner's global `ask` entries as the choice, and the reset removed them; the accepted record
   `2026-10-29-workbench-asks-for-remove-submit-and-fetch` replaces that choice for `safe-git remove` and `remote-runner submit`
-  and `fetch`: the workbench renders an `ask` for those three, not for `safe-git commit`. Not built.*
+  and `fetch`: the workbench renders an `ask` for those three, not for `safe-git commit`. Built 2026-10-29 by plan
+  `2026-10-29-policy-and-module-asks` (increment B, the module `asks` field, then increment C, the declarations of `safe-git` and
+  `remote-runner`): the rows above and this finding are the state of 2026-10-25 to 28, and a clone has the rule after
+  `wb rerender`.*
 - **F-B3: edit protection of the user level is thin.** The only `Edit` rules are three `ask` entries (the approver's data
   directory, the approver hook, the commit helper). The settings file, the other hook program, the agent definitions and
   the `ask-codex` and `remote-runner` programs have no `Edit` rule (see "The question whether the settings file's own path is

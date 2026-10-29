@@ -11,9 +11,9 @@
       "tree_hash": "b430917e5b59ed45cbc6c9c71e57b3fc79801f1e96d99db558c17152773c3838"
     },
     {
-      "declaration_hash": "56198469236c21632edd088a610737b27597365ad5b608fd7a2a8d7e0bd6c877",
+      "declaration_hash": "900839874d3d1aa7cb173ae96d9e670256977bc334539b38a3d360fd9ffe62a5",
       "name": "ask-codex",
-      "tree_hash": "34d0cc7b223ccbe75a188c5d457eda95dea309a6052393f26d1de40b28316391"
+      "tree_hash": "012a252e7fd21f00281990ba5c04e8cbcde1fa32d3e6ff02a80ef8dc27b8c1a0"
     },
     {
       "declaration_hash": "bbee74d628101045800cfe5e8d75672920a7d21a935171c914cdc932f0c2eb06",
@@ -36,9 +36,9 @@
       "tree_hash": "e033e06a323650e6cea0ac5852131758ef49e2bc9f1fa59341c399a8f6c1bed0"
     },
     {
-      "declaration_hash": "4b8f7c515c504354e5a6691c8ba1f14616926becffd1e249170a3cf44a861b38",
+      "declaration_hash": "42d04c9ccf24d08e662269c44db10d7e952a25465d0ae552e8ee8c4703044b11",
       "name": "remote-runner",
-      "tree_hash": "537cdf6ee084c5c020ec3797a211d584bbfdb9c8430af25851824058efc6dc6d"
+      "tree_hash": "6ce14728d689dfa13a3b5d79625f1c01ed4a1687522b1d6ef875a090c5b2acd7"
     },
     {
       "declaration_hash": "7af5f9f0a3e840f58f1808a7ebabc589416a1188813a08222504c742caa1d311",
@@ -46,9 +46,9 @@
       "tree_hash": "2752b03db3a33e641e94aa03451fb81051cb24d592b0560725e987f87d7bc86e"
     },
     {
-      "declaration_hash": "496e75db97a0b962c5ab010338824a450028dc5fbc21f42759e62527d5a2deaa",
+      "declaration_hash": "0e95b236920f6f6052c769fa2112680d00581ce168c8002e9b252ac6cbe161bf",
       "name": "safe-git",
-      "tree_hash": "5b5ec77bffc52f4764d5c24a5a80feff57656c04aa452f79fac3fd245485aeb3"
+      "tree_hash": "4b9b8ce62cd859bd37bfd5138e9093553037bb13b805c173e41cbcb761106165"
     },
     {
       "declaration_hash": "699b15cbb3637244800be23192d3085186fd448a6aab41a4c60c08586229d324",
@@ -63,6 +63,6 @@
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "b203eced791bdefaf171ceb84e293141813d7fc337a6daddd7049765e83440be",
+  "tree_hash": "f726c320fe28ed0d98f2e91eff4108ab82213ef940a1358864c46ff51abc9595",
   "workbench_version": "0.1.0"
 }

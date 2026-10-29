@@ -169,7 +169,10 @@ A bridge conforms when a test against a fake vendor program, which records its a
 standard input, shows each item. No item needs a real vendor, a sign-in or a network.
 
 1. The declaration is as above: type `module`, provides only `model-bridge`, one helper, command `ask-<vendor>`
-   with `runtime` `python`, `kit` 1 and `arguments` `["ask"]`, and no `requires`, `writes` or `fills`.
+   with `runtime` `python`, `kit` 1 and `arguments` `["ask"]`, and no `requires`, `writes` or `fills`. A bridge may declare
+   `ask_reads` for the vendor's own login file under the home directory, so that a harness that provides `permissions` asks
+   before the agent reads it (`module-contract.md`); `ask-codex` declares `["~/.codex/auth.json"]` (since 2026-10-29,
+   plan `2026-10-29-policy-and-module-asks`). The installer names no vendor: the module does.
 2. A missing, empty, non-UTF-8 or oversize prompt is refused and nothing runs.
 3. An unknown option, a repeated option, a missing value, a `--model` outside its charset or length, an
    `--effort` outside the three levels, and a `--timeout` out of range are each refused and nothing runs.

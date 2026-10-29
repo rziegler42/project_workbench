@@ -65,8 +65,32 @@ class Declaration(unittest.TestCase):
         self.assertEqual({"remote-runner": {"helper": "helper/remote-runner", "runtime": "python", "kit": 1,
                                             "arguments": ["profiles", "recommend", "status", "artifacts",
                                                           "submit", "fetch", "fetch-overwrite"],
-                                            "owner": ["fetch-overwrite"]}}, document["commands"])
+                                            "owner": ["fetch-overwrite"],
+                                            "asks": ["submit", "fetch"]}}, document["commands"])
         self.assertEqual([{"helper": "helper/remote-runner-check", "kit": 1}], document["checks"])
+
+    def test_it_asks_for_submit_and_fetch_and_fetch_overwrite_stays_owner_run(self):
+        import types
+        from workbench import declarations, harnessplan, harnessstage
+        self.assertEqual(["submit", "fetch"], declaration()["commands"]["remote-runner"]["asks"])
+        loaded = declarations.load_package(PACKAGE, first_party=True)
+        module = [m for m in loaded.modules if m.name == "remote-runner"][0]
+        self.assertEqual(("submit", "fetch"), module.commands[0].asks)
+        self.assertEqual(("fetch-overwrite",), module.commands[0].owner)
+        installed = [types.SimpleNamespace(module=module, type="module")]
+        found = harnessstage.ask_rules(installed)
+        self.assertEqual({"ask"}, {rule.action for rule in found})
+        with open(os.path.join(PACKAGE, "claude", "module.json"), encoding="utf-8") as handle:
+            layout = json.load(handle)["layout"]
+        permissions = json.loads(harnessplan.render_permissions(
+            harnessstage.owner_rules(installed) + found, layout, "/Users/tester/.config/project-workbench", "/Users/tester"))["permissions"]
+        deny, ask = permissions["deny"], permissions["ask"]
+        for text in ("wb run remote-runner submit", "wb run remote-runner submit *", "wb run remote-runner fetch",
+                     "wb run remote-runner fetch *", "python3 -B -m workbench run remote-runner fetch *"):
+            self.assertIn("Bash(%s)" % text, ask)
+        for text in ("wb run remote-runner status", "wb run remote-runner profiles", "wb run remote-runner fetch-overwrite"):
+            self.assertNotIn("Bash(%s)" % text, ask)
+        self.assertIn("Bash(wb run remote-runner fetch-overwrite)", deny)
 
     def test_every_file_is_the_declaration_a_helper_or_the_skill(self):
         found = []

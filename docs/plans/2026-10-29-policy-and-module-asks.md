@@ -253,8 +253,8 @@ meaningful finding; two findings, both applied. The text applied after round 2 i
 
 ## Result
 
-**Increment A is done and committed (`0907cbe`); Increment B is done and awaits the owner's word to commit; C and D are not
-started.**
+**Increment A is done and committed (`0907cbe`); Increment B is done and committed (`41ffe9f`, with a fix in `ce683c0`); Increment C
+is done and awaits the owner's word to commit; D is not started.**
 
 ### Increment A
 
@@ -327,4 +327,48 @@ started.**
 - **Specs.** `module-boundary.md` (the `asks` field and its refusals), `module-contract.md` (the `ask_reads` row),
   `trust-and-approval.md` ("Rendering rules") and `command-permissions.md` (a declared ask is not a level; `wb settings` prints no
   line for it).
-- **Not done.** Nothing is committed. No package uses the fields yet: Increment C does.
+- **Not done.** Committed as `41ffe9f`. No package uses the fields yet: Increment C does.
+- **A mistake of mine in the commit.** After the security review I added the pattern `~/.claude/**` to a list of accepted patterns
+  in `tests/test_module_asks.py`. The boundary test forbids the installer's tests from naming a harness, so `test_boundary` failed on
+  `41ffe9f`. I had rerun only four test files after that edit. The fix, a neutral pattern, is `ce683c0`.
+
+### Increment C
+
+- **Done.** `packages/workbench/safe-git/module.json` has `asks: ["remove"]` (not `commit`, `push-check` or `describe`),
+  `remote-runner/module.json` has `asks: ["submit", "fetch"]` (`owner` stays `["fetch-overwrite"]`, so it is not asked), and
+  `ask-codex/module.json` has `ask_reads: ["~/.codex/auth.json"]`. The three module tests assert the declaration, the parsed
+  `Command.asks` or `Module.ask_reads`, and the rendered rules on the package's own Claude layout: the asks are `ask`, in every
+  spelling, and the asks for `commit`, `push-check`, `describe`, `status`, `profiles` and `fetch-overwrite` are absent, while
+  `fetch-overwrite` stays in the denies. The `remote-runner` exact-declaration assertion gained `asks` and nothing else.
+  `safe-git.md`, `remote-runner.md` and `model-bridge.md` say what is declared and why. `remote-runner.md` had three passages that said
+  the module renders no `ask` (the checkpoints paragraph, an open question and the limits list), which the reviewer found and I
+  corrected.
+- **How the six package edits were made.** The first package edit makes the shipped approvals stale and the edit gate refuses the next
+  edit, so six edits would have meant six releases. The owner chose, on my recommendation, one script run in my scratch directory
+  (`apply_c.py`), with every anchor checked to occur once before anything was written. The same was done a second time for a follow-up
+  (below). I did not make any package edit otherwise.
+- **A mistake of mine, found by the whole suite.** My first version of the three new tests imported `tests.test_permissions` to render
+  the rules. A repository rule (`tests/test_module_test_imports.py`) allows a module's tests to import only `tests.support` and
+  `tests.support_*`, so it failed for the three files. I had run the three module roots and not that repository test. The owner agreed
+  to a second scripted pass (`apply_c2.py`) that renders with `harnessplan.render_permissions` on the package's own Claude layout. A
+  dry run of that logic, reading `packages/` only, preceded it.
+- **The releases.** The owner ran `wb release-approvals` twice, once after each pass. The first pair of records (the old four tracked
+  ones removed, four new ones) and the second pair were each read and approved by the owner, and the stale ones were removed with
+  `wb run safe-git remove --recursive --confirm` on the owner's approval of each list. The shipped records now are format 1, the
+  approver `workbench-release`, no `via`: module `safe-git` (declaration `0e95b236920f`, tree `4b9b8ce62cd8`), `remote-runner`
+  (`42d04c9ccf24`, `6ce14728d689`), `ask-codex` (`900839874d3d`, `012a252e7fd2`) and the package `workbench` (`61775495d86d`,
+  `f726c320fe28`, the same 11 modules). The other eight module records are unchanged.
+- **Verification as run.** The three module roots: `safe-git` 647, `remote-runner` 107, `ask-codex` 95, all OK, on the final tree. The
+  whole `run_all.py` on the final tree, after the last release and the removal: 6,050 tests in 12 roots, OK. `wb verify
+  packages/workbench` runs with no refusal; `wb check` and `wb run code-work check` report no problems. The root-level tests of the
+  mechanism (`tests/test_module_asks.py`, 25) cover it, and the real-module tests could not be seen failing first, because the first
+  package edit locks the gate; the root-level versions of the same checks failed before the declarations changed.
+- **Review.** One read-only reviewer pass: one blocking finding, the stale `remote-runner.md` text above, applied. Not applied, each
+  non-blocking: no single test renders the three real modules installed together (it would live in one module's tests and need
+  another release; each module's test covers its own rules, so every rule the plan names is checked), which is a departure from the
+  plan's wording; `docs/development.md` describes the `remove` flow without saying that both steps now prompt; the skills
+  `commit-changes` and `run-remote-job` need no change.
+- **The inventory.** On the owner's word, one dated line was added to the status of F-B2 in `global-config-inventory.md`, saying the
+  `ask` was built on 2026-10-29. The rows above it remain the state of 2026-10-25 to 28.
+- **Not done.** Nothing is committed. The owner's `wb rerender` and a check that the rendered settings list the asks and that a
+  `wb run safe-git remove` raises the harness's prompt (criterion 6) is the owner's run, after the commit.

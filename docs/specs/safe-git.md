@@ -33,7 +33,7 @@ Non-goals:
 | requires | nothing |
 | fills, writes | nothing |
 | ships | one helper, `helper/safe-git`, and one neutral skill, `commit-changes` |
-| commands | `safe-git`, whose first argument is `commit`, `remove`, `push-check` or `describe` (kit 1), with `describes: ["remove", "commit", "push"]` (see "Describe"). |
+| commands | `safe-git`, whose first argument is `commit`, `remove`, `push-check` or `describe` (kit 1), with `describes: ["remove", "commit", "push"]` (see "Describe") and, since 2026-10-29, `asks: ["remove"]` (see "Remove"). |
 
 It is run as `wb run safe-git commit`, `wb run safe-git remove`, `wb run safe-git push-check` and `wb run safe-git
 describe commit|remove`. The installer pins the helper when the
@@ -64,6 +64,15 @@ message.
 them. It refuses Git metadata, nested repositories, the repository root, links and overlapping targets, and
 follows no link. A deletion needs the owner's approval of the previewed list; the skill tells the agent to
 stop for it.
+
+*Asks (built 2026-10-29 by plan `2026-10-29-policy-and-module-asks`; the decision is
+`2026-10-29-workbench-asks-for-remove-submit-and-fetch`).* The module declares `asks: ["remove"]`: a harness that provides
+`permissions` asks the owner before the agent runs `wb run safe-git remove`, bare or with further arguments, in the same spellings
+(`module-boundary.md`, "Declaration schema"). The floor's `ask` for deleting files matches the text `rm` and `rm *`, so a
+deletion made as `remove --confirm` did not raise it; this closes that. The match is on command text and cannot tell the preview
+from `--confirm`, so a removal asks twice. `commit` is not asked: the helper checks the expected head, the exact paths and the
+attribution rule, a commit is local and can be reverted, and a push is already asked by the floor. The rule is a first line, not
+a guarantee, and an existing clone gets it after `wb rerender`.
 
 ## Push check
 

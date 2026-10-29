@@ -76,7 +76,7 @@ do today.
 | provides | nothing (see "Open questions") |
 | requires, fills, writes | nothing |
 | ships | one helper, `helper/remote-runner`, a check helper, and one neutral skill, `run-remote-job` |
-| commands | `remote-runner`, with `helper` `helper/remote-runner`, `runtime` `python`, `kit` 1, `arguments` `["profiles", "recommend", "status", "artifacts", "submit", "fetch", "fetch-overwrite"]` and `owner` `["fetch-overwrite"]` |
+| commands | `remote-runner`, with `helper` `helper/remote-runner`, `runtime` `python`, `kit` 1, `arguments` `["profiles", "recommend", "status", "artifacts", "submit", "fetch", "fetch-overwrite"]`, `owner` `["fetch-overwrite"]` and, since 2026-10-29, `asks` `["submit", "fetch"]` (below) |
 | checks | one: `wb check` reports the project file (below) |
 
 The helper uses only the standard library, and `tomllib` from Python 3.11. The project's documented minimum Python
@@ -180,6 +180,14 @@ passes `--force`, and `fetch-overwrite` is listed under `owner`, which a harness
 to the agent (`module-boundary.md`, "Declaration schema"). The owner can run it. A harness without `permissions`
 leaves the rule to instruction, as it does for every hard stop.
 
+*Asks (built 2026-10-29 by plan `2026-10-29-policy-and-module-asks`; the decision is
+`2026-10-29-workbench-asks-for-remove-submit-and-fetch`).* The module declares `asks` of `["submit", "fetch"]`: a harness that
+provides `permissions` asks the owner before the agent runs `wb run remote-runner submit` or `fetch`, bare or with further arguments, in
+the same spellings (`module-boundary.md`, "Declaration schema"). Before this, the owner's global configuration held an `ask` for
+each, and the reset of 2026-10-29 removed it. The rule is a prompt and not a wall: both stay agent-safe, and `fetch-overwrite`
+stays owner-run, so it is not asked. It is a first line, not a guarantee: the match is on command text, settings merge across levels,
+and a harness with no `permissions` leaves it to the skill and the checkpoints. An existing clone gets it after `wb rerender`.
+
 The rendered deny rules match the text of `wb run`, in its usual spellings. The installer also refuses an owner
 argument in its own code, whatever the spelling: `wb run` and `wb launch` run `fetch-overwrite` only when standard input
 and output are both terminals, and `wb launch` of an installer-made pin first requires the declaration at `--root` to be
@@ -193,10 +201,11 @@ states for every pin and deny rule.
 
 `submit-remote-job` and `fetch-remote-output` are declared by `code-work` and default to `stop`. This module declares
 no checkpoint. The skill `run-remote-job` tells the agent to wait for the owner's word before it submits or fetches
-and to submit only a profile the plan names. The module renders no `ask` rule: what prompts for `wb run` in a given
-harness is the owner's own `allow` and `ask` rules, which the workbench never writes. So the checkpoints are
-instruction, and a permissive rule of the owner's for `wb run` lets the agent submit without a prompt. Rendering an
-`ask` for these commands is deferred.
+and to submit only a profile the plan names. Since 2026-10-29 the module declares `asks` of `["submit", "fetch"]` ("Asks",
+above), so a harness that provides `permissions` asks the owner before either runs, whatever the owner's own `allow` and `ask`
+rules say; before that the module rendered no `ask` and the only prompt was the owner's own, which the workbench never writes.
+The checkpoints themselves remain instruction, and the rendered `ask` is a first line and not a guarantee: the match is on
+command text, a harness with no `permissions` renders nothing, and an existing clone has the rule only after `wb rerender`.
 
 ## How the helper runs the program
 
@@ -274,7 +283,8 @@ environment and working directory, shows each item. No item needs the real progr
 - Whether the module should provide a capability such as `remote-jobs`, once a module needs to require it.
 - Whether the environment should pass `SSH_AUTH_SOCK`. The program needs it to reach a runner with an agent; it is
   also a path to the owner's keys, so the allow list names it deliberately.
-- Whether a rendered `ask` for `submit` and `fetch`, or `delegate` for these checkpoints, is wanted.
+- Whether `delegate` for these checkpoints is wanted. (The rendered `ask` for `submit` and `fetch` was decided and built on
+  2026-10-29: "Asks".)
 - Whether `log`, `cancel`, `remotes` and `prune` should be wrapped, and under which checkpoint.
 - Whether the program should keep reading the old path during a move.
 - Whether `provenance` should also require the program's `integrity` to be `ok`. The job can write its own record, so
@@ -297,8 +307,9 @@ The project's documented minimum Python version is 3.11 (`docs/development.md`).
 - The wrapper shows its guarantees against a fake program, never the real one, and no host was contacted. A mismatch
   with the real program's output text, exit codes or flags would be found only by a live check, which has not been
   done, and cannot be until the program reads `.workbench/remote-runner.toml`.
-- The checkpoints are instruction. The module renders no `ask` for submit or fetch, so a permissive `allow` rule of the
-  owner's for `wb run` lets an agent submit without a prompt. The overwrite is kept from the agent by `owner`, which
+- The checkpoints are instruction. Since 2026-10-29 the module declares an `ask` for submit and fetch ("Asks"), which a
+  harness with `permissions` renders as a first line and not a guarantee; before then a permissive `allow` rule of the
+  owner's for `wb run` let an agent submit without a prompt. The overwrite is kept from the agent by `owner`, which
   the rendered Claude settings deny (a test pins it); a harness without `permissions` leaves it to instruction.
 - The tracked-file refusal and the hash check of a fetch are the program's. The wrapper's pre-check covers an existing
   target and a link; a race between the check and the program's write is not closed. The conformance function in the
