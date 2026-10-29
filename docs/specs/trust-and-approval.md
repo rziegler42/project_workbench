@@ -210,6 +210,9 @@ Rules:
   policy, may remove one.
 - Each harness that provides `permissions` receives the floor and the added stops as
   local `deny` and `ask` rules at attach.
+- Each stop of the floor renders `ask` rules for the commands and reads it covers, listed in
+  `FLOOR_RULES` in `workbench/rules.py`, as a best-effort match on the command text a harness is
+  given and not a sandbox.
 - Deleting inside the session's scratch directory or the system's temporary
   directory is not a hard stop. It is a personal permission, not project policy.
 

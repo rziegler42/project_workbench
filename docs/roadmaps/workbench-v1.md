@@ -718,11 +718,12 @@ add a command, a module or a rule that a check enforces, and it does not change 
 
 ### floor-rules-after-reset — Floor rules for what the global reset removed
 
-**Outcome:** the compiled hard-stop floor renders `ask` rules for five actions that the owner's former global `deny` list stopped
-and the project did not: `rmdir`, `unlink` and `shred` under the stop for deleting files, and reads of `~/.config/gh/**` and
-`~/.codex/auth.json` under the stop for touching secrets. The owner's direction, 2026-10-29, after the global configuration was
-reset: an `ask` and not a `deny`, because every floor stop is a stop for the owner and not a wall. `git merge` is left out: it fits
-none of the five stops, and a push is already asked.
+**Outcome:** the compiled hard-stop floor renders `ask` rules for four actions that the owner's former global `deny` list stopped
+and the project did not: `rmdir`, `unlink` and `shred` under the stop for deleting files, and reads of `~/.config/gh/**` under the
+stop for touching secrets. The owner's direction, 2026-10-29, after the global configuration was reset: an `ask` and not a `deny`,
+because every floor stop is a stop for the owner and not a wall. `git merge` is left out: it fits none of the five stops, and a push
+is already asked. Reads of the Codex login file are left out of the installer too, because the installer may not name a harness; the
+`ask-codex` module declares that rule once a module can declare an `ask`.
 **Dependencies:** none. The floor and its rendering are built (`trust-and-approval.md`, "Hard stops and the floor").
 **Boundary:** the compiled rule list, its tests and one sentence of spec text. It adds no stop to the floor and changes no rule's
 action. A clone receives the rules after the owner's re-render. Matching stays a best-effort match on command text.

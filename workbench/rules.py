@@ -54,6 +54,12 @@ FLOOR_RULES = {
     "delete-or-overwrite-files": (
         ("ask", "shell", "rm"),
         ("ask", "shell", "rm *"),
+        ("ask", "shell", "rmdir"),
+        ("ask", "shell", "rmdir *"),
+        ("ask", "shell", "unlink"),
+        ("ask", "shell", "unlink *"),
+        ("ask", "shell", "shred"),
+        ("ask", "shell", "shred *"),
         ("ask", "shell", "git clean*"),
         ("ask", "shell", "git checkout -- *"),
         ("ask", "shell", "git checkout ."),
@@ -76,6 +82,7 @@ FLOOR_RULES = {
         ("ask", "read", "**/.env.*"),
         ("ask", "read", "~/.ssh/**"),
         ("ask", "read", "~/.aws/**"),
+        ("ask", "read", "~/.config/gh/**"),
         ("ask", "read", "~/.gnupg/**"),
     ),
     "install-dependencies": (
