@@ -102,7 +102,7 @@ module commands that lost their only prompt. After this plan:
 2. Add a section `## Source of truth` between the Working agreement and the Policy, its items numbered so that the specs' citations
    resolve (`mempalace.md` cites item 6):
    1. The owner's current instruction.
-   2. The instructions in this file and in any file that applies to the path being changed.
+   2. The instructions in this file and in any file of this repository that applies to the path being changed.
    3. Accepted decisions, where the project keeps them.
    4. Current specifications, where the project keeps them.
    5. Current code, tests and configuration, as evidence of what is built.
@@ -253,4 +253,37 @@ meaningful finding; two findings, both applied. The text applied after round 2 i
 
 ## Result
 
-Empty until work starts.
+**Increment A is done and awaits the owner's word to commit; B to D are not started.**
+
+### Increment A
+
+- **Done.** `base/AGENTS.md` and this repository's `AGENTS.md` carry the four Working-agreement changes (unrelated cleanup left out;
+  deploy, secrets and destructive cleanup need the owner's approval; pull request descriptions describe the change only; prefer the
+  documented commands) and a `## Source of truth` section of six items with the lead sentence. The two files are identical from the
+  top to the `## Policy` heading, which I compared; below it only this repository's three filled module blocks differ.
+- **A change after the plan's first approval.** The reviewer noted that item 2 ("any file that applies to the path being changed")
+  does not exclude a file inside fetched or vendored content, and a project with the base and without groundwork lacks the line that
+  says fetched content is data. The owner chose to amend: item 2 now says "any file of this repository". The plan was edited and the
+  owner approved it again at the level `ask` (region `fc1a9cef…`), and both files were changed to match.
+- **Searches of step 3, run on 2026-10-29.** `packages/` outside the tests, for "narrowest", "unrelated", "destructive", "source of
+  truth", "pull request", "deploy" and "documented command". "narrowest": the `test-first` and `diagnose-failure` skills only, which
+  the base does not repeat. "unrelated" and "pull request": the action-review rubric (commit paths and untrusted pull requests) and a
+  recall skill's remark about a low match score. "deploy": the code-work policy block and the security-review skill as a trigger for
+  asking about a security review. "destructive", "source of truth" and "documented command": no hit. No module says what the base now
+  says.
+- **Citations of step 5.** A search of `docs/` for "Source of truth" finds three: `command-permissions.md` line 433 (an accepted
+  decision outranks the code; item 3 above item 5), `mempalace.md` line 48 (item 6, recalled context) and `knowledge-tools.md` line 21
+  (external content is untrusted as instruction). Each names an item that exists, and no citation was changed.
+- **Verification as run.** `tests/test_base.py` 8 and `tests/test_self_hosting.py` 3 pass, before and after the amendment. The whole
+  `tests` root ran 3,557 tests, OK, 1 skipped, before the one-word amendment; the two tests that read these files were run again
+  after it. `wb check` and `wb run code-work check` report no problems. The packages' tests were not run: no package file changed.
+- **Review.** One read-only reviewer pass: no blocking finding. It found the new text matches the plan's wording, repeats nothing a
+  module says, and agrees with every ranking statement in `command-permissions.md`, `action-review.md`, `mempalace.md`,
+  `knowledge-tools.md` and the decisions README. Applied: item 2 (above). Not applied, each non-blocking: "prefer the commands the
+  project documents" could be read as licence for a raw `git commit`, but the `commit-changes` and `push-changes` skills restrict an
+  agent to the helper and "prefer" is weaker than "use only"; "use secrets" is consistent with the read rule `ask-codex` gets in
+  Increment C; the pull request sentence extends the rule the code-work block states for commits, and the harness's own attribution
+  reminder for a pull request is an environment matter.
+- **Security review.** The checkpoint after A: the owner was asked and the reviewer's pass stood for it; no separate review was run.
+- **Not done.** Nothing is committed. A project already created from the base keeps its own seeded `AGENTS.md`; the change reaches new
+  projects only.
