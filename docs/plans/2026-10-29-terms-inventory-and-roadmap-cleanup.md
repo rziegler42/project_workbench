@@ -207,8 +207,8 @@ Plan review by Codex through the `ask-codex` bridge (model `gpt-5.6-terra`), rou
 
 ## Result
 
-**Increments A, B and C are done; Increment D is not started.** Their commits carry the trailers
-`Plan: 2026-10-29-terms-inventory-and-roadmap-cleanup#A`, `#B` and `#C`.
+**Increments A, B and C are done and committed; Increment D is done and awaits the owner's word to commit.** Their commits carry the
+trailers `Plan: 2026-10-29-terms-inventory-and-roadmap-cleanup#A`, `#B`, `#C` and `#D`.
 
 ### Increment A
 
@@ -311,3 +311,26 @@ Plan review by Codex through the `ask-codex` bridge (model `gpt-5.6-terra`), rou
     can confirm.
   - Row IV3 is placed in the move M6, and the part C counts now agree everywhere. Rows that name a `keep global` disposition are
     unchanged and are read through the dated note.
+
+### Increment D
+
+- **Done, in `docs/roadmaps/workbench-v1.md` only.** Steps 1 to 7 as written: the eight-key decision reads as accepted; Bootstrap is a
+  short history note; the Purpose says only Claude has a module; "Suggested order" became "Order" and says there is none; the
+  `global-config-migration` outcome, boundary and trigger are rewritten around the one-step reset and the backup; the graphify, cad and
+  superpowers candidates name the former backup or the old template repository; `security-review-module` and `verilog-module` are
+  marked built by their completed plans in one Current state bullet; `code-work-approval` is reworded and the Related decisions list
+  is a pointer to `docs/decisions/`. There was no `peer-review-provider`.
+- **Checked before writing.** A read-only check on 2026-10-29 of which cad and graphify sources exist in the backup and in the old
+  template repository: the full module sources and the graphify helper exist only in the template; the backup holds older dated
+  copies of the graphify skill and agent and one script. Tree hashes (first 12 hex of SHA-256 over sorted relative names and
+  contents) are in the roadmap. No file in the backup was opened beyond hashing, and no home path was written.
+- **Verification as run.** Searches for "not yet accepted", the old template manifest name and "code-work-approval" in the roadmap come
+  back empty; `wb check` and `wb run code-work check` report no problems.
+- **Review.** One read-only reviewer pass: no blocking finding. Applied: the sentence "listed under Related decisions" now points to
+  `docs/decisions/`. It could not recompute the hashes.
+- **For the owner.**
+  - Not done, outside the steps: `agent-confinement` and `global-settings-check` still say their decisions are "written first as
+    `Proposed`", while `harness-modules.md` says both were accepted on 2026-10-24. Same stale-status pattern as step 1.
+  - The bullet marking two modules built sits against the roadmaps README's "completion is never written into a roadmap"; step 6
+    asked for it, and it is the one bullet to drop if you disagree.
+  - Pre-existing and left: garbled sentences in Current state near the plan-approval bullets, and the candidate heading format.

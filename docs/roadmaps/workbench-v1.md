@@ -5,52 +5,26 @@ Updated: 2026-10-29
 
 This roadmap is direction only. It does not authorize implementation and does not
 change any plan. A candidate is referred to as `workbench-v1#<id>`. Candidates are
-identified by a topic slug and carry no required order; the suggested order below and
-the dependencies are hints, and what is learned along the way may reshuffle, add or
-drop candidates.
+identified by a topic slug and carry no required order; the dependencies are hints, and
+what is learned along the way may reshuffle, add or drop candidates.
 
 ## Purpose
 
 Build the first version of the project-workbench installer and its first modules, as
 specified in `docs/specs/`: a neutral installer that creates and maintains projects
-from packages of modules, with Claude and opencode as the supported harnesses and a
-programming way of working (`code-work`) on top of a shared `groundwork` module.
+from packages of modules, with a programming way of working (`code-work`) on top of a
+shared `groundwork` module. Claude is the one harness that has a module; opencode is
+specified and has none (`verify-opencode` and `opencode-harness`).
 
 ## Bootstrap
 
-This repository is built while the new system does not yet exist, so two sets of rules
-meet here and the order matters.
-
-- **The old conventions governed only until `adopt-conventions`, which is done.** Until
-  then this repository followed the rules in its own `AGENTS.md` and
-  `docs/plans/README.md`: one active plan in `docs/plans/next.md`, explicit owner
-  approval of a plan before implementation, numbered archives, and numbered decision
-  records. `adopt-conventions` rewrote those documents by hand to the new document
-  conventions (dated plan and decision names, the `Candidate:` and `Specs:` lines, no
-  fixed `next.md`). The repository had no commits, so nothing needed migrating.
-- **Mechanical enforcement waits for the code.** Hash-bound approval, the guarded store,
-  the derived active-plan listing, the checks and the commit helper arrive with their
-  candidates. The repository has one developer, so none of them is needed early. Until
-  they exist, approval is the owner's explicit statement in session, a `Status:` line is
-  informational, and active plans are found by searching for it. The repository's own
-  documents say that these checks are "enforced by the installer once built; until then
-  by the owner in session".
-- **The first commit already respects the new boundary.** Harness files (`CLAUDE.md`,
-  `.claude/`) and the old `.template-manifest` are not committed; `adopt-conventions`
-  excluded them before any commit existed.
-- **Plans are approved by the owner in session** until the approval mechanism that the
-  later candidates build exists.
-- **No project file is written before module approval exists.** `installer-core-verifier`
-  writes nothing into a project; it verifies declarations. `module-approvals` comes
-  before `base-and-manifests`, so the first time the installer writes a project, the
-  approval check is already in place. Plan approval and the delegation helper are
-  built with `code-work-plans` and plan `2026-10-22-plan-approval-records`, because the plan format names the
-  sections they depend on.
-- **The installer is not run on its own repository** until `self-hosting` has recorded,
-  by a test, how its output relates to the hand-maintained files, and `adopt-existing-repository` gives it a way in. The
-  installer only installs into a new or empty directory, so this repository cannot become an installed project before then.
-- **The commit helper does not exist while it is being built.** Until `code-work-commit`
-  ships it, commits are made with the owner's own tooling.
+History, kept short. This repository was built before the system it describes existed, by hand under the
+rules of its own `AGENTS.md` and `docs/plans/README.md`. `adopt-conventions` moved those documents to the
+current conventions on 2026-10-19, and the first commit already left out the harness files and the old
+template's manifest. The mechanical pieces that were once still to come (hash-bound approval, the guarded
+store, the checks and the commit helper) are built, and plans here are approved with `wb approve-plan` and
+committed through the git helper. The part of that order that is still open is `self-hosting` and
+`adopt-existing-repository`.
 
 ## Current state
 
@@ -58,12 +32,13 @@ meet here and the order matters.
   the repository's own documents follow the new conventions, and harness files and the
   old template manifest are excluded from git. The old template is retired as a source at
   `self-hosting`: nothing tracked here depends on it. What remains is the owner's, outside this repository: archiving the
-  old repository and removing its mentions from `~/.claude` (`global-config-migration`).
+  two old repositories (`global-config-migration`). The owner reset `~/.claude` to the harness's defaults on 2026-10-29 and
+  kept the former configuration as a backup.
 - Seven specifications are approved by the owner (2026-10-19) and read `Current`:
   `terms`, `module-contract`, `repository-boundary`, `trust-and-approval`,
   `groundwork`, `code-work` and `harness-modules`.
-- Twelve decision records were accepted on 2026-10-19 and five more on 2026-10-20, listed under
-  Related decisions.
+- Twelve decision records were accepted on 2026-10-19 and five more on 2026-10-20, recorded in
+  `docs/decisions/`.
 - `installer-core-verifier` is built and its language decision is accepted
   (`2026-10-19-implementation-language`, 2026-10-19): a Python 3
   package `workbench/` with the safe filesystem layer, hashing, declaration and module
@@ -140,9 +115,9 @@ meet here and the order matters.
   (`wb approve-plan`, `wb plan-status`); the process module declares an `approval` command and the `code-work` helper's
   `region` subcommand computes the plan's hashed region. The decision
   `2026-10-22-installer-records-plan-approval-module-computes-region` was accepted on 2026-10-22. The candidate
-  `code-work-approval` was too large for one plan and is split into `checkpoint-settings-and-caps`,
+  The first candidate for this work was too large for one plan and is split into `checkpoint-settings-and-caps`,
   `increment-loop-and-review-skills`, `push-checkpoint`, `compaction-guidance` and `delegated-approval`; the older
-  plans, specs and decisions that name `code-work-approval` mean this group. Security and workflow reviews found
+  plans, specs and decisions that speak of that one candidate mean this group. Security and workflow reviews found
   nothing above Medium unresolved; the hand run in a live project is still to do.
 - The checkpoint settings, the loop caps and the edit gate are implemented (plan
   `2026-10-22-checkpoint-settings-and-caps`, increments A to H; its completion is derived from that plan once it is
@@ -206,26 +181,20 @@ meet here and the order matters.
   the skill `recall-memory`. The facts come from running the real `mempalace` 3.11.0 in a scratch directory; `search`
   rewrites the program's bookkeeping, which the owner accepted. No live session; the last security-review fixes were not
   reviewed. `docs/specs/mempalace.md` and `docs/specs/knowledge-tools.md` record it.
-- The global Claude configuration holds work that the design has not yet accounted for: agents, skills, hooks and
-  instruction text. The owner treats the old repositories and that configuration as lessons learned, not authority. The
-  seven candidates that precede `global-config-migration` came from a first-pass inventory; completing it is the first step of
-  `global-config-migration`.
+- The former global Claude configuration held work that the design had not accounted for: agents, skills, hooks and
+  instruction text. The owner reset it on 2026-10-29 and kept a backup; `docs/specs/global-config-inventory.md` is the record
+  of the state before. The owner treats the old repositories and that configuration as lessons learned, not authority. The
+  seven candidates that precede `global-config-migration` came from a first-pass inventory; what to re-adopt from the backup
+  is settled in `global-config-migration`.
+- `security-review-module` and `verilog-module` are built by the plans that name them
+  (`2026-10-24-security-review-module`, `2026-10-28-verilog-module`).
 - Out of the first version: Codex as a harness, a way of working for CAD and EDA,
   harness swap, three-way merge on upgrade, and migration of the old projects.
 
-## Suggested order
+## Order
 
-`approve-specs`, `adopt-conventions`, `installer-core-verifier`, `module-approvals`,
-`installer-interface`, `base-and-manifests`,
-`ownership-and-upgrade`, `claude-harness`, `verify-opencode`, `opencode-harness`,
-`groundwork-module`, `researcher-fetch-tool`, `code-work-plans`, `module-boundary-kit`,
-`module-commands`, `module-checks`, `module-harness-paths`, `code-work-commit`,
-`checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint`, `compaction-guidance`,
-`remote-runner-module`, `review-engine`, `delegated-approval`, `action-review-engine`,
-`mempalace-module`, `graphify-module`, `knowledge-base-package`, `port-superpowers`,
-`architecture-decisions-merge`, `agent-confinement`, `security-review-module`, `verilog-module`, `cad-modules`,
-`global-settings-check`, `mempalace-scoping`, `checkpoint-levels-beyond-block`, `global-config-migration`, `self-hosting`, `adopt-existing-repository`,
-`remaining-modules-rename`.
+There is none. Candidates carry no required order, as `docs/roadmaps/README.md` says; read each candidate's dependencies and
+promotion trigger. A list of identifiers here would drift as candidates are added.
 
 ## Candidates
 
@@ -245,7 +214,7 @@ owner's request. No code.
 that follows is planned, recorded and archived the way the specs say. The plans,
 decisions and roadmaps READMEs and `AGENTS.md` describe dated plan and decision names,
 the `Candidate:` and `Specs:` lines, and no fixed `next.md`; the placeholder `next.md`
-is replaced by that convention; harness files and the old `.template-manifest` are
+is replaced by that convention; harness files and the old template's manifest are
 excluded before the first commit; and the documents state which checks are enforced by
 the installer once built and until then by the owner in session.
 **Dependencies:** `approve-specs`.
@@ -557,13 +526,18 @@ MCP rendering, and no installation or configuration of the program. Writes to th
 ### graphify-module — The `graphify` module
 
 **Outcome:** the optional module `graphify`, which provides `code-graph` for questions of structure and impact. It is
-designed afresh, with the owner's earlier `graphify` skill, helper and template module as lessons learned and not as a
-source to port. It keeps the freshness status and the rule that an old graph is orientation only, written as neutral
+designed afresh, with the owner's earlier `graphify` skill, helper and template module (held in the old template repository
+and, in part, the former user-level backup) as lessons learned and not as a source to port. It keeps the freshness status and the rule that an old graph is orientation only, written as neutral
 skills and a pinned helper. It carries no plan receipt and no gate: the discovery gate was dropped on 2026-10-19
 (`code-work.md`: no discovery gate). Whether it is built at all is the owner's choice.
 **Dependencies:** `mempalace-module` (for the shared conventions it shows).
 **Boundary:** the module and a spec of its own. It does not ingest conversation history or the knowledge base.
 The graph output is untracked. This candidate takes `graphify` out of `remaining-modules-rename`.
+A read-only check on 2026-10-29 found that the module's files, its helper `tools/graphify` and its agent exist in full only in the old
+template repository (module tree of 15 files, hash `00036b7b5933`; helper of 6 files, `a8a2a9e870e5`; head of that repository
+`9b0decb8c07f`, 2026-10-19), and that the backup keeps only older dated copies of the skill and the agent (4 files, `7b85d96a59d6`;
+`305059869319`). The old template repository is archived only after this candidate has taken what it needs from it. A hash here is the
+first 12 hex digits of the SHA-256 of the sorted relative file names and contents.
 **Promotion trigger:** `mempalace-module` complete and the owner chooses to begin it.
 
 ### knowledge-base-package — The knowledge base as a package
@@ -580,7 +554,7 @@ because it exists. It does not hold decisions or conversation, and nothing track
 
 ### port-superpowers — Port the superpowers skills the owner uses into neutral skills
 
-**Outcome:** an inventory of the superpowers skills the owner's global configuration and agents
+**Outcome:** an inventory of the superpowers skills the owner's former global configuration (the backup) and agents
 rely on (brainstorming, planning, plan execution, code review, test-driven development, systematic
 debugging, verification before completion, worktrees and branch finishing), each recorded as used
 or not, already covered by a workbench rule or skill, or a gap; the module each ported skill belongs
@@ -595,8 +569,8 @@ git-specific slice was taken by `2026-10-22-safe-git-module`: the `commit-change
 `using-git-worktrees` and `finishing-a-development-branch` are recorded as not ported, with the reasons, in
 `docs/specs/safe-git.md`; this candidate starts from that and does not revisit git.
 Each further port is its own candidate. Whether the superpowers wording may be reused is checked
-against its licence before any text is copied, and the default is to write new text. Removing
-superpowers from the owner's `~/.claude` belongs to `global-config-migration`.
+against its licence before any text is copied, and the default is to write new text. The reset of `~/.claude` on 2026-10-29
+moved the former configuration into a backup; whether any superpowers item returns is settled in `global-config-migration`.
 **Promotion trigger:** `increment-loop-and-review-skills` complete.
 
 The next seven candidates (`architecture-decisions-merge` to `mempalace-scoping`) came from a first-pass inventory of the owner's global Claude configuration and the two earlier
@@ -657,7 +631,10 @@ stays is open.
 **Dependencies:** `claude-harness`, `groundwork-module`.
 **Boundary:** the two modules. The FreeCAD skill is large (about 28 KB with ten reference files) and carries one script that
 runs only under FreeCAD's own interpreter, so its helper is pinned and approved like any other code. A way of working for
-CAD (`cad-work`) stays deferred.
+CAD (`cad-work`) stays deferred. A read-only check on 2026-10-29 found the sources in full only in the old template repository
+(`cad`, 6 files, hash `9aa7270b0ba8`; `cad-freecad`, 20 files, `f99af34499e2`, of which the skill is 12 files, `f2f93e728e78`); the
+backup keeps one dated copy of the skill's script and no more. The old template repository is archived only after this candidate has
+taken what it needs from it. The hashes are computed as for `graphify-module`.
 **Promotion trigger:** the owner chooses to begin it.
 
 ### global-settings-check — Where a global setting may conflict with a project's
@@ -691,9 +668,9 @@ the owner. A default wing per project is a larger change and is not part of this
 no key should be limited to `block`; this closes the gap that spec lists. Today `delegate` takes effect for `approve-plan`
 only, so this widens it.
 **Dependencies:** `checkpoint-settings-and-caps`, `push-checkpoint`, `remote-runner-module` and `delegated-approval` (all
-complete). The decision `2026-10-28-every-key-offers-the-approve-plan-levels`, which is `Proposed` and not yet accepted by
-the owner, on what `ask`, `delegated` and `none` mean for each key, in particular for the two agent checkpoints that no installer command runs and for what a review may stand for at a
-push or a remote job.
+complete). The decision `2026-10-28-every-key-offers-the-approve-plan-levels`, accepted by the owner on 2026-10-29, on what `ask`,
+`delegated` and `none` mean for each key, in particular for the two agent checkpoints that no installer command runs and for what a
+review may stand for at a push or a remote job.
 **Boundary:** the command keys need their own preview digest before `ask` can work, and a delegated route for each; the
 agent checkpoints (`fetch-remote-output`, `change-direction`) and `accept-decision`, which no command runs, need the decision
 and a way to record the level. `wb release-approvals` runs where no project level can be read, so it needs a decision on where
@@ -745,37 +722,39 @@ decision, the identity convention in the module READMEs, the `verilog` module de
 owner can set to `Current`. Accepted decisions are not edited.
 **Promotion trigger:** the owner chooses to begin it.
 
-### global-config-migration — Move the owner's global Claude configuration into modules
+### global-config-migration — What remains of the owner's global Claude configuration
 
-**Outcome:** a working vision, which may change as the design is worked out: the owner maintains `~/.claude` and the
-project maintains `<project>/.claude`, and what `~/.claude` carried for project work is supplied by installed modules, so a
-project gives a consistent workbench experience whatever the owner's global settings are. What the project can guarantee
-under any global setup is a floor (its `deny` and `ask` rules, edit gate, owner-run refusals and hard stops); a trial on
-2026-10-24 (Claude Code 2.1.310) found a project `deny` and `ask` holding against a global `allow` and `auto` mode, a global
-hook running beside the project's, a global skill replacing a project skill of the same name, and a project agent replacing
-a global one. The owner decides which global items to remove, and keeps the rest:
-the owner's own `allow` rules (the workbench never writes `allow`), machine-level settings such as authentication, model
-choice and remote hosts, and anything wanted in a project that has no workbench. The owner's earlier repositories,
-`claude_global_config` and `claude_project_template`, are lessons learned and go away when the workbench can run without
-them; there is no mirror to keep in step.
+**Outcome:** what `~/.claude` carried for project work is supplied by installed modules, so a project gives a consistent
+workbench experience whatever the owner's global settings are. This overtook the first plan, which was to remove global items one
+at a time, each only after a test showed a project behaving the same without it. On 2026-10-29 the owner reset the user level to
+the harness's defaults in one step and kept the former configuration as a backup, so the guarantee that no hard stop, deny rule
+or approver is ever absent in between no longer applies to the removal; the floor carries it from here. What remains is: (1)
+re-adopting from the backup, one item at a time and only on the owner's word, what the workbench does not supply; (2) the floor
+test, a recorded run, repeated against the reset configuration, that a project's `deny` and `ask` rules, edit gate, owner-run
+refusals and hard stops hold under the owner's own global settings (the trial of 2026-10-24, Claude Code 2.1.310, found a project
+`deny` and `ask` holding against a global `allow` and `auto` mode, a global hook running beside the project's, a global skill
+replaced by a project skill of the same name, and a project agent replacing a global one); and (3) archiving the two earlier
+repositories, `claude_global_config` and `claude_project_template`, once nothing is still needed from them. The owner keeps their
+own `allow` rules (the workbench never writes `allow`), machine-level settings such as authentication, model choice and remote
+hosts, and anything wanted in a project that has no workbench. The earlier repositories are lessons learned; there is no mirror to
+keep in step.
 **Dependencies:** `checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint`,
 `compaction-guidance`, `remote-runner-module`, `review-engine`, `action-review-engine`, and `groundwork-module`; hooks
 rendering for Claude (built by `checkpoint-settings-and-caps`); and the candidates from the inventory of the global
 configuration that supply a global item: `architecture-decisions-merge`, `security-review-module`, `verilog-module` and
 `cad-modules`.
-**Boundary:** the first step is a line-by-line comparison of the global agents, skills, hooks, `settings.json` and
-`CLAUDE.md` against the specs and modules, recording what was and was not inspected and a disposition for every item found
-(move, redesign, drop, or keep global); the first-pass inventory behind the seven candidates before this one is its
-starting point and not its end. Then one global item at a time, each moved only after a test or a recorded run
-shows a project behaves the same without the global copy, so no hard stop, deny rule or approver is ever absent in
-between. The superpowers dependencies are items to settle: the three agents' `skills:` lists that name plugin skills, the
+**Boundary:** the first step is to finish the comparison that `docs/specs/global-config-inventory.md` begins, of the agents,
+skills, hooks, `settings.json` and `CLAUDE.md` in the backup against the specs and modules, recording what was and was not inspected
+and a disposition for every item (move, redesign, drop, or keep global); the backup holds credential-bearing material, so the record
+names items by role and existence and never by value. Then the floor test above, then one item at a time from the backup, each
+re-adopted only on the owner's word. The superpowers dependencies are items to settle: the three agents' `skills:` lists that name plugin skills, the
 routing in the owner's `CLAUDE.md`, the session-start rule that tells an agent to look for a skill, and the gaps recorded
 in `superpowers-ports.md` (parallel agents, writing skills, a fresh implementer per increment). It also settles the open
 question whether the settings file's own path is denied for edits (`harness-modules.md`, "As built, and its limits"). It
 does not move the owner's `allow` rules and does not change what the installer writes.
 **Promotion trigger:** `checkpoint-settings-and-caps`, `increment-loop-and-review-skills`, `push-checkpoint`,
 `compaction-guidance`, `remote-runner-module`, `review-engine` and `action-review-engine` complete, and the owner chooses
-to begin removing items from `~/.claude`. Each of those earlier plans lists the global items it replaces, so this
+to begin re-adopting items from the backup. Each of those earlier plans lists the global items it replaces, so this
 candidate starts from that list.
 
 ### self-hosting — Self-hosting
@@ -826,35 +805,4 @@ disposition of each `diverged` seeded file recorded by `self-hosting` is decided
 
 ## Related decisions
 
-Accepted 2026-10-19, in `docs/decisions/`:
-
-- `2026-10-19-closed-module-types`
-- `2026-10-19-harness-files-per-clone`
-- `2026-10-19-uniform-package-trust`
-- `2026-10-19-guarded-store`
-- `2026-10-19-compiled-hard-stop-floor`
-- `2026-10-19-restrictive-only-permissions`
-- `2026-10-19-mandatory-review-personal-delegation`
-- `2026-10-19-groundwork-shared-layer`
-- `2026-10-19-derived-completion-slugs-dated-names`
-- `2026-10-19-non-destructive-upgrades`
-- `2026-10-19-tracked-pointer-rule`
-- `2026-10-19-implementation-language`
-
-Accepted 2026-10-20:
-
-- `2026-10-20-fixed-store-location`
-- `2026-10-20-first-party-by-location-and-shipped-record`
-- `2026-10-20-isolated-launcher-invocation`
-- `2026-10-20-target-decided-by-state`
-- `2026-10-20-preview-then-owner-run-write`
-
-Accepted 2026-10-21:
-
-- `2026-10-21-reference-index-format`
-- `2026-10-21-installer-runs-document-checks`
-
-Accepted 2026-10-22:
-
-- `2026-10-22-git-work-in-its-own-module`
-- `2026-10-22-model-calls-go-through-vendor-bridges`
+Decisions are listed, with their status, in `docs/decisions/`. This roadmap keeps no copy of that list.
