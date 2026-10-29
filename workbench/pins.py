@@ -9,8 +9,14 @@ the hash and the helper is not run until the owner pins it again.
 
 The file is strict JSON::
 
-    {"format": 1, "pins": {"<name>": {"path": "<relative>", "pinned_by": "<user>",
+    {"format": 2, "pins": {"<name>": {"path": "<relative>", "pinned_by": "<Name <email>> or a role",
                                       "sha256": "<64 hex>", "time": "<UTC>"}}}
+
+The file is written at ``format 2``; a ``format 1`` file is read. A pin made by ``pin`` also records ``"via"``
+(``terminal`` or ``none``, the level the run was authorized under), and its ``pinned_by`` is then the git identity
+``Name <email>`` (``identity.py``; at most 256 characters). A pin without ``via`` keeps its earlier ``pinned_by``, at most 64
+characters: the role text of an installer or acknowledge pin, or the account name an earlier ``pin`` wrote. ``via`` is not
+allowed in a ``format 1`` file. Neither ``pinned_by`` nor ``via`` is read by any check.
 
 A Python helper that runs through the kit runner also records ``"kit": <API number>``; a pin
 without it runs the helper directly. A pin the installer makes also records ``"declaration"``, the
@@ -38,10 +44,14 @@ import json
 import os
 import re
 
-from . import approvals, approve, declarations
+from . import approvals, approve, declarations, identity
 from .wbkit import display, safefs
 
-FORMAT = 1
+FORMAT = 2
+FORMATS = (1, 2)
+VIAS = ("terminal", "none")
+OLD_PINNED_BY_LIMIT = 64
+PINNED_BY_LIMIT = 256
 CONFIRM_CHARS = 12
 PREVIEW_LINES = 15
 PREVIEW_WIDTH = 160
@@ -51,11 +61,11 @@ _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}\Z")
 _HEX = re.compile(r"^[0-9a-f]{64}\Z")
 _TIME = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\Z")
 _FIELDS = ("path", "pinned_by", "sha256", "time")
-_OPTIONAL = ("kit", "declaration")
+_OPTIONAL = ("kit", "declaration", "via")
 MAX_KIT = declarations.MAX_KIT
 
-Pin = collections.namedtuple("Pin", "name path sha256 pinned_by time kit declaration",
-                             defaults=(None, None))
+Pin = collections.namedtuple("Pin", "name path sha256 pinned_by time kit declaration via",
+                             defaults=(None, None, None))
 
 
 class PinError(Exception):
@@ -92,9 +102,10 @@ def parse(data):
         document = declarations.parse_json(data)
     except ValueError as exc:
         raise PinError("the pins file is not valid (%s)" % exc)
-    if set(document) != {"format", "pins"} or document["format"] != FORMAT \
-            or isinstance(document["format"], bool) or not isinstance(document["pins"], dict):
+    if set(document) != {"format", "pins"} or type(document["format"]) is not int \
+            or document["format"] not in FORMATS or not isinstance(document["pins"], dict):
         raise PinError("the pins file does not have the expected format")
+    fmt = document["format"]
     pins = {}
     for name, entry in document["pins"].items():
         check_name(name)
@@ -106,8 +117,18 @@ def parse(data):
         if not isinstance(entry["sha256"], str) or not _HEX.match(entry["sha256"]):
             raise PinError("pin %s has a bad hash" % display.ascii_text(name)[:80])
         who = entry["pinned_by"]
-        if not isinstance(who, str) or not who or len(who) > 64 or not who.isprintable():
+        via = entry.get("via")
+        if "via" in entry:
+            if fmt == 1 or not isinstance(via, str) or via not in VIAS:
+                raise PinError("pin %s has a bad via" % display.ascii_text(name)[:80])
+        limit = PINNED_BY_LIMIT if via is not None else OLD_PINNED_BY_LIMIT
+        if not isinstance(who, str) or not who or len(who) > limit or not who.isprintable():
             raise PinError("pin %s has a bad pinned_by" % display.ascii_text(name)[:80])
+        if via is not None:
+            try:
+                identity.parse(who)
+            except identity.IdentityError:
+                raise PinError("pin %s has a pinned_by that is not a git identity" % display.ascii_text(name)[:80])
         if not isinstance(entry["time"], str) or not _TIME.match(entry["time"]):
             raise PinError("pin %s has a bad time" % display.ascii_text(name)[:80])
         kit = entry.get("kit")
@@ -116,7 +137,7 @@ def parse(data):
         declaration = entry.get("declaration")
         if "declaration" in entry and (not isinstance(declaration, str) or not _HEX.match(declaration)):
             raise PinError("pin %s has a bad declaration hash" % display.ascii_text(name)[:80])
-        pins[name] = Pin(name, path, entry["sha256"], who, entry["time"], kit, declaration)
+        pins[name] = Pin(name, path, entry["sha256"], who, entry["time"], kit, declaration, via)
     return pins
 
 
@@ -132,6 +153,8 @@ def _entry(pin):
         entry["kit"] = pin.kit
     if pin.declaration is not None:
         entry["declaration"] = pin.declaration
+    if pin.via is not None:
+        entry["via"] = pin.via
     return entry
 
 
@@ -162,13 +185,14 @@ def lookup(store, project_id, name):
     return pins[name]
 
 
-def set_pin(store, project_id, name, path, sha256, pinned_by, time=None, kit=None):
-    """Record or replace one pin, keeping the others. Refuses to touch a damaged file."""
+def set_pin(store, project_id, name, path, sha256, pinned_by, time=None, kit=None, via=None):
+    """Record or replace one pin, keeping the others. Refuses to touch a damaged file. A pin made by a person has a `via`
+    and a `pinned_by` that is ``Name <email>``."""
     check_name(name)
     pins = load(store, project_id)
     if kit is not None:
         check_kit(kit)
-    pins[name] = Pin(name, path, sha256, pinned_by, time or approvals.utc_now(), kit)
+    pins[name] = Pin(name, path, sha256, pinned_by, time or approvals.utc_now(), kit, None, via)
     data = serialize(pins)
     parse(data)   # nothing is written that a read would refuse
     try:
@@ -229,6 +253,11 @@ def run(store, project_id, name, helper, root, stdin, stdout, err, kit=None, log
     if log is None and not (approve.is_terminal(stdin) and approve.is_terminal(stdout)):
         return _refuse(err, TERMINAL_ONLY)
     try:
+        who = identity.read().text  # first: a missing identity refuses before anything is shown or asked
+    except identity.IdentityError as exc:
+        return _refuse(err, str(exc))
+    via = "terminal" if log is None else "none"
+    try:
         check_id(project_id)
         check_name(name)
         if kit is not None:
@@ -269,11 +298,12 @@ def run(store, project_id, name, helper, root, stdin, stdout, err, kit=None, log
 
     def apply():
         try:
-            pin = set_pin(store, project_id, name, rel, digest, approve.approver_name(), kit=kit)
+            pin = set_pin(store, project_id, name, rel, digest, who, kit=kit, via=via)
         except PinError as exc:
             return _refuse(err, str(exc))
-        stdout.write("pinned %s -> %s (sha256 %s)\n" % (display.ascii_text(pin.name),
-                                                        display.ascii_text(pin.path), pin.sha256))
+        stdout.write("pinned %s -> %s (sha256 %s) by %s%s\n" % (
+            display.ascii_text(pin.name), display.ascii_text(pin.path), pin.sha256, display.ascii_text(pin.pinned_by),
+            " (no gate)" if pin.via == "none" else ""))
         return 0
 
     return apply() if log is None else log(digest, apply)

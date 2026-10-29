@@ -12,13 +12,17 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT = "a" * 64
 OTHER = "b" * 64
 SHA = "c" * 64
+IDENT = "Example Approver <12345+example@users.noreply.github.com>"
 PROMPT = b"Anything else cancels and records nothing.\r\n> "
 HELPER = "#!/bin/sh\necho helper ran\n"
 
 
 class Base(unittest.TestCase):
+    identity_mode = "fixed"
+
     def setUp(self):
         support.forbid_real_store(self)
+        self.who = support.fixed_identity(self)
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.base = os.path.realpath(self.tmp.name)
@@ -48,7 +52,7 @@ class PinFileTest(Base):
                      "2026-10-20T08:00:00Z")
         with open(self.pins_path()) as handle:
             self.assertEqual(handle.read(), (
-                '{\n  "format": 1,\n  "pins": {\n    "commit": {\n      "path": "tools/helper.sh",\n'
+                '{\n  "format": 2,\n  "pins": {\n    "commit": {\n      "path": "tools/helper.sh",\n'
                 '      "pinned_by": "owner",\n      "sha256": "%s",\n'
                 '      "time": "2026-10-20T08:00:00Z"\n    }\n  }\n}\n' % SHA))
 
@@ -101,6 +105,55 @@ class PinFileTest(Base):
         with self.assertRaisesRegex(pins.PinError, "no pin named"):
             pins.lookup(self.store, PROJECT, "two")
 
+    def test_a_format_1_file_is_read_and_the_next_write_gives_format_2_and_keeps_every_pin_whole(self):
+        self.put(self.good())
+        got = pins.lookup(self.store, PROJECT, "one")
+        self.assertEqual(("owner", None), (got.pinned_by, got.via))
+        pins.set_pin(self.store, PROJECT, "two", "a/two.sh", SHA, IDENT, "2026-10-21T08:00:00Z", via="terminal")
+        with open(self.pins_path()) as handle:
+            document = json.load(handle)
+        self.assertEqual(2, document["format"])
+        self.assertEqual(self.good()["pins"]["one"], document["pins"]["one"])
+        self.assertEqual((IDENT, "terminal"), (document["pins"]["two"]["pinned_by"], document["pins"]["two"]["via"]))
+
+    def test_a_pin_made_by_a_person_round_trips_with_its_via(self):
+        for via in ("terminal", "none"):
+            with self.subTest(via=via):
+                pins.set_pin(self.store, PROJECT, "one", "a/one.sh", SHA, IDENT, "2026-10-21T08:00:00Z", via=via)
+                got = pins.lookup(self.store, PROJECT, "one")
+                self.assertEqual((IDENT, via), (got.pinned_by, got.via))
+
+    def test_a_role_text_pin_has_no_via_and_keeps_its_old_limit_of_64(self):
+        pins.set_pin(self.store, PROJECT, "one", "a/one.sh", SHA, "workbench install", "2026-10-21T08:00:00Z")
+        self.assertIsNone(pins.lookup(self.store, PROJECT, "one").via)
+        with open(self.pins_path()) as handle:
+            self.assertNotIn("via", json.load(handle)["pins"]["one"])
+        with self.assertRaises(pins.PinError):
+            pins.set_pin(self.store, PROJECT, "two", "a/two.sh", SHA, "x" * 65, "2026-10-21T08:00:00Z")
+
+    def test_a_via_needs_an_identity_and_one_of_the_two_values(self):
+        for label, who, via in (("not an identity", "bob", "terminal"), ("outside the grammar", "Name <a b@c.d>", "none"),
+                                ("a bad via", IDENT, "ask"), ("an empty via", IDENT, ""), ("a delegated via", IDENT, "delegated")):
+            with self.subTest(label):
+                with self.assertRaises(pins.PinError):
+                    pins.set_pin(self.store, PROJECT, "one", "a/one.sh", SHA, who, "2026-10-21T08:00:00Z", via=via)
+                self.assertFalse(os.path.exists(self.pins_path()))
+
+    def test_a_format_2_file_is_refused_when_a_via_and_a_pinned_by_do_not_agree(self):
+        def two(**entry):
+            item = {"path": "a/one.sh", "pinned_by": IDENT, "sha256": SHA, "time": "2026-10-20T08:00:00Z", "via": "terminal"}
+            item.update(entry)
+            return {"format": 2, "pins": {"one": item}}
+        self.put(two())
+        self.assertEqual("terminal", pins.lookup(self.store, PROJECT, "one").via)
+        for label, data in (("a pinned_by that is not an identity", two(pinned_by="bob")),
+                            ("a bad via", two(via="ask")), ("a via that is not text", two(via=1)),
+                            ("a via of null", two(via=None)), ("a 257 character pinned_by", two(pinned_by="x" * 257))):
+            with self.subTest(label):
+                self.put(data)
+                with self.assertRaises(pins.PinError):
+                    pins.load(self.store, PROJECT)
+
     def put(self, data, project=PROJECT):
         path = self.pins_path(project)
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -114,7 +167,8 @@ class PinFileTest(Base):
 
     def test_every_malformed_file_fails_closed(self):
         bad = [b"", b"{", b"[]", b"null", b"\xff", b'{"format": 1, "format": 1, "pins": {}}',
-               {"format": 2, "pins": {}}, {"format": True, "pins": {}}, {"format": 1},
+               {"format": 3, "pins": {}}, {"format": True, "pins": {}}, {"format": 1},
+               self.good(via="terminal"),  # a via is not allowed in a format 1 file
                {"format": 1, "pins": []}, {"format": 1, "pins": {}, "extra": 1},
                self.good(path="/abs"), self.good(path="../x"), self.good(path=".git/config"),
                self.good(path="a\\b"), self.good(path=""), self.good(path=5),
@@ -197,8 +251,8 @@ class PinFileTest(Base):
 class PinCommandTest(Base):
     def drive(self, args, answer=None, **kwargs):
         env = dict(os.environ, HOME=self.home, PYTHONPATH=ROOT, PYTHONDONTWRITEBYTECODE="1",
-                   PATH=support.clean_path())
-        return support.drive_pty(self, [sys.executable, "-B", "-m", "workbench", "pin"] + list(args),
+                   PATH=support.clean_path(), TEST_IDENTITY=self.identity_mode)
+        return support.drive_pty(self, [sys.executable, "-B", "-c", support.CHILD, "pin"] + list(args),
                                  env, self.base, answer, PROMPT, **kwargs)
 
     def digest(self):
@@ -211,8 +265,19 @@ class PinCommandTest(Base):
         self.assertEqual((code, error), (0, ""), output)
         pin = pins.lookup(self.store, PROJECT, "commit")
         self.assertEqual((pin.path, pin.sha256), ("tools/helper.sh", self.digest()))
-        self.assertEqual(pin.pinned_by, approve.approver_name())
-        self.assertIn("pinned commit -> tools/helper.sh", output)
+        self.assertEqual((pin.pinned_by, pin.via), (self.who.text, "terminal"))
+        self.assertIn("pinned commit -> tools/helper.sh (sha256 %s) by %s\r\n" % (self.digest(), self.who.text), output)
+        with open(self.pins_path()) as handle:
+            self.assertEqual(2, json.load(handle)["format"])
+
+    def test_a_missing_identity_refuses_before_anything_is_shown_or_asked(self):
+        self.identity_mode = "missing"
+        code, output, error = self.drive([PROJECT, "commit", self.helper, "--root", self.root],
+                                         answer=self.digest()[:12])
+        self.assertEqual(1, code)
+        self.assertIn("refused: no identity here", error)
+        self.assertNotIn("sha256", output)
+        self.assertFalse(os.path.exists(self.pins_path()))
 
     def test_kit_is_recorded_and_shown_when_given(self):
         code, output, error = self.drive([PROJECT, "py", self.helper, "--root", self.root,

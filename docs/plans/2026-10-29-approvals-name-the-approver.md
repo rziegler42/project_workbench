@@ -249,8 +249,8 @@ applied; the third round's finding was applied after the last round, so no round
 
 ## Result
 
-**Increment A is done and committed (`6f2e957`, `67e4d1a`, `d3b0539`); Increment B is done and awaits the owner's word to commit; C and
-D are not started.**
+**Increment A is done and committed (`6f2e957`, `67e4d1a`, `d3b0539`); Increment B is done and committed (`3aae9c5`); Increment C is
+done and awaits the owner's word to commit; D is not started.**
 
 ### Increment A
 
@@ -331,3 +331,40 @@ D are not started.**
   Not applied: a test of a rewrite of a legacy delegated entry through the file (covered by the parse and serialize round trip).
 - **Not done.** The owner's own trial of `wb approve-plan` with the real identity, which the agent does not run. Increment C removes
   the last callers of `approve.approver_name`, which `approve` and `pin` still use.
+
+### Increment C
+
+- **Done.** `workbench/approvals.py`: a record is written at format 2 exactly when it has a `via` (`terminal` or `none`), with the
+  approver as `Name <email>` (at most 256 characters, parsed by `identity.parse`); a format 1 record is read and checked as before;
+  the release passes no `via`, so it still writes format 1 with `workbench-release`, byte for byte the same twice, and no shipped
+  record changed. `workbench/pins.py`: format 2 is written and format 1 read; `via` is optional, present for a pin made by `wb pin`
+  (with an identity as `pinned_by`, up to 256 characters) and absent for the installer's and `acknowledge`'s pins, which keep their
+  role text and the 64-character limit; `via` is refused in a format 1 file. `workbench/approve.py` and `pins.run` read the identity
+  first (before a download, a request, a prompt or a read of the helper), record `terminal` or `none`, and print ` by X` or
+  ` by X (no gate)`; a repeat names the approver on file. `approve.approver_name`, its `owner` fallback and the `pwd` import are gone;
+  nothing calls it. No source file writes the literal `owner` as an approver (the remaining hits are the declaration key `owner` and
+  tests that use it as role text for a pin).
+- **A mistake of mine, and a rule.** `workbench/pins.py` is code that the live edit and command gates load. I edited it in an order
+  that left `FORMAT = 2` while the reader still required the file's format to equal `FORMAT`, so the gate refused every further edit,
+  including the one that would repair it. I did not route around the refusal. The owner ran `git checkout -- workbench/pins.py`, which
+  discarded only those 14 lines, and I redid the change so that every intermediate state still read the format 1 file and
+  `FORMAT = 2` was the last edit. Rule for the rest of this plan: a parser or format that the gates load changes in an order that never
+  leaves the stored file unreadable, or in one write.
+- **Tests, first written after the code in part.** `tests/support.py` has `CHILD`, a stub that runs the command in a child process
+  with the identity fixed (or missing), used by `test_approve.py` and `test_pins.py` so no test reads the machine's identity. New and
+  changed: `test_approvals.py` 50 (a `ViaTest` class and format 2 parse cases), `test_approve.py` 55 (the old account-name tests
+  replaced), `test_pins.py` 38 (format 1 read, format 2 written, `via` rules), `test_approve_pin_levels.py` 33 (the level `none`
+  records `none`, a missing identity writes and logs nothing).
+- **Verification as run.** The whole `run_all.py`: 6,022 tests in 12 roots, OK (it ran before the last small edits; the four edited
+  files were run again after them and pass). A mutation that forced `via` to always read `terminal` made 2 tests fail.
+  `wb verify packages/workbench` runs with no refusal (no package file changed, so no release); `wb check` and
+  `wb run code-work check` report no problems.
+- **Review.** One read-only reviewer pass: no blocking finding. Applied: `test_approve.py` uses the shared `support.CHILD` instead of its
+  own copy; the `pins.py` docstring example shows the new `pinned_by`. Not applied, with reasons: reading stored identities more
+  leniently (the grammar uses the Python version's Unicode tables, so a name written under newer tables could make an older Python
+  refuse a pins file, which the gates load; rare, since the owner's name is ASCII, and fixing it would also change the reader of
+  Increment B; it is a known limit for the owner to weigh); the gate now imports `identity` and with it `subprocess`, `selectors`
+  and `pwd` (no import cycle; the gate runs).
+- **For Increment D to cover.** `trust-and-approval.md` lines 392, 397, 500, 695 and 831 and the approval record formats; and
+  `docs/development.md` line 258 ("the account name from the operating system's user database").
+- **Not done.** The owner's own trial with the real identity.

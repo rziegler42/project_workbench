@@ -16,9 +16,15 @@ is a different key and has no approval. Two kinds exist:
 
 The record is strict JSON with exactly these fields, no others::
 
-    format 1, kind, subject, declaration_hash, tree_hash, approver, time (UTC,
+    format, kind, subject, declaration_hash, tree_hash, approver, time (UTC,
     ``YYYY-MM-DDTHH:MM:SSZ``), workbench_version, and for a package also modules and
     commit (a lowercase hex commit id, or null).
+
+Two formats are read. ``format 1`` is what a release writes and what earlier approvals are: the approver is text of at most
+64 characters, a role or an account name. ``format 2`` is an approval made by a person (``approve``): it adds ``via``
+(``terminal`` or ``none``, the level the run was authorized under) and the approver is the git identity ``Name <email>``
+(``identity.py``), at most 256 characters. A record is written at format 2 exactly when it has a ``via``; the release writes
+format 1, so a second release still gives identical files. The approver and ``via`` are provenance: no check reads them.
 
 A check fails closed. A record that is missing, is not a regular file inside a real
 directory, cannot be read, is malformed, or whose stored hashes, kind or key differ from
@@ -44,10 +50,15 @@ import hashlib
 import json
 import re
 
-from . import __version__, declarations
+from . import __version__, declarations, identity
 from .wbkit import safefs
 
-FORMAT = 1
+FORMAT = 1       # what a release writes: the approver is a role and the record has no `via`
+FORMATS = (1, 2)
+VIA_FORMAT = 2   # an approval made by a person: the approver is `Name <email>` and the record has a `via`
+VIAS = ("terminal", "none")
+OLD_APPROVER_LIMIT = 64
+APPROVER_LIMIT = 256
 KINDS = ("module", "package")
 RECORD_NAME = "approval.json"
 
@@ -60,7 +71,7 @@ _MODULE_ENTRY = ("name", "declaration_hash", "tree_hash")
 
 Approval = collections.namedtuple(
     "Approval", "kind subject declaration_hash tree_hash approver time workbench_version "
-                "modules commit")
+                "modules commit via", defaults=(None,))
 Check = collections.namedtuple("Check", "approved record reason")
 
 
@@ -128,14 +139,27 @@ def parse_record(data):
     kind = document.get("kind")
     if kind not in KINDS:
         raise ApprovalError("'kind' must be 'module' or 'package'")
-    expected = set(_COMMON) | ({"modules", "commit"} if kind == "package" else set())
+    fmt = document.get("format")
+    known = type(fmt) is int and fmt in FORMATS
+    expected = (set(_COMMON) | ({"modules", "commit"} if kind == "package" else set())
+                | ({"via"} if known and fmt == VIA_FORMAT else set()))
     if set(document) != expected:
         missing = sorted(expected - set(document))
         extra = sorted(set(document) - expected)
         raise ApprovalError("fields differ from the %s record format (missing %s, unknown %s)"
                             % (kind, missing, [declarations._shown(item) for item in extra]))
-    if document["format"] != FORMAT or isinstance(document["format"], bool):
+    if not known:
         raise ApprovalError("unsupported record format")
+    via = None
+    approver = _text(document, "approver", APPROVER_LIMIT if fmt == VIA_FORMAT else OLD_APPROVER_LIMIT)
+    if fmt == VIA_FORMAT:
+        via = document["via"]
+        if not isinstance(via, str) or via not in VIAS:
+            raise ApprovalError("'via' must be one of %s" % ", ".join(VIAS))
+        try:
+            identity.parse(approver)
+        except identity.IdentityError:
+            raise ApprovalError("'approver' must be a git identity, Name <email>")
     subject = _text(document, "subject", 129)
     if kind == "module":
         parts = subject.split("/")
@@ -154,8 +178,8 @@ def parse_record(data):
     return Approval(kind, subject,
                     _hash(document["declaration_hash"], "'declaration_hash'"),
                     _hash(document["tree_hash"], "'tree_hash'"),
-                    _text(document, "approver"), _timestamp(document["time"]),
-                    _text(document, "workbench_version"), modules, commit)
+                    approver, _timestamp(document["time"]),
+                    _text(document, "workbench_version"), modules, commit, via)
 
 
 def _modules(value):
@@ -179,11 +203,13 @@ def _modules(value):
 
 def _document(approval):
     document = {
-        "format": FORMAT, "kind": approval.kind, "subject": approval.subject,
+        "format": FORMAT if approval.via is None else VIA_FORMAT, "kind": approval.kind, "subject": approval.subject,
         "declaration_hash": approval.declaration_hash, "tree_hash": approval.tree_hash,
         "approver": approval.approver, "time": approval.time,
         "workbench_version": approval.workbench_version,
     }
+    if approval.via is not None:
+        document["via"] = approval.via
     if approval.kind == "package":
         document["modules"] = [
             {"name": n, "declaration_hash": d, "tree_hash": t} for n, d, t in approval.modules]
@@ -223,24 +249,25 @@ def _write(store, approval):
 
 
 def record_module(store, subject, declaration_hash, tree_hash, approver, time=None,
-                  workbench_version=__version__):
-    """Record that the owner approved one module. Returns the Approval now on file."""
+                  workbench_version=__version__, via=None):
+    """Record that the owner approved one module. Returns the Approval now on file. A `via` makes it an approval by
+    a person (the approver is ``Name <email>``); without one it is the role a release writes."""
     return _write(store, Approval("module", subject, declaration_hash, tree_hash, approver,
-                                  utc_now() if time is None else time, workbench_version, (), None))
+                                  utc_now() if time is None else time, workbench_version, (), None, via))
 
 
 def record_package(store, subject, declaration_hash, tree_hash, modules, approver, time=None,
-                   commit=None, workbench_version=__version__):
+                   commit=None, workbench_version=__version__, via=None):
     """Record that the owner approved a package and exactly the listed modules.
 
-    `modules` is a list of ``(name, declaration_hash, tree_hash)``.
+    `modules` is a list of ``(name, declaration_hash, tree_hash)``. `via` is as for ``record_module``.
     """
     if (not isinstance(modules, (list, tuple))
             or any(not isinstance(m, (list, tuple)) or len(m) != 3 for m in modules)):
         raise ApprovalError("modules must be a list of (name, declaration_hash, tree_hash)")
     return _write(store, Approval("package", subject, declaration_hash, tree_hash, approver,
                                   utc_now() if time is None else time, workbench_version,
-                                  tuple(sorted(tuple(m) for m in modules)), commit))
+                                  tuple(sorted(tuple(m) for m in modules)), commit, via))
 
 
 # --- checking -------------------------------------------------------------------

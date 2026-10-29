@@ -106,12 +106,25 @@ class ApproveAtNone(Base):
             self.assertTrue(approvals.check(self.guarded, "module", "%s/%s" % (info.name, name), item.declaration_hash,
                                             item.tree_hash).approved, name)
 
-    def test_the_record_is_the_one_a_terminal_approval_writes(self):
+    def test_the_record_is_the_one_a_terminal_approval_writes_with_the_level_as_its_via(self):
         info, modules = self.facts()
-        self.assertEqual(0, self.go(self.argv())[0])
+        code, out, err = self.go(self.argv())
+        self.assertEqual(0, code)
+        self.assertIn("approved package %s by %s (no gate)" % (info.name, self.who.text), out)
         record = approvals.check(self.guarded, "package", info.name, info.declaration_hash, info.tree_hash)
-        self.assertEqual(approve.approver_name(), record.record.approver)
+        self.assertEqual((self.who.text, "none"), (record.record.approver, record.record.via))
         self.assertEqual(sorted(modules), sorted(name for name, _, _ in record.record.modules))
+
+    def test_a_missing_identity_refuses_with_nothing_recorded_and_nothing_logged(self):
+        from workbench import identity
+        info, _ = self.facts()
+        with unittest.mock.patch.object(identity, "read", side_effect=identity.IdentityError("no identity here")):
+            code, out, err = self.go(self.argv())
+        self.assertEqual(1, code)
+        self.assertIn("refused: no identity here", err)
+        self.assertFalse(approvals.check(self.guarded, "package", info.name, info.declaration_hash,
+                                         info.tree_hash).approved)
+        self.assertEqual([], self.log_lines())
 
     def test_module_approves_only_that_module(self):
         info, modules = self.facts()
@@ -254,7 +267,18 @@ class PinAtNone(Base):
         pin = pins.lookup(self.guarded, self.project_id, "extra")
         with open(os.path.join(self.real, *HELPER.split("/")), "rb") as handle:
             digest = pins.hash_bytes(handle.read())
-        self.assertEqual((HELPER, digest, approve.approver_name(), None), (pin.path, pin.sha256, pin.pinned_by, pin.kit))
+        self.assertEqual((HELPER, digest, self.who.text, None, "none"),
+                         (pin.path, pin.sha256, pin.pinned_by, pin.kit, pin.via))
+        self.assertIn("by %s (no gate)" % self.who.text, out)
+
+    def test_a_missing_identity_refuses_with_no_pin_and_nothing_logged(self):
+        from workbench import identity
+        with unittest.mock.patch.object(identity, "read", side_effect=identity.IdentityError("no identity here")):
+            code, out, err = self.go(self.argv())
+        self.assertEqual(1, code)
+        self.assertIn("refused: no identity here", err)
+        self.assertNotIn("extra", pins.load(self.guarded, self.project_id))
+        self.assertEqual([], self.log_lines())
 
     def test_the_kit_is_recorded_as_at_a_terminal(self):
         self.assertEqual(0, self.go(self.argv("extra", None, None, "--kit", "1"))[0])

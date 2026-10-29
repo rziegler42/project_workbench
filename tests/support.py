@@ -60,6 +60,24 @@ def clean_path():
     return os.pathsep.join(keep)
 
 
+# A command run as a child process with the git identity fixed (TEST_IDENTITY=fixed) or missing (TEST_IDENTITY=missing), so no
+# test reads the identity of the machine it runs on: `[sys.executable, "-B", "-c", CHILD, <command words>]`.
+CHILD_NAME = "Example Approver"
+CHILD_EMAIL = "12345+example@users.noreply.github.com"
+CHILD = (
+    "import os, sys\n"
+    "from workbench import cli, identity\n"
+    "if os.environ['TEST_IDENTITY'] == 'missing':\n"
+    "    def read(home=None):\n"
+    "        raise identity.IdentityError('no identity here')\n"
+    "else:\n"
+    "    found = identity.check(%r, %r)\n"
+    "    def read(home=None):\n"
+    "        return found\n"
+    "identity.read = read\n"
+    "sys.exit(cli.main(sys.argv[1:]))\n" % (CHILD_NAME, CHILD_EMAIL))
+
+
 def drive_pty(case, command, env, cwd, answer=None, prompt=b"> ", between=None,
               stdin="pty", stdout="pty", timeout=30):
     """Run `command` in a child whose terminals are real pseudo-terminals and type `answer`.

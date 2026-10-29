@@ -14,7 +14,9 @@ import unittest
 import support
 import unittest.mock
 
-from workbench import approvals, approve, cli, declarations, request, store, verify
+import json
+
+from workbench import approvals, approve, cli, declarations, identity, request, store, verify
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIXTURE = os.path.join(ROOT, "tests", "fixtures", "sample-package")
@@ -36,9 +38,15 @@ def listing(top):
     return found
 
 
+NAME, EMAIL = support.CHILD_NAME, support.CHILD_EMAIL
+
+
 class Base(unittest.TestCase):
+    identity_mode = "fixed"
+
     def setUp(self):
         support.forbid_real_store(self)
+        self.who = support.fixed_identity(self, NAME, EMAIL)
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.base = os.path.realpath(self.tmp.name)
@@ -62,9 +70,9 @@ class Base(unittest.TestCase):
         """
         master, slave = pty.openpty()
         env = dict(os.environ, HOME=self.home, PYTHONPATH=ROOT, PYTHONDONTWRITEBYTECODE="1",
-                   PATH=support.clean_path())
+                   PATH=support.clean_path(), TEST_IDENTITY=self.identity_mode)
         proc = subprocess.Popen(
-            [sys.executable, "-B", "-m", "workbench", "approve"] + list(args),
+            [sys.executable, "-B", "-c", support.CHILD, "approve"] + list(args),
             stdin=slave if stdin == "pty" else subprocess.PIPE,
             stdout=slave if stdout == "pty" else subprocess.PIPE,
             stderr=subprocess.PIPE, env=env, cwd=self.base)
@@ -138,7 +146,7 @@ class PackageApprovalTest(Base):
         self.assertTrue(self.approved_module("sample-notes"))
         record = approvals.check_package(self.store, "sample", info.declaration_hash,
                                          info.tree_hash).record
-        self.assertEqual(record.approver, approve.approver_name())
+        self.assertEqual(record.approver, self.who.text)
         self.assertEqual(sorted(m[0] for m in record.modules), ["sample-harness", "sample-notes"])
 
     def test_the_request_is_printed_before_the_prompt(self):
@@ -278,7 +286,7 @@ class RecordingTest(Base):
     def record(self, module_name=None):
         info, modules = self.facts()
         out, err = io.StringIO(), io.StringIO()
-        code = approve._record(self.store, info, modules, module_name, out, err)
+        code = approve._record(self.store, info, modules, module_name, out, err, None, self.who.text, "terminal")
         return code, out.getvalue(), err.getvalue()
 
     def test_a_second_approval_in_the_same_second_still_says_already_approved(self):
@@ -675,19 +683,59 @@ class RefusalTest(Base):
         self.nothing_recorded()
 
 
-class ApproverTest(unittest.TestCase):
-    def test_the_approver_is_a_short_printable_name(self):
-        name = approve.approver_name()
-        self.assertTrue(name and len(name) <= 64 and name.isprintable())
+class ApproverTest(Base):
+    """The approver is the git identity, `Name <email>`, read first; `via` says how the run was authorized."""
 
-    def test_the_approver_does_not_come_from_the_environment(self):
-        saved = {k: os.environ.get(k) for k in ("USER", "LOGNAME", "LNAME", "USERNAME")}
-        self.addCleanup(lambda: [os.environ.__setitem__(k, v) if v is not None
-                                 else os.environ.pop(k, None) for k, v in saved.items()])
-        before = approve.approver_name()
-        for key in saved:
-            os.environ[key] = "someone-else"
-        self.assertEqual(approve.approver_name(), before)
+    def test_there_is_no_account_name_approver_any_more(self):
+        self.assertFalse(hasattr(approve, "approver_name"))
+
+    def test_the_record_holds_the_identity_and_terminal_and_the_output_says_who(self):
+        info, _ = self.facts()
+        code, output, error = self.drive([self.path], answer=info.tree_hash[:12])
+        self.assertEqual((code, error), (0, ""), output)
+        self.assertIn("approved package sample by %s\r\n" % self.who.text, output)
+        self.assertIn("approved module sample/sample-notes by %s\r\n" % self.who.text, output)
+        record = approvals.check_package(self.store, "sample", info.declaration_hash, info.tree_hash).record
+        self.assertEqual((self.who.text, "terminal"), (record.approver, record.via))
+        with open(os.path.join(self.store.root, "packages", approvals.record_key(
+                "package", info.declaration_hash, info.tree_hash), "approval.json"), encoding="ascii") as handle:
+            self.assertEqual(2, json.load(handle)["format"])
+
+    def test_a_missing_identity_refuses_before_anything_is_shown_or_asked(self):
+        info, _ = self.facts()
+        self.identity_mode = "missing"
+        code, output, error = self.drive([self.path], answer=info.tree_hash[:12])
+        self.assertEqual(1, code)
+        self.assertIn("refused: no identity here", error)
+        self.assertNotIn("type the first", output)
+        self.nothing_recorded()
+
+    def test_the_identity_does_not_come_from_the_environment_or_the_account_name(self):
+        info, _ = self.facts()
+        with unittest.mock.patch.dict(os.environ, {"USER": "someone-else", "LOGNAME": "someone-else",
+                                                    "GIT_AUTHOR_NAME": "Someone Else"}):
+            code, output, error = self.drive([self.path], answer=info.tree_hash[:12])
+        self.assertEqual((code, error), (0, ""), output)
+        self.assertIn(self.who.text, output)
+        self.assertNotIn("someone-else", output)
+        self.assertNotIn("Someone Else", output)
+
+    def test_a_repeat_names_the_approver_on_file_whatever_its_form(self):
+        info, modules = self.facts()
+        approvals.record_module(self.store, "sample/sample-notes", modules["sample-notes"].declaration_hash,
+                                modules["sample-notes"].tree_hash, "an-old-account", "2026-10-20T08:00:00Z")
+        code, output, error = self.drive([self.path, "--module", "sample-notes"],
+                                         answer=modules["sample-notes"].tree_hash[:12])
+        self.assertEqual((code, error), (0, ""), output)
+        self.assertIn("already approved module sample/sample-notes (by an-old-account on 2026-10-20T08:00:00Z); "
+                      "the earlier record is kept", output)
+
+    def test_a_release_still_writes_a_role_at_format_1_with_no_via(self):
+        info, _ = self.facts()
+        approvals.record_package(self.store, "sample", info.declaration_hash, info.tree_hash, [], "workbench-release",
+                                 "1970-01-01T00:00:00Z")
+        record = approvals.check_package(self.store, "sample", info.declaration_hash, info.tree_hash).record
+        self.assertEqual(("workbench-release", None), (record.approver, record.via))
 
 
 if __name__ == "__main__":
