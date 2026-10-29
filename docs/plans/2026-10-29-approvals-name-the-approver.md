@@ -1,6 +1,6 @@
 # Approvals name the approver by git identity
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-29
 Candidate: workbench-v1#approval-identity
 Specs: trust-and-approval, terms, installer-interface
@@ -256,7 +256,8 @@ applied; the third round's finding was applied after the last round, so no round
 ## Result
 
 **Increment A is done and committed (`6f2e957`, `67e4d1a`, `d3b0539`); Increment B is done and committed (`3aae9c5`); Increment C is
-done and committed (`ab1ed81`); Increment D is done and awaits the owner's word to commit.**
+done and committed (`ab1ed81`); Increment D is done and committed (`8f5cf5d`); the plan is completed. Completion criteria 1 to 5 are
+met; the owner's own trial of `wb approve-plan` with the real identity, which the agent does not run, is the one thing not done.**
 
 ### Increment A
 
