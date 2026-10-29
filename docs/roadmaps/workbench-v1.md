@@ -81,11 +81,10 @@ meet here and the order matters.
   untrusted project lets that project's code run first, so the harness must call the `wb` launcher
   and not the `-m` form (decision `2026-10-20-isolated-launcher-invocation`, accepted); a module has no field to declare an added hard stop; and nothing removes
   cache copies, shipped records of earlier releases or leftover `bin/run/` directories.
-- `installer-interface` is being written (plan `2026-10-20-installer-interface`): the draft spec
-  `docs/specs/installer-interface.md` covers the target rules, the commands, the preview and
-  approval, the output and the exit codes, and awaits the owner's approval. It changes no code. It
-  departs from the wording of the candidate below in three places, listed in the spec under
-  "Departures from the roadmap's wording".
+- `installer-interface` is done (plan `2026-10-20-installer-interface`, completed): the spec
+  `docs/specs/installer-interface.md` is Current, approved by the owner on 2026-10-20, and covers the target rules, the
+  commands, the preview and approval, the output and the exit codes. It departs from the wording of the candidate below in
+  three places, listed in the spec under "Departures from the roadmap's wording".
 - `base-and-manifests` is implemented (plan `2026-10-20-base-and-manifests`, increments A to I; its
   completion is derived from that plan): the `base/` content and its loader, the canonical
   committed manifest with the project seed and ID, the write plan with its digest, `wb preview
@@ -225,7 +224,7 @@ meet here and the order matters.
 `remote-runner-module`, `review-engine`, `delegated-approval`, `action-review-engine`,
 `mempalace-module`, `graphify-module`, `knowledge-base-package`, `port-superpowers`,
 `architecture-decisions-merge`, `agent-confinement`, `security-review-module`, `verilog-module`, `cad-modules`,
-`global-settings-check`, `mempalace-scoping`, `global-config-migration`, `self-hosting`, `adopt-existing-repository`,
+`global-settings-check`, `mempalace-scoping`, `checkpoint-levels-beyond-block`, `global-config-migration`, `self-hosting`, `adopt-existing-repository`,
 `remaining-modules-rename`.
 
 ## Candidates
@@ -686,14 +685,14 @@ the owner. A default wing per project is a larger change and is not part of this
 ### checkpoint-levels-beyond-block — Levels other than `block` for the keys that offer only `block`
 
 **Outcome:** the four keys that `command-permissions.md` lists as limited to `block` (`submit-remote-job`,
-`push-shared-branch`, `fetch-remote-output` and `change-direction`), and the three that offer `block` and `none` only
-(`accept-decision`, `wb release-approvals` and `acknowledge-first-tier`), each offer the same levels as `approve-plan`:
+`push-shared-branch`, `fetch-remote-output` and `change-direction`), and the four that offer `block` and `none` only
+(`accept-decision`, `wb release-approvals`, `acknowledge-first-tier` and `acknowledge-second-tier`), each offer the same levels as `approve-plan`:
 `block`, `ask`, `delegated` and `none`, with the same meaning (the owner's direction, 2026-10-28). The accepted decision says
 no key should be limited to `block`; this closes the gap that spec lists. Today `delegate` takes effect for `approve-plan`
 only, so this widens it.
 **Dependencies:** `checkpoint-settings-and-caps`, `push-checkpoint`, `remote-runner-module` and `delegated-approval` (all
-complete). A decision, written first as `Proposed` and accepted by the owner, on what `ask`, `delegated` and `none` mean for
-each key, in particular for the two agent checkpoints that no installer command runs and for what a review may stand for at a
+complete). The decision `2026-10-28-every-key-offers-the-approve-plan-levels`, which is `Proposed` and not yet accepted by
+the owner, on what `ask`, `delegated` and `none` mean for each key, in particular for the two agent checkpoints that no installer command runs and for what a review may stand for at a
 push or a remote job.
 **Boundary:** the command keys need their own preview digest before `ask` can work, and a delegated route for each; the
 agent checkpoints (`fetch-remote-output`, `change-direction`) and `accept-decision`, which no command runs, need the decision
