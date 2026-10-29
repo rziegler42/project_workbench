@@ -595,7 +595,7 @@ the owner.
 installer enforces them with a per-agent hook rendered into the harness, as it enforces the edit gate; the harness layout
 declares where its session scratch directory is. An elevated agent has no general shell: scratch execution goes through one
 pinned command matched by a fixed pattern.
-**Dependencies:** the owner's acceptance of a decision on declared agent confinement (written first as `Proposed`);
+**Dependencies:** the owner's acceptance of a decision on declared agent confinement (accepted on 2026-10-24: `declared-agent-confinement`);
 `claude-harness`.
 **Boundary:** the agent fields, the layout's scratch path, the installer's guard and the per-agent hook. It needs a
 specification change and an installer change. A script the agent writes and runs is not confined, and the specification says
@@ -644,7 +644,7 @@ project's: a global rule, a global hook, a skill or agent of the same name, the 
 code reads the harness's global configuration, never a module's; it prints names and paths and never values, and decides
 nothing.
 **Dependencies:** the owner's acceptance of a decision that narrows the rule in `repository-boundary.md` that the workbench
-never reads a harness's global configuration (written first as `Proposed`); `claude-harness`.
+never reads a harness's global configuration (accepted on 2026-10-24: `installer-reads-global-settings-on-request`); `claude-harness`.
 **Boundary:** one command, owner-run and terminal-only, read-only, for the Claude harness first. It may never be built: the
 decision can be deferred until the cases the 2026-10-24 trial did not cover are run.
 **Promotion trigger:** the decision accepted and the owner chooses to begin it.

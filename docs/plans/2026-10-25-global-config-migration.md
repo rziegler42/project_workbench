@@ -1,6 +1,6 @@
 # Global configuration migration: the inventory and the move list
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-25
 Candidate: workbench-v1#global-config-migration
 Specs: global-config-inventory (new)
