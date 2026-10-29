@@ -649,6 +649,78 @@ class Finish(Upgrade):
         self.assertIn("put the files listed as written back", err)
 
 
+SKILL_ITEM = ".workbench/p/notes/harness/neutral/skills/sample/SKILL.md"
+POINTER = "the rendered skills, agents or commands may be behind; `wb preview rerender` shows which"
+
+
+SKILL_HEAD = b"---\nname: sample\ndescription: A sample skill\n---\n"
+OTHER_ITEM = ".workbench/p/notes/harness/neutral/skills/other/SKILL.md"
+
+
+def with_skill(text, scripts=b"#!/bin/sh\n", other=None):
+    """The notes module with one neutral skill whose body is `text`, and a second skill when `other` is given."""
+    files = {"files/docs/notes.md": b"# Notes\n", "scripts/run.sh": scripts,
+             "harness/neutral/skills/sample/SKILL.md": SKILL_HEAD + text}
+    if other is not None:
+        files["harness/neutral/skills/other/SKILL.md"] = SKILL_HEAD.replace(b"sample", b"other") + other
+    return {"writes": ["docs/notes.md"], "ships": ["scripts/run.sh"]}, files
+
+
+class Pointer(Upgrade):
+    """After an upgrade that wrote a harness item, one line points at `wb preview rerender`."""
+
+    MODULES = {"h": (base_tests.HARNESS, {}), "notes": with_skill(b"Do the thing.\n"),
+               "a": base_tests.FILL(b"Rule A\n")}
+
+    def test_a_written_harness_item_prints_the_line_once_after_the_count(self):
+        new = self.ready(notes=with_skill(b"Do the other thing.\n"))
+        code, out, err = self.upgrade("--package", new)
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertEqual(b"Do the other thing.\n", self.read(SKILL_ITEM)[len(SKILL_HEAD):])
+        self.assertEqual(1, out.count(POINTER), out)
+        lines = out.splitlines()
+        self.assertEqual(lines.index(POINTER) - 1,
+                         [i for i, line in enumerate(lines) if line.lstrip("> ").startswith("wrote ")][0])
+
+    def test_a_created_harness_item_prints_the_line(self):
+        new = self.ready(notes=with_skill(b"Do the thing.\n", other=b"More.\n"))
+        code, out, err = self.upgrade("--package", new)
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertEqual(SKILL_HEAD.replace(b"sample", b"other") + b"More.\n", self.read(OTHER_ITEM))
+        self.assertEqual(1, out.count(POINTER), out)
+
+    def test_an_upgrade_that_wrote_no_harness_item_prints_no_line(self):
+        new = self.ready(notes=with_skill(b"Do the thing.\n", scripts=b"#!/bin/sh\necho 2\n"))
+        code, out, err = self.upgrade("--package", new)
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertIn("wrote ", out)
+        self.assertNotIn("wb preview rerender", out)
+
+    def test_the_preview_prints_no_line(self):
+        new = self.ready(notes=with_skill(b"Do the other thing.\n"))
+        code, out, err = self.preview("--package", new)
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertNotIn("wb preview rerender", out)
+
+    def test_nothing_outside_the_workbench_folder_and_git_is_written(self):
+        new = self.ready(notes=with_skill(b"Do the other thing.\n"))
+        before = self.tree(self.place)
+        code, out, err = self.upgrade("--package", new)
+        self.assertEqual((0, ""), (code, err), out)
+        after = self.tree(self.place)
+        changed = sorted(path for path in set(before) | set(after) if before.get(path) != after.get(path))
+        self.assertTrue(all(path.split(os.sep)[0] in (".workbench", ".git") for path in changed), changed)
+        self.assertIn("nothing was committed", out)
+
+    def test_a_failed_upgrade_prints_no_line(self):
+        new = self.ready(notes=with_skill(b"Do the other thing.\n"))
+        with unittest.mock.patch.object(projectfs.Writer, "replace_file",
+                                        side_effect=projectfs.safefs.SafeFsError("disk full")):
+            code, out, err = self.upgrade("--package", new)
+        self.assertEqual(3, code)
+        self.assertNotIn("wb preview rerender", out + err)
+
+
 class Terminal(base_tests.UpgradePreview):
     """The command run in a child process whose terminals are real pseudo-terminals."""
 

@@ -33,12 +33,12 @@ Non-goals:
 |---|---|
 | type | `process` |
 | provides | `plans` |
-| requires | `specs`, `roadmaps`, `decisions`, `commit` (hard); `peer-review`, `permissions` (soft) |
+| requires | `specs`, `roadmaps`, `decisions`, `commit` (all hard); it declares no soft requirement, and a `peer-review` provider may review (see "Review") though nothing requires one |
 | blocks | nothing beyond the one-process rule of the type |
 | fills | the policy slot in `AGENTS.md`; the `docs-index` slot |
 | writes | `docs/plans/` and its README |
-| ships | one helper (code-bearing, shown at approval) with the subcommands `check`, `plans`, `report`, `region`, `active` and `shared`; the `wb` launcher is a workbench component and not shipped by this module |
-| approval | `region` computes a plan's hashed region; `active` lists the plans under way |
+| ships | one helper (code-bearing, shown at approval) with the subcommands `check`, `plans`, `report`, `region`, `active`, `shared` and `delegable`; the `wb` launcher is a workbench component and not shipped by this module |
+| approval | `region` computes a plan's hashed region; `active` lists the plans under way; `delegable` says whether a plan may be approved by a delegate |
 | checkpoints, caps | the eight checkpoint names and three caps under "Checkpoints" and "Loop caps" (built by plan `2026-10-22-checkpoint-settings-and-caps`) |
 
 It also ships neutral items: skills for drafting a plan, running the increment loop,
@@ -140,8 +140,8 @@ and `groundwork`'s completion report does nothing when no process module provide
 The record of a plan approval is written by the installer, and so is a delegated one
 (`trust-and-approval.md`, "Delegated plan approval records"). This module
 supplies what only its plan format knows: the sections that are excluded from the
-hashed region (the status line, the review record and the result) and, once the
-delegated approval is built, whether a plan is delegable. `trust-and-approval.md`
+hashed region (the status line, the review record and the result) and, since the
+delegated approval was built, whether a plan is delegable. `trust-and-approval.md`
 defines the rule; this module supplies the section names and the plan check. An
 earlier version of this paragraph said the delegation helper is implemented with
 this module; the decision `2026-10-23-delegated-plan-approval` (accepted) moves
@@ -485,7 +485,8 @@ installer's and is replaced on upgrade only while unedited.
 - Built, from plan `2026-10-22-checkpoint-settings-and-caps`: the `active` subcommand, the eight `checkpoints` and
   three `caps` the module declares, the `caps` setting and `wb settings` that reports the effective values, and the
   installer's edit gate (`wb gate`) that the Claude harness renders as a hook (`trust-and-approval.md`, "Checkpoint
-  and cap settings, and the edit gate"). Limits: `delegate` has no effect and every checkpoint stops; nothing yet
+  and cap settings, and the edit gate"). Limits: when this was built `delegate` had no effect and every checkpoint stopped (it takes
+effect for `approve-plan` since increment D of `2026-10-23-delegated-approval`, below); nothing yet
   reads a cap, so a cap is declared, set and reported and not enforced; a project cannot lower a cap (that waits
   for a project setting the installer can read without naming a module); the gate stops a mistaken agent and not a
   hostile one, covers only file-editing tools, and was seen working in a live Claude session on 2026-10-22 (Claude
@@ -508,7 +509,13 @@ installer's and is replaced on upgrade only while unedited.
   Accepted). `diagnose-failure` agrees with `run-increment` on stopping at the same failure twice and adds a stop at
   three failed fixes; `verify-before-claiming` is the rule under `run-increment`'s report. Limits: the skills are
   advice, and nothing forces an agent to load one or follow it; whether Claude loads them when it should is
-  unverified; the superpowers plugin is still enabled in `~/.claude` until `global-config-migration`.
+  unverified; the superpowers plugin is no longer enabled, because the user-level configuration was reset on 2026-10-29.
+- Built, from plan `2026-10-29-debug-artifacts`: a seventh step of `diagnose-failure` says where retained diagnostics go,
+  `.workbench/local/debug/<YYYY-MM-DD>-<topic>/` (the scratch place in `repository-boundary.md`), with a local README that
+  gives the commit, the commands and tool versions, the purpose and the conclusion, and that a durable finding is recorded
+  in a tracked document, a decision or a test and cites no path into scratch. The policy block is not changed: it is at
+  the length its test allows. Limits: advice only. Nothing makes an agent keep the evidence or write the README, and no
+  check flags a missing one.
 - Built, from plan `2026-10-23-push-checkpoint`: `wb run safe-git push-check` (`safe-git.md`, "Push check"), the
   helper's `shared` subcommand, the file `.workbench/shared-branches.json`, and the neutral skill `push-changes`.
   Limits: the skill is advice and no rule is added, so the enforced stop is the floor's `ask` on every push, which
@@ -521,7 +528,7 @@ installer's and is replaced on upgrade only while unedited.
   section, no `SessionStart` hook and no opencode delivery exist; nothing was run in a live session.
 - Built, from plan `2026-10-23-delegated-approval`, increment C: the helper's `delegable` subcommand and the
   `approval.delegable` declaration (`"delegable": "delegable"`). Limits: the marker is a convention and defence in depth
-  only; the package's shipped approval is stale until increment F.
+  only; the package's shipped approval was stale until increment F released it.
 - Built, from plan `2026-10-23-delegated-approval`, increment D, in the installer: `wb delegate-approve-plan`, the
   format-2 record and the rule that `delegate` takes effect for `approve-plan` only (`trust-and-approval.md`,
   `installer-interface.md`).
@@ -530,10 +537,14 @@ installer's and is replaced on upgrade only while unedited.
   `approve-plan` shows `delegate`; to ask with `wb delegate-approve-plan <plan>` once, after the converging round and
   before it writes the review record; to report a `refused:` line and stop; that every other checkpoint still stops;
   and that the owner's word and the approve-plan command remain the other way. Limits: the skill is advice, and what
-  gives or refuses the approval is the installer's command; the shipped approval of the package is stale until
-  increment F.
-- Not built: the security pass of the delegated approval (`delegated-approval`, increment F). It came from the roadmap
-  candidate `code-work-approval`, which is split into it and `compaction-guidance`.
+  gives or refuses the approval is the installer's command; the shipped approval of the package was stale until
+  increment F released it.
+- Built, from plan `2026-10-23-delegated-approval`, increment F, which came from the roadmap candidate `code-work-approval`
+  (split into it and `compaction-guidance`): two adversarial security passes over the delegated approval, with their findings fixed
+  and tested (the `delegable` answer is bound to the plan's hash; the `Hard stop:` marker and the Risks section are read
+  strictly, so two older plans are no longer delegable), and the approvals released by the owner. Limits: the passes did not run
+  an end-to-end run with a fake executable, a concurrent swap, or hardlinked, FIFO and oversize plans beyond the shipped tests,
+  and the owner waived a real-vendor run.
 - The helper reads untrusted plans and is bounded; the limits are in the plan `2026-10-21-code-work-plans`.
 
 ## Open items

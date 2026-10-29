@@ -74,12 +74,13 @@ Each module has one declaration file, `module.json`, at the root of its director
 | `fills` | Blocks the module contributes: the slot, and the source file. |
 | `writes` | The project paths the module writes, beyond its own namespace. |
 | `ships` | Executable or code-bearing items it ships, such as hooks or helper scripts. |
-| `commands` | Commands it offers, each a helper it ships and the first arguments it accepts, run with `wb run`. A command may also list `describes`, the actions its `describe` argument answers (`module-boundary.md`, "Declaration schema"; *built*). The installer pins the helper when the owner confirms the install; nothing in the name of the shipped file declares a command. A command may also list `owner`, the arguments only the owner runs, which a harness that provides `permissions` denies the agent (`module-boundary.md`, "Declaration schema"). *(built: verified, and run with `wb run`; `owner` built by plan `2026-10-23-review-engine`)* |
+| `commands` | Commands it offers, each a helper it ships and the first arguments it accepts, run with `wb run`. A command may also list `describes`, the actions its `describe` argument answers (`module-boundary.md`, "Declaration schema"; *built*). The installer pins the helper when the owner confirms the install; nothing in the name of the shipped file declares a command. A command may also list `owner`, the arguments only the owner runs by default, which a harness that provides `permissions` denies the agent unless the approver sets one to a level its `levels` offer (`module-boundary.md`, "Declaration schema"). A command may also list `levels` and `preview`, which let an owner-run argument offer `ask` or `none` and not `block` only ("Concrete schema" below; `command-permissions.md`; built by plan `2026-10-27-levels-for-the-review-workflow`). *(built: verified, and run with `wb run`; `owner` built by plan `2026-10-23-review-engine`)* |
 | `checks` | Pinned Python helpers it contributes to `wb check`. *(built: verified, listed in the approval request, and run by `wb check`)* |
-| `approval` | Process modules only: the command of its own that computes the hashed region of a plan and, optionally, the argument that lists the plans under way. *(built by plans `2026-10-22-plan-approval-records` and `2026-10-22-checkpoint-settings-and-caps`)* |
+| `approval` | Process modules only: the command of its own that computes the hashed region of a plan and, optionally, the argument that lists the plans under way and the argument that says whether a plan may be approved by a delegate (`delegable`). *(built by plans `2026-10-22-plan-approval-records` and `2026-10-22-checkpoint-settings-and-caps`; `delegable` by `2026-10-23-delegated-approval`)* |
 | `checkpoints` | Process modules only: the names of the checkpoints it asks the owner about. *(built by plan `2026-10-22-checkpoint-settings-and-caps`)* |
 | `caps` | Process modules only: the loop caps it enforces, each with a default and a ceiling. *(built by plan `2026-10-22-checkpoint-settings-and-caps`)* |
 | `layout` | Harness modules only: the layout description (see `harness-modules.md`). It is part of the declaration and its hash. |
+| `ask_reads` | A non-empty list of at most 16 distinct patterns under the home directory, each starting `~/` (at most 200 characters from the characters of a neutral rule, a path of non-empty segments with no `.` or `..` segment and no trailing slash, a first segment that holds a character other than `*` and `.`, and no edge space), for which a harness that provides `permissions` asks before its read tool reads a path that matches. A rule is restrictive: a prompt, never an `allow`. A command's `asks` is the same for an argument of its own (`module-boundary.md`, "Declaration schema"). *(built 2026-10-29 by plan `2026-10-29-policy-and-module-asks`, increment B)* |
 
 `provides`, `requires` and `blocks` are lists of capability names. A module that
 provides nothing, requires nothing and blocks nothing is valid.
@@ -156,7 +157,8 @@ namespace.
   or fetches a package on its own; when nothing provides a hard requirement it tells
   the user to add a package that does.
 - A **helper** is looked up on `PATH`. A missing helper is a warning. The installer
-  never runs a helper.
+  never runs a helper at install. It may run a module's pinned helper at use time, through `wb run` and `wb check`
+  (`module-boundary.md`, "Module directories").
 
 ## Conflicts
 
@@ -289,7 +291,8 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   file and directory.
 - `ships`: each item is a file, or a directory that holds at least one file. An empty
   directory is refused because the content hash does not cover it.
-- `commands` *(built)* and `checks` *(the field is built; `wb check` does not run it yet)*: the exact shapes,
+- `commands` *(built)* and `checks` *(built: `wb check` runs each declared check from the project root, for a project whose
+  manifest records the module and whose helper the owner has pinned)*: the exact shapes,
   limits and refusals are in `module-boundary.md`, "Declaration schema". The verifier also requires a
   command's helper to be a regular file of the module. In short, each names a helper that is an item of `ships` (or a file below one),
   a Python helper declares the kit API number it needs in `kit`, and an unknown field is refused as

@@ -2,5 +2,5 @@
   "name": "verilog",
   "version": "0.1.0",
   "type": "module",
-  "description": "Plain Verilog-2001 verification advice: a skill for simulation with Verilator and, later, one for formal proofs with SymbiYosys."
+  "description": "Plain Verilog-2001 verification advice: skills for simulation with Verilator and for formal proofs with SymbiYosys."
 }

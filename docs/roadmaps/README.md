@@ -1,73 +1,39 @@
 # Roadmaps
 
-Roadmaps are tracked, committed, non-authoritative documents for multi-plan
-direction. They preserve dependencies, boundaries, and rationale. They do not
-authorize implementation or change an active plan. The rules are in
-[`groundwork.md`](../specs/groundwork.md).
+A roadmap lists candidates, each sized to be one unit of work, with no required order. It
+expresses direction. It does not authorize work and does not change work in progress. A
+roadmap is a tracked, committed document, kept with the project's documentation.
 
-## Lifecycle
+## Naming
 
-- A roadmap is a list of candidates with no required order. Order and dependencies
-  are hints, and what is learned may reshuffle, add or drop candidates. A roadmap may
-  keep an optional suggested order as a list.
-- Promote one selected candidate into a complete, reviewed, explicitly approved plan
-  in `docs/plans/`. Several plans may be active; one candidate has one plan.
-- A candidate's completion is derived. It is complete when a plan whose `Candidate:`
-  line names it has `Status: Completed`. Completion is never written into the roadmap,
-  so the roadmap file changes only when direction changes.
-- Record durable architectural choices in `docs/decisions/`; roadmaps explain
-  direction and dependencies but do not replace decisions.
-- Keep implementation-ready file lists, detailed acceptance criteria, and executable
-  verification commands in the promoted plan.
+A roadmap is named by its scope in lowercase kebab-case, with no number or date, for
+example `first-release.md`. There may be several.
 
-## Naming and candidates
+## Contents
 
-- Use stable, lowercase, kebab-case scope names such as `workbench-v1.md`. Do not use
-  numbers or dates in roadmap filenames.
-- A candidate's ID is a short topic slug in lowercase kebab-case, unique within its
-  roadmap, fixed when created, never reused or renumbered, and unchanged if the title
-  is reworded. A candidate is cited as `<roadmap>#<id>`, for example
-  `workbench-v1#approve-specs`.
-- An abandoned candidate is marked dropped with a reason and stays in the file,
-  because completed work may refer to it.
-- Keep one roadmap per scope that is not archived and update it in place. A replacement
-  takes a new name, and the old roadmap is retired by setting `Status: Archived`. The
-  file is never moved or renamed, so `<roadmap>#<id>` stays valid. Retiring or replacing
-  a roadmap changes direction, so it needs the owner.
+A roadmap states its status, the date it was updated, its purpose, the current state, its
+candidates, deferred work, and the decisions that bear on it. The status is one line,
+`Status: <value>`, before the first `##` heading, and the values are `Draft`, `Active` and
+`Archived`.
 
-## Index (current)
+Candidates are the `###` headings under a `## Candidates` heading, written `### <id>: <title>`.
+A candidate has an ID, a title, the outcome wanted, dependency hints, a boundary and the
+trigger for starting it. The ID is a short topic slug in lowercase kebab-case, fixed when
+the candidate is created and unique within the roadmap. It is never reused, renumbered or
+changed when the title is reworded. Refer to a candidate as `<roadmap>#<id>`, for example
+`first-release#pick-a-board`. An abandoned candidate is marked dropped with a reason and
+stays in the file.
 
-List roadmaps that are not archived; an archived roadmap stays in place and keeps its
-history.
+A roadmap keeps no implementation file lists, detailed acceptance criteria or executable
+commands; they belong in the plan written when a candidate is promoted.
 
-| Roadmap | Status | Scope |
-|---|---|---|
-| `workbench-v1.md` | Active | First version of the installer, harnesses, `groundwork` and `code-work` |
+Completion is never written into a roadmap. The file changes only when direction changes,
+and changing direction needs the owner.
 
-## Format
+## Retiring a roadmap
 
-```markdown
-# Roadmap: <scope>
-
-Status: Draft | Active | Archived
-Updated: YYYY-MM-DD
-
-## Purpose
-
-## Current state
-
-## Suggested order (optional)
-
-## Candidates
-
-### <id> — <title>
-
-**Outcome:** ...
-**Dependencies:** ...
-**Boundary:** ...
-**Promotion trigger:** ...
-
-## Deferred
-
-## Related decisions
-```
+Retire a roadmap by setting its status to `Archived`, as a plan is archived by status. Never
+move or rename the file: a candidate is cited as `<roadmap>#<id>`, so the name stays. Keep
+one roadmap that is not archived for each scope and update it in place; a replacement takes a
+new name, and the old one is archived when it is written. Retiring or replacing a roadmap
+changes direction, so it needs the owner.

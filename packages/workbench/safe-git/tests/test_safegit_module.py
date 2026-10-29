@@ -69,6 +69,27 @@ class Declaration(unittest.TestCase):
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
         self.assertEqual(["safe-git"], list(declaration()["commands"]))
 
+    def test_it_asks_for_remove_and_not_for_commit(self):
+        import types
+        from workbench import harnessstage
+        command = declaration()["commands"]["safe-git"]
+        self.assertEqual(["remove"], command["asks"])
+        loaded = declarations.load_package(PACKAGE, first_party=True)
+        module = [m for m in loaded.modules if m.name == "safe-git"][0]
+        self.assertEqual(("remove",), module.commands[0].asks)
+        found = harnessstage.ask_rules([types.SimpleNamespace(module=module, type="module")])
+        self.assertEqual({"ask"}, {rule.action for rule in found})
+        with open(os.path.join(PACKAGE, "claude", "module.json"), encoding="utf-8") as handle:
+            layout = json.load(handle)["layout"]
+        permissions = json.loads(harnessplan.render_permissions(
+            found, layout, "/Users/tester/.config/project-workbench", "/Users/tester"))["permissions"]
+        deny, ask = permissions["deny"], permissions["ask"]
+        for text in ("wb run safe-git remove", "wb run safe-git remove *", "python3 -B -m workbench run safe-git remove *"):
+            self.assertIn("Bash(%s)" % text, ask)
+        for text in ("wb run safe-git commit", "wb run safe-git commit *", "wb run safe-git push-check",
+                     "wb run safe-git describe remove"):
+            self.assertNotIn("Bash(%s)" % text, ask)
+
     def test_describe_is_declared_for_the_removal_the_commit_and_the_push_and_is_not_owner_run(self):
         command = declaration()["commands"]["safe-git"]
         self.assertEqual(["remove", "commit", "push"], command["describes"])

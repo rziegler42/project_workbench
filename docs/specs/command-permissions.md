@@ -45,7 +45,9 @@ a harness renders it, and the command gate that protects the rendering.
   the command gate, which read text (see "The command gate" and "Limits").
 - Verified by the owner's trials, recorded in `harness-modules.md`: an `ask` prompt reaches the owner's remote channel and a Yes
   or No given there runs or refuses the command (Claude Code 2.1.310); a `PreToolUse` hook for `Bash` that exits 2 stops a wrapped
-  command in auto and default mode and a hook that exits 0 leaves an `ask` rule in force (2.1.311).
+  command in auto and default mode and a hook that exits 0 leaves an `ask` rule in force (2.1.311). They ran under the owner's former
+  configuration and have not been re-run since the reset of 2026-10-29; the note before the trials in `harness-modules.md` says
+  what still holds.
 
 ## Behavior
 
@@ -75,8 +77,13 @@ each such reading (it is not a problem, so it is not a `settings:` line). When a
 notes that the level applies. `delegate` still takes effect for `approve-plan` only; a `delegate` that cannot take effect has its own note
 and no `translated` line.
 
+A module can also declare a prompt that is not a key: a command's `asks` (an argument that is asked and not owner-run) and a
+module's `ask_reads` (a read under the home directory) render as `ask` rules and are not levels, so the table does not carry them and
+the approver cannot lower them from the personal settings (`trust-and-approval.md`, "Rendering rules"; built 2026-10-29 by plan
+`2026-10-29-policy-and-module-asks`, increment B). `wb settings` prints no line for them.
+
 A key is a process module's declared checkpoint name (`approve-plan`, `accept-decision` and the others), or the command in the `wb`
-spelling: `wb install`, `wb adopt`, `wb add`, `wb upgrade`, `wb attach`, `wb approve`, `wb pin`, `wb recover`,
+spelling: `wb install`, `wb adopt`, `wb add`, `wb upgrade`, `wb attach`, `wb rerender`, `wb approve`, `wb pin`, `wb recover`,
 `wb release-approvals`, and `wb run <command> <argument>` for each owner-run argument that an installed module declares. The key
 `approve-plan` is the checkpoint and the command; `wb acknowledge` is not a key, because the checkpoints
 `acknowledge-first-tier` and `acknowledge-second-tier` set it. The registry (`workbench/levels.py`) is built from what the
@@ -228,8 +235,9 @@ escapes are applied to the pair, so `w""b install`, `wb inst""all` and `wb $'\x6
 commit message or a path that holds the word are allowed. The exact pair `preview <action>` for each action of
 `rules.PREVIEW_ACTIONS` is removed before the search, as `delegate-approve-plan` is, for these keys only; the pattern rule still reads the text as written,
 so a preview that holds an expansion or a glob (`--dir $PWD`) is blocked and is run with the path spelled out. A command that names the word with no launcher
-before it, such as an alias or a script the agent wrote that wraps the call, is not seen; the classifier remains the barrier for
-it, as for the other limits listed under "Limits".
+before it, such as an alias or a script the agent wrote that wraps the call, is not seen; the auto-mode classifier was the barrier
+for it, as for the other limits listed under "Limits", while auto mode was the owner's setting. The reset of 2026-10-29 ended that
+setting, and no barrier for these cases is claimed here under factory defaults.
 
 For these keys two more forms are not taken for the word (built by Increment I; decision `2026-10-27-command-gate-literal-arguments`).
 A command that is exactly one literal `wb run <name> <arguments>`, matched in full on the raw text through `wb` or the store's `bin/wb`, with a
@@ -278,7 +286,7 @@ list the operations and the attempts with no outcome as unfinished (a killed pro
 
 It prints the `checkpoint` and `cap` lines it always printed, then one `level <key>: <level>` line for every key it knows: the
 declared checkpoints, then the installer's owner-run commands, then the agent-safe actions (`wb verify`, `wb preview install`,
-`wb preview adopt`, `wb preview upgrade`, `wb preview add`, `wb launch`, `wb check`, `wb plan-status`, `wb settings`), then `wb run
+`wb preview adopt`, `wb preview upgrade`, `wb preview add`, `wb preview rerender`, `wb launch`, `wb check`, `wb plan-status`, `wb settings`), then `wb run
 <command> <argument>` for each argument the installed modules declare (an owner-run argument first), with the defaults and the
 table applied. An agent-safe key and a declared argument that is not owner-run default to `none`; every other key defaults to `block`.
 The hook entry points, the dispatcher words and `delegate-approve-plan` are not keys. As built by Increments A and C of the plan, a
@@ -299,7 +307,7 @@ A state in which an owner has set every key to `none`, and so has no protections
 freedom and not a feature: there is no master switch, profile or command that sets it.
 
 **Coverage.** Every command and subcommand that `cli.py` routes has a key, the agent-safe ones included (`verify`, `preview install`,
-`preview adopt`, `launch`, `check`, `run`, `plan-status`, `settings`), so the owner can tighten a command that is always allowed
+`preview adopt`, `preview upgrade`, `preview add`, `preview rerender`, `launch`, `check`, `plan-status`, `settings`), so the owner can tighten a command that is always allowed
 today. The hook entry points `gate`, `agent-gate` and `gate-command` are the exception: the harness runs them, they are not keys and
 they stay always allowed (the owner's decision). A test fails when `cli.py` routes any other command or subcommand with no key, as the test
 in `rules.py` does for the owner-run and agent-safe split. A subcommand has a key when it is a different action (`wb preview
@@ -321,7 +329,9 @@ Increment C of the plan `2026-10-27-levels-for-the-review-workflow`; "Which leve
 that key has a preview digest of its own, built as `approve-plan`'s is (for an owner-run argument of a module's command, once its
 declaration names a `preview` argument; `verify` checks the name, and the digest the argument prints is the module's to build). Every key built by the plan offers `none`; the keys that still offer `block` only are listed under "Not built". Only the review engine's five owner-run arguments have a digest of their own and so offer `ask` besides `approve-plan` (built by Increments E and F of the plan `2026-10-27-levels-for-the-review-workflow`). At `none` an owner-run command runs without a terminal
 and without a harness `deny`; the command's own checks of its input and its log entry apply, and the terminal prompt does not.
-`accept-decision` offers `block` and `none`, and `AGENTS.md` says that the owner decides who accepts a decision.
+`accept-decision` offers `block` and `none`. Since 2026-10-29 the groundwork policy block in `AGENTS.md` says that accepting a
+decision is a checkpoint that stops by default and that the level `wb settings` prints for it says whether the agent may accept; the
+`draft-decision` skill says what each level allows.
 
 **One table** (built by Increment B). The `levels` table is the only place a level is set. A version 1 file's `checkpoints` are read as a fallback for a
 key the table does not mention, and a table entry wins in either direction, so loosening a key is one edit. The checkpoint words
@@ -478,19 +488,26 @@ and not a problem, because the stale state is already safe).
 - **`wb preview rerender`** is the read-only plan and is its own agent-safe key, default `none`.
 - **It runs only at a terminal**, on standard input and output, at every level; the owner types the first 12 characters of the
   preview's digest. Before the first write it rebuilds the plan and refuses unless the digest is the one confirmed.
-- **The plan lists** each key whose rule moves, the three files it changes (the permissions file, the local manifest's hash for it,
-  the rendering record), every `allow` rule of the live file, which it keeps, and every other live entry the new file will not have,
+- **The plan lists** each key whose rule moves, the files it changes (the permissions file, the local manifest, the rendering
+  record, and the stale, new and missing rendered skills, agents and root file of
+  [`harness-refresh.md`](harness-refresh.md)), every `allow` rule of the live file, which it keeps, and every other live entry the new file will not have,
   which it removes, each shown whole. It notes the shared settings file when the record watched another version of it: a re-render
   records that file as it is now and does not write it.
-- **The write order** is the permissions file, the local manifest, then the record. The record is last, so a stop at any step leaves
+- **The write order** is the rendered files, the permissions file, the local manifest, then the record. The record is last, so a stop at any step leaves
   every relaxed key reading `block` and never looser. Exit 0 done or nothing to change, 1 refused or cancelled, 2 usage, 3 stopped
   after writing (the report lists what was and was not written), 130 interrupted before writing.
+- **The local manifest is denied.** Every rendered permissions file denies the harness's write tool on
+  `.workbench/local/harness.json` in the three spellings of the other protected files, with or without the edit gate hook, because the
+  edited-file test of `wb rerender` trusts the hashes it records (plan `2026-10-28-protect-local-manifest`). The installer's own
+  writes do not go through that tool. A clone gets the rule when its permissions file is next rendered, which `wb preview rerender`
+  shows as a change of that file. The deny covers the harness's write tool and not a write by the shell.
 
 ## The planning workflow without a terminal
 
 What an agent can do, and what stops it, when the owner has no terminal (a phone or the web). It covers drafting, reviewing and
 approving a roadmap, spec, design, plan or decision. The "Key and level" column gives the shipped default, and says where the owner's
-table (the personal settings read now) differs: today it differs for `approve-plan` only, which is `ask`. An `ask` prompt reaches the
+table (the personal settings as read on 2026-10-27, see the provenance below) differed: it differed for `approve-plan` only, which was
+`ask`. Every owner-run key has the shipped default `block`. An `ask` prompt reaches the
 owner's remote channel (see "Assumptions and constraints"), so a key at `ask` does not need a terminal; a command at `block` does, and
 so does an edit of a file the owner makes themselves.
 
@@ -505,7 +522,7 @@ owner-run was run to build the table. A reading from the code or a spec is state
 
 | Action | What does it | Key and level | Needs a terminal | What can block |
 |---|---|---|---|---|
-| Draft a roadmap, spec, decision or plan | the `draft-roadmap`, `draft-spec`, `draft-decision` and `draft-plan` skills. As rendered in this clone they run no command, except `wb run code-work check` for a plan; the packaged `draft-decision` also runs `wb settings` (`none`) | no key for the edits; `wb run code-work check` and `wb settings` `none` | no | the edit gate (`wb gate`) refuses an edit while a plan under way is not approved (`harness-modules.md`, "The edit gate hook"); a decision is written `Proposed` and stops |
+| Draft a roadmap, spec, decision or plan | the `draft-roadmap`, `draft-spec`, `draft-decision` and `draft-plan` skills. As rendered in this clone on 2026-10-27 they ran no command, except `wb run code-work check` for a plan, while the packaged `draft-decision` also ran `wb settings` (`none`); the clone has since been re-rendered and its `draft-decision` runs it too | no key for the edits; `wb run code-work check` and `wb settings` `none` | no | the edit gate (`wb gate`) refuses an edit while a plan under way is not approved (`harness-modules.md`, "The edit gate hook"); a decision is written `Proposed` and stops |
 | Change a spec's or roadmap's direction | the checkpoint `change-direction` | `change-direction`, `block` only | no | an agent checkpoint, not a terminal gate: the agent stops and asks the owner in the conversation, and no installer command is behind it (`code-work.md`, "Checkpoints") |
 | Brainstorm a design | the `brainstorm` skill: reads, asks, writes a spec | no key | no | nothing; the owner's approval of the design is their statement in the conversation |
 | Read the plans | `wb run code-work plans`, `report`, `active`, `region`, `delegable`, `shared`; `wb plan-status` | `none` | no | nothing |
@@ -519,16 +536,16 @@ owner-run was run to build the table. A reading from the code or a spec is state
 | Change a recorded decision | `wb run review-engine amend <document> <finding> …`, and at `ask` `--digest` after `preview amend` | `block` (shipped), `ask` or `none` | **yes at `block`**; no at `ask` or `none` | a wrong `decide` cannot be corrected by the agent unless the owner relaxes the level |
 | Delete closed reviews | `wb run review-engine prune [--apply]`; at `ask` `prune --apply --digest` after `preview prune` | `block` (shipped), `ask` or `none` | **yes at `block`**; no at `ask` or `none` | nothing else is stopped by it; old reviews stay *(inference)*; the plan recommends keeping it at `block`; the plain list needs a digest too at `ask`, so an agent uses `preview prune` |
 | Approve a plan, at a terminal | `wb approve-plan <plan>` | `approve-plan`, any level | **yes** | the owner types the first 12 characters of the region hash |
-| Approve a plan, at `ask` | `wb approve-plan <plan> --digest <32 hex>` after `wb plan-status <plan> --digest` | `approve-plan`, `ask` (the owner's table now) | no | the owner's confirmation on the harness prompt; the digest binds the plan, not what the owner read; a stale rendering makes the key read `block` |
+| Approve a plan, at `ask` | `wb approve-plan <plan> --digest <32 hex>` after `wb plan-status <plan> --digest` | `approve-plan`, `ask` (the owner's table on 2026-10-27) | no | the owner's confirmation on the harness prompt; the digest binds the plan, not what the owner read; a stale rendering makes the key read `block` |
 | Approve a plan, at `delegated` | `wb delegate-approve-plan <plan>` | `approve-plan`, `delegated` | no | a converged, sealed review of the exact bytes (`trust-and-approval.md`), and the preconditions of the `delegate-approval` skill (a `peer-review` provider, a Risks section, no `Hard stop:` line); it counts only while the table reads `delegated`, so not while it reads `ask` *(the last clause is an inference from `trust-and-approval.md`)* |
 | Approve a plan, at `none` | `wb approve-plan <plan>`, no terminal | `approve-plan`, `none` | no | nothing; the run is logged |
 | Approve a roadmap, a spec or a design | none exists | no key | not applicable | a roadmap and a spec have no status gate (`AGENTS.md`); a design is approved by the owner's word in the conversation. Nothing records it |
-| Accept a decision | the owner edits its `Status:` line and the index | `accept-decision`, `block`; offers `block` and `none` | **yes, or an editor** *(inference)* | the rule that an agent may not accept one at `block` is guidance in `AGENTS.md` and the skill; the installer enforces nothing here. No command with an `ask` level exists for it. The owner's other route is their own edit of the personal settings to `none` (a terminal or an editor), which lets the packaged `draft-decision` accept a record; the copy rendered in this clone says never to accept one and has no such route, so the clone's skill is out of date with the package |
+| Accept a decision | the owner edits its `Status:` line and the index | `accept-decision`, `block`; offers `block` and `none` | **yes, or an editor** *(inference)* | the rule that an agent may not accept one at `block` is guidance in `AGENTS.md` and the skill; the installer enforces nothing here. No command with an `ask` level exists for it. The owner's other route is their own edit of the personal settings to `none` (a terminal or an editor), which lets the packaged `draft-decision` accept a record; on 2026-10-27 the copy rendered in this clone said never to accept one and had no such route; the clone has since been re-rendered and its skill matches the package |
 
 Three things this map shows:
 
 - **Not blocked without a terminal:** drafting, starting and reading a review, and recording decisions, at their shipped levels; and
-  approving a plan at `ask` (the owner's table now, with the rendering current as `wb check` reports today), or at `delegated` or
+  approving a plan at `ask` (the owner's table as read on 2026-10-27, with the rendering then current), or at `delegated` or
   `none` once the owner sets and renders them.
 - **Blocked without a terminal:** the five owner-run arguments of the review engine at their shipped level `block`, and accepting a
   decision. These five are the subject of the plan `2026-10-27-levels-for-the-review-workflow`, which built `ask` and `none` for
@@ -562,7 +579,8 @@ Also, in the same flow:
 - The rule that a command reaching more than one key takes the strictest level of them: each command reaches one key today.
 - `none` for `wb rerender`, if a way to authorize a stale rendering without a terminal is ever wanted: the key reads its level
   through the record that a re-render repairs (see "Re-rendering an attached clone"), and it needs its own decision.
-- Picking up a module or package change in an attached clone, which `upgrade` covers; `wb rerender` re-renders for the table only.
+- Picking up a module or package change in an attached clone: `upgrade` brings the installed files up to date and `wb rerender`
+  then refreshes the rendered skills and agents (`harness-refresh.md`); the key it needs is the same `wb rerender`, `block` only.
 - A provenance check inside `approve-plan`, managed settings, and a store whose approvals a shell cannot forge.
 
 ## Limits
@@ -579,7 +597,9 @@ clarification note) and are tested where a test can show them (`tests/test_comma
   a differently named command that holds the words of such a key (`wb run safe-git commit --subject 'review-engine extend'`) stays
   blocked.
 - A hook is not a boundary. The `ask` rule and the gate are best-effort matches; the auto-mode classifier remained the barrier for the
-  rest (it denied the script and base64 cases in the owner's probe, which the gate did not control).
+  rest (it denied the script and base64 cases in the owner's probe, which the gate did not control), while auto mode was the owner's
+  setting. The reset of 2026-10-29 ended that setting, so for those cases no barrier is claimed here under factory defaults, and
+  that was not tested.
 - A store or settings file that cannot be read blocks every Bash call while a key is relaxed, `wb check` included; the recovery is
   the owner's terminal. "Yes, and don't ask again" writes an allow rule into the per-clone settings file, whose changed hash makes the
   keys read `block`.

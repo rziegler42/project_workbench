@@ -50,7 +50,10 @@ Non-goals:
 - Scratch grants no authority. Nothing read from scratch can approve, allow or
   acknowledge anything.
 - The guarded store is not a harness's global configuration, and the workbench never
-  reads, checks or requires one.
+  reads, checks or requires one. This is to be amended: the accepted design
+  `2026-10-24-installer-reads-global-settings-on-request` lets the installer's own code read a harness's global configuration,
+  read-only, through an owner-run command that needs a terminal. That amendment and that command are pending and neither is built,
+  so today the sentence holds as written.
 - The committed repository names no harness: no committed file lists a harness's
   file names, root file or directories.
 
@@ -75,7 +78,8 @@ Non-goals:
     seen                    where the project was first seen (written by install)
     baselines               acknowledgement baselines, path to SHA-256 (written by install,
                             upgrade, add and acknowledge)
-                            (plan approvals are not built yet)
+    plan-approvals          plan approvals: plan path, region hash, approver and time (written by
+                            approve-plan and delegate-approve-plan; `trust-and-approval.md`)
   bin/wb                    the launcher script, fixed text apart from one path
   bin/run/<uuid>/<name>     a private copy of a pinned helper, only while it runs
 ```
@@ -98,6 +102,9 @@ module, has no type and has no approval record. Its tree hash and the workbench 
 recorded in the committed manifest. *(Built by `base-and-manifests`.)*
 
 - `AGENTS.md`: the project's policy headings and the `policy` slot marker. Seeded.
+- `README.md`: a stub for the project's purpose, how to start, how to test and where its documents are, with
+  placeholders in angle brackets and links only to `AGENTS.md` and `docs/README.md`. It names no module and holds no
+  slot marker. Seeded.
 - `docs/README.md`: an index of the project's documents and the `docs-index` slot marker. Seeded.
 - `.workbench/.gitignore`: generated, not stored. Module-owned.
 - The base owns exactly two slots, `policy` (in `AGENTS.md`) and `docs-index` (in
@@ -118,8 +125,8 @@ fetched files that are not tracked.
 
 - A tracked document may cite an untracked reference by source URL, retrieval date
   and content hash, with no path to the file.
-- Naming a convention path in prose is allowed, for example the debug rule in
-  `AGENTS.md` or `/local/` in `.workbench/.gitignore`.
+- Naming a convention path in prose is allowed, for example the debug path
+  `.workbench/local/debug/` or `/local/` in `.workbench/.gitignore`.
 - A check flags links, includes and imports in documents and workbench-managed files
   that point into untracked or ignored locations. It ignores plain text mentions and
   does not inspect source code.
@@ -180,7 +187,8 @@ absolute path of the target>"}`. Reading a remote needs `.git/config`, which is 
 so `install` records the path and no remote; a freshly initialized repository has no remote
 anyway. When the target was an existing lone `.git`, `install` warns that no remote was
 recorded. Recording and comparing a remote is settled by the candidate that first meets a
-project in a second clone (at attach). Nothing reads `seen` yet.
+project in a second clone (at attach). `attach`, `upgrade` and `acknowledge` read `seen` and compare its path with
+the project's resolved path, and refuse a project first seen at another path as a new one. No remote is compared.
 
 **Baselines.** `install` writes `projects/<id>/baselines` as strict JSON,
 `{"baselines": {"<path>": "<sha256 hex of the bytes written>"}, "format": 1}`, with sorted
@@ -208,13 +216,13 @@ recorded in the manifest.
 
 - A template is not installed as a placeholder file. It stays in its module and is
   used when something is created, so an upgrade has no empty file to overwrite.
-- **Classes at install.** The base's `AGENTS.md` and `docs/README.md` are `seeded`.
+- **Classes at install.** The base's `AGENTS.md`, `README.md` and `docs/README.md` are `seeded`.
   `.workbench/.gitignore` is `module-owned`, as is each file under a module's namespace
   `.workbench/<package>/<module>/`. A file written from a module's `writes` is `seeded`. A
   filled block is a `slot block`. The declaration has no field to choose the class, and
   `ownership-and-upgrade` defers one: the fixed mapping stands, and a field can be added later
   without breaking it *(owner)*.
-- **A kept seeded file** *(proposed by `adopt-existing-repository`; my call)*. `adopt` finds a seeded path that already
+- **A kept seeded file** *(decision `2026-10-25-adopt-an-existing-repository-without-editing-it`)*. `adopt` finds a seeded path that already
   exists in the directory it adopts. It keeps the file and records it as `seeded` with the hash of the bytes there,
   not the hash of the seed, because the manifest records the bytes the installer last saw and "seeded with an entry is
   skip always" then means a later edit changes nothing. The file's slot blocks are not filled by `adopt` and have no
@@ -297,7 +305,7 @@ are not repeated here.
   `module-contract.md` or on a missing approval.
 - A harness is mandatory at install.
 
-### adopt *(proposed by `adopt-existing-repository`; my call)*
+### adopt *(decision `2026-10-25-adopt-an-existing-repository-without-editing-it`)*
 
 - Installs the selected modules into a directory that has its own real `.git`, has content and has no `.workbench`.
   It does what `install` does for every path that does not exist, and it writes nothing into a path that does. It
@@ -408,9 +416,9 @@ are not repeated here.
   does not change the file otherwise.
 - A tracked file that links to a path under `.workbench/local/` is reported by the
   check, and a plain mention of that path is not.
-- *(Proposed by `adopt-existing-repository`.)* After `adopt`, every file that existed before is byte-identical, a kept
+- *(Decision `2026-10-25-adopt-an-existing-repository-without-editing-it`.)* After `adopt`, every file that existed before is byte-identical, a kept
   seeded file is in the manifest at the hash of its own bytes, the tree contains no harness file, and nothing was
   committed. `check` passes on the adopted project, and `upgrade` classifies each kept seeded file **skip** and offers
   the blocks that were not filled.
-- *(Proposed by `adopt-existing-repository`.)* `adopt` refuses a directory with no real `.git`, a `.git` that is a file
+- *(Decision `2026-10-25-adopt-an-existing-repository-without-editing-it`.)* `adopt` refuses a directory with no real `.git`, a `.git` that is a file
   or link, and any `.workbench` entry, and writes nothing.

@@ -1,6 +1,6 @@
 # The installer reads a harness's paths from that harness module's layout
 
-Status: Proposed
+Status: Accepted by Robert Ziegler <25854477+rziegler42@users.noreply.github.com> on 2026-10-29
 Date: 2026-10-21
 
 ## Context

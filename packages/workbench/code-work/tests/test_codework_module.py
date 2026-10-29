@@ -16,8 +16,8 @@ import unittest
 import unittest.mock
 
 from tests import support_install
-from workbench import (approve, cli, commands, firstparty, harnessplan, install, manifest, neutral, pins, sources,
-                       verify)
+from workbench import (approve, cli, commands, firstparty, harnessplan, identity, install, manifest, neutral, pins,
+                       sources, verify)
 from workbench.wbkit import project
 
 
@@ -130,6 +130,17 @@ class Declaration(unittest.TestCase):
             self.assertEqual(["ask-codex", "claude", "code-work", "groundwork", "safe-git", "review-engine",
                               "action-review", "mempalace", "remote-runner", "security-review", "verilog", "freecad"],
                              json.load(handle)["modules"])
+
+    def test_the_readme_says_what_a_checkpoint_does_and_names_the_approver_by_git_identity(self):
+        with open(os.path.join(MODULE, "files", README), encoding="utf-8") as handle:
+            text = " ".join(handle.read().split())
+        self.assertNotIn("nothing yet reads a setting", text)
+        for clause in ("Every checkpoint stops by default",
+                       "`wb settings` prints the level of each",
+                       "other than `block` lets the agent go on in the way that level says",
+                       "names the approver by their git identity, `Name <email>`",
+                       "at a terminal, at a prompt, delegated or with no gate"):
+            self.assertIn(clause, text)
 
     def test_the_readme_states_the_format_the_labels_and_the_status_values(self):
         with open(os.path.join(MODULE, "files", README), encoding="utf-8") as handle:
@@ -523,7 +534,9 @@ class Install(support_install.InstallBase):
 
         def run(*argv, typed=""):
             out, err = io.StringIO(), io.StringIO()
-            with unittest.mock.patch.object(approve, "is_terminal", lambda stream: True):
+            who = identity.check("Example Approver", "12345+example@users.noreply.github.com")
+            with unittest.mock.patch.object(approve, "is_terminal", lambda stream: True), \
+                    unittest.mock.patch.object(identity, "read", lambda home=None: who):
                 code = cli.main(list(argv), out, err, store_root=self.store_root, distribution=self.dist,
                                 stdin=io.StringIO(typed))
             return code, out.getvalue(), err.getvalue()

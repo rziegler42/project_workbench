@@ -24,6 +24,17 @@ def forbid_real_store(case):
     case.addCleanup(finder.stop)
 
 
+def fixed_identity(case, name="Example Approver", email="12345+example@users.noreply.github.com"):
+    """Make the git identity an approval records a fixed one, so a test does not read this machine's. Returns the
+    ``identity.Identity``."""
+    from workbench import identity
+    found = identity.check(name, email)
+    patcher = unittest.mock.patch.object(identity, "read", lambda home=None: found)
+    patcher.start()
+    case.addCleanup(patcher.stop)
+    return found
+
+
 STALE = "the shipped approvals are stale until the owner runs release-approvals"
 
 
@@ -47,6 +58,24 @@ def clean_path():
     keep = [d for d in os.environ.get("PATH", "").split(os.pathsep)
             if not (d and os.path.exists(os.path.join(d, "wb")))]
     return os.pathsep.join(keep)
+
+
+# A command run as a child process with the git identity fixed (TEST_IDENTITY=fixed) or missing (TEST_IDENTITY=missing), so no
+# test reads the identity of the machine it runs on: `[sys.executable, "-B", "-c", CHILD, <command words>]`.
+CHILD_NAME = "Example Approver"
+CHILD_EMAIL = "12345+example@users.noreply.github.com"
+CHILD = (
+    "import os, sys\n"
+    "from workbench import cli, identity\n"
+    "if os.environ['TEST_IDENTITY'] == 'missing':\n"
+    "    def read(home=None):\n"
+    "        raise identity.IdentityError('no identity here')\n"
+    "else:\n"
+    "    found = identity.check(%r, %r)\n"
+    "    def read(home=None):\n"
+    "        return found\n"
+    "identity.read = read\n"
+    "sys.exit(cli.main(sys.argv[1:]))\n" % (CHILD_NAME, CHILD_EMAIL))
 
 
 def drive_pty(case, command, env, cwd, answer=None, prompt=b"> ", between=None,

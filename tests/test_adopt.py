@@ -109,7 +109,8 @@ class AdoptWriteTest(AdoptBase):
             code, out, err = self.run_adopt(place, path)
         self.assertEqual(0, code, (out, err))
         self.assertEqual([], [name for name in opened if name in ("AGENTS.md", "CONTRIBUTING.md", "index")])
-        self.assertIn("manifest.json", opened)      # the watch does see the files adopt creates
+        # The watch does see the files adopt creates: each is opened under a private sibling name and linked into place.
+        self.assertTrue([name for name in opened if name.startswith(".workbench-") and name.endswith(".tmp")])
 
     def test_a_wrong_digest_cancels_and_writes_nothing(self):
         path = self.good_set()

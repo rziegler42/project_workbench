@@ -1,10 +1,10 @@
 # Harness modules
 
-Status: Current. Approved by the owner on 2026-10-19; implementation has not started. Paths, field names and
-formats are proposals. Every statement about what a particular harness reads is taken
-from its official documentation as read on 2026-10-19 and must be re-checked against
-the installed version before implementation; the places where it is unverified are
-marked.
+Status: Current. Approved by the owner on 2026-10-19. The Claude harness is built (plan `2026-10-20-claude-harness` and the
+plans after it that the "As built" sections name); the opencode harness is not, so its paths, field names and formats remain
+proposals. Every statement about what a particular harness reads was taken from its official documentation as read on
+2026-10-19, and the Claude statements were then tested in the trials the evidence sections record. All must be re-checked against
+the installed version, and the places where something is unverified are marked.
 
 Terms are defined in `terms.md`. A harness module is a module (`module-contract.md`)
 of type `harness`. Where its files go and what is never committed is defined in
@@ -134,7 +134,8 @@ maps to its own rule syntax; the exact grammar is written with the schema.
 - A harness that provides no `permissions` yields a warning at attach that hard stops
   and the guarded store are enforced only by instruction.
 - The owner's own `allow` rules remain in the owner's configuration. The workbench
-  never writes them.
+  never renders one. Attach never reads or writes them, and `wb rerender` carries those it finds in the live permissions file
+  into the new one, each shown in the preview (`harness-rerender.md`).
 
 ## Hooks
 
@@ -144,8 +145,9 @@ plain terms when the module is approved. A harness that declares `hooks: none` s
 does not receive them.
 
 The hooks the installer itself renders are the edit gate, for a harness whose layout carries a `hooks` key
-("The edit gate hook", built), and the agent gate, one per confined agent, for a harness whose layout describes a per-agent
-hook ("The agent gate", built). Neither is a module's file or listed
+("The edit gate hook", built), the agent gate, one per confined agent, for a harness whose layout describes a per-agent
+hook ("The agent gate", built), and the command gate, a `Bash` hook, for a harness whose layout carries `hooks.command_gate`
+(`command-permissions.md`, "The command gate", built). None is a module's file or listed
 under `ships`.
 
 ## Root files and instructions
@@ -253,9 +255,27 @@ it, and project against local settings precedence.
   shell sees (so whether `wb` is found); and hooks through a symlinked path. The last 73,000 characters of the
   hooks page were searched for terms and not read in full.
 
+*Note, 2026-10-29, on the four trials below.* They ran from 2026-10-24 to 2026-10-26, three of them under the owner's former
+user-level configuration (stated in the method of one, and inferred for the two of 2026-10-26 from their results, which name auto
+mode), which was reset to factory defaults on 2026-10-29. They are history and were not re-run. What holds, and
+what does not:
+
+- **Holds from Claude Code's behaviour alone (2.1.310):** the results of "Global against project settings", which
+  replaced the user level with a throwaway configuration directory (a project `deny` and `ask` held against a global `allow`, a
+  global hook ran beside the project's, a global skill replaced a project skill of the same name and a project agent replaced a
+  global one).
+- **Not shown to depend on the configuration, but not re-run (2.1.310 and 2.1.311):** what the two hook trials show about a hook (an
+  exit 2 blocks, a word that a text match cannot see gets through, an agent's frontmatter hook runs and blocks, and is skipped in a
+  folder that is not trusted). Both ran under the former configuration, and nothing in them shows that it mattered.
+- **Depended on the former configuration:** every statement that an `ask` rule "overrides auto mode", and every statement that the
+  auto-mode classifier "remained the barrier", because auto mode was the owner's setting. At factory defaults there is no auto
+  mode, so those describe a configuration that no longer exists. The one observation that the owner's real instruction file loaded
+  beside the throwaway one, whose cause was not established, concerned that configuration and cannot be repeated.
+- **Never established:** whether the owner's former approver hook affected the `ask` trials. The trial text says it was not tested.
+
 ### Global against project settings (Claude Code 2.1.310, 2026-10-24)
 
-What happens when the owner's user-level configuration (`~/.claude`) differs from the project's. Method: `claude -p` runs in a
+What happens when the owner's user-level configuration differs from the project's. Method: `claude -p` runs in a
 throwaway workbench project (122 `deny` and 58 `ask` rules rendered by this harness module), with the user level replaced by a
 throwaway configuration directory chosen with `CLAUDE_CONFIG_DIR` and made deliberately noisy: `allow: Bash(*)`, a `PreToolUse`
 hook on Bash that appended a line to a log, a skill and an agent each named like one of the project's with a marker in its text,
@@ -280,7 +300,7 @@ carry out each request; the permission results are read from the run's `permissi
   settings precedence, and any agent tool other than `Read`.
 
 The decisions `2026-10-24-project-guarantees-a-floor`, `2026-10-24-declared-agent-confinement` and
-`2026-10-24-installer-reads-global-settings-on-request` (all `Proposed`) rest on these results.
+`2026-10-24-installer-reads-global-settings-on-request` (all accepted by the owner on 2026-10-24) rest on these results.
 
 ### Hooks in an agent's frontmatter (Claude Code 2.1.310, 2026-10-24)
 
@@ -333,7 +353,7 @@ workbench repository head was `1a731fa`. One run of each case, so each result is
   observation of this session.
 - **No answered on the remote side refused the command.** The session said it did not run the command because it was denied,
   and the terminal prompt closed without a keypress there.
-- **No `PermissionRequest` hook was found** by `grep -rn PermissionRequest ~/.claude/settings.json ~/.claude/plugins` (no output),
+- **No `PermissionRequest` hook was found** by a recursive search of the owner's user-level settings file and plugins folder for the word `PermissionRequest` (no output),
   so whether the owner's global hook fires on an `ask` prompt was not tested. Hooks elsewhere were not searched.
 - **A first rule, `Bash(echo ask-trial:*)`, did not prompt** for `echo ask-trial-1`: the command ran with no prompt noticed. The
   likely cause is that the `:*` form matches whole words; that cause was not confirmed.
@@ -383,21 +403,26 @@ review or in the security pass:
 
 - **An existing `.claude/settings.local.json` is a conflict.** Attach creates the file
   exclusively. If another file is there, attach refuses it and prints the entries to add by
-  hand. There is no merge, and the owner's `allow` rules are never read or written.
+  hand. There is no merge, and attach never reads or writes the owner's `allow` rules (`wb rerender` is the command that carries
+  them, as above).
 - **Attach is idempotent.** A path that already holds exactly the planned bytes is kept; a
   different one is a conflict. The local manifest, `.workbench/local/harness.json`, is written
   last, so a part-written attach has none and can be rerun. It is scratch and grants no
-  authority.
+  authority, except that `wb rerender` trusts its hashes to tell an edited rendered file from a stale one
+  ([`harness-refresh.md`](harness-refresh.md)); the rendered permissions deny the harness's write tool on it and
+  nothing stops a write by the shell.
 - **`install` attaches as its last step,** after its own unfinished-write marker is removed. If
   attach fails, the install is complete, `install` prints `failed:` and names `wb attach`, and
   exits 3.
 - **The deny list** covers the guarded store and every owner-run command (`install`, `adopt`, `upgrade`,
-  `add`, `attach`, `acknowledge`, `recover`, `approve`, `pin`, `release-approvals`) in five
+  `add`, `attach`, `rerender`, `acknowledge`, `recover`, `approve`, `pin`, `release-approvals`, `approve-plan`; `rules.OWNER_RUN`
+  and the commands the owner has set to a level that lets an agent run them are in `command-permissions.md`) in five
   spellings: `wb` and the four interpreter forms of `-m workbench` (`rules.SPELLINGS`). `wb preview` is not denied. A Bash deny is not a security
   boundary; see "Verified rendering rules".
 - **The rendered rules deny edits to `.claude/settings.local.json` and `.git/info/exclude` only
   together with the edit gate hook** ("The edit gate hook"). Without a hook, Claude prompts for an
-  edit, but an agent that has been allowed edits could change its own deny rules.
+  edit, but an agent that has been allowed edits could change its own deny rules. The deny of the local manifest
+  (`.workbench/local/harness.json`) is rendered with or without the hook (plan `2026-10-28-protect-local-manifest`).
 - **`.git/info/exclude` has the lowest precedence of git's ignore sources,** so a committed
   `.gitignore` can re-include a path with `!`. `wb check` reports such a file once it is tracked.
   An exclude file that already holds a later `!` line defeats an exclude line that is present.

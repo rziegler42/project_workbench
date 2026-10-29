@@ -46,6 +46,22 @@ class Declaration(unittest.TestCase):
         self.assertEqual(["ask"], command["arguments"])
         self.assertEqual((HELPER, "python", 1), (command["helper"], command["runtime"], command["kit"]))
 
+    def test_it_asks_before_the_login_file_is_read(self):
+        import types
+        from workbench import declarations, harnessplan, harnessstage, neutral
+        self.assertEqual(["~/.codex/auth.json"], declaration()["ask_reads"])
+        loaded = declarations.load_package(PACKAGE, first_party=True)
+        module = [m for m in loaded.modules if m.name == "ask-codex"][0]
+        self.assertEqual(("~/.codex/auth.json",), module.ask_reads)
+        found = harnessstage.ask_rules([types.SimpleNamespace(module=module, type="module")])
+        self.assertEqual([neutral.Rule("ask", "read", "~/.codex/auth.json")], found)
+        with open(os.path.join(PACKAGE, "claude", "module.json"), encoding="utf-8") as handle:
+            layout = json.load(handle)["layout"]
+        permissions = json.loads(harnessplan.render_permissions(
+            found, layout, "/Users/tester/.config/project-workbench", "/Users/tester"))["permissions"]
+        deny, ask = permissions["deny"], permissions["ask"]
+        self.assertIn("Read(//Users/tester/.codex/auth.json)", ask)
+
     def test_every_file_is_the_declaration_or_the_helper(self):
         found = []
         for base, dirs, files in os.walk(MODULE):

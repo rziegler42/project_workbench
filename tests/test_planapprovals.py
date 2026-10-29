@@ -10,7 +10,7 @@ import os
 import unittest
 import unittest.mock
 
-from tests import support_project
+from tests import support, support_project
 from tests.support_project import HELPER_PATH, tool
 from tests.test_approvalcmd import APPROVAL, Approval
 from workbench import approvalcmd, approve, cli, hashing, manifest, planapprovals
@@ -55,6 +55,7 @@ class Typed(io.StringIO):
 class Planned(Approval):
     def setUp(self):
         Approval.setUp(self)
+        self.who = support.fixed_identity(self)
         module, files = tool({"region-of": {"helper": HELPER_PATH, "arguments": ["region"]}}, helper=HELPER)
         module.update(type="process", approval=APPROVAL)
         self.MODULES = dict(self.MODULES, tool=(module, files))
@@ -329,7 +330,7 @@ class Damaged(Planned):
         "not json": b"{",
         "an array": b"[]",
         "no format": b'{"approvals": []}',
-        "format 3": b'{"format": 3, "approvals": []}',
+        "format 4": b'{"format": 4, "approvals": []}',
         "format 0": b'{"format": 0, "approvals": []}',
         "format true": b'{"format": true, "approvals": []}',
         "an extra key": b'{"format": 1, "approvals": [], "x": 1}',
@@ -385,6 +386,166 @@ class Damaged(Planned):
     def test_the_record_round_trips(self):
         entry = planapprovals.Approval(PLAN, "a" * 64, "b" * 64, "c" * 64, "o", "2026-10-22T10:00:00Z", "0.1.0")
         self.assertEqual([entry], planapprovals.parse(planapprovals.serialize([entry])))
+
+
+IDENT = "Example Approver <12345+example@users.noreply.github.com>"
+OTHER = "Other Person <other@example.com>"
+DELEGATE = {"provider": "review", "provider_declaration_hash": "d" * 64, "provider_helper_sha256": "e" * 64,
+            "bridge": "bridge-one", "model": "model-one", "rounds_used": 2, "bound": 3, "review": "plan-0123456789abcdef",
+            "document_sha256": "f" * 64}
+
+
+def approval(approver=IDENT, via="terminal", delegate=None, **changes):
+    fields = dict(plan=PLAN, region_hash="a" * 64, declaration_hash="b" * 64, helper_sha256="c" * 64, approver=approver,
+                  time="2026-10-29T10:00:00Z", workbench_version="0.1.0", delegate=delegate, via=via)
+    fields.update(changes)
+    return planapprovals.Approval(**fields)
+
+
+def raw(entry):
+    """The JSON object of an entry as the file holds it: no `via` and no `delegate` when they are None."""
+    item = entry._asdict()
+    return {key: value for key, value in item.items() if value is not None}
+
+
+class Formats(Planned):
+    """Format 3: the approver is an identity, `via` says how it was authorized, and the earlier formats are history."""
+
+    def file(self, fmt, entries):
+        return json.dumps({"format": fmt, "approvals": entries}).encode()
+
+    def test_a_format_2_file_is_read_as_it_is(self):
+        old = raw(approval(approver="o", via=None))
+        delegated = raw(approval(approver="o", via=None, delegate=DELEGATE, region_hash="9" * 64))
+        read = planapprovals.parse(self.file(2, [old, delegated]))
+        self.assertEqual(["o", "o"], [entry.approver for entry in read])
+        self.assertEqual([None, None], [entry.via for entry in read])
+        self.assertEqual((None, DELEGATE), (read[0].delegate, read[1].delegate))
+
+    def test_the_next_write_gives_format_3_and_keeps_the_old_entries_whole(self):
+        old = raw(approval(approver="o", via=None))
+        self.guarded.write(self.record_file(), self.file(2, [old]))
+        self.assertTrue(planapprovals.add(self.guarded, self.project_id, approval(region_hash="9" * 64)))
+        document = json.loads(self.stored())
+        self.assertEqual(3, document["format"])
+        self.assertEqual(old, document["approvals"][0])
+        self.assertNotIn("via", document["approvals"][0])
+        self.assertEqual((IDENT, "terminal"), (document["approvals"][1]["approver"], document["approvals"][1]["via"]))
+
+    def test_the_approver_limit_is_256_in_format_3_and_64_before(self):
+        for fmt, length, ok in ((1, 64, True), (1, 65, False), (2, 64, True), (2, 65, False), (3, 256, True), (3, 257, False)):
+            with self.subTest(format=fmt, length=length):
+                entry = raw(approval(approver="x" * length, via=None))
+                if ok:
+                    planapprovals.parse(self.file(fmt, [entry]))
+                else:
+                    with self.assertRaises(planapprovals.PlanApprovalError):
+                        planapprovals.parse(self.file(fmt, [entry]))
+
+    def test_an_entry_written_now_needs_a_via_of_the_four_and_an_identity(self):
+        for label, entry in (("no via", approval(via=None)), ("a bad via", approval(via="ssh")),
+                             ("not an identity", approval(approver="bob")),
+                             ("an identity outside the grammar", approval(approver="Name <a b@c.d>"))):
+            with self.subTest(label):
+                with self.assertRaises(planapprovals.PlanApprovalError):
+                    planapprovals.add(self.guarded, self.project_id, entry)
+                self.assertIsNone(self.stored())
+
+    def test_via_and_delegate_agree_on_read_and_on_write(self):
+        bad = (approval(via="delegated"), approval(via="terminal", delegate=DELEGATE), approval(via="ask", delegate=DELEGATE),
+               approval(via="none", delegate=DELEGATE))
+        for entry in bad:
+            with self.subTest(via=entry.via, delegate=entry.delegate is not None):
+                with self.assertRaises(planapprovals.PlanApprovalError):
+                    planapprovals.parse(self.file(3, [raw(entry)]))
+                with self.assertRaises(planapprovals.PlanApprovalError):
+                    planapprovals.add(self.guarded, self.project_id, entry)
+        for via, delegate in (("terminal", None), ("ask", None), ("none", None), ("delegated", DELEGATE)):
+            with self.subTest(good=via):
+                entry = approval(via=via, delegate=delegate)
+                self.assertEqual([entry], planapprovals.parse(self.file(3, [raw(entry)])))
+
+    def test_an_old_entry_with_a_delegate_and_no_via_is_still_read_in_format_3(self):
+        entry = approval(approver="o", via=None, delegate=DELEGATE)
+        self.assertEqual([entry], planapprovals.parse(self.file(3, [raw(entry)])))
+
+    def test_a_format_3_entry_with_a_via_and_an_approver_that_is_not_an_identity_is_refused_on_read(self):
+        with self.assertRaises(planapprovals.PlanApprovalError):
+            planapprovals.parse(self.file(3, [raw(approval(approver="bob"))]))
+
+    def test_a_via_in_a_file_of_an_earlier_format_is_refused(self):
+        for fmt in (1, 2):
+            with self.subTest(format=fmt):
+                with self.assertRaises(planapprovals.PlanApprovalError):
+                    planapprovals.parse(self.file(fmt, [raw(approval())]))
+
+    def test_format_4_is_refused(self):
+        with self.assertRaises(planapprovals.PlanApprovalError):
+            planapprovals.parse(self.file(4, []))
+
+    def test_every_entry_round_trips(self):
+        entries = [approval(approver="o", via=None), approval(via="terminal", region_hash="1" * 64),
+                   approval(via="ask", region_hash="2" * 64), approval(via="none", region_hash="3" * 64),
+                   approval(via="delegated", delegate=DELEGATE, region_hash="4" * 64)]
+        self.assertEqual(entries, planapprovals.parse(planapprovals.serialize(entries)))
+
+
+class Identified(Planned):
+    """What `approve-plan` at a terminal records and prints."""
+
+    def line(self, word, plan=PLAN, tail=""):
+        return "%s: %s (region %s)%s\n" % (word, plan, self.region().region_hash, tail)
+
+    def test_it_records_the_identity_and_terminal_and_prints_who(self):
+        code, out, err = self.approve_plan(PLAN)
+        self.assertEqual((0, ""), (code, err))
+        self.assertTrue(out.endswith("> " + self.line("approved", tail=" by " + IDENT)), out)
+        entry, = self.recorded()
+        self.assertEqual((IDENT, "terminal", None), (entry.approver, entry.via, entry.delegate))
+        self.assertEqual(3, json.loads(self.stored())["format"])
+
+    def test_the_word_owner_is_never_recorded(self):
+        self.approved()
+        self.assertNotIn(b"owner", self.stored())
+
+    def test_a_repeat_names_the_approver_and_via_on_file(self):
+        planapprovals.add(self.guarded, self.project_id, approval(
+            approver=OTHER, via="none", region_hash=self.region().region_hash, declaration_hash=self.resolve().declaration,
+            helper_sha256=self.resolve().helper_sha256))
+        code, out, err = self.approve_plan(PLAN)
+        self.assertEqual((0, ""), (code, err))
+        self.assertTrue(out.endswith("> " + self.line("already approved", tail=" by %s (no gate)" % OTHER)), out)
+        self.assertEqual(1, len(self.recorded()))
+
+    def test_a_repeat_of_an_old_entry_shows_its_approver_alone(self):
+        planapprovals.add(self.guarded, self.project_id, approval(
+            approver=IDENT, via="terminal", region_hash=self.region().region_hash,
+            declaration_hash=self.resolve().declaration, helper_sha256=self.resolve().helper_sha256))
+        document = json.loads(self.stored())
+        for item in document["approvals"]:
+            item["approver"] = "o"
+            del item["via"]
+        self.guarded.write(self.record_file(), json.dumps(document).encode())
+        code, out, err = self.approve_plan(PLAN)
+        self.assertEqual((0, ""), (code, err))
+        self.assertTrue(out.endswith("> " + self.line("already approved", tail=" by o")), out)
+
+    def test_a_missing_identity_refuses_before_a_prompt_and_writes_nothing(self):
+        from workbench import identity
+        with unittest.mock.patch.object(identity, "read", side_effect=identity.IdentityError(
+                "the global git configuration has no user.name; set it")):
+            code, out, err = self.approve_plan(PLAN)
+        self.assertEqual((1, ""), (code, out))  # nothing shown: no preview and no prompt
+        self.assertEqual("refused: the global git configuration has no user.name; set it\n", err)
+        self.nothing_written()
+
+    def test_the_identity_is_read_once_at_the_start(self):
+        from workbench import identity
+        calls = []
+        found = self.who
+        with unittest.mock.patch.object(identity, "read", lambda home=None: calls.append(1) or found):
+            self.approved()
+        self.assertEqual([1], calls)
 
 
 class FromTheCommandLine(Planned):

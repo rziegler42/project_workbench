@@ -14,7 +14,7 @@ import time
 import unittest
 import unittest.mock
 
-from tests import support_project
+from tests import support, support_project
 from tests.support_project import HELPER_PATH, tool
 from workbench import approvalcmd, cli, gate_hook, levellog, planapprovals, rules, settings, settingscmd, verify
 
@@ -95,6 +95,7 @@ class Delegated(support_project.Project):
 
     def setUp(self):
         support_project.Project.setUp(self)
+        self.who = support.fixed_identity(self)
         original = verify.verify_package
         # The synthetic provider provides the capability under its core name, as a first-party module may.
         first = unittest.mock.patch.object(
@@ -177,8 +178,10 @@ def cli_run(case, argv, out, err, cwd):
 class Recorded(Delegated):
     def test_it_records_one_delegated_approval_and_says_so(self):
         code, out, err = self.delegate(PLAN)
-        self.assertEqual((0, "approved: %s (delegated, 2 of 3 rounds)\n" % PLAN, ""), (code, out, err))
+        self.assertEqual((0, "approved: %s by %s delegated to review (model-one), 2 of 3 rounds\n" % (PLAN, self.who.text), ""),
+                         (code, out, err))
         entry, = self.recorded()
+        self.assertEqual((self.who.text, "delegated"), (entry.approver, entry.via))
         self.assertEqual(PLAN, entry.plan)
         self.assertEqual(self.resolve().declaration, entry.declaration_hash)
         self.assertEqual(self.resolve().helper_sha256, entry.helper_sha256)
@@ -187,7 +190,39 @@ class Recorded(Delegated):
                           "provider_helper_sha256": review.helper_sha256, "bridge": "bridge-one",
                           "model": "model-one", "rounds_used": 2, "bound": 3, "review": REVIEW,
                           "document_sha256": hashlib.sha256(TEXT).hexdigest()}, entry.delegate)
-        self.assertEqual(2, json.loads(self.stored())["format"])
+        self.assertEqual(3, json.loads(self.stored())["format"])
+
+    def test_the_sentence_leaves_out_a_model_that_is_not_known(self):
+        self.control(convergence={"set": {"model": None}})
+        code, out, err = self.delegate(PLAN)
+        self.assertEqual((0, "approved: %s by %s delegated to review, 2 of 3 rounds\n" % (PLAN, self.who.text), ""),
+                         (code, out, err))
+
+    def test_a_missing_identity_refuses_and_writes_nothing_and_logs_nothing(self):
+        from workbench import identity
+        with unittest.mock.patch.object(identity, "read", side_effect=identity.IdentityError("no identity here")):
+            self.refuses("no identity here")
+        self.assertEqual([], self.log_lines())
+        self.assertEqual([], self.calls())  # before any helper ran
+
+    def test_the_identity_is_read_once_after_the_setting_and_before_any_helper(self):
+        from workbench import identity
+        seen = []
+        found = self.who
+        with unittest.mock.patch.object(identity, "read", lambda home=None: seen.append(self.calls()) or found):
+            self.approved()
+        self.assertEqual([[]], seen)
+
+    def test_with_the_setting_off_the_setting_refusal_comes_before_the_identity(self):
+        from workbench import identity
+        self.setting({"approve-plan": "stop"})
+        with unittest.mock.patch.object(identity, "read", side_effect=identity.IdentityError("no identity here")):
+            self.refuses("approve-plan is not set to delegate")
+
+    def log_lines(self):
+        if self.guarded.kind(levellog.LOG) != "file":
+            return []
+        return self.guarded.read(levellog.LOG).decode("ascii").splitlines()
 
     def resolve(self):
         return approvalcmd.resolve(self.guarded, self.real)
@@ -207,16 +242,19 @@ class Recorded(Delegated):
         self.approved()
         first = self.stored()
         code, out, err = self.delegate(PLAN)
-        self.assertEqual((0, "already approved: %s\n" % PLAN, ""), (code, out, err))
+        self.assertEqual((0, "already approved: %s by %s delegated to review (model-one)\n" % (PLAN, self.who.text), ""),
+                         (code, out, err))
         self.assertEqual(first, self.stored())
 
     def test_an_owner_entry_for_the_same_plan_is_kept_and_nothing_is_added(self):
         resolved = self.resolve()
         report = approvalcmd.region(self.guarded, resolved, PLAN)
+        other = "Other Person <other@example.com>"
         planapprovals.add(self.guarded, self.project_id, planapprovals.Approval(
-            PLAN, report.region_hash, resolved.declaration, resolved.helper_sha256, "owner", "2026-10-23T00:00:00Z", "1"))
+            PLAN, report.region_hash, resolved.declaration, resolved.helper_sha256, other, "2026-10-23T00:00:00Z", "1",
+            None, "terminal"))
         first = self.stored()
-        self.assertEqual((0, "already approved: %s\n" % PLAN, ""), self.delegate(PLAN))
+        self.assertEqual((0, "already approved: %s by %s\n" % (PLAN, other), ""), self.delegate(PLAN))
         self.assertEqual(first, self.stored())
 
     def test_the_plan_is_named_from_any_directory_inside_the_project(self):
@@ -294,7 +332,8 @@ class Logged(Delegated):
         self.approved()
         before = self.log_lines()
         code, out, err = self.delegate(PLAN)
-        self.assertEqual((0, "already approved: %s\n" % PLAN, ""), (code, out, err))
+        self.assertEqual((0, "already approved: %s by %s delegated to review (model-one)\n" % (PLAN, self.who.text), ""),
+                         (code, out, err))
         self.assertEqual(before, self.log_lines())
 
     def test_a_refusal_before_the_change_leaves_no_entry(self):
@@ -779,7 +818,8 @@ class Reading(Delegated):
         resolved = approvalcmd.resolve(self.guarded, self.real)
         report = approvalcmd.region(self.guarded, resolved, PLAN)
         planapprovals.add(self.guarded, self.project_id, planapprovals.Approval(
-            PLAN, report.region_hash, resolved.declaration, resolved.helper_sha256, "owner", "2026-10-23T00:00:00Z", "1"))
+            PLAN, report.region_hash, resolved.declaration, resolved.helper_sha256, "Other Person <other@example.com>",
+            "2026-10-23T00:00:00Z", "1", None, "terminal"))
         for value in ({"approve-plan": "stop"}, {}, {"approve-plan": "delegate"}):
             self.setting(value)
             self.assertEqual((0, "approved: %s\n" % PLAN, ""), self.status())
@@ -832,11 +872,11 @@ class Format(Delegated):
         self.assertEqual(PLAN, entry.plan)
         self.assertIsNone(entry.delegate)
 
-    def test_a_format_one_file_is_rewritten_as_format_two_when_an_approval_is_added(self):
+    def test_a_format_one_file_is_rewritten_as_format_three_when_an_approval_is_added(self):
         self.guarded.write(self.record_file(), document(format=1))
         self.approved()
         stored = json.loads(self.stored())
-        self.assertEqual(2, stored["format"])
+        self.assertEqual(3, stored["format"])
         self.assertEqual(2, len(stored["approvals"]))
         self.assertNotIn("delegate", stored["approvals"][0])
 
@@ -849,7 +889,7 @@ class Format(Delegated):
         self.refused(document(1, delegate=DELEGATE))
 
     def test_other_formats_are_refused(self):
-        for value in (0, 3, True, "2", None, 2.0):
+        for value in (0, 4, True, "2", None, 2.0):
             with self.subTest(value):
                 self.refused(json.dumps({"format": value, "approvals": []}).encode())
 
@@ -874,7 +914,7 @@ class Format(Delegated):
         self.approved()
         good = self.stored()
         for label, data in (("truncated", good[:-20]), ("empty", b""), ("a changed hash", good.replace(b'"a', b'"A', 1)),
-                            ("an extra key", good.replace(b'"format": 2', b'"format": 2, "x": 1'))):
+                            ("an extra key", good.replace(b'"format": 3', b'"format": 3, "x": 1'))):
             with self.subTest(label):
                 self.guarded.write(self.record_file(), data)
                 code, out, err = self.status()

@@ -1,6 +1,6 @@
 # At the ask and none levels the harness's rule is the only barrier, and its limit is accepted
 
-Status: Accepted by the owner on 2026-10-26
+Status: Accepted by the owner on 2026-10-26; item 6 replaced by 2026-10-26-ask-level-command-gate
 Date: 2026-10-26
 
 ## Context

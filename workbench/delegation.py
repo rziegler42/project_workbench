@@ -28,7 +28,7 @@ validated and never followed. Every refusal writes nothing.
 import hashlib
 import os
 
-from . import __version__, approvalcmd, approvals, approve, levellog, planapprovals, settings
+from . import __version__, approvalcmd, approvals, identity, levellog, planapprovals, settings
 from .planapprovals import PlanApprovalError
 from .wbkit import display, safefs
 
@@ -90,6 +90,7 @@ def delegate_approve_plan(guarded, tokens, out, err, *, cwd=None):
         return _refuse(err, "the working directory cannot be read: %s" % (exc.strerror or "unknown error"))
     try:
         process, provider = approvalcmd.resolve_delegation(guarded, start, check=_setting(guarded))
+        who = identity.read().text  # after the setting is checked and before any helper runs: a missing one refuses early
         plan = planapprovals.plan_path(process.root, start, argument)
         shown = display.ascii_text(plan)
         first = hashlib.sha256(_bytes(process.root, plan)).hexdigest()
@@ -116,7 +117,8 @@ def delegate_approve_plan(guarded, tokens, out, err, *, cwd=None):
                     "rounds_used": review.rounds_used, "bound": review.bound, "review": review.review,
                     "document_sha256": review.document_sha256}
         entry = planapprovals.Approval(plan, report.region_hash, process.declaration, process.helper_sha256,
-                                       approve.approver_name(), approvals.utc_now(), __version__, delegate)
+                                       who, approvals.utc_now(), __version__, delegate,
+                                       planapprovals.DELEGATED)
         op = None
         if not any(planapprovals._same(item, entry) for item in planapprovals.load(guarded, process.project_id)):
             try:
@@ -137,12 +139,13 @@ def delegate_approve_plan(guarded, tokens, out, err, *, cwd=None):
                 _outcome(guarded, op, "done" if written else "refused",
                          "written, but %s" % reason if written else reason)
             raise
-    except (PlanApprovalError, approvalcmd.ApprovalError) as exc:
+    except (PlanApprovalError, approvalcmd.ApprovalError, identity.IdentityError) as exc:
         return _refuse(err, str(exc))
     if written:
-        out.write("approved: %s (delegated, %d of %d rounds)\n" % (shown, review.rounds_used, review.bound))
+        out.write("approved: %s%s, %d of %d rounds\n" % (shown, planapprovals.by(entry), review.rounds_used, review.bound))
     else:
-        out.write("already approved: %s\n" % shown)
+        out.write("already approved: %s%s\n" % (
+            shown, planapprovals.by(planapprovals.on_file(planapprovals.load(guarded, process.project_id), entry) or entry)))
     if op is not None:
         try:
             levellog.finish(guarded, op, "done", "recorded")

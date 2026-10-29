@@ -23,6 +23,10 @@
       ],
       "owner": [
         "fetch-overwrite"
+      ],
+      "asks": [
+        "submit",
+        "fetch"
       ]
     }
   },

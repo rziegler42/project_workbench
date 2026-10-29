@@ -4,15 +4,20 @@ The installer records what the project's declared approval command reports for a
 itself (``approvalcmd.py``; ``docs/specs/trust-and-approval.md``, "Plan approval records"). The record is
 ``projects/<id>/plan-approvals`` in the guarded store, strict JSON::
 
-    {"format": 2, "approvals": [{"plan": "<path in the project>", "region_hash": "<64 hex>",
+    {"format": 3, "approvals": [{"plan": "<path in the project>", "region_hash": "<64 hex>",
                                  "declaration_hash": "<64 hex>", "helper_sha256": "<64 hex>",
-                                 "approver": "<user>", "time": "<UTC>", "workbench_version": "<text>"}, ...]}
+                                 "approver": "<Name <email>>", "via": "<how>", "time": "<UTC>",
+                                 "workbench_version": "<text>"}, ...]}
 
-The file is ``format: 2`` when written; a ``format: 1`` file is read (it has no delegated entries). A format-2 entry
-may also hold ``delegate``, an object that says which provider found the review converged (``delegation.py``;
-"Delegated plan approval records"). Such an entry counts only while the owner's personal setting for the
-checkpoint ``approve-plan`` reads ``delegate`` when it is read; an entry without ``delegate`` is never affected by
-the setting.
+The file is ``format: 3`` when written; ``format: 1`` and ``format: 2`` files are read, and an entry written before this
+format is history: it keeps its approver text (at most 64 characters, an operating-system account name or ``owner``) and
+has no ``via``. An entry written now has the approver as the git identity ``Name <email>`` (``identity.py``; at most 256
+characters when read) and ``via``, one of ``terminal``, ``ask``, ``none`` or ``delegated`` (the level the run was
+authorized under), and ``add`` refuses one without. An entry may also hold ``delegate``, an object that says which
+provider found the review converged (``delegation.py``; "Delegated plan approval records"); ``via`` is ``delegated``
+exactly when ``delegate`` is present, in an entry that has a ``via``. A delegated entry counts only while the owner's
+personal setting for the checkpoint ``approve-plan`` reads ``delegate`` when it is read; an entry without ``delegate`` is
+never affected by the setting. The approver and ``via`` are provenance: no check reads them.
 
 A plan is ``approved`` when an entry equals all four of its path, the region hash the command reports now, the
 process module's declaration hash and the helper's pinned SHA-256. If only some other entry names the plan it is
@@ -33,11 +38,15 @@ import os
 import re
 import stat
 
-from . import __version__, approvalcmd, approvals, approve, levellog, levelrun, levels, settings
+from . import __version__, approvalcmd, approvals, approve, identity, levellog, levelrun, levels, settings
 from .wbkit import display, jsonstrict, safefs
 
-FORMAT = 2
-FORMATS = (1, 2)
+FORMAT = 3
+FORMATS = (1, 2, 3)
+OLD_APPROVER_LIMIT = 64
+APPROVER_LIMIT = 256
+TERMINAL, ASK, NONE, DELEGATED = "terminal", levels.ASK, levels.NONE, levels.DELEGATED
+VIAS = (TERMINAL, ASK, DELEGATED, NONE)
 MAX_ENTRIES = 2000
 CONFIRM_CHARS = 12
 DIGEST_CHARS = 32
@@ -51,7 +60,7 @@ _FIELDS = ("plan", "region_hash", "declaration_hash", "helper_sha256", "approver
 _DELEGATE = ("provider", "provider_declaration_hash", "provider_helper_sha256", "bridge", "model", "rounds_used",
              "bound", "review", "document_sha256")
 
-Approval = collections.namedtuple("Approval", " ".join(_FIELDS + ("delegate",)), defaults=(None,))
+Approval = collections.namedtuple("Approval", " ".join(_FIELDS + ("delegate", "via")), defaults=(None, None))
 Status = collections.namedtuple("Status", "state differs withdrawn", defaults=(False,))
 
 APPROVED, CHANGED, NOT_APPROVED = "approved", "changed since approval", "not approved"
@@ -111,8 +120,11 @@ def parse(data):
     if len(document["approvals"]) > MAX_ENTRIES:
         raise PlanApprovalError("the plan approvals file holds more than %d approvals" % MAX_ENTRIES)
     found = []
+    fmt = document["format"]
+    base = set(_FIELDS)
+    allowed = {1: [base], 2: [base, base | {"delegate"}],
+               3: [base, base | {"delegate"}, base | {"via"}, base | {"via", "delegate"}]}[fmt]
     for entry in document["approvals"]:
-        allowed = [set(_FIELDS), set(_FIELDS) | {"delegate"}] if document["format"] == 2 else [set(_FIELDS)]
         if not isinstance(entry, dict) or set(entry) not in allowed:
             raise PlanApprovalError("a plan approval has the wrong fields")
         plan = entry["plan"]
@@ -123,9 +135,21 @@ def parse(data):
                 raise PlanApprovalError("a plan approval has a bad %s" % key)
         if not isinstance(entry["time"], str) or not _TIME.match(entry["time"]):
             raise PlanApprovalError("a plan approval has a bad time")
+        via = entry.get("via")
+        if "via" in entry:
+            if via not in VIAS or not isinstance(via, str):
+                raise PlanApprovalError("a plan approval has a bad via")
+            if (via == DELEGATED) != ("delegate" in entry):
+                raise PlanApprovalError("a plan approval's via and delegate do not agree")
+        approver = _text(entry, "approver", APPROVER_LIMIT if fmt == 3 else OLD_APPROVER_LIMIT)
+        if via is not None:
+            try:
+                identity.parse(approver)
+            except identity.IdentityError:
+                raise PlanApprovalError("a plan approval has an approver that is not a git identity")
         found.append(Approval(plan, entry["region_hash"], entry["declaration_hash"], entry["helper_sha256"],
-                              _text(entry, "approver"), entry["time"], _text(entry, "workbench_version"),
-                              _delegate(entry["delegate"]) if "delegate" in entry else None))
+                              approver, entry["time"], _text(entry, "workbench_version"),
+                              _delegate(entry["delegate"]) if "delegate" in entry else None, via))
     return found
 
 
@@ -133,8 +157,9 @@ def serialize(entries):
     listed = []
     for entry in entries:
         item = entry._asdict()
-        if item["delegate"] is None:
-            del item["delegate"]
+        for key in ("delegate", "via"):
+            if item[key] is None:
+                del item[key]
         listed.append(item)
     document = {"format": FORMAT, "approvals": listed}
     return (json.dumps(document, sort_keys=True, indent=2, ensure_ascii=True) + "\n").encode("ascii")
@@ -162,7 +187,9 @@ def _same(entry, wanted):
 def add(store, project_id, approval):
     """Record `approval`. Returns True when it was written and False when an identical approval (the same
     plan, region hash, declaration hash and helper hash) was already recorded, in which case the first record is
-    kept and nothing is written."""
+    kept and nothing is written. An approval made now needs a ``via`` (``PlanApprovalError`` otherwise)."""
+    if approval.via is None:
+        raise PlanApprovalError("an approval needs to say how it was authorized (via)")
     entries = load(store, project_id)
     if any(_same(entry, approval) for entry in entries):
         return False
@@ -175,6 +202,27 @@ def add(store, project_id, approval):
     except safefs.SafeFsError as exc:
         raise PlanApprovalError("the plan approvals file cannot be written: %s" % display.clean(str(exc))[:200])
     return True
+
+
+def on_file(entries, approval):
+    """The first of `entries` equal to `approval` in plan, region hash, declaration hash and helper hash, or None."""
+    return next((entry for entry in entries if _same(entry, approval)), None)
+
+
+def by(entry):
+    """How an approval reads at the end of a line that reports it: `` by <approver>`` and, by how it was authorized,
+    `` (ask)``, `` (no gate)`` or `` delegated to <provider> (<model>)``. An entry with no ``via`` is shown by its approver
+    alone. It is data from the record and is shown as ASCII."""
+    who = display.ascii_text(entry.approver)
+    if entry.via == ASK:
+        return " by %s (ask)" % who
+    if entry.via == NONE:
+        return " by %s (no gate)" % who
+    if entry.via == DELEGATED:
+        model = entry.delegate["model"]
+        return " by %s delegated to %s%s" % (who, display.ascii_text(entry.delegate["provider"]),
+                                              " (%s)" % display.ascii_text(model) if model else "")
+    return " by %s" % who
 
 
 def delegating(guarded, found):
@@ -390,6 +438,7 @@ def _approve_without_terminal(guarded, argument, given, out, err, cwd):
     if level not in (levels.ASK, levels.NONE) or (level == levels.ASK and given is None):
         return _refuse(err, TERMINAL_ONLY)
     try:
+        who = identity.read().text  # after the level is checked and before any helper runs
         resolved, plan, report = _current(guarded, argument, cwd)
         if resolved.project_id != ident:
             return _refuse(err, "the project the level was read for is not the project the plan belongs to; nothing was "
@@ -403,20 +452,21 @@ def _approve_without_terminal(guarded, argument, given, out, err, cwd):
             return _refuse(err, "the plan, the approval command or its declaration changed while the digest was "
                                 "checked, so it no longer holds; nothing was recorded")
         entry = Approval(plan, report.region_hash, resolved.declaration, resolved.helper_sha256,
-                         approve.approver_name(), approvals.utc_now(), __version__)
+                         who, approvals.utc_now(), __version__, None, level)
         written, op = levelrun.logged(
             guarded, settings.APPROVE_PLAN, level, lambda: add(guarded, resolved.project_id, entry),
             "digest:%s" % given if given else "",
             needed=not any(_same(item, entry) for item in load(guarded, resolved.project_id)))
+        shown = entry if written else on_file(load(guarded, resolved.project_id), entry) or entry
     except levellog.LogError as exc:
         return _refuse(err, "%s; nothing was recorded" % exc)
-    except (PlanApprovalError, approvalcmd.ApprovalError) as exc:
+    except (PlanApprovalError, approvalcmd.ApprovalError, identity.IdentityError) as exc:
         return _refuse(err, str(exc))
     except KeyboardInterrupt:
         out.write("\ninterrupted: the plan approvals and the level log show what was done\n")
         return 130
-    out.write("%s: %s (region %s)\n" % ("approved" if written else "already approved", display.ascii_text(plan),
-                                        report.region_hash))
+    out.write("%s: %s (region %s)%s\n" % ("approved" if written else "already approved", display.ascii_text(plan),
+                                          report.region_hash, by(shown)))
     try:
         levelrun.done(guarded, op)
     except levellog.OutcomeError as exc:
@@ -427,6 +477,7 @@ def _approve_without_terminal(guarded, argument, given, out, err, cwd):
 
 def _approve_at_terminal(guarded, argument, stdin, out, err, cwd):
     try:
+        who = identity.read().text  # first: a missing identity refuses before anything is shown or asked
         resolved, plan, report = _current(guarded, argument, cwd)
         entries = load(guarded, resolved.project_id)
         _show(out, resolved, plan, report, entries)
@@ -438,14 +489,15 @@ def _approve_at_terminal(guarded, argument, stdin, out, err, cwd):
                 (resolved.declaration, resolved.helper_sha256, resolved.project_id, plan, report):
             return _refuse(err, "the plan, the approval command or its declaration changed while the approval "
                                 "was shown; nothing was recorded")
-        written = add(guarded, resolved.project_id, Approval(
-            plan, report.region_hash, resolved.declaration, resolved.helper_sha256, approve.approver_name(),
-            approvals.utc_now(), __version__))
-    except (PlanApprovalError, approvalcmd.ApprovalError) as exc:
+        entry = Approval(plan, report.region_hash, resolved.declaration, resolved.helper_sha256, who,
+                         approvals.utc_now(), __version__, None, TERMINAL)
+        written = add(guarded, resolved.project_id, entry)
+        shown = entry if written else on_file(load(guarded, resolved.project_id), entry) or entry
+    except (PlanApprovalError, approvalcmd.ApprovalError, identity.IdentityError) as exc:
         return _refuse(err, str(exc))
     except KeyboardInterrupt:
         out.write("\ninterrupted: nothing was recorded\n")
         return 130
-    out.write("%s: %s (region %s)\n" % ("approved" if written else "already approved", display.ascii_text(plan),
-                                        report.region_hash))
+    out.write("%s: %s (region %s)%s\n" % ("approved" if written else "already approved", display.ascii_text(plan),
+                                          report.region_hash, by(shown)))
     return 0

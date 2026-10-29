@@ -232,7 +232,7 @@ Python 3.14), with `strace` 6.19. Every probe ran under `env -i` in a scratch di
 directories and `TMPDIR` in scratch, `--palace` in scratch and `PYTHONDONTWRITEBYTECODE=1`, and (except one) in a
 network namespace with no network. The traces show only reads of the program's own installation, the system
 Python and locale data outside scratch, and nothing of the owner's real configuration. The one networked run was
-`mine` on a scratch project. The retained traces are untracked, in `/.debug/2026-10-24-mempalace-evidence/`.
+`mine` on a scratch project. The retained traces were kept untracked, in scratch on the machine that made them, and are not part of the repository.
 
 1. **Writes and downloads.** `status` writes nothing in the palace, in every state tried. `search` rewrites the
    palace's bookkeeping on every call (see `search`), and tries to download the model when it is absent. `wake-up`

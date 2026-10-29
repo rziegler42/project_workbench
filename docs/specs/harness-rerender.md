@@ -77,14 +77,18 @@ key. Both are registered as the registry requires for a routed subcommand.
 rendered into one file only: the harness's permissions file (the per-clone settings file the layout names), through
 `render_permissions` (the `deny`, `ask` and open patterns, and the command gate's hook). Every other staged file is the same for
 any table. The gate also reads the rendering record and the local manifest's harness name, and watches the shared settings file
-(it is hashed, not written). So a re-render replaces one file and the record, not the whole harness.
+(it is hashed, not written). So a re-render for the table replaces one file and the record, not the whole harness. (Since the
+plan `2026-10-28-refresh-rendered-harness`, `wb rerender` also brings the other staged files up to date with their sources in the
+same run: [`harness-refresh.md`](harness-refresh.md). This design's scope stays the permissions file and the table.)
 
 **(call) Source.** It stages as attach does, from the packages the local manifest records (a local source is given with
 `--package`, as for `upgrade`) and the effective table now, and runs the same checks: no unacknowledged differences, packages
 verified and approved on this machine, the recorded harness is still one this project records. It uses only the permissions
-file from the result.
+file from the result for the table. (The built command also takes the other staged files; see [`harness-refresh.md`](harness-refresh.md).)
 
-**(call) What it writes.** In this order: the permissions file, the local manifest's hash for it, then the record. The
+**(call) What it writes.** In this order: the permissions file, the local manifest's hash for it, then the record. (The built
+command writes the stale, new and missing rendered files first and records their hashes in the manifest too; the order is in
+[`harness-refresh.md`](harness-refresh.md), "As built".) The
 permissions file is replaced with `Writer.replace_file(path, expected_hash, data)`, which writes a private sibling, reads the
 original again and compares its hash, and renames it into place; it raises `WriteConflict` on any other hash, a link, or a file
 that is gone. The expected hash is that of the file as the plan read it. The file as it stands may differ from the record's
@@ -144,15 +148,17 @@ it covers loosening and tightening both, since the owner asked for loosening and
 
 - A write to the permissions file that lands between `replace_file`'s hash comparison and its rename is overwritten without
   notice. The command is owner-run; the window is small and is not closed here.
-- A change to a module or a package is not a table change. This command re-renders for the table only; picking up a module
-  change is `upgrade`'s work and is not covered here.
+- A change to a module or a package is not a table change. This design re-renders for the table only; picking up a module
+  change in the rendered skills and agents is [`harness-refresh.md`](harness-refresh.md), built into the same command, which
+  also writes the files, the manifest and the record in the order given there.
 
 ## As built
 
 The questions the design left to the plan, and what was settled:
 
 - **The manifest's hash.** `localmanifest.replace` writes the manifest again through `Writer.replace_file` with the hash the plan
-  read; the new manifest is the old one with only the permissions file's hash changed. What `wb check` reads from it is `harness`
+  read; the new manifest is the old one with only the permissions file's hash changed (when the refresh of the other rendered files was
+built it also took their hashes and the entries of new files: [`harness-refresh.md`](harness-refresh.md)). What `wb check` reads from it is `harness`
   and the `files` list (`check._drift`, `_strays`, `_shallow`), so its hash for the file is current before the record is written.
 - **How the preview shows the change.** Per key, the old and new rule; per file, the old and new hash or `left as it is`; the kept
   `allow` rules and the removed entries each shown whole (a rule that is not plain printable ASCII is shown as its JSON string, so

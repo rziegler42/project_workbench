@@ -3,7 +3,8 @@
 Status: Current. Contract version 1. Written by plan `2026-10-22-ask-codex-bridge` (increment A), before any
 bridge or engine existed, so that both are built against this text; the first bridge, `ask-codex`, was built and
 reviewed by the same plan, and "As built, and its limits" lists what exists. The capability name `model-bridge`
-is still a proposal (see "Open questions").
+is provided by the built `ask-codex` module and required by `review-engine` and `action-review`, and the owner has not confirmed it
+as the final name (see "Open questions").
 
 Terms are defined in `terms.md`. The declaration it satisfies is defined in `module-contract.md`; the launcher,
 the kit, the pin and the rule for a helper that runs another module's command are in `module-boundary.md`; the
@@ -168,7 +169,10 @@ A bridge conforms when a test against a fake vendor program, which records its a
 standard input, shows each item. No item needs a real vendor, a sign-in or a network.
 
 1. The declaration is as above: type `module`, provides only `model-bridge`, one helper, command `ask-<vendor>`
-   with `runtime` `python`, `kit` 1 and `arguments` `["ask"]`, and no `requires`, `writes` or `fills`.
+   with `runtime` `python`, `kit` 1 and `arguments` `["ask"]`, and no `requires`, `writes` or `fills`. A bridge may declare
+   `ask_reads` for the vendor's own login file under the home directory, so that a harness that provides `permissions` asks
+   before the agent reads it (`module-contract.md`); `ask-codex` declares `["~/.codex/auth.json"]` (since 2026-10-29,
+   plan `2026-10-29-policy-and-module-asks`). The installer names no vendor: the module does.
 2. A missing, empty, non-UTF-8 or oversize prompt is refused and nothing runs.
 3. An unknown option, a repeated option, a missing value, a `--model` outside its charset or length, an
    `--effort` outside the three levels, and a `--timeout` out of range are each refused and nothing runs.
@@ -272,6 +276,6 @@ Limits:
 
 ## Open questions
 
-- The capability name is a proposal.
+- The capability name `model-bridge`: the built modules use it, and the owner has not confirmed it as the final name.
 - Whether `--effort` needs vendor-specific levels beyond `low`, `medium` and `high`.
 - Whether a prompt larger than 262,144 bytes is ever wanted (an engine would pass the file name instead).

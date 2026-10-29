@@ -65,8 +65,9 @@ and the result after approval needs a new approval.
 Approval is a record, not a status. The owner makes it with `wb approve-plan <plan>`, which
 shows the hash of the plan's hashed region and records it when the owner types the start of it
 back; `wb plan-status <plan>` reads it and prints `approved`, `changed since approval` or
-`not approved`. Do not begin an increment of a plan that is not `approved`. The `Status:` line
-is informational and never an approval.
+`not approved`. The record names the approver by their git identity, `Name <email>`, and says how
+the run was authorized (at a terminal, at a prompt, delegated or with no gate). Do not begin an
+increment of a plan that is not `approved`. The `Status:` line is informational and never an approval.
 
 The hashed region is the whole plan except the `Status:` line, the `## Review record` section
 (or `## Second opinion`) and the `## Result` section. Write those headings exactly so, once
@@ -83,7 +84,8 @@ when no work is added; record out-of-scope work as deferred or in a roadmap.
 A checkpoint is a point where the work stops for the owner: approving a plan, pushing to a shared
 branch, submitting a remote job, fetching its output, changing a spec's or roadmap's direction,
 accepting a decision, and acknowledging changes made by someone else (two tiers). Every checkpoint
-stops until the owner's settings say otherwise, and nothing yet reads a setting to proceed.
+stops by default. `wb settings` prints the level of each, and a level the owner has set to something
+other than `block` lets the agent go on in the way that level says.
 
 Three caps bound a run: review rounds (default 3, at most 5), retries of the same failure
 (default 1, at most 2) and exchanges with a reviewer (default 6, at most 12). A second identical

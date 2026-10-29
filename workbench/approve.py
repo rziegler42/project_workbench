@@ -30,19 +30,17 @@ first twelve characters are printed in the request and by ``verify``, and a proc
 opens its own pseudo-terminal passes the terminal test. What stops an agent is the deny rule
 a harness renders for this command, and the deny rule on the guarded store.
 
-The approver recorded is the account name from the operating system's user database, not
-from an environment variable, and is text only: it grants nothing.
+The approver recorded is the person's git identity, ``Name <email>``, read from the account's own global git
+configuration as ``identity.py`` says, not from an environment variable and never from the project. It is read first: a
+missing identity refuses before anything is shown or asked. The record also says how the run was authorized (``via``:
+``terminal``, or ``none`` when the owner has set the level of ``wb approve`` to ``none``). Both are provenance and text
+only: they grant nothing.
 """
 
 import os
 
-from . import approvals, fetch, firstparty, request, verify
+from . import approvals, fetch, firstparty, identity, request, verify
 from .wbkit import display, safefs
-
-try:
-    import pwd
-except ImportError:  # not POSIX; the safe filesystem layer refuses to run there anyway
-    pwd = None
 
 CONFIRM_CHARS = 12
 MAX_ANSWER = 200
@@ -55,14 +53,6 @@ def is_terminal(stream):
         return os.isatty(stream.fileno())
     except (AttributeError, OSError, ValueError):
         return False
-
-
-def approver_name():
-    try:
-        name = pwd.getpwuid(os.getuid()).pw_name
-    except (AttributeError, KeyError, OSError):
-        return "owner"
-    return name if name and len(name) <= 64 and name.isprintable() else "owner"
 
 
 def _refuse(err, text):
@@ -129,6 +119,11 @@ def run(store, path, module_name, stdin, stdout, err, distribution=None, source=
     """
     if log is None and not (is_terminal(stdin) and is_terminal(stdout)):
         return _refuse(err, TERMINAL_ONLY)
+    try:
+        who = identity.read().text  # first: a missing identity refuses before a download, a request or a prompt
+    except identity.IdentityError as exc:
+        return _refuse(err, str(exc))
+    via = "terminal" if log is None else "none"
     fetched = origin = None
     if source is not None:
         stdout.write("Downloading %s (ref %s) into the cache. Nothing is executed or "
@@ -180,7 +175,7 @@ def run(store, path, module_name, stdin, stdout, err, distribution=None, source=
     commit = fetched.commit if fetched is not None else None
 
     def apply():
-        return _record(store, info, hashes, module_name, stdout, err, commit)
+        return _record(store, info, hashes, module_name, stdout, err, commit, who, via)
 
     if log is None or _on_file(store, info, hashes, module_name):
         return apply()
@@ -202,8 +197,8 @@ def _existing(store, kind, subject, declaration_hash, tree_hash):
     return approvals.check(store, kind, subject, declaration_hash, tree_hash).approved
 
 
-def _record(store, info, hashes, module_name, stdout, err, commit=None):
-    who, now = approver_name(), approvals.utc_now()
+def _record(store, info, hashes, module_name, stdout, err, commit, who, via):
+    now = approvals.utc_now()
     done = []
     try:
         names = [module_name] if module_name is not None else sorted(hashes)
@@ -212,13 +207,13 @@ def _record(store, info, hashes, module_name, stdout, err, commit=None):
             subject = "%s/%s" % (info.name, name)
             was = _existing(store, "module", subject, item.declaration_hash, item.tree_hash)
             done.append(("module", was, approvals.record_module(
-                store, subject, item.declaration_hash, item.tree_hash, who, now)))
+                store, subject, item.declaration_hash, item.tree_hash, who, now, via=via)))
         if module_name is None:
             was = _existing(store, "package", info.name, info.declaration_hash, info.tree_hash)
             done.append(("package", was, approvals.record_package(
                 store, info.name, info.declaration_hash, info.tree_hash,
                 [(name, item.declaration_hash, item.tree_hash) for name, item in hashes.items()],
-                who, now, commit)))
+                who, now, commit, via=via)))
     except (approvals.ApprovalError, safefs.SafeFsError) as exc:
         written = ", ".join("%s %s" % (kind, record.subject) for kind, was, record in done
                             if not was) or "none"
@@ -230,7 +225,9 @@ def _record(store, info, hashes, module_name, stdout, err, commit=None):
                 kind, display.clean(record.subject), display.clean(record.approver),
                 display.clean(record.time)))
         else:
-            stdout.write("approved %s %s\n" % (kind, display.clean(record.subject)))
+            stdout.write("approved %s %s by %s%s\n" % (
+                kind, display.clean(record.subject), display.clean(record.approver),
+                " (no gate)" if record.via == "none" else ""))
         if kind == "package":
             if record.commit and commit and record.commit != commit:
                 stdout.write("kept the earlier pin %s; this download was commit %s, which has "

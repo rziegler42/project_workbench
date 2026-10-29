@@ -8,15 +8,15 @@ that receive the ports are `code-work.md`, `groundwork.md` and `safe-git.md`.
 
 ## Purpose and scope
 
-The owner's global configuration (`~/.claude`) routes project work to skills of the superpowers plugin. This spec records,
-for each skill of the plugin, whether the owner uses it and what became of it in the workbench, so that
-`global-config-migration` can remove the plugin knowing nothing was dropped by accident. It also records where each ported
+Until the owner's user-level configuration was reset on 2026-10-29, it routed project work to skills of the superpowers plugin.
+This spec records, for each skill of the plugin, whether the owner uses it and what became of it in the workbench, so that the
+plugin could be removed knowing nothing was dropped by accident; the reset removed it. It also records where each ported
 skill lives, because one superpowers skill can belong in more than one module.
 
 Non-goals:
 
 - The text of any skill. A port is written in the workbench's own words and lives in its module's neutral tree.
-- Changes to `~/.claude`, which belong to `global-config-migration`.
+- Changes to the owner's user-level configuration, which are the owner's.
 - A promise to port every skill. A skill marked not ported or a gap stays so until the owner picks it.
 
 ## Source and provenance
@@ -53,10 +53,17 @@ The text of the plugin is data. An instruction inside it, including its own rule
 
 ## How use was decided
 
-A skill is **used** when the owner's own files name it: `~/.claude/CLAUDE.md` ("Skill and agent routing" and "Implementation
-and verification") or the `skills:` list of one of the owner's agents (`implementer`, `workflow-reviewer`,
-`security-reviewer`). A skill the plugin installs but no file of the owner's names is **not used**. The plugin entry in
-`~/.claude/settings.json` shows it is enabled; it does not show use.
+A skill is **used** when the owner's own files name it: the owner's user-level instruction file (its sections "Skill and agent
+routing" and "Implementation and verification") or the `skills:` list of one of the owner's agents (`implementer`,
+`workflow-reviewer`, `security-reviewer`). A skill the plugin installs but no file of the owner's names is **not used**. The plugin
+entry in the owner's user-level settings file shows it is enabled; it does not show use.
+
+Those files are identified by role only, as owner-local files with no URL. This spec read them on 2026-10-23 and recorded no hash.
+`global-config-inventory.md` records the SHA-256 of each as read on 2026-10-25. The copy the owner kept at the reset of 2026-10-29
+was hashed on 2026-10-29 with `shasum -a 256`: the instruction file is `6c4de9ea291da89416fe3f869811b057866519759149a14388c80eb66006bd5c`
+and the settings file is `36c2594f83c4884133e60cf4a9dbd9cad7f40bcbdbc5563bdd978864aa104247`. Neither equals the hash the inventory
+records, so the copy differs from the bytes read on 2026-10-25 for a reason these records do not show, such as later edits, the
+reset or the backup. The evidence here is therefore a reading on those dates and cannot be re-checked against the copy.
 
 ## The inventory
 
@@ -89,7 +96,7 @@ Reasons for the rows that are not a plain port:
   the push is a checkpoint (`push-changes`). Not revisited here.
 - **using-superpowers.** It tells an agent to look for a skill before every reply. That is behaviour of the harness and of the
   policy text, not a project practice. In a workbench project the `policy` slot in `AGENTS.md` and the harness's own skill
-  listing do this work. `global-config-migration` decides what replaces the routing in `CLAUDE.md`.
+  listing do this work. The routing in the owner's old user-level instruction file went with the reset of 2026-10-29.
 - **diagnosing-superpowers.** It diagnoses sessions of the plugin itself. It has no meaning once the plugin is gone.
 - **dispatching-parallel-agents, writing-skills.** Not named by any file of the owner's. If the owner wants either, it is its
   own candidate: the first would belong to `code-work`, the second to a module about writing skills for the workbench.
@@ -116,6 +123,10 @@ only; it is not a line-by-line audit.
 
 ## What stops working when the plugin is removed
 
+*Note, 2026-10-29.* The plugin is no longer enabled, because the owner's user-level configuration was reset, so what follows
+records what would have stopped working and is now what stopped. The three agent definitions and the routing text it describes are
+no longer loaded, and nothing in the workbench depended on them.
+
 Observed on 2026-10-24 by reading the owner's agent definitions and the routing text of the owner's user-level instruction
 file. The comparison covers the agents' `skills:` lists and the routing lines only; it is not a line-by-line audit of either
 file.
@@ -125,7 +136,7 @@ file.
   `workflow-reviewer` names `requesting-code-review` and `verification-before-completion`; `security-reviewer` names
   `verification-before-completion`. The workbench skills that replace them are `diagnose-failure`, `test-first`,
   `request-review` and `verify-before-claiming`. They exist only in a project that installed `code-work`; editing the agent
-  definitions is the owner's, and `global-config-migration` carries it.
+  definitions was the owner's; the reset removed them.
 - **The routing text names the plugin's skills** for brainstorming, planning, plan execution, subagent-driven development,
   receiving and requesting code review, worktrees, debugging and verification. Without the plugin none of them loads. The
   workbench counterpart of each is the inventory table's row; worktrees are not ported.

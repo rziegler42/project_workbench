@@ -36,7 +36,9 @@ commands    an object of at most ``MAX_COMMANDS`` entries, each a command name i
             object that maps an ``owner`` argument to the non-empty list of levels, from ``ask`` and
             ``none``, that it offers beyond ``block``; ``preview`` names the declared argument, neither
             owner-run nor ``describe``, that previews them, and goes exactly with a command that
-            offers ``ask`` (``2026-10-27-owner-run-arguments-take-a-level``).
+            offers ``ask`` (``2026-10-27-owner-run-arguments-take-a-level``). ``asks`` is a non-empty
+            list of that command's ``arguments``, none of them owner-run, before which a harness that
+            provides permissions asks the owner (``2026-10-29-workbench-asks-for-remove-submit-and-fetch``).
 checks     a list of at most ``MAX_CHECKS`` objects ``{"helper", "kit"}``, both required. The
             helper is an item of ``ships`` or a file below one, and its last path segment, the
             check's pin name, is in the helper-name form (``module-boundary.md``).
@@ -54,13 +56,18 @@ checkpoints process modules only: a list of at most ``MAX_CHECKPOINTS`` checkpoi
 caps        process modules only: a list of at most ``MAX_CAPS`` objects ``{"name", "default",
             "ceiling"}``; the name as for a checkpoint, none repeated, the numbers JSON
             integers with ``1 <= default <= ceiling <= MAX_CEILING``.
+ask_reads   a non-empty list of at most ``MAX_ASK_READS`` patterns, each ``~/`` and a path under the home
+            directory, before a read of which a harness that provides permissions asks the owner. Each
+            is at most ``MAX_ASK_READ_CHARS`` characters of a neutral rule, with no empty, ``.`` or ``..``
+            segment, no trailing slash, no edge space, and a first segment that holds a character other than
+            ``*`` and ``.``.
 layout      present exactly for a harness module: an object whose keys come from
             ``LAYOUT_KEYS``. Its values are not checked beyond being JSON data;
             that belongs to the harness specification.
 
 Optional fields (``type``, ``provides``, ``requires``, ``blocks``, ``helpers``,
 ``slots``, ``fills``, ``writes``, ``ships``, ``commands``, ``checks``, ``approval``, ``convergence``, ``checkpoints``,
-``caps``) default to ``module`` and empty. The
+``caps``, ``ask_reads``) default to ``module`` and empty. The
 declaration hash covers the declaration as written, never the defaults.
 
 A ``writes`` path may not name the guarded store and may not enter ``.workbench/``
@@ -88,7 +95,7 @@ LAYOUT_KEYS = ("root", "kinds", "local_settings", "hooks", "exclude", "tolerated
 PACKAGE_FIELDS = ("name", "version", "contract", "modules")
 MODULE_FIELDS = ("name", "version", "type", "description", "provides", "requires", "blocks",
                  "helpers", "slots", "fills", "writes", "ships", "commands", "checks", "approval", "checkpoints",
-                 "caps", "layout", "convergence")
+                 "caps", "layout", "convergence", "ask_reads")
 
 _NAME = re.compile(r"^[a-z][a-z0-9-]*\Z")
 _VERSION = re.compile(r"^(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*)){0,3}\Z")
@@ -98,6 +105,10 @@ _ARGUMENT = re.compile(r"^[a-z][a-z0-9-]*\Z")
 
 MAX_COMMANDS = 16
 MAX_CHECKS = 16
+MAX_ASK_READS = 16
+MAX_ASK_READ_CHARS = 200
+# The characters a rule's pattern may hold (``neutral.PATTERN_CHARS``, which this module cannot import: a test keeps them equal).
+ASK_READ_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _./*~@=+-"
 MAX_ARGUMENTS = 16
 MAX_DESCRIBES = 16
 MAX_CHECKPOINTS = 16
@@ -110,10 +121,10 @@ RUNTIMES = ("python", "exec")
 Package = collections.namedtuple("Package", "name version contract modules declaration")
 Module = collections.namedtuple(
     "Module", "name version type description provides requires blocks helpers slots fills "
-              "writes ships commands checks layout declaration approval checkpoints caps convergence",
-    defaults=(None, (), (), None))
-Command = collections.namedtuple("Command", "name helper runtime kit arguments owner describes levels preview",
-                                 defaults=((), (), (), None))
+              "writes ships commands checks layout declaration approval checkpoints caps convergence ask_reads",
+    defaults=(None, (), (), None, ()))
+Command = collections.namedtuple("Command", "name helper runtime kit arguments owner describes levels preview asks",
+                                 defaults=((), (), (), None, ()))
 # The levels, beyond ``block``, that a declaration may give an owner-run argument (``module-contract.md``).
 ARGUMENT_LEVELS = ("ask", "none")
 Cap = collections.namedtuple("Cap", "name default ceiling")
@@ -293,7 +304,8 @@ def _commands(check, value, ships):
             check.fail("commands", "command name %s must be letters, digits and ._+-, starting "
                                    "with a letter or digit, at most %d characters"
                        % (_shown(name), MAX_NAME_CHARS))
-        check.exact_keys(entry, "commands", ("helper",), ("runtime", "kit", "arguments", "owner", "describes", "levels", "preview"))
+        check.exact_keys(entry, "commands", ("helper",), ("runtime", "kit", "arguments", "owner", "describes", "levels", "preview",
+                                                           "asks"))
         helper = check.path(entry["helper"], "commands")
         helper = "/".join(helper)
         if not any("/".join(helper.split("/")[:n]) in ships
@@ -350,9 +362,54 @@ def _commands(check, value, ships):
         if describes and "describe" not in arguments:
             check.fail("commands", "command %s: 'describes' needs 'describe' among its 'arguments'" % name)
         offered, preview = _argument_levels(check, name, entry, arguments, owner)
+        asks = _asks(check, name, entry, arguments, owner)
         commands.append(Command(name, helper, runtime, kit, tuple(arguments), tuple(owner), tuple(describes), offered,
-                                preview))
+                                preview, asks))
     return tuple(commands)
+
+
+def _asks(check, name, entry, arguments, owner):
+    """The ``asks`` field of a command entry as a tuple, in the order written: a non-empty list of different arguments the
+    command declares, none of them owner-run. The harness asks before each, whatever follows it
+    (``2026-10-29-workbench-asks-for-remove-submit-and-fetch``); the rule is restrictive and is not a level."""
+    if "asks" not in entry:
+        return ()
+    value = entry["asks"]
+    if not isinstance(value, list) or not value or any(not isinstance(item, str) for item in value):
+        check.fail("commands", "command %s: 'asks' must be a non-empty list of strings" % name)
+    check.unique(value, "commands")
+    for argument in value:
+        if argument not in arguments:
+            check.fail("commands", "command %s: the asked argument %s is not one of its 'arguments'"
+                       % (name, _shown(argument)))
+        if argument in owner:
+            check.fail("commands", "command %s: the argument %s is owner-run and cannot also be asked, because a rule is "
+                                   "a prompt or a wall and not both" % (name, _shown(argument)))
+    return tuple(value)
+
+
+def _ask_reads(check, value):
+    """The ``ask_reads`` field as a tuple, in the order written: a non-empty list of different patterns under the home
+    directory, each ``~/`` and a path of non-empty segments (none ``.`` or ``..``, no trailing slash) whose first segment holds a
+    character other than ``*`` and ``.``, so that a pattern cannot ask about most of the home directory and a rendered pattern
+    is one a harness can match as written. The harness asks before its read tool reads a path that matches; the rule is
+    restrictive."""
+    if not isinstance(value, list) or not value or any(not isinstance(item, str) for item in value):
+        check.fail("ask_reads", "must be a non-empty list of strings")
+    if len(value) > MAX_ASK_READS:
+        check.fail("ask_reads", "at most %d patterns, not %d" % (MAX_ASK_READS, len(value)))
+    check.unique(value, "ask_reads")
+    for pattern in value:
+        segments = pattern[2:].split("/")
+        if (not pattern.startswith("~/") or len(pattern) > MAX_ASK_READ_CHARS or pattern != pattern.strip()
+                or any(c not in ASK_READ_CHARS for c in pattern)
+                or any(part in ("", ".", "..") for part in segments)
+                or not segments[0].strip("*.")):
+            check.fail("ask_reads", "%s must start with ~/ and name a path of non-empty segments (no '.', '..' or empty one, "
+                                    "no trailing slash) whose first segment holds a character other than '*' and '.', with no "
+                                    "edge space, at most %d characters from %r"
+                       % (_shown(pattern), MAX_ASK_READ_CHARS, ASK_READ_CHARS))
+    return tuple(value)
 
 
 def _argument_levels(check, name, entry, arguments, owner):
@@ -638,6 +695,7 @@ def parse_module(data, package_name, expected_name, first_party=False):
                    if "convergence" in declaration else None)
     checkpoints = _checkpoints(check, declaration["checkpoints"], mtype) if "checkpoints" in declaration else ()
     caps = _caps(check, declaration["caps"], mtype) if "caps" in declaration else ()
+    ask_reads = _ask_reads(check, declaration["ask_reads"]) if "ask_reads" in declaration else ()
 
     layout = declaration.get("layout")
     if mtype == "harness":
@@ -655,7 +713,7 @@ def parse_module(data, package_name, expected_name, first_party=False):
     return Module(name, version, mtype, description, tuple(provides), tuple(requires),
                   tuple(blocks), tuple(helpers), tuple(slots), tuple(fills), tuple(writes),
                   tuple(ships), commands, checks, layout, declaration, approval, checkpoints, caps,
-                  convergence)
+                  convergence, ask_reads)
 
 
 # --- from a directory ------------------------------------------------------------------------

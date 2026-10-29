@@ -133,6 +133,24 @@ class AtAsk(Ask):
         from workbench import approvalcmd
         return approvalcmd.resolve(self.guarded, self.real)
 
+    def test_it_records_the_identity_and_ask_and_prints_who_and_that_it_was_at_ask(self):
+        digest, _ = self.preview()
+        code, out, err = self.with_digest(digest)
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertTrue(out.endswith(") by %s (ask)\n" % self.who.text), out)
+        entry, = self.recorded()
+        self.assertEqual((self.who.text, "ask"), (entry.approver, entry.via))
+        again = self.with_digest(digest)
+        self.assertTrue(again[1].startswith("already approved: ") and again[1].endswith(" by %s (ask)\n" % self.who.text),
+                        again)
+
+    def test_a_missing_identity_refuses_with_nothing_recorded_and_nothing_logged(self):
+        from workbench import identity
+        digest, _ = self.preview()
+        with unittest.mock.patch.object(identity, "read", side_effect=identity.IdentityError("no identity here")):
+            self.refused("approve-plan", PLAN, "--digest", digest, contains="no identity here")
+        self.assertEqual([], self.log_lines())
+
     def test_it_leaves_an_attempt_and_a_done_outcome(self):
         digest, _ = self.preview()
         self.with_digest(digest)
@@ -246,11 +264,36 @@ class AtBlockAndNone(Ask):
         self.attached(approve_plan="none")
         code, out, err = self.run_cli("approve-plan", PLAN)
         self.assertEqual((0, ""), (code, err), out)
+        self.assertTrue(out.endswith(") by %s (no gate)\n" % self.who.text), out)
+        self.assertEqual((self.who.text, "none"), (self.recorded()[0].approver, self.recorded()[0].via))
         attempt, outcome = self.log_lines()
         fields = attempt.split("\t")
         self.assertEqual(["approve-plan", "none", ""], fields[3:6])
         self.assertEqual("done", outcome.split("\t", 4)[3])
         self.assertEqual(0, self.status()[0])
+
+    def test_at_none_a_missing_identity_refuses_with_nothing_recorded_and_nothing_logged(self):
+        from workbench import identity
+        self.attached(approve_plan="none")
+        with unittest.mock.patch.object(identity, "read", side_effect=identity.IdentityError("no identity here")):
+            self.refused("approve-plan", PLAN, contains="no identity here")
+        self.assertEqual([], self.log_lines())
+
+    def test_at_none_the_identity_is_read_once_before_the_plan_is_run(self):
+        from workbench import identity
+        self.attached(approve_plan="none")
+        seen = []
+        found = self.who
+        with unittest.mock.patch.object(identity, "read", lambda home=None: seen.append(self.calls()) or found):
+            code, out, err = self.run_cli("approve-plan", PLAN)
+        self.assertEqual((0, ""), (code, err), out)
+        self.assertEqual([[]], seen)
+
+    def test_at_block_the_owner_run_refusal_comes_before_the_identity(self):
+        from workbench import identity
+        self.attached()
+        with unittest.mock.patch.object(identity, "read", side_effect=identity.IdentityError("no identity here")):
+            self.refused("approve-plan", PLAN, contains="owner-run")
 
     def test_at_none_a_digest_is_refused_as_an_unknown_argument(self):
         self.attached(approve_plan="none")

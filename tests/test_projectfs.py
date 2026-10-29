@@ -1,8 +1,10 @@
+import errno
 import hashlib
 import os
 import stat
 import tempfile
 import unittest
+import unittest.mock
 
 from workbench import projectfs, target
 from workbench.wbkit import safefs
@@ -211,6 +213,127 @@ class WriterTest(Fixture):
         self.assertEqual(["one"], writer.written)
         self.assertEqual(b"1", self.read("one"))
         self.assertEqual(b"existing", self.read("two"))
+
+    def fail_at(self, stage, error):
+        def hook(name, **info):
+            if name == stage:
+                raise error
+        safefs._hook = hook
+
+    def test_a_write_that_fails_part_way_leaves_no_file_and_no_sibling(self):
+        os.mkdir(os.path.join(self.root, "docs"))
+        self.fail_at("projectfs_filled", OSError(errno.ENOSPC, "no space left"))
+        writer = self.writer()
+        with self.assertRaises(OSError):
+            writer.create_file("docs/a.md", b"hello")
+        self.assertEqual([], os.listdir(os.path.join(self.root, "docs")))
+        self.assertEqual([], writer.written)
+
+    def test_a_file_that_appears_while_it_is_written_is_a_conflict_and_is_kept(self):
+        def appear(name, **info):
+            if name == "projectfs_filled":
+                with open(os.path.join(self.root, "a"), "wb") as handle:
+                    handle.write(b"theirs")
+        safefs._hook = appear
+        writer = self.writer()
+        with self.assertRaises(WriteConflict):
+            writer.create_file("a", b"mine")
+        self.assertEqual(b"theirs", self.read("a"))
+        self.assertEqual(["a"], os.listdir(self.root))
+        self.assertEqual([], writer.written)
+
+    def test_a_created_file_has_one_link_and_leaves_no_sibling(self):
+        writer = self.writer()
+        writer.create_file("a", b"x")
+        self.assertEqual(["a"], os.listdir(self.root))
+        self.assertEqual(1, os.stat(os.path.join(self.root, "a")).st_nlink)
+        self.assertEqual(["a"], writer.written)
+
+    def test_a_created_file_takes_the_umask_as_a_file_made_in_place_did(self):
+        old = os.umask(0o027)
+        self.addCleanup(os.umask, old)
+        self.writer().create_file("a", b"x")
+        self.assertEqual(0o640, stat.S_IMODE(os.stat(os.path.join(self.root, "a")).st_mode))
+
+    def swap_sibling(self, make):
+        """Replace the private sibling by what `make(path)` creates, as a process that can write the directory could."""
+        def swap(name, **info):
+            if name == "projectfs_filled":
+                (sibling,) = [each for each in os.listdir(self.root) if each.startswith(".workbench-")]
+                path = os.path.join(self.root, sibling)
+                os.unlink(path)
+                make(path)
+        safefs._hook = swap
+
+    def victim(self):
+        path = os.path.join(self.outside, "victim")
+        with open(path, "wb") as handle:
+            handle.write(b"keep")
+        os.chmod(path, 0o600)
+        return path
+
+    def assert_swap_refused(self, writer, victim):
+        with self.assertRaises(WriteConflict):
+            writer.create_file("a", b"mine")
+        self.assertEqual([], writer.written)
+        self.assertEqual([], [each for each in os.listdir(self.root) if each.startswith(".workbench-")])
+        with open(victim, "rb") as handle:
+            self.assertEqual(b"keep", handle.read())
+        self.assertEqual(0o600, stat.S_IMODE(os.stat(victim).st_mode))
+
+    def test_a_sibling_swapped_for_a_link_is_a_conflict_and_is_not_listed(self):
+        victim = self.victim()
+        self.swap_sibling(lambda path: os.symlink(victim, path))
+        writer = self.writer()
+        self.assert_swap_refused(writer, victim)
+
+    def test_a_sibling_swapped_for_a_hard_link_to_another_file_is_a_conflict_and_is_not_listed(self):
+        victim = self.victim()
+        self.swap_sibling(lambda path: os.link(victim, path))
+        writer = self.writer()
+        self.assert_swap_refused(writer, victim)
+
+    def test_a_hard_link_to_the_sibling_made_before_the_link_is_a_conflict_and_is_not_listed(self):
+        def extra(name, **info):
+            if name == "projectfs_filled":
+                (sibling,) = [each for each in os.listdir(self.root) if each.startswith(".workbench-")]
+                os.link(os.path.join(self.root, sibling), os.path.join(self.outside, "second-name"))
+        safefs._hook = extra
+        writer = self.writer()
+        with self.assertRaises(WriteConflict):
+            writer.create_file("a", b"mine")
+        self.assertEqual([], writer.written)
+        self.assertEqual([], [each for each in os.listdir(self.root) if each.startswith(".workbench-")])
+
+    def test_a_sibling_swapped_for_another_file_is_a_conflict_and_is_not_listed(self):
+        victim = self.victim()
+
+        def other(path):
+            with open(path, "wb") as handle:
+                handle.write(b"theirs")
+        self.swap_sibling(other)
+        writer = self.writer()
+        self.assert_swap_refused(writer, victim)
+
+    def test_a_filesystem_without_hard_links_is_named_and_leaves_nothing_behind(self):
+        for code in (errno.EPERM, errno.ENOTSUP, errno.EMLINK):
+            with self.subTest(code=code):
+                writer = self.writer()
+                with unittest.mock.patch("os.link", side_effect=OSError(code, os.strerror(code))):
+                    with self.assertRaises(safefs.SafeFsError) as caught:
+                        writer.create_file("a", b"x")
+                self.assertNotIsInstance(caught.exception, WriteConflict)
+                self.assertIn("hard links", str(caught.exception))
+                self.assertEqual([], os.listdir(self.root))
+                self.assertEqual([], writer.written)
+
+    def test_another_link_failure_keeps_the_generic_message(self):
+        writer = self.writer()
+        with unittest.mock.patch("os.link", side_effect=OSError(errno.EIO, "input/output error")):
+            with self.assertRaises(safefs.SafeFsError) as caught:
+                writer.create_file("a", b"x")
+        self.assertNotIn("hard links", str(caught.exception))
+        self.assertEqual([], os.listdir(self.root))
 
     def test_a_closed_target_is_refused(self):
         writer = self.writer()

@@ -38,8 +38,8 @@ ambiguous blank.
 | Owner-run: accept changes made to a project (terminal only; with the checkpoint `acknowledge-first-tier` set to `none`, an agent may run it with no terminal, which lets an agent accept changes to instruction-bearing and executable files) | `python3 -m workbench acknowledge [<target> \| --dir <path>]` |
 | Owner-run: clear the marker of an unfinished write (terminal only; at `wb recover` set to `none`, an agent may run it with no terminal) | `python3 -m workbench recover [<target> \| --dir <path>]` |
 | Owner-run: attach the harness to a clone (no terminal test, denied to the agent by the harness; at `wb attach` set to `none` the `deny` is not rendered and an unattended run is logged) | `python3 -m workbench attach [<target> \| --dir <path>] --harness <package>/<module>` |
-| Preview a re-render of an attached clone's permissions (read-only) | `python3 -m workbench preview rerender [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
-| Owner-run: re-render an attached clone's permissions after changing the settings (terminal only at every level; the key `wb rerender` offers `block` only) | `python3 -m workbench rerender [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
+| Preview a re-render of an attached clone's permissions and of its rendered skills, agents and root file that are behind their sources (read-only) | `python3 -m workbench preview rerender [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
+| Owner-run: re-render an attached clone's permissions after changing the settings, and refresh its stale rendered skills, agents and root file (terminal only at every level; the key `wb rerender` offers `block` only) | `python3 -m workbench rerender [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
 | Check a clone (read-only) | `python3 -m workbench check [<target> \| --dir <path>]` |
 | Preview an upgrade (read-only) | `python3 -m workbench preview upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
 | Owner-run: upgrade a project (terminal only; at `wb upgrade` set to `none`, as for install, with the plan for the project it is run from) | `python3 -m workbench upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
@@ -164,8 +164,8 @@ its own.
   so do not run a search while a `mine` runs. A low match score means the memory has nothing on the subject: the program
   returns its nearest notes for any query.
 - **Evidence and limits.** The run that settled how the program behaves is in `docs/specs/mempalace.md` ("Evidence"); the
-  limits, including what no test covers, are in "As built, and its limits". The raw traces of that run are untracked, in
-  `/.debug/2026-10-24-mempalace-evidence/` on the machine that made them.
+  limits, including what no test covers, are in "As built, and its limits". The raw traces of that run were kept untracked,
+  in scratch on the machine that made them, and are not part of the repository.
 - **A first hand run** has not been made: no live Claude session has used the skill against a real palace.
 
 ## The verify command
@@ -255,8 +255,10 @@ print them. The typed text guards against a mistaken approval, and it is not aut
    all its modules approved. If a write fails part way, the earlier records stay (they are
    valid) and the error lists the records written by that run.
 
-The recorded approver is the account name from the operating system's user database, not
-from an environment variable; it is text and grants nothing. Exit codes: 0 recorded, 1
+The recorded approver is your git identity, `Name <email>`, read from your global git
+configuration (and never from the project or an environment variable), with the way the run
+was authorized; it is text and grants nothing. Without a global `user.name` and
+`user.email` the command refuses and says how to set them. Exit codes: 0 recorded, 1
 refused or cancelled, 2 usage error.
 
 **Approving from a source.** `--source` takes an `https://`, `ssh://` or `file://` URL or a
@@ -544,8 +546,8 @@ python3 -m workbench recover [<target> | --dir <path>]                    (owner
 ## The distribution layout
 
 The repository root is the distribution: `workbench/` (the code and `shipped_approvals/`),
-`base/` (the content every project gets before any module: `AGENTS.md` and `docs/README.md`,
-each holding a slot marker), the first-party packages, `docs/` and `tests/`. `base/` is trusted as
+`base/` (the content every project gets before any module: `AGENTS.md`, `README.md` and
+`docs/README.md`; the first and last hold a slot marker), the first-party packages, `docs/` and `tests/`. `base/` is trusted as
 the code is and has no approval record; its tree hash is recorded in each project's manifest.
 
 ## Pins and the launcher
@@ -640,7 +642,12 @@ the records are read from the installed workbench, never copied into the guarded
   `allow` rules it keeps, the entries it removes, the shared settings file if it changed), then run `python3 -m workbench rerender
   --package <source>` from your terminal and type the first 12 characters of the digest. `wb check` says `rendering: out of date`
   and names the command when the settings and the rendering differ. `wb rerender` needs a terminal at every level (its key offers
-  `block` only), and a clone attached before the command existed lacks its `deny` until it is re-rendered once. `wb settings` prints a `level <key>:
+  `block` only), and a clone attached before the command existed lacks its `deny` until it is re-rendered once. The same command
+  brings the rendered skills, agents and root file up to date with the installed modules (`docs/specs/harness-refresh.md`). After a
+  package changes, the sequence is `wb upgrade` (it prints a pointer line when it wrote a harness item), `wb preview rerender
+  --package <source>` (each rendered file is current, stale, new, missing, applied or orphaned; an edited or linked file refuses
+  the whole run, and you move an edited file aside to have it recreated), then `wb rerender --package <source>` from your
+  terminal. `wb check` does not report a stale rendered file. `wb settings` prints a `level <key>:
   <level>` line for every key. The default is `block`, except for an agent-safe action and a declared module argument that is not owner-run, which default to `none`. A `block` set on an agent-safe action or a declared module argument is rendered as a `deny` at the next attach or re-render; at its default `none` nothing is rendered. A damaged settings file blocks every owner-run key and leaves the agent-safe ones at `none`, so `wb settings` and `wb check` still run to report it; an explicit `block` on an agent-safe key is not honored until the file is repaired. The checkpoint `accept-decision` offers `block` (the default) and `none`: at `none`, `wb settings` prints `level accept-decision: none` and the `draft-decision` skill lets an agent mark a decision it drafted `Accepted`; otherwise only the owner accepts a decision (`AGENTS.md`). Not every key offers `none`: the owner-run arguments of module commands (except the review engine's `extend`, `reset`, `archive`, `amend` and `prune`, which offer `ask` and `none`), `push-shared-branch`, `submit-remote-job`, `fetch-remote-output`, `change-direction` and `wb rerender` offer `block` only (`docs/specs/command-permissions.md`, "Not built" and "Re-rendering an attached clone").
 - **What it asks of the agent.** The agent runs `wb plan-status <plan> --digest`, shows you the preview, and runs
   `wb approve-plan <plan> --digest <digest>` as one simple command on its own; the harness then prompts you. A command that wraps or
@@ -773,15 +780,16 @@ or tracked artifacts.
 ## Local debug artifacts
 
 Keep retained, untracked diagnostics in
-`/.debug/<YYYY-MM-DD>-<topic>/`. Opt in locally; do not add this directory to
-the tracked `.gitignore`:
+`.workbench/local/debug/<YYYY-MM-DD>-<topic>/`, the scratch place in
+`docs/specs/repository-boundary.md` ("The four places"). `.workbench/.gitignore` already
+lists `/local/`, so nothing needs adding to `.gitignore` or `.git/info/exclude`:
 
 ```sh
-printf '/.debug/\n' >> .git/info/exclude
-mkdir -p .debug
+mkdir -p .workbench/local/debug/<YYYY-MM-DD>-<topic>
 ```
 
-Include a local README with the source commit, command and tool versions,
+Scratch grants no authority: nothing read from it approves, allows or acknowledges
+anything. Include a local README with the source commit, command and tool versions,
 purpose, and conclusion. These artifacts are not portable to fresh clones or
 worktrees. Record durable findings in tracked documentation, decisions, or
 tests instead.

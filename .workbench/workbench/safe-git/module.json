@@ -24,6 +24,9 @@
         "remove",
         "commit",
         "push"
+      ],
+      "asks": [
+        "remove"
       ]
     }
   }

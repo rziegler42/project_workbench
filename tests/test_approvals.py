@@ -15,6 +15,7 @@ NOW = "2026-10-20T08:00:00Z"
 KEY_MODULE_AB = "f04f2164227adad514ca7d1f286d89757d1c4e3fbb99be352217c4c3e946584d"
 KEY_PACKAGE_AB = "965f31f19cc0650d1368dd44b58dd934e1c534a05c56778c1eb520a08dfc2c2f"
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
+IDENT = "Example Approver <12345+example@users.noreply.github.com>"
 
 
 def listing(top):
@@ -225,6 +226,52 @@ class WriteAndCheckTest(Base):
         self.assertEqual(listing(self.root), before)
 
 
+class ViaTest(Base):
+    """A record is written at format 2 exactly when it has a `via`; a release writes format 1."""
+
+    def written(self, key):
+        with open(self.record_path(key), "rb") as handle:
+            return handle.read()
+
+    def test_a_record_with_a_via_is_written_at_format_2_and_read_back(self):
+        got = approvals.record_module(self.store, "pkg/mod", A, B, IDENT, NOW, via="terminal")
+        self.assertEqual((IDENT, "terminal"), (got.approver, got.via))
+        document = json.loads(self.written(approvals.record_key("module", A, B)))
+        self.assertEqual((2, "terminal"), (document["format"], document["via"]))
+        self.assertTrue(approvals.check_module(self.store, "pkg/mod", A, B).approved)
+        got = approvals.record_package(self.store, "pkg", A, B, [("mod", C, D)], IDENT, NOW, via="none")
+        self.assertEqual("none", got.via)
+        self.assertEqual(2, json.loads(self.written(approvals.record_key("package", A, B)))["format"])
+
+    def test_a_record_with_no_via_is_written_at_format_1_byte_for_byte_the_same_twice(self):
+        approvals.record_module(self.store, "pkg/mod", A, B, "workbench-release", "1970-01-01T00:00:00Z")
+        key = approvals.record_key("module", A, B)
+        first = self.written(key)
+        self.assertEqual(1, json.loads(first)["format"])
+        self.assertNotIn(b"via", first)
+        shutil.rmtree(os.path.join(self.root, "packages", key))
+        approvals.record_module(self.store, "pkg/mod", A, B, "workbench-release", "1970-01-01T00:00:00Z")
+        self.assertEqual(first, self.written(key))
+
+    def test_a_via_that_is_not_one_of_the_two_or_an_approver_that_is_not_an_identity_is_not_written(self):
+        for who, via in ((IDENT, "ask"), (IDENT, "delegated"), ("bob", "terminal"), ("Name <a b@c.d>", "none")):
+            with self.subTest(who=who, via=via):
+                with self.assertRaises(ApprovalError):
+                    approvals.record_module(self.store, "pkg/mod", A, B, who, NOW, via=via)
+        self.assertFalse(os.path.exists(self.record_path(approvals.record_key("module", A, B))))
+
+    def test_approving_the_same_thing_again_keeps_the_first_record_whatever_its_format(self):
+        first = approvals.record_module(self.store, "pkg/mod", A, B, "an-old-account", NOW)
+        again = approvals.record_module(self.store, "pkg/mod", A, B, IDENT, "2026-10-21T08:00:00Z", via="terminal")
+        self.assertEqual(first, again)
+        self.assertEqual(("an-old-account", None), (again.approver, again.via))
+
+    def test_a_format_1_record_reads_and_checks_as_before(self):
+        self.module()
+        got = approvals.check_module(self.store, "pkg/mod", A, B)
+        self.assertEqual((True, "owner", None), (got.approved, got.record.approver, got.record.via))
+
+
 class FailClosedTest(Base):
     def setUp(self):
         super().setUp()
@@ -421,6 +468,35 @@ class ParseTest(unittest.TestCase):
             with self.subTest(data=data[:20]):
                 with self.assertRaises(ApprovalError):
                     approvals.parse_record(data)
+
+    def two(self, **change):
+        return self.base(**dict({"format": 2, "approver": IDENT, "via": "terminal"}, **change))
+
+    def test_format_2_documents_parse_with_a_via_and_an_identity(self):
+        for via in ("terminal", "none"):
+            with self.subTest(via=via):
+                found = self.parse(self.two(via=via))
+                self.assertEqual((IDENT, via), (found.approver, found.via))
+        found = self.parse(self.package(format=2, approver=IDENT, via="none"))
+        self.assertEqual(("package", "none"), (found.kind, found.via))
+        self.assertIsNone(self.parse(self.base()).via)
+
+    def test_each_bad_format_2_document_is_refused(self):
+        document = self.two()
+        without_via = {key: value for key, value in document.items() if key != "via"}
+        bad = [without_via, self.two(via="ask"), self.two(via="delegated"), self.two(via=""), self.two(via=None),
+               self.two(via=1), self.two(approver="bob"), self.two(approver="Name <a b@c.d>"),
+               self.two(approver="x" * 257), self.two(approver="ㅤ <a@b.c>"), self.base(via="terminal"),
+               self.two(extra=1)]
+        for item in bad:
+            with self.subTest(data=str(item)[:70]):
+                with self.assertRaises(ApprovalError):
+                    self.parse(item)
+
+    def test_a_format_1_approver_keeps_its_limit_of_64(self):
+        self.parse(self.base(approver="x" * 64))
+        with self.assertRaises(ApprovalError):
+            self.parse(self.base(approver="x" * 65))
 
     def test_an_unknown_field_name_is_escaped_in_the_message(self):
         with self.assertRaises(ApprovalError) as caught:

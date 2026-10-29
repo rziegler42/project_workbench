@@ -100,6 +100,13 @@ class Store(unittest.TestCase):
                 render(store=store)
 
 
+def asks(command, ask):
+    # a rendered pattern is literal text where `*` matches any run, so fnmatch's other symbols are escaped
+    return any(
+        fnmatch.fnmatchcase(command, entry[len("Bash("):-1].replace("[", "[[]").replace("?", "[?]"))
+        for entry in ask if entry.startswith("Bash(") and entry.endswith(")"))
+
+
 class Floor(unittest.TestCase):
     def test_every_hard_stop_has_rules(self):
         self.assertEqual(set(rules.FLOOR_RULES), {stop.id for stop in floor.FLOOR})
@@ -130,12 +137,6 @@ class Floor(unittest.TestCase):
             "uv add requests", "pipx install black", "git push", "git push origin main",
         )
 
-        def asks(command, ask):
-            # a rendered pattern is literal text where `*` matches any run, so fnmatch's other symbols are escaped
-            return any(
-                fnmatch.fnmatchcase(command, entry[len("Bash("):-1].replace("[", "[[]").replace("?", "[?]"))
-                for entry in ask if entry.startswith("Bash(") and entry.endswith(")"))
-
         _, ask = lists()
         for command in commands:
             self.assertTrue(asks(command, ask), command)
@@ -144,6 +145,16 @@ class Floor(unittest.TestCase):
                         "go install example.com/x@latest"):
             self.assertFalse(asks(command, ask), command)
         self.assertFalse(asks("npm ci", ["Bash(npm install*)"]))
+
+    def test_the_floor_asks_for_what_the_former_user_level_denied(self):
+        # plan 2026-10-29-floor-rules-for-removed-denies: the user-level deny list is gone, and the floor asks for these instead
+        _, ask = lists()
+        for command in ("rmdir", "rmdir build", "unlink", "unlink a", "unlink -- a", "shred", "shred a", "shred -u a"):
+            self.assertTrue(asks(command, ask), command)
+        # a rule is for the command and not for a longer word that starts with it
+        for command in ("rmdirs", "unlinked a", "shredder"):
+            self.assertFalse(asks(command, ask), command)
+        self.assertIn("Read(//Users/tester/.config/gh/**)", ask)
 
     def test_the_floor_is_rendered_without_any_module_rules(self):
         _, ask = lists()

@@ -1,9 +1,9 @@
 # Module boundary
 
-Status: Current. Approved by the owner on 2026-10-21. It directs the work but changes no other document by
-itself: `module-contract.md`, `trust-and-approval.md` and the accepted decisions stay as they are until they
-are updated, and the decision `2026-10-21-installer-runs-document-checks` stays in force until the owner
-accepts a decision that supersedes it. No code follows from it until a plan is approved.
+Status: Current. Approved by the owner on 2026-10-21. It is built by the plans `2026-10-21-module-boundary-kit`,
+`2026-10-21-module-commands`, `2026-10-21-module-checks` and `2026-10-21-module-harness-paths`, all completed, and
+`module-contract.md` carries the changes it called for. The decision `2026-10-21-installer-runs-document-checks` is
+`Superseded by 2026-10-21-module-code-lives-in-modules`.
 
 Terms are defined in `terms.md`. The terms this specification adds (the **kit**, a **module command**, a
 **module check**, a **maintainer directory**) are added there with the first plan that builds them.
@@ -285,10 +285,9 @@ Behaviour of `wb check`:
    trusted to be read-only exactly as far as its owner-approved bytes are; the kit makes the reading safe
    and cannot make the helper write nothing.
 
-Once this specification is approved and built, `doccheck`, `refcheck` and `refindex` leave the installer.
-That contradicts the accepted decision `2026-10-21-installer-runs-document-checks`, which stays in force
-until the owner accepts a decision that supersedes it. Nothing in this draft changes it, and no
-implementation follows from the draft before that decision is accepted.
+When this specification was built, `doccheck`, `refcheck` and `refindex` left the installer: the installer has no such file now,
+and the `groundwork` module ships the two checks and the index reader. That contradicted the accepted decision
+`2026-10-21-installer-runs-document-checks`, which is now `Superseded by 2026-10-21-module-code-lives-in-modules`.
 
 ## Declaration schema
 
@@ -308,13 +307,21 @@ checked with the rest of its declaration, before anything is written.
   - `arguments` (optional): a list of at most 16 distinct strings, each `^[a-z][a-z0-9-]*$` and at most 32
     characters, default empty.
   - `owner` (optional, built by plan `2026-10-23-review-engine`): a list of distinct strings, each one of this
-    command's `arguments`, default empty. These are the arguments only the owner runs. A harness that provides
+    command's `arguments`, default empty. These are the arguments only the owner runs by default. A harness that provides
     `permissions` denies the agent each of them (`trust-and-approval.md`, "Rendering rules"), and `wb run` and
     `wb launch` run one only when standard input and output are both terminals (plan
     `2026-10-24-owner-run-in-code`), except that `wb run` runs one without a terminal when the owner has set its key to `ask` (with the
     preview digest as the last two arguments) or `none`, for a command that declares `levels` (`command-permissions.md`); `wb launch`
     stays terminal-only. The declaration authorizes the first argument only, so a form that must be allowed to the agent and a form that must not
     are two arguments of the command.
+  - `asks` (optional; *built 2026-10-29 by plan `2026-10-29-policy-and-module-asks`, increment B*): a non-empty list of distinct
+    strings, each one of this command's `arguments` and none of them in `owner`, default empty. A harness that provides
+    `permissions` asks the owner before the agent runs `wb run <command> <argument>`, bare or with more arguments, in each spelling
+    the `owner` arguments are denied in (`trust-and-approval.md`, "Rendering rules"). The rule is a prompt and not a wall: the
+    argument is still agent-safe, and an argument is never both asked and owner-run. It is not a level and is not on the owner's
+    table, so the approver cannot lower it in the personal settings. It asks for a preview as it does for the action, because the
+    match is on command text and cannot tell them apart; the decision is
+    `2026-10-29-workbench-asks-for-remove-submit-and-fetch`.
   - `describes` (optional; *the verifier and the launcher rule are built by plan `2026-10-25-safe-git-describe`, and
     `safe-git` declares it; the engine's use of it is built for `commit` and `remove` by plan `2026-10-26-action-review-engine`*): a list of at most 16 distinct strings, each `^[a-z][a-z0-9-]*$` and at most 32
     characters, default empty. These are the actions the command's `describe` argument answers, in the sense of the
@@ -326,7 +333,8 @@ checked with the rest of its declaration, before anything is written.
     rule is generic and names no module.
 - Refused: an unknown field, a wrong type, a duplicate key (the parser already refuses it), a `helper` that
   is not in `ships`, a `runtime` other than the two, a duplicate `arguments` entry, an `owner` entry that is not a
-  string, is repeated or is not one of the command's `arguments`, and two entries of one
+  string, is repeated or is not one of the command's `arguments`, an `asks` that is not a non-empty list of distinct strings
+  each of which is one of the command's `arguments` and not in `owner`, and two entries of one
   module that name the same `helper`. For `describes`: an entry that is not a string, a
   duplicate action, an action that fails the form, a non-empty `describes` on a command whose `arguments` lack `describe` (an empty list is allowed, as the default), and
   `describe` in `owner`.
@@ -484,6 +492,6 @@ approves the specification.
 - `module-contract.md`, `trust-and-approval.md` ("Pinned helpers"), `installer-interface.md`,
   `harness-modules.md`, `groundwork.md`, `code-work.md`
 - [2026-10-21-installer-runs-document-checks](../decisions/2026-10-21-installer-runs-document-checks.md)
-  (to be superseded)
+  (superseded by [2026-10-21-module-code-lives-in-modules](../decisions/2026-10-21-module-code-lives-in-modules.md))
 - [2026-10-20-isolated-launcher-invocation](../decisions/2026-10-20-isolated-launcher-invocation.md)
 - [2026-10-20-first-party-by-location-and-shipped-record](../decisions/2026-10-20-first-party-by-location-and-shipped-record.md)

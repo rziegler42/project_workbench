@@ -165,7 +165,7 @@ says so.
 | `preview` | project | `install`, `adopt`, `upgrade`, `add` or `rerender` and their arguments | nothing; no network, it reads only the approved cache | no | built |
 | `adopt` | project | target, a module selection (as `install`) | committed content for the paths that are missing, manifest, the project's store directory; never an existing file and no harness file | yes, owner-run; the owner may set `wb adopt` to `none` | built (`adopt-existing-repository`) |
 | `attach` | project | target, `--harness` | per-clone harness files, `.git/info/exclude`, the local manifest | no, but owner-run (harness deny rule) | built |
-| `rerender` | project | target, `--package` | the harness's permissions file, the local manifest's hash for it, then the rendering record in the guarded store | yes, owner-run at every level; the key offers `block` only | built (`rerender-attached-harness`) |
+| `rerender` | project | target, `--package` | the stale, new and missing rendered files, the harness's permissions file, the local manifest's hashes, then the rendering record in the guarded store | yes, owner-run at every level; the key offers `block` only | built (`rerender-attached-harness`, `refresh-rendered-harness`) |
 | `check` | project | target | nothing | no | built |
 | `upgrade` | project | target | after an approved preview, new content, left uncommitted | yes, owner-run; the owner may set it to `none` | built |
 | add a module | project | target, a module | the same as `upgrade`, new files and blocks only | yes, owner-run; the owner may set `wb add` to `none` | built |
@@ -306,7 +306,7 @@ publishes, and none edits a living or historical document** (`repository-boundar
   refused target. After a failure part-way, the report says what was written ("Failure part-way").
 - **Contacts the network and writes a cache directory** for each source that is not a local
   directory, in `install` itself and never in `preview`.
-- **Agent may run it:** no *(owner)*. The owner runs `install`, from a terminal, and approves the
+- **Agent may run it:** by default no *(owner)*; the approver may set `wb install` to `none`. The owner runs `install`, from a terminal, and approves the
   preview there. An agent runs `wb preview install ...` to see the same preview and write
   nothing (the preview and approval section).
 
@@ -335,7 +335,7 @@ plan made and the owner may still change.
   | the path | outcome |
   |---|---|
   | does not exist | **create**, exclusively, as `install` does |
-  | a seeded file (the base's `AGENTS.md` and `docs/README.md`, or a file from a module's `writes`) that is a regular file | **keep**: hashed (the content is never printed), never written, recorded in the manifest as `seeded` with the hash of the bytes there |
+  | a seeded file (the base's `AGENTS.md`, `README.md` and `docs/README.md`, or a file from a module's `writes`) that is a regular file | **keep**: hashed (the content is never printed), never written, recorded in the manifest as `seeded` with the hash of the bytes there |
   | a directory the plan needs, which is a real directory | reused |
   | a module-owned path or a living or historical path that exists in any form | **refuse** the whole command |
   | a file where the plan has a directory, a directory or any non-regular file where it has a file, a link at any component of a planned path, a seeded file with more than one hard link, or one over the bound | **refuse** the whole command |
@@ -383,7 +383,7 @@ plan made and the owner may still change.
   committed, and the `wb attach` and `wb upgrade` that follow.
 - **Contacts the network and writes a cache directory** for each source that is not a local
   directory, in `adopt` itself and never in `preview`.
-- **Agent may run it:** no. The owner runs `adopt` from a terminal and approves the preview there.
+- **Agent may run it:** by default no; the approver may set `wb adopt` to `none`. The owner runs `adopt` from a terminal and approves the preview there.
   An agent runs `wb preview adopt ...` to see the same plan and write nothing. Every harness denies
   `wb adopt` as it denies `wb install` (see "The preview and approval", rule 2).
 - **An adopted project is an existing project** for every other command. `check`, `acknowledge`,
@@ -417,7 +417,7 @@ plan made and the owner may still change.
   version between the lock and the installed workbench warns and continues.
 - **Prints** post-install notes for steps it cannot perform, such as a harness's project trust,
   and warns when a file it wrote changes the agent's permissions.
-- **Agent may run it:** no *(owner)*. Attach writes the files that set an agent's own
+- **Agent may run it:** by default no *(owner)*; the approver may set `wb attach` to `none`. Attach writes the files that set an agent's own
   permissions, deny rules and instructions. Choosing and attaching a harness is the owner's
   act in setting up a clone, before an agent runs in it; the harness's deny rule on `wb
   attach` is the barrier, as it is for `approve`. It is not terminal-gated, because setting up
@@ -437,8 +437,12 @@ plan made and the owner may still change.
 - **The preview prints,** after `project: <resolved target>`, the harness, each key whose rule moves (`old -> new`), the files it
   changes with old and new hash (or `left as it is`), the `allow` rules kept (`kept:`), every other live entry the new file will not
   have (`removed:`), notes, a summary of the inputs read and a 64-character `digest:`. Nothing to change says so. It writes nothing.
-- **`wb rerender` writes** in this order: the permissions file (`replace_file` with the hash the plan read), the local manifest's hash
-  for it, then the rendering record. It needs a terminal on both standard input and output at every level, asks for the first 12
+- **The other rendered files** (`harness-refresh.md`). The preview also lists each skill, agent and root file the harness
+  stages with a state: current, applied, stale, new, missing (recreated) or orphaned (listed, never deleted); an edited file, an
+  unrecorded file at a staged path, or a link at any staged or listed path refuses the whole run. Stale files show the changed lines.
+- **`wb rerender` writes** in this order: the stale files (`replace_file` with the hash the plan read) and the new and missing ones
+  (`create_file`), after a re-read of each that refuses with nothing written if one differs; the permissions file (`replace_file`
+  with the hash the plan read); the local manifest's hashes; then the rendering record. It prints a `files:` line of counts. It needs a terminal on both standard input and output at every level, asks for the first 12
   characters of the digest, rebuilds the plan and refuses unless the digest is unchanged, and writes no level-log entry. A stop after
   writing began lists what was and was not written and how to finish; running the command again finishes it.
 - **Exit codes:** 0 done or nothing to change, 1 refused or cancelled (a failure of the first replacement, a conflict for
@@ -446,6 +450,9 @@ plan made and the owner may still change.
   nothing was renamed yet), 130 interrupted before the writes begin. `preview rerender` exits 0 or 1.
 - **Agent may run it:** the preview, yes (its key defaults to `none`). The write, no: it is owner-run and terminal-only, and the
   harness renders a `deny` for it in every spelling.
+- **`upgrade` points at it.** After an upgrade that wrote a path under a module's `harness/` folder, `wb upgrade` (and `wb add`,
+  which shares the code) prints one line after "wrote N paths" saying the rendered skills, agents or commands may be behind and
+  naming `wb preview rerender`. It stages and compares nothing and writes nothing under the harness's folders.
 
 ### `check` (built by `claude-harness`)
 
@@ -463,7 +470,8 @@ plan made and the owner may still change.
   is valid.
 - **The local manifest is not evidence.** The hashes in `.workbench/local/harness.json` are
   scratch, which grants no authority, so "no drift" says the files match the scratch record
-  and not that they are safe.
+  and not that they are safe. `wb rerender` does trust them to tell an edited rendered file from a stale one, so the
+  rendered permissions deny the harness's write tool on the file (not a write by the shell).
 - **Options:** none in this version.
 - **Agent may run it:** yes. It asks git nothing: it reads `.git/index` itself, so the git rule
   in the states section is met without running a program or reading the repository's
@@ -562,7 +570,7 @@ plan made and the owner may still change.
   the preview approval. On a match it replaces the baselines for exactly the listed paths, then the moved pins. Any
   other answer writes nothing and exits 1; no differences says `nothing to acknowledge` and
   exits 0.
-- **Agent may run it:** no. It is denied to an agent by the harness as `approve` is.
+- **Agent may run it:** by default no; the approver may set `acknowledge-first-tier` or `acknowledge-second-tier` to `none`. It is denied to an agent by the harness as `approve` is.
 - **As built.** A link, a directory or another non-regular file where a file is expected, and a
   name under `.workbench/` that fails the path rules (control character, non-UTF-8, colon,
   backslash), cannot be acknowledged: it is listed as a difference with its reason, never
@@ -614,7 +622,7 @@ plan made and the owner may still change.
 - **Exit codes:** 0 cleared or nothing to recover; 1 refused or cancelled; 2 usage; 3 a removal
   failed or was interrupted (the message says whether the marker remains); 130 interrupted at the
   prompt.
-- **Agent may run it:** no. It is owner-run and terminal-only; a harness's deny rule is the
+- **Agent may run it:** by default no; the approver may set `wb recover` to `none`. It is owner-run and terminal-only by default; a harness's deny rule is the
   barrier, as for `acknowledge`.
 - **Limits.** The marker is unlinked by name after the second examination, so a marker swapped in
   that window is removed instead of the one shown. A forged record can make `recover` remove empty
@@ -640,6 +648,26 @@ no harness denies it. It writes only the `plan-approvals` record in the guarded 
 nothing. The checks, their order, the facts it reads from the process module and from a `peer-review` provider, the
 record and the exit codes are in `trust-and-approval.md`, "Delegated plan approval records". It reads no plan section
 itself: the process module's declared, pinned commands do.
+
+### What the approval commands print *(built 2026-10-29 by plan `2026-10-29-approvals-name-the-approver`, commits `3aae9c5` and `ab1ed81`)*
+
+`approve`, `pin`, `approve-plan` and `delegate-approve-plan` read the approver's git identity first, before anything is shown,
+downloaded or asked (`trust-and-approval.md`, "The approver and how it was authorized"), and refuse with a `refused:` line that says
+how to set it (`git config --global user.name`, `user.email`) when it is missing or invalid; nothing is written or logged. The
+success line then ends with who approved and, for a level other than a terminal, how. Written `X` for `Name <email>`:
+
+- `approve`: `approved <kind> <subject> by X`, with ` (no gate)` at the level `none` of `wb approve`. A repeat keeps the first record
+  and says `already approved <kind> <subject> (by <approver on file> on <time>); the earlier record is kept`.
+- `pin`: `pinned <name> -> <path> (sha256 <hash>) by X`, with ` (no gate)` at the level `none` of `wb pin`.
+- `approve-plan`: `approved: <plan> (region <hash>) by X`, ` by X (ask)` at the level `ask` and ` by X (no gate)` at `none`. A repeat
+  says `already approved: ...` and names the approver and the way on file, which may be another person's and another level; an
+  entry written before 2026-10-29 has no way recorded and is shown by its approver text alone.
+- `delegate-approve-plan`: `approved: <plan> by X delegated to <provider> (<model>), <n> of <bound> rounds`; the parenthesis is left
+  out when the model is not known. A repeat says `already approved: <plan> by X delegated to <provider> (<model>)` from the entry on
+  file.
+
+The text is fixed by the tests (`tests/test_planapprovals.py`, `test_delegation.py`, `test_approve.py`, `test_pins.py`,
+`test_approve_levels.py`, `test_approve_pin_levels.py`). Not run here: the owner's own `approve-plan` with the real identity.
 
 ### `settings` and `gate` (built by plan `2026-10-22-checkpoint-settings-and-caps`)
 

@@ -107,6 +107,22 @@ class Plan(Base):
         self.levels(wb_install="none")
         self.assertNotEqual(first, DIGEST.search(self.shown()).group(1))
 
+    def test_a_clone_rendered_without_the_local_manifest_deny_sees_the_permissions_file_change(self):
+        def older(doc):
+            doc["permissions"]["deny"] = [rule for rule in doc["permissions"]["deny"] if LOCAL not in rule]
+        self.edit_live(older)
+        out = self.shown()
+        self.assertNotIn("nothing to change", out)
+        self.assertRegex(out, r"(?m)^  %s: [0-9a-f]{12} -> [0-9a-f]{12}$" % re.escape(SETTINGS))
+        self.assertNotIn("kept:", out)
+        self.assertNotIn("removed:", out)
+
+    def test_the_permissions_file_denies_the_local_manifest(self):
+        deny = self.live()["permissions"]["deny"]
+        self.assertIn("Edit(%s)" % LOCAL, deny)
+        self.assertIn("Edit(**/%s)" % LOCAL, deny)
+        self.assertIn("Edit(/%s/%s)" % (os.path.realpath(self.place), LOCAL), deny)
+
     def test_an_allow_rule_the_owner_added_is_kept_and_listed(self):
         self.edit_live(lambda doc: doc["permissions"].__setitem__("allow", ["Bash(ls)"]))
         out = self.shown()

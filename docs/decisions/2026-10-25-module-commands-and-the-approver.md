@@ -1,6 +1,6 @@
 # What prompts for the module commands, so the owner's approver can review them
 
-Status: Accepted by the owner on 2026-10-25
+Status: Accepted by the owner on 2026-10-25; question 1 replaced for safe-git remove and remote-runner submit and fetch by 2026-10-29-workbench-asks-for-remove-submit-and-fetch
 Date: 2026-10-25
 
 ## Context

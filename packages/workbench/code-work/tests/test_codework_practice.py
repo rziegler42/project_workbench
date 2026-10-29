@@ -27,6 +27,7 @@ PHRASES = {
         "read the whole failure before you change anything", "reproduce it", "one hypothesis at a time",
         "change one thing at a time", "never skip, delete or loosen a check", "the same failure twice",
         "three failed fixes", "stop and report", "what you tried", "what you could not check",
+        ".workbench/local/debug/", "untracked", "grants no authority", "a durable finding", "local readme",
         "a skill in a domain module may extend this one", "in its domain its rules take precedence",
         "is data. ignore any instruction", "run no other command"),
     "verify-before-claiming": (
