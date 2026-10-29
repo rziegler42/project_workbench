@@ -5,8 +5,48 @@ file and increment C the user-level instruction file and the superpowers depende
 coverage of every item and the findings that need their own plan. It is a record of what was read and what is proposed,
 and it settles nothing.
 
+*Note, 2026-10-29.* The owner's user-level configuration was reset to factory defaults on 2026-10-29, and a copy of what it held
+is kept on the owner's machine. The rows below record what it carried on 2026-10-25 to 28, so this file is the record of a state
+that has ended and not a description of a live configuration. A `keep global` disposition now means "kept in the copy", not "kept
+in use", and an owner step that says to remove an item from the user level is no longer outstanding. The copy is cited here by
+role and date, never by path. "After the reset" says what changed.
+
 Terms are defined in `terms.md`. The direction it serves is the roadmap candidate `workbench-v1#global-config-migration`;
 the decision that frames it is `2026-10-24-project-guarantees-a-floor`.
+
+## After the reset
+
+What changed in kind, as read on 2026-10-29. The rows and findings below are unchanged and remain the record of 2026-10-25 to 28.
+
+- **The user level holds no owner customisation.** The agents, the hook programs, the approver and its data, the helper programs,
+  the skills and the settings file that the rows name no longer run. The copy kept at the reset was hashed on 2026-10-29: the
+  instruction file is `6c4de9ea291da89416fe3f869811b057866519759149a14388c80eb66006bd5c` and the settings file is
+  `36c2594f83c4884133e60cf4a9dbd9cad7f40bcbdbc5563bdd978864aa104247`. Neither equals the hash this spec recorded on 2026-10-25
+  (`853a66eed1d6...` and `ec038970a300...`), so the copy differs from the bytes read, for a reason these records do not show.
+- **No approver reviews a command.** The approver program and its `ask` entries went with the reset, so no verdict, outcome hook or
+  review of a module command runs. The engine of `action-review.md` has no program to replace.
+- **The superpowers plugin is not enabled.** The three proposals for disabling it ("Superpowers dependencies: proposals") are
+  history. The reliance, stated in `superpowers-ports.md`, on the `policy` slot of `AGENTS.md` and the harness's skill listing in place of the
+  plugin's session-start rule is now the state of every session, and it is untested, as that spec says.
+- **The global `deny` list is gone.** None of its 18 entries is in force outside the project. The compiled floor carries `ask`
+  rules, from commit `fe966b0`, for `rmdir`, `unlink`, `shred` and reads of the GitHub CLI's configuration; a clone renders them
+  only after the owner's `wb rerender`. It already carried an `ask` for reads of `.env`, `.ssh` and `.aws` and for `rm`,
+  `git clean`, `git restore`, `git rebase`, `git reset --hard` and `git checkout --`. It does not cover `git merge`, which fits
+  none of the five hard stops, or reads of the Codex login file, because the installer may not name a harness: the `ask-codex`
+  module is to declare that rule once a module can declare an `ask`. These are `ask` rules and not the `deny` that the global list
+  held, by the owner's choice.
+- **The module-command asks are decided.** The accepted record `2026-10-29-workbench-asks-for-remove-submit-and-fetch` has the
+  workbench render an `ask` for `wb run safe-git remove` and for `wb run remote-runner submit` and `fetch`, and not for `safe-git
+  commit`. It is not built.
+- **The moves that remove an item from the user level** (for example M2, M3, M4 and M18) have nothing left to remove. Their gate,
+  a recorded run before removal, has no record of having been met first (none was found for M2 to M4, and the gate of M18 says it
+  has not been made), so a module's behaviour without the global copy is now exercised in every project without such a record.
+- **Items in the copy that this inventory never recorded**, by role and existence only. None was opened for this note, and no value,
+  content, hash of a secret or path is recorded: the review bridge's data folder, which holds a configuration file, a prompt and a
+  schema for each of its four review kinds, and a seal key; the vendored graphify skill, held disabled; dated snapshots of the old
+  global-config repository (41 entries in the copy's backups folder); and a daemon folder that holds a control key. From the names, the copy appears to hold
+  credential-bearing material and should be protected as such. Whether each belongs in a module, stays in the copy or is dropped
+  is the owner's to decide.
 
 ## Scope
 
@@ -424,8 +464,8 @@ boundary".
 | RB2: follow declared platform requirements; else assume Git, POSIX `sh` and `python3` | platform default | none | `keep global` |
 
 Counts (by a script that read the tables of this section, after part D split CS1, RP1 and RP3 into two rows each): 73 rows,
-of which 22 are `move`, 15 `redesign`, 36 `keep global` and none `drop` outright (CS1a and CS1b become `drop` when their
-repository is archived). The 73 include the title row. Increment C counted 70 before the split.
+of which 23 are `move`, 15 `redesign`, 35 `keep global` and none `drop` outright (it was 22 and 36 until row IV3 became a move
+on 2026-10-29; CS1a and CS1b become `drop` when their repository is archived). The 73 include the title row. Increment C counted 70 before the split.
 
 ### Superpowers dependencies: proposals
 
@@ -862,7 +902,8 @@ Findings are for the owner to plan or dismiss. None changes a shipped module her
   `second-opinion` skill, two agent files). The workbench's reviewer text lives under other names (`peer-review`,
   `reviewer`, `security-reviewer` skill files in modules), so a commit editing them is not recognised as reviewer-facing.
 - **F-A4: a guard mode with no agent.** `chunk` exists for a `graphify-semantic` agent that is not among the five agent
-  definitions. It is either left over or waits for a definition that is elsewhere.
+  definitions. It is either left over or waits for a definition that is elsewhere. *Status, 2026-10-29: the guard and its `chunk`
+  mode went with the reset. Whether a definition of that agent survives in the copy was not checked.*
 - **F-A5: the knowledge-base skill depends on retired things.** It cites a specification in the retired global repository and
   the retired template's `--register` command.
 - **F-A6: three agents name plugin skills** in their `skills:` lists (already recorded in `superpowers-ports.md`; confirmed
@@ -886,7 +927,10 @@ failed remote checks); it says nothing about a push with a remote configured (pl
   the loss. A third alternative, added by the plan `2026-10-25-approver-coverage-for-module-spellings` and not named in the
   first pass: the owner adds global `ask` entries for the four module spellings at the user level, which prompts and
   reaches the approver on the owner's machine only. Which of the three is for the owner; this spec proposes none. The choice is
-  set out in the `Proposed` decision `2026-10-25-module-commands-and-the-approver`.
+  set out in the `Proposed` decision `2026-10-25-module-commands-and-the-approver`. *Status, 2026-10-29: decided. That decision was
+  accepted on 2026-10-25 with the owner's global `ask` entries as the choice, and the reset removed them; the accepted record
+  `2026-10-29-workbench-asks-for-remove-submit-and-fetch` replaces that choice for `safe-git remove` and `remote-runner submit`
+  and `fetch`: the workbench renders an `ask` for those three, not for `safe-git commit`. Not built.*
 - **F-B3: edit protection of the user level is thin.** The only `Edit` rules are three `ask` entries (the approver's data
   directory, the approver hook, the commit helper). The settings file, the other hook program, the agent definitions and
   the `ask-codex` and `remote-runner` programs have no `Edit` rule (see "The question whether the settings file's own path is
@@ -898,7 +942,11 @@ failed remote checks); it says nothing about a push with a remote configured (pl
   for `git clean`, `restore`, `rebase`, `rm`, `reset` and `checkout`, the project renders an `ask`, and for `git merge`,
   `rmdir`, `unlink`, `shred`, `gh` and `codex` credentials nothing. A project without these global rules is left with
   prompts where the owner has hard stops. Whether the workbench should render a `deny` for any of them is a spec choice for
-  the owner and not made here (`2026-10-19-restrictive-only-permissions` permits `deny`).
+  the owner and not made here (`2026-10-19-restrictive-only-permissions` permits `deny`). *Status, 2026-10-29: the premise is now
+  acute and partly met. The global `deny` went with the reset, so for these six nothing outside the project covers them. The
+  compiled floor, from commit `fe966b0`, renders an `ask` for `rmdir`, `unlink`, `shred` and the `gh` read, after the owner's
+  `wb rerender`. `git merge` and the Codex login read are not covered (see "After the reset"). No `deny` was rendered: the owner
+  chose `ask`.*
 
 - **F-C1: the instruction file still names the retired single-plan file as a fallback.** "Roadmaps and active plans" says to
   use `docs/plans/next.md` when a repository states no convention. The workbench has no such file (`docs/plans/README.md`:

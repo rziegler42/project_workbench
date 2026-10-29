@@ -207,8 +207,8 @@ Plan review by Codex through the `ask-codex` bridge (model `gpt-5.6-terra`), rou
 
 ## Result
 
-**Increments A and B are done; Increments C and D are not started.** Their commits carry the trailers
-`Plan: 2026-10-29-terms-inventory-and-roadmap-cleanup#A` and `#B`.
+**Increments A, B and C are done; Increment D is not started.** Their commits carry the trailers
+`Plan: 2026-10-29-terms-inventory-and-roadmap-cleanup#A`, `#B` and `#C`.
 
 ### Increment A
 
@@ -277,3 +277,37 @@ Plan review by Codex through the `ask-codex` bridge (model `gpt-5.6-terra`), rou
     claims nothing beyond the trial's own words.
   - The script and base64 cases that the classifier denied "in the owner's probe" (`command-permissions.md`) are unchanged text
     whose source I did not trace to a plan's Result.
+
+### Increment C
+
+- **Security review.** The checkpoint before step 4 asked the owner, on 2026-10-29, whether to run a security review of the list of
+  backup items. The owner chose to skip it. The list holds role and existence only.
+- **Done, in `global-config-inventory.md`.**
+  - A dated note after the status paragraph says the reset ended the state the rows record, that a copy is kept, and that
+    `keep global` now means "kept in the copy".
+  - A section "After the reset" says what changed in kind: the agents, hooks, approver, helpers, skills and settings no longer run,
+    and the copy's two hashes, given as provenance, differ from those recorded on 2026-10-25; no approver reviews a command; the
+    plugin is not enabled; the global `deny` list is gone, and the compiled floor carries `rmdir`, `unlink`, `shred` and the `gh`
+    read as `ask` rules from commit `fe966b0` but not `git merge` or the Codex login read; the module-command asks are decided; the
+    moves that remove an item from the user level have nothing left to remove; and a list, by role and existence only, of items in
+    the copy that the inventory never recorded.
+  - One-line "Status, 2026-10-29" additions to F-A4, F-B2 and F-B5. The rows and findings are unchanged.
+- **Checked before writing.** `workbench/rules.py` holds the four rules, as the plan required. The items in the copy were confirmed
+  by listing directory names only; no file in the copy was opened.
+- **Verification as run.** `wb check` and `wb run code-work check` report no problems; the part C and total counts agree (35 keep
+  global in the list, 23, 15 and 35 in the part table, 48, 27 and 108 in total); the added lines contain no path into a home
+  directory; only this file changed. There was a stale part C count in prose (22 move and 36 keep global, from before row IV3
+  became a move). My first search missed it because it did not include the backticks around the words, and the reviewer's note
+  led me to it. It now reads 23 and 35.
+- **Review.** One read-only reviewer pass: no blocking finding. It judged the last bullet as a security reader and found nothing
+  locatable or usable in it. Its points, applied: the claim that the moves' gate "was not met first" became "no record of its having
+  been met was found", because absence of a record is not proof; the paraphrase of `superpowers-ports.md` now states what that spec
+  says; and "holds credential-bearing material" became "appears to hold", because it is inferred from names. It could not read the
+  copy and checked none of the last bullet's contents.
+- **For the owner.**
+  - The copy holds a seal key and a control key, judged from names only. Protect it as credential-bearing, and decide what each
+    unrecorded item becomes: a module, a place in the copy, or dropped.
+  - The two copy hashes and the plugin not being enabled are my readings on 2026-10-29 that no record in the repository
+    can confirm.
+  - Row IV3 is placed in the move M6, and the part C counts now agree everywhere. Rows that name a `keep global` disposition are
+    unchanged and are read through the dated note.
