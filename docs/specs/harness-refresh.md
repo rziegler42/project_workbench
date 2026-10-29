@@ -203,7 +203,8 @@ for the owner to decide:
   and what is there is left alone: the sibling is a plain file that whoever can write the directory could replace before the
   link. A swap after that check is not prevented. The other gap left is a crash between the link and the unlink: the finished
   file then has a second name, a later read refuses it by its final path (more than one hard link), and removing the sibling
-  clears it. A filesystem without hard links fails the create and leaves nothing behind. The two-link condition assumes the
+  clears it. A filesystem without hard links fails the create and leaves nothing behind; the error says the filesystem does not
+  allow hard links there (for `EPERM`, `ENOTSUP` and `EMLINK` from the link). The two-link condition assumes the
   filesystem reports link counts truthfully; one that does not would make every create a conflict, which is loud and not
   silent. It was tried on macOS (APFS) only.
 - **A new file is checked against the clone's `.git/info/exclude` as well as the layout's exclude entries.** Both the preview

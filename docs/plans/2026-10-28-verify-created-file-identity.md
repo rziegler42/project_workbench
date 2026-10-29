@@ -132,4 +132,25 @@ Empty until a review is asked for.
 - **Review.** One `reviewer` exchange, no blocking finding. Applied: the link-count test and the spec note. Not applied: asserting
   the outside file's link count (it differs by case) and what is left at the final name after a refusal (documented, a non-goal).
   Kept the link-count clause as the plan chose.
-- **Not done.** Linux and a filesystem that reports link counts oddly were not tried. Increment B is not started.
+- **Not done.** Linux and a filesystem that reports link counts oddly were not tried.
+
+### Increment B
+
+- **Done.** A failed `os.link` with `EPERM`, `ENOTSUP` or `EMLINK` now raises `SafeFsError` "cannot create <path>: the filesystem
+  does not allow hard links there (<OS text>)"; any other error keeps the generic message, and a conflict is still a
+  `WriteConflict`. The spec bullet names the message.
+- **Tests (red first).** One test over the three errors (message names hard links, not a `WriteConflict`, no sibling left, path not
+  listed) failed before the change; a second checks that another error (`EIO`) keeps the generic message.
+- **Scope touch.** The tests need `unittest.mock`, so `import unittest.mock` was added to `tests/test_projectfs.py`. That also
+  fixes the older test that errored when the file ran alone, so the "Deferred work" line saying the import is missing is now stale.
+  The plan's Deferred work was not edited (an approved plan changes only in status, review record and result).
+- **Verification as run.** `tests.test_projectfs tests.test_adopt tests.test_refresh tests.test_rerender tests.test_boundary`
+  250 tests OK; the full suite 5931 tests in 12 roots OK; `git diff --check`, `wb check`, `wb run code-work check` clean.
+- **Review.** One `reviewer` exchange, no blocking finding. `EPERM` can also come from a sandbox denial, but the OS text stays in
+  the message and the failure is closed, so the mapping was kept. No caller or test matches the old text.
+- **Not done.** Only mocked errors were tried; no real filesystem without hard links, and no Linux.
+
+### Plan as a whole
+
+Both increments are done (A `c91d26e`; B uncommitted until the owner says commit). Completion criteria 1 to 5 are met on this machine
+by the suite and the checks above. Deferred: the same identity check in `replace_file`, Linux, and the cosmetic `Partial` wording.

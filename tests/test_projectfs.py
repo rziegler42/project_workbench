@@ -4,6 +4,7 @@ import os
 import stat
 import tempfile
 import unittest
+import unittest.mock
 
 from workbench import projectfs, target
 from workbench.wbkit import safefs
@@ -313,6 +314,26 @@ class WriterTest(Fixture):
         self.swap_sibling(other)
         writer = self.writer()
         self.assert_swap_refused(writer, victim)
+
+    def test_a_filesystem_without_hard_links_is_named_and_leaves_nothing_behind(self):
+        for code in (errno.EPERM, errno.ENOTSUP, errno.EMLINK):
+            with self.subTest(code=code):
+                writer = self.writer()
+                with unittest.mock.patch("os.link", side_effect=OSError(code, os.strerror(code))):
+                    with self.assertRaises(safefs.SafeFsError) as caught:
+                        writer.create_file("a", b"x")
+                self.assertNotIsInstance(caught.exception, WriteConflict)
+                self.assertIn("hard links", str(caught.exception))
+                self.assertEqual([], os.listdir(self.root))
+                self.assertEqual([], writer.written)
+
+    def test_another_link_failure_keeps_the_generic_message(self):
+        writer = self.writer()
+        with unittest.mock.patch("os.link", side_effect=OSError(errno.EIO, "input/output error")):
+            with self.assertRaises(safefs.SafeFsError) as caught:
+                writer.create_file("a", b"x")
+        self.assertNotIn("hard links", str(caught.exception))
+        self.assertEqual([], os.listdir(self.root))
 
     def test_a_closed_target_is_refused(self):
         writer = self.writer()

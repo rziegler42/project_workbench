@@ -242,6 +242,9 @@ class Writer:
             except OSError as exc:
                 if exc.errno in (errno.ELOOP, errno.ENOTDIR):
                     raise WriteConflict("a link or a file is in the way: %s" % shown)
+                if exc.errno in (errno.EPERM, errno.ENOTSUP, errno.EMLINK):
+                    raise safefs.SafeFsError("cannot create %s: the filesystem does not allow hard links there (%s)"
+                                             % (shown, exc.strerror or exc))
                 raise _os_error("create", shown, exc)
             # The sibling can be replaced between the fill and the link by whoever can write the directory; the link then made
             # `rel` that other object. It is listed only when it is the file written here, with the sibling as its one other name.
