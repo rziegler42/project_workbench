@@ -1,6 +1,6 @@
 # Terms, the former global setup, the inventory and the roadmap
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-29
 Candidate: workbench-v1#docs-cleanup-after-reset
 Specs: terms, superpowers-ports, knowledge-tools, harness-modules, command-permissions, repository-boundary, global-config-inventory
@@ -207,7 +207,7 @@ Plan review by Codex through the `ask-codex` bridge (model `gpt-5.6-terra`), rou
 
 ## Result
 
-**Increments A, B and C are done and committed; Increment D is done and awaits the owner's word to commit.** Their commits carry the
+**Increments A, B, C and D are done and committed (D as `aebce61`); the plan is completed.** Their commits carry the
 trailers `Plan: 2026-10-29-terms-inventory-and-roadmap-cleanup#A`, `#B`, `#C` and `#D`.
 
 ### Increment A
