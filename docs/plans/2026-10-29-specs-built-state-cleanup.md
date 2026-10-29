@@ -180,8 +180,10 @@ findings, both applied.
 
 ## Result
 
-**Increment A is done; Increments B and C are not started.** Its commit carries the trailer
-`Plan: 2026-10-29-specs-built-state-cleanup#A`.
+**Increments A and B are done; Increment C is not started.** Their commits carry the trailers
+`Plan: 2026-10-29-specs-built-state-cleanup#A` and `#B`.
+
+### Increment A
 
 - **Done, in the five named specs.**
   - `groundwork.md`: the two table rows and the two "ships no code" sentences now say the module ships the read-only check helpers
@@ -202,3 +204,32 @@ findings, both applied.
   file. It raised three non-blocking leftovers, all fixed as above. It could not see a diff and did not rerun my searches.
 - **Left for the owner.** The `delegated-approval` plan's own Result still says increment F is "not yet committed"; it is a completed
   plan, so I left it. The lines that cite `AGENTS.md` sections in `code-work.md` were not touched, as the plan says.
+
+### Increment B
+
+- **Security review.** The checkpoint asked the owner, on 2026-10-29, whether to run a security review of the edits to the
+  permission, approval and command-gate specs. The owner chose to skip it. In its place the reviewer was given eight
+  security-property claims to verify against the code, and it confirmed all eight.
+- **Done.**
+  - `harness-modules.md` and `terms.md`: the status lines say the Claude harness and the installer are built and a second
+    harness is not. "All `Proposed`" now says the three decisions are accepted. The owner-run deny list gains `rerender` and
+    `approve-plan`. The `allow` rules text says attach never reads or writes them and `rerender` carries them, as
+    `workbench/rerender.py` and `harness-rerender.md` show. The hooks list gains the command gate.
+  - `trust-and-approval.md`: the delegated record is built; a paragraph explains how `stop` and `delegate` map to the four levels
+    and the precedence of table entry, checkpoint reading and shipped default; `wb rerender` is in the owner-run list; the edit gate
+    sentence says the command gate is the separate, built shell hook; the delegated-formats sentence says format 2 is built.
+  - `command-permissions.md`: the dated snapshots say 2026-10-27, and the clause that this clone's `draft-decision` skill was out
+    of date is corrected, because the clone has since been re-rendered; the key lists gain `wb rerender` and the preview keys.
+- **Beyond the listed steps, after the review.** `command-permissions.md`: the "Draft a roadmap ..." row now agrees with the corrected
+  row below it; `wb preview rerender` is in the `wb settings` key list; `run`, a dispatcher word that is not a key, is out of the
+  Coverage list. `trust-and-approval.md`: the deferral of a shell or commit-time gate is stated as the source plan stated it, as
+  conditional.
+- **Verification as run.** A search for the old status and snapshot wording finds one legitimate use ("the effective table now" in
+  a rule); `wb check` and `wb run code-work check` report no problems; `wb verify packages/workbench` ran with no refusal; `git
+  status` showed only the four specs changed.
+- **Review.** One read-only reviewer pass: no blocking finding. It confirmed owner-run lists against `rules.OWNER_RUN`, the built
+  command gate, `rerender` and `allow`, the built delegated approval and format 2, the precedence rule and defaults against
+  `levels.py` and `settings.py`, and the status lines. Its four non-blocking points are fixed as above. It could not run git or
+  the checks and did not compare the two `draft-decision` skill files byte for byte.
+- **Left for the owner.** Whether `harness-modules.md` and `terms.md`, still `Status: Current`, need re-approval after their status
+  text changed: I changed what they say is built, not what they require.

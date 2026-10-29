@@ -156,6 +156,10 @@ setting in the personal settings, with two values:
 
 A new teammate with no settings gets `stop` for every checkpoint.
 
+The personal settings also hold a `levels` table, and a key's level is its table entry, else its checkpoint reading, else its
+shipped default. A level is `block`, `ask`, `delegated` or `none`; `stop` reads as `block` and `delegate` as `delegated`, and a key
+offers only the levels its command or checkpoint supports (`command-permissions.md`, "A level for every command").
+
 ### Delegated approval
 
 - A delegate may issue the verdict for a checkpoint only when the personal setting
@@ -164,9 +168,9 @@ A new teammate with no settings gets `stop` for every checkpoint.
   `review-engine` (`review-engine.md`). It stores findings, the reviewer's verdict
   and its own reading as data, and it records no approval and grants no authority;
   nothing in it asks for one. The delegated
-  record is designed (plan `2026-10-23-delegated-approval`, decision
-  `2026-10-23-delegated-plan-approval`, accepted) and not built; "Delegated plan
-  approval records" below states it.
+  record is built (plan `2026-10-23-delegated-approval`, decision
+  `2026-10-23-delegated-plan-approval`, accepted); "Delegated plan
+  approval records" below states it and "As built" records what the code does.
 - A reviewer may always give findings without delegation. The verdict is the part
   that needs authority.
 - For plan approval, the delegate's verdict requires that review converged with no
@@ -223,7 +227,7 @@ Rules:
 - A rule is rendered into local, uncommitted harness configuration only.
 - A harness that provides `permissions` renders a `deny` for each owner-run command, so an
   agent cannot run it (except a command the owner has set to `ask` or `none`, which renders as `command-permissions.md`
-  says): `wb install`, `wb adopt`, `wb upgrade`, `wb add`, `wb attach`, `wb acknowledge`,
+  says): `wb install`, `wb adopt`, `wb upgrade`, `wb add`, `wb attach`, `wb rerender`, `wb acknowledge`,
   `wb recover`, `wb approve`, `wb pin`, `wb release-approvals` and `wb approve-plan`, in the `wb` spelling and
   the four interpreter spellings of `-m workbench` (`rules.SPELLINGS`). The read-only `wb preview` is not denied. The commands
   are listed in `installer-interface.md`. A module command may also declare owner-run arguments
@@ -437,10 +441,11 @@ prose above and this section differ in precision, this section is what the code 
 
 ### Delegated plan approval records
 
-*(Designed by plan `2026-10-23-delegated-approval` and the decision `2026-10-23-delegated-plan-approval`, which the
+*(Designed and built by plan `2026-10-23-delegated-approval` and the decision `2026-10-23-delegated-plan-approval`, which the
 owner accepted on 2026-10-23. The provider's `convergence` argument is built by its increment B, the process module's
 `delegable` argument by increment C, and the installer's command, the format-2 record and the reading rule by
-increment D, the skill guidance (`delegate-approval` in `code-work`) by increment E; the security pass is increment F.)*
+increment D, the skill guidance (`delegate-approval` in `code-work`) by increment E; the security pass, increment F, ran in two
+rounds and its findings are fixed.)*
 
 - **The command.** `wb delegate-approve-plan <plan>` takes one argument and no option, runs from anywhere inside the
   project, and finds the root, the ID and the plan path as `approve-plan` does, with the same path rules. It is not
@@ -584,7 +589,9 @@ in `module-contract.md`; the decision that the installer owns the gate is
 - **Limits.** The gate stops a mistaken agent and not a hostile one. A `Status:` line is informational and an agent
   can edit it; a shell command writes any file without passing a file-editing tool; a plan that no listed
   status marks as under way is not seen; and the hook runs only where the owner's local settings carry it.
-  `Bash` and commit-time gates are deferred (`2026-10-22-checkpoint-settings-and-caps`, "Deferred work").
+  The edit gate does not cover `Bash`: the command gate is a separate, built hook (`command-permissions.md`, "The command gate"),
+  and `2026-10-22-checkpoint-settings-and-caps`, "Deferred work", had listed a gate over shell commands or at commit time as
+  conditional on a security pass; the shell-command gate is the command gate above.
   Input of more than 65,536 bytes is refused only once the `active` command has reported a plan under way, so a
   `Write` of more than about 64 KiB is allowed when none is, and refused while one is. Input of more than 16 MiB is
   refused in every state, so the read is always bounded; a `Write` of that size is refused with the hook installed.
@@ -822,9 +829,9 @@ instead of retrying. No dollar ceiling is required.
 - **Image handling.** Which tools open image files, and how location metadata is
   stripped from tracked copies, are decided in the `researcher-fetch-tool` candidate.
 - **Formats still proposals.** The formats in "Concrete formats" are fixed by the code at `format: 1`.
-  The format of plan approvals is built ("Plan approval records"); the formats of
-  delegated-approval records remain a proposal (the baselines format is built) until the way of working that
-  uses them is built. The `caps` setting and the edit gate are built by plan `2026-10-22-checkpoint-settings-and-caps` ("Checkpoint and cap
+  The formats of plan approvals and of delegated plan approvals (format 2) are built ("Plan approval records", "Delegated plan
+  approval records"); the formats of any other delegated-approval record remain a proposal (the baselines format is built) until
+  the way of working that uses them is built. The `caps` setting and the edit gate are built by plan `2026-10-22-checkpoint-settings-and-caps` ("Checkpoint and cap
   settings, and the edit gate"); the checkpoint names are in `code-work.md`.
 - **Added hard stops.** A module may add hard stops, and the function that combines stops accepts
   additions, but a module declaration has no field to declare one and no module supplies any. The owner

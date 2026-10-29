@@ -76,7 +76,7 @@ notes that the level applies. `delegate` still takes effect for `approve-plan` o
 and no `translated` line.
 
 A key is a process module's declared checkpoint name (`approve-plan`, `accept-decision` and the others), or the command in the `wb`
-spelling: `wb install`, `wb adopt`, `wb add`, `wb upgrade`, `wb attach`, `wb approve`, `wb pin`, `wb recover`,
+spelling: `wb install`, `wb adopt`, `wb add`, `wb upgrade`, `wb attach`, `wb rerender`, `wb approve`, `wb pin`, `wb recover`,
 `wb release-approvals`, and `wb run <command> <argument>` for each owner-run argument that an installed module declares. The key
 `approve-plan` is the checkpoint and the command; `wb acknowledge` is not a key, because the checkpoints
 `acknowledge-first-tier` and `acknowledge-second-tier` set it. The registry (`workbench/levels.py`) is built from what the
@@ -278,7 +278,7 @@ list the operations and the attempts with no outcome as unfinished (a killed pro
 
 It prints the `checkpoint` and `cap` lines it always printed, then one `level <key>: <level>` line for every key it knows: the
 declared checkpoints, then the installer's owner-run commands, then the agent-safe actions (`wb verify`, `wb preview install`,
-`wb preview adopt`, `wb preview upgrade`, `wb preview add`, `wb launch`, `wb check`, `wb plan-status`, `wb settings`), then `wb run
+`wb preview adopt`, `wb preview upgrade`, `wb preview add`, `wb preview rerender`, `wb launch`, `wb check`, `wb plan-status`, `wb settings`), then `wb run
 <command> <argument>` for each argument the installed modules declare (an owner-run argument first), with the defaults and the
 table applied. An agent-safe key and a declared argument that is not owner-run default to `none`; every other key defaults to `block`.
 The hook entry points, the dispatcher words and `delegate-approve-plan` are not keys. As built by Increments A and C of the plan, a
@@ -299,7 +299,7 @@ A state in which an owner has set every key to `none`, and so has no protections
 freedom and not a feature: there is no master switch, profile or command that sets it.
 
 **Coverage.** Every command and subcommand that `cli.py` routes has a key, the agent-safe ones included (`verify`, `preview install`,
-`preview adopt`, `launch`, `check`, `run`, `plan-status`, `settings`), so the owner can tighten a command that is always allowed
+`preview adopt`, `preview upgrade`, `preview add`, `preview rerender`, `launch`, `check`, `plan-status`, `settings`), so the owner can tighten a command that is always allowed
 today. The hook entry points `gate`, `agent-gate` and `gate-command` are the exception: the harness runs them, they are not keys and
 they stay always allowed (the owner's decision). A test fails when `cli.py` routes any other command or subcommand with no key, as the test
 in `rules.py` does for the owner-run and agent-safe split. A subcommand has a key when it is a different action (`wb preview
@@ -496,7 +496,8 @@ and not a problem, because the stale state is already safe).
 
 What an agent can do, and what stops it, when the owner has no terminal (a phone or the web). It covers drafting, reviewing and
 approving a roadmap, spec, design, plan or decision. The "Key and level" column gives the shipped default, and says where the owner's
-table (the personal settings read now) differs: today it differs for `approve-plan` only, which is `ask`. An `ask` prompt reaches the
+table (the personal settings as read on 2026-10-27, see the provenance below) differed: it differed for `approve-plan` only, which was
+`ask`. Every owner-run key has the shipped default `block`. An `ask` prompt reaches the
 owner's remote channel (see "Assumptions and constraints"), so a key at `ask` does not need a terminal; a command at `block` does, and
 so does an edit of a file the owner makes themselves.
 
@@ -511,7 +512,7 @@ owner-run was run to build the table. A reading from the code or a spec is state
 
 | Action | What does it | Key and level | Needs a terminal | What can block |
 |---|---|---|---|---|
-| Draft a roadmap, spec, decision or plan | the `draft-roadmap`, `draft-spec`, `draft-decision` and `draft-plan` skills. As rendered in this clone they run no command, except `wb run code-work check` for a plan; the packaged `draft-decision` also runs `wb settings` (`none`) | no key for the edits; `wb run code-work check` and `wb settings` `none` | no | the edit gate (`wb gate`) refuses an edit while a plan under way is not approved (`harness-modules.md`, "The edit gate hook"); a decision is written `Proposed` and stops |
+| Draft a roadmap, spec, decision or plan | the `draft-roadmap`, `draft-spec`, `draft-decision` and `draft-plan` skills. As rendered in this clone on 2026-10-27 they ran no command, except `wb run code-work check` for a plan, while the packaged `draft-decision` also ran `wb settings` (`none`); the clone has since been re-rendered and its `draft-decision` runs it too | no key for the edits; `wb run code-work check` and `wb settings` `none` | no | the edit gate (`wb gate`) refuses an edit while a plan under way is not approved (`harness-modules.md`, "The edit gate hook"); a decision is written `Proposed` and stops |
 | Change a spec's or roadmap's direction | the checkpoint `change-direction` | `change-direction`, `block` only | no | an agent checkpoint, not a terminal gate: the agent stops and asks the owner in the conversation, and no installer command is behind it (`code-work.md`, "Checkpoints") |
 | Brainstorm a design | the `brainstorm` skill: reads, asks, writes a spec | no key | no | nothing; the owner's approval of the design is their statement in the conversation |
 | Read the plans | `wb run code-work plans`, `report`, `active`, `region`, `delegable`, `shared`; `wb plan-status` | `none` | no | nothing |
@@ -525,16 +526,16 @@ owner-run was run to build the table. A reading from the code or a spec is state
 | Change a recorded decision | `wb run review-engine amend <document> <finding> …`, and at `ask` `--digest` after `preview amend` | `block` (shipped), `ask` or `none` | **yes at `block`**; no at `ask` or `none` | a wrong `decide` cannot be corrected by the agent unless the owner relaxes the level |
 | Delete closed reviews | `wb run review-engine prune [--apply]`; at `ask` `prune --apply --digest` after `preview prune` | `block` (shipped), `ask` or `none` | **yes at `block`**; no at `ask` or `none` | nothing else is stopped by it; old reviews stay *(inference)*; the plan recommends keeping it at `block`; the plain list needs a digest too at `ask`, so an agent uses `preview prune` |
 | Approve a plan, at a terminal | `wb approve-plan <plan>` | `approve-plan`, any level | **yes** | the owner types the first 12 characters of the region hash |
-| Approve a plan, at `ask` | `wb approve-plan <plan> --digest <32 hex>` after `wb plan-status <plan> --digest` | `approve-plan`, `ask` (the owner's table now) | no | the owner's confirmation on the harness prompt; the digest binds the plan, not what the owner read; a stale rendering makes the key read `block` |
+| Approve a plan, at `ask` | `wb approve-plan <plan> --digest <32 hex>` after `wb plan-status <plan> --digest` | `approve-plan`, `ask` (the owner's table on 2026-10-27) | no | the owner's confirmation on the harness prompt; the digest binds the plan, not what the owner read; a stale rendering makes the key read `block` |
 | Approve a plan, at `delegated` | `wb delegate-approve-plan <plan>` | `approve-plan`, `delegated` | no | a converged, sealed review of the exact bytes (`trust-and-approval.md`), and the preconditions of the `delegate-approval` skill (a `peer-review` provider, a Risks section, no `Hard stop:` line); it counts only while the table reads `delegated`, so not while it reads `ask` *(the last clause is an inference from `trust-and-approval.md`)* |
 | Approve a plan, at `none` | `wb approve-plan <plan>`, no terminal | `approve-plan`, `none` | no | nothing; the run is logged |
 | Approve a roadmap, a spec or a design | none exists | no key | not applicable | a roadmap and a spec have no status gate (`AGENTS.md`); a design is approved by the owner's word in the conversation. Nothing records it |
-| Accept a decision | the owner edits its `Status:` line and the index | `accept-decision`, `block`; offers `block` and `none` | **yes, or an editor** *(inference)* | the rule that an agent may not accept one at `block` is guidance in `AGENTS.md` and the skill; the installer enforces nothing here. No command with an `ask` level exists for it. The owner's other route is their own edit of the personal settings to `none` (a terminal or an editor), which lets the packaged `draft-decision` accept a record; the copy rendered in this clone says never to accept one and has no such route, so the clone's skill is out of date with the package |
+| Accept a decision | the owner edits its `Status:` line and the index | `accept-decision`, `block`; offers `block` and `none` | **yes, or an editor** *(inference)* | the rule that an agent may not accept one at `block` is guidance in `AGENTS.md` and the skill; the installer enforces nothing here. No command with an `ask` level exists for it. The owner's other route is their own edit of the personal settings to `none` (a terminal or an editor), which lets the packaged `draft-decision` accept a record; on 2026-10-27 the copy rendered in this clone said never to accept one and had no such route; the clone has since been re-rendered and its skill matches the package |
 
 Three things this map shows:
 
 - **Not blocked without a terminal:** drafting, starting and reading a review, and recording decisions, at their shipped levels; and
-  approving a plan at `ask` (the owner's table now, with the rendering current as `wb check` reports today), or at `delegated` or
+  approving a plan at `ask` (the owner's table as read on 2026-10-27, with the rendering then current), or at `delegated` or
   `none` once the owner sets and renders them.
 - **Blocked without a terminal:** the five owner-run arguments of the review engine at their shipped level `block`, and accepting a
   decision. These five are the subject of the plan `2026-10-27-levels-for-the-review-workflow`, which built `ask` and `none` for

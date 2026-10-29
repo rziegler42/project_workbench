@@ -1,10 +1,10 @@
 # Harness modules
 
-Status: Current. Approved by the owner on 2026-10-19; implementation has not started. Paths, field names and
-formats are proposals. Every statement about what a particular harness reads is taken
-from its official documentation as read on 2026-10-19 and must be re-checked against
-the installed version before implementation; the places where it is unverified are
-marked.
+Status: Current. Approved by the owner on 2026-10-19. The Claude harness is built (plan `2026-10-20-claude-harness` and the
+plans after it that the "As built" sections name); the opencode harness is not, so its paths, field names and formats remain
+proposals. Every statement about what a particular harness reads was taken from its official documentation as read on
+2026-10-19, and the Claude statements were then tested in the trials the evidence sections record. All must be re-checked against
+the installed version, and the places where something is unverified are marked.
 
 Terms are defined in `terms.md`. A harness module is a module (`module-contract.md`)
 of type `harness`. Where its files go and what is never committed is defined in
@@ -134,7 +134,8 @@ maps to its own rule syntax; the exact grammar is written with the schema.
 - A harness that provides no `permissions` yields a warning at attach that hard stops
   and the guarded store are enforced only by instruction.
 - The owner's own `allow` rules remain in the owner's configuration. The workbench
-  never writes them.
+  never renders one. Attach never reads or writes them, and `wb rerender` carries those it finds in the live permissions file
+  into the new one, each shown in the preview (`harness-rerender.md`).
 
 ## Hooks
 
@@ -144,8 +145,9 @@ plain terms when the module is approved. A harness that declares `hooks: none` s
 does not receive them.
 
 The hooks the installer itself renders are the edit gate, for a harness whose layout carries a `hooks` key
-("The edit gate hook", built), and the agent gate, one per confined agent, for a harness whose layout describes a per-agent
-hook ("The agent gate", built). Neither is a module's file or listed
+("The edit gate hook", built), the agent gate, one per confined agent, for a harness whose layout describes a per-agent
+hook ("The agent gate", built), and the command gate, a `Bash` hook, for a harness whose layout carries `hooks.command_gate`
+(`command-permissions.md`, "The command gate", built). None is a module's file or listed
 under `ships`.
 
 ## Root files and instructions
@@ -280,7 +282,7 @@ carry out each request; the permission results are read from the run's `permissi
   settings precedence, and any agent tool other than `Read`.
 
 The decisions `2026-10-24-project-guarantees-a-floor`, `2026-10-24-declared-agent-confinement` and
-`2026-10-24-installer-reads-global-settings-on-request` (all `Proposed`) rest on these results.
+`2026-10-24-installer-reads-global-settings-on-request` (all accepted by the owner on 2026-10-24) rest on these results.
 
 ### Hooks in an agent's frontmatter (Claude Code 2.1.310, 2026-10-24)
 
@@ -383,7 +385,8 @@ review or in the security pass:
 
 - **An existing `.claude/settings.local.json` is a conflict.** Attach creates the file
   exclusively. If another file is there, attach refuses it and prints the entries to add by
-  hand. There is no merge, and the owner's `allow` rules are never read or written.
+  hand. There is no merge, and attach never reads or writes the owner's `allow` rules (`wb rerender` is the command that carries
+  them, as above).
 - **Attach is idempotent.** A path that already holds exactly the planned bytes is kept; a
   different one is a conflict. The local manifest, `.workbench/local/harness.json`, is written
   last, so a part-written attach has none and can be rerun. It is scratch and grants no
@@ -394,7 +397,8 @@ review or in the security pass:
   attach fails, the install is complete, `install` prints `failed:` and names `wb attach`, and
   exits 3.
 - **The deny list** covers the guarded store and every owner-run command (`install`, `adopt`, `upgrade`,
-  `add`, `attach`, `acknowledge`, `recover`, `approve`, `pin`, `release-approvals`) in five
+  `add`, `attach`, `rerender`, `acknowledge`, `recover`, `approve`, `pin`, `release-approvals`, `approve-plan`; `rules.OWNER_RUN`
+  and the commands the owner has set to a level that lets an agent run them are in `command-permissions.md`) in five
   spellings: `wb` and the four interpreter forms of `-m workbench` (`rules.SPELLINGS`). `wb preview` is not denied. A Bash deny is not a security
   boundary; see "Verified rendering rules".
 - **The rendered rules deny edits to `.claude/settings.local.json` and `.git/info/exclude` only

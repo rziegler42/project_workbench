@@ -1,7 +1,8 @@
 # Terms
 
-Status: Current. Approved by the owner on 2026-10-19; implementation has not started. Every definition
-describes intended behavior of a system that does not exist yet.
+Status: Current. Approved by the owner on 2026-10-19. The installer, the verifier, the first-party modules and the Claude harness
+are built, and the definitions describe their behavior. Where a specification marks something as not built (a second harness, for
+example), the term describes the intended behavior.
 
 ## Purpose and scope
 
