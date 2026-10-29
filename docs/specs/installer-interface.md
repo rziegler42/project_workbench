@@ -649,6 +649,26 @@ nothing. The checks, their order, the facts it reads from the process module and
 record and the exit codes are in `trust-and-approval.md`, "Delegated plan approval records". It reads no plan section
 itself: the process module's declared, pinned commands do.
 
+### What the approval commands print *(built 2026-10-29 by plan `2026-10-29-approvals-name-the-approver`, commits `3aae9c5` and `ab1ed81`)*
+
+`approve`, `pin`, `approve-plan` and `delegate-approve-plan` read the approver's git identity first, before anything is shown,
+downloaded or asked (`trust-and-approval.md`, "The approver and how it was authorized"), and refuse with a `refused:` line that says
+how to set it (`git config --global user.name`, `user.email`) when it is missing or invalid; nothing is written or logged. The
+success line then ends with who approved and, for a level other than a terminal, how. Written `X` for `Name <email>`:
+
+- `approve`: `approved <kind> <subject> by X`, with ` (no gate)` at the level `none` of `wb approve`. A repeat keeps the first record
+  and says `already approved <kind> <subject> (by <approver on file> on <time>); the earlier record is kept`.
+- `pin`: `pinned <name> -> <path> (sha256 <hash>) by X`, with ` (no gate)` at the level `none` of `wb pin`.
+- `approve-plan`: `approved: <plan> (region <hash>) by X`, ` by X (ask)` at the level `ask` and ` by X (no gate)` at `none`. A repeat
+  says `already approved: ...` and names the approver and the way on file, which may be another person's and another level; an
+  entry written before 2026-10-29 has no way recorded and is shown by its approver text alone.
+- `delegate-approve-plan`: `approved: <plan> by X delegated to <provider> (<model>), <n> of <bound> rounds`; the parenthesis is left
+  out when the model is not known. A repeat says `already approved: <plan> by X delegated to <provider> (<model>)` from the entry on
+  file.
+
+The text is fixed by the tests (`tests/test_planapprovals.py`, `test_delegation.py`, `test_approve.py`, `test_pins.py`,
+`test_approve_levels.py`, `test_approve_pin_levels.py`). Not run here: the owner's own `approve-plan` with the real identity.
+
 ### `settings` and `gate` (built by plan `2026-10-22-checkpoint-settings-and-caps`)
 
 `wb settings` takes no argument and no option and runs from anywhere inside a project, with the root and the ID

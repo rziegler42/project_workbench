@@ -288,7 +288,11 @@ path or field.
 : The person who may approve a plan, accept a decision, acknowledge a change or set a level, defined by that capability and not by
   having written the document. A specification that says "the owner" at a checkpoint means the approver. A record of what happened
   names the person who acted by their git identity, `Name <email>`, in the form the accepted record
-  `2026-10-29-approvals-name-the-approver-by-git-identity` sets (not built yet). That identity is an attribution and not authority.
+  `2026-10-29-approvals-name-the-approver-by-git-identity` sets, and, since 2026-10-29, the installer does this for every approval
+  a person makes (plan approvals, module and package approvals, pins made with `pin`), read from the account's global git
+  configuration (the shipped records and the pins an install, upgrade, add or acknowledge makes keep a role as their maker), together with
+  `via`, the level the run was authorized under: `terminal`, `ask`, `none` or `delegated` (`trust-and-approval.md`, "The approver
+  and how it was authorized"). That identity is an attribution and not authority.
 
 **owner-run command**
 : A command whose default level is `block`: by default only the owner runs it, and the harness denies it to an agent.

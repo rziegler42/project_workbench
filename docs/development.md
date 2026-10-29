@@ -255,8 +255,10 @@ print them. The typed text guards against a mistaken approval, and it is not aut
    all its modules approved. If a write fails part way, the earlier records stay (they are
    valid) and the error lists the records written by that run.
 
-The recorded approver is the account name from the operating system's user database, not
-from an environment variable; it is text and grants nothing. Exit codes: 0 recorded, 1
+The recorded approver is your git identity, `Name <email>`, read from your global git
+configuration (and never from the project or an environment variable), with the way the run
+was authorized; it is text and grants nothing. Without a global `user.name` and
+`user.email` the command refuses and says how to set them. Exit codes: 0 recorded, 1
 refused or cancelled, 2 usage error.
 
 **Approving from a source.** `--source` takes an `https://`, `ssh://` or `file://` URL or a

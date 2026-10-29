@@ -371,11 +371,14 @@ prose above and this section differ in precision, this section is what the code 
 - **File and key.** A record is `packages/<key>/approval.json`. The key is the SHA-256, in
   lowercase hex, of `"<kind>\n<declaration hash>\n<tree hash>\n"`, so a record is found only by
   presenting the hashes it binds to.
-- **Fields.** Strict JSON with exactly these fields and no others: `format` (1), `kind`
+- **Fields.** Strict JSON with exactly these fields and no others: `format` (1 or 2), `kind`
   (`module` or `package`), `subject`, `declaration_hash`, `tree_hash`, `approver` (printable text,
-  at most 64 characters), `time` (UTC, `YYYY-MM-DDTHH:MM:SSZ`) and `workbench_version`. A package
+  at most 64 characters at format 1 and 256 at format 2), `time` (UTC, `YYYY-MM-DDTHH:MM:SSZ`) and
+  `workbench_version`. A format 2 record also has `via` (`terminal` or `none`). A package
   record also has `modules` (a list of `{name, declaration_hash, tree_hash}`, unique and sorted by
-  name) and `commit` (`null` or a lowercase hex commit id).
+  name) and `commit` (`null` or a lowercase hex commit id). A record is written at format 2 exactly when it
+  has a `via`, which is an approval made by a person; a record at format 1 is an earlier one or a shipped one
+  (see "The approver and how it was authorized").
 - **What each kind binds.** A `module` record has the subject `<package>/<module>` and binds that
   module's declaration hash and tree hash. A `package` record has the subject `<package>` and binds
   the package declaration's hash and the tree hash of the whole package directory, and lists the
@@ -389,12 +392,67 @@ prose above and this section differ in precision, this section is what the code 
   record is never replaced. The `commit` is provenance and not part of what a record binds:
   identical content reached by another commit, or after a local approval, is the same approval and
   the first record, with its commit or absence of one, is kept.
-- **Approver.** The account name from the operating system's user database, not from an
-  environment variable. It is text and grants nothing.
+- **Approver.** See "The approver and how it was authorized", next. It is text and grants nothing.
+
+### The approver and how it was authorized
+
+*(Built 2026-10-29 by plan `2026-10-29-approvals-name-the-approver`, commits `6f2e957` to `ab1ed81`, workbench 0.1.0; the
+decision is `2026-10-29-approvals-name-the-approver-by-git-identity` with its clarification note of the same date. This replaces
+the earlier rule that the approver was the operating-system account name, with `owner` as the fallback.)*
+
+- **What is recorded.** An approval made by a person (`approve`, `pin`, `approve-plan`, `delegate-approve-plan`) records the
+  approver as that person's git identity in git's author form, `Name <email>`, and `via`, the level the run was authorized
+  under: `terminal` (typed at a terminal), `ask` (confirmed at a prompt, plan approval only), `none` (run with no gate) or
+  `delegated` (a review stood in, plan approval only). The identity is an unverified attribution label: git does not check that
+  a person owns an email, and two people could use one. It is provenance, no check reads it, and it grants nothing; who may
+  approve is not decided here.
+- **Where it is read from, exactly.** Two runs, `git config --global --get user.name` and `--get user.email`, each an argument
+  list with no shell, at the moment of approval and before anything is shown or asked. The working directory is the account's
+  home directory from the account database, never the project. The environment is built from nothing: `HOME` set to that
+  directory, a fixed `PATH`, `GIT_CONFIG_NOSYSTEM=1` and `LC_ALL=C`, and no `GIT_*` variable. `git` is the first of
+  `/usr/bin/git`, `/usr/local/bin/git` and `/opt/homebrew/bin/git` that is an executable file, never what the caller's `PATH`
+  names first. `--global` reads only the account's own global files and follows no `include` directive; a symbolic link at
+  `~/.gitconfig` or `~/.config/git/config` is refused; the project's own `.git/config` is never read. Output is read in pieces and
+  stopped at 4,096 bytes (1,024 of messages) or 10 seconds. A missing, empty or ungrammatical value makes the command refuse and
+  say how to set it. There is no fallback to `owner` or to an account name.
+- **The grammar.** The name is 1 to 100 characters after NFC normalization, with no control, format, surrogate, private-use or
+  unassigned character, no line or paragraph separator and neither `<` nor `>`; it holds a letter, number, punctuation mark or
+  symbol that shows (not a Hangul filler, the Braille blank, a Khmer inherent vowel or the grapheme joiner) and neither begins
+  nor ends with a blank. The email is 3 to 100 printable ASCII characters from `!` to `~` other than `<` and `>`, with exactly one
+  `@` and something on each side. The stored text `Name <email>` is at most 210 characters. The comparison key of an identity is
+  the lowercased email, never the name; the reader provides it, and nothing in the installer compares identities by it yet. Lookalike letters and brackets and runs of combining marks are not restricted; the security review
+  of 2026-10-29 listed them, and the email carries the identity.
+- **Which record holds what.** Module and package approvals: format 2 holds the identity and a `via` of `terminal` or `none` (up to
+  256 characters); format 1 is every earlier record and every shipped one, with an approver of up to 64 characters and no `via`.
+  The release writes format 1 with the role `workbench-release`, so a second release changes nothing, and `terminal` would be
+  false for it; no shipped record changed its format or its approver for this (two were released again on 2026-10-29, for the
+  `code-work` module and the `workbench` package, because a package test was edited, and carry the new tree hash). Plan approvals: format 3 ("Plan approval records"). Pins: format 2, with `via`
+  (`terminal` or `none`) on a pin made by `pin`; the pins an install, upgrade, add or acknowledge makes keep their role text
+  (`workbench <command>`) and have no `via`. An entry written before this change is read as it is and stays as history.
+- **Shown as a sentence.** The commands print the approval as one: `approved ... by Name <email>`, with `(ask)` or `(no gate)` for
+  those levels and `delegated to <provider> (<model>)` for a delegated plan approval (`installer-interface.md`).
+- **What the installer cannot tell.** Which AI ran a command at `ask` or `none`: it records the level and not who ran it. A named
+  AI appears only on a delegated approval, where the entry's `delegate` names the provider, bridge and model.
+- **Also refused.** Git not found at any of the three paths; an unusable home directory; a value that is not valid UTF-8; a git
+  that exits non-zero with a message (reported as "could not read", with git's message escaped and cut to 40 characters, and not as
+  a missing value); a global file git cannot read. A printed identity is shown as ASCII, so a non-ASCII name appears escaped.
+- **Limits, found by the security review of 2026-10-29 and left as they are.** The symbolic-link refusal is not a boundary against
+  anyone who can write in the home: it does not see a link at `~/.config` or at the home itself and cannot close a swap between the
+  check and git's read. The second and third git paths are not checked for owner or permissions (`/opt/homebrew/bin` is writable by
+  the account), and are reached only when the earlier ones are absent. A stored identity is checked against the grammar when it is
+  read, and the grammar uses the running Python's Unicode data, so a name written under newer data could be refused by an older
+  Python, which for a pins file refuses the whole file. The name grammar lets through a name that prints as a second identity
+  (lookalike letters or brackets) and runs of combining marks. An actor with the account's own rights can always set the identity.
+- **Evidence.** Built and run at workbench 0.1.0, Python 3.15.0, Apple Git 2.54.0 on macOS, commits `6f2e957` to `ab1ed81`:
+  `tests/run_all.py` ran 6,022 tests in 12 roots, OK, on the tree of the last increment before its final small test edits, and the
+  four test files edited after it were run again and pass. The reader's tests ran the real git for the project configuration, the
+  `GIT_*` variables, the `include` directive, the symbolic link and the unreadable file. A security review of the reader ran on a
+  copy against real git and found no way to choose the identity from outside the account's global files; its other findings are
+  above. Not run: the owner's own `approve-plan` with the real identity; the macOS `/usr/bin/git` shim without the developer tools.
 
 ### Plan approval records
 
-*(Built by plan `2026-10-22-plan-approval-records`, at `format: 1`.)*
+*(Built by plan `2026-10-22-plan-approval-records`, at `format: 1`; since 2026-10-29 the file is written at `format: 3`, below.)*
 
 - **The region command.** A `process` module declares `approval: {"command", "argument"}` (`module-contract.md`).
   The installer resolves exactly one process module that declares it, from the committed manifest, and runs the
@@ -408,8 +466,11 @@ prose above and this section differ in precision, this section is what the code 
   module's helper reads the plan (bounded, no link followed) and decides what is in the region; the output is
   data and is validated, never followed.
 - **The record.** `projects/<id>/plan-approvals` in the guarded store, strict JSON,
-  `{"format": 1, "approvals": [{"plan", "region_hash", "declaration_hash", "helper_sha256", "approver", "time",
-  "workbench_version"}, ...]}` with at most 2,000 entries. `plan` is the path relative to the project root, and
+  `{"format": 3, "approvals": [{"plan", "region_hash", "declaration_hash", "helper_sha256", "approver", "via", "time",
+  "workbench_version"}, ...]}` with at most 2,000 entries (formats 1 and 2 are read; see below and "The approver and how it
+  was authorized"). At format 3 `approver` is `Name <email>` (up to 256 characters) and `via` is `terminal`, `ask`, `none` or
+  `delegated`; an entry written before format 3 has no `via` and keeps its approver text (up to 64 characters), and is rewritten
+  into a format 3 file as it is, never given a `via`. `add` refuses a new entry without a `via`. `plan` is the path relative to the project root, and
   passes the path validator. `declaration_hash` is the process module's declaration hash and `helper_sha256` is the
   SHA-256 of the helper as pinned. The file is replaced whole and atomically. An approval that equals an entry in
   all four of plan, region hash, declaration hash and helper hash is not added again (the first record is kept);
@@ -449,9 +510,11 @@ rounds and its findings are fixed.)*
 
 - **The command.** `wb delegate-approve-plan <plan>` takes one argument and no option, runs from anywhere inside the
   project, and finds the root, the ID and the plan path as `approve-plan` does, with the same path rules. It is not
-  owner-run: the agent may run it, and no harness denies it. It prints one line, `approved: <plan> (delegated, <n> of
-  <bound> rounds)` or `already approved: <plan>`, or a `refused:` line on standard error and nothing on standard
-  output. Exit codes: 0 recorded or already recorded, 1 refused with nothing written, 2 usage error.
+  owner-run: the agent may run it, and no harness denies it. It prints one line, `approved: <plan> by <Name <email>> delegated to <provider>
+  (<model>), <n> of <bound> rounds` or `already approved: <plan> by <Name <email>> delegated to <provider> (<model>)` (before
+  2026-10-29: `approved: <plan> (delegated, <n> of <bound> rounds)` and `already approved: <plan>`), or a `refused:` line on
+  standard error and nothing on standard output. It reads the git identity after it has checked the setting and before it runs
+  any helper. Exit codes: 0 recorded or already recorded, 1 refused with nothing written, 2 usage error.
 - **What it checks, in this order, and stops at the first failure.**
   1. The effective value of the checkpoint `approve-plan` is `delegate` ("Checkpoint and cap settings", below). The
      value is read from the owner's personal settings in the guarded store and from nowhere else.
@@ -492,12 +555,14 @@ rounds and its findings are fixed.)*
   before it writes the record. If it asks later the command refuses, saying that the file differs from the reviewed
   one; the agent runs another round or the owner approves. The status line, the review record and the result can change
   after the approval without invalidating it, because the approval binds the region.
-- **The record.** The `plan-approvals` file moves to `format: 2`. The reader accepts formats 1 and 2 and the writer
-  writes 2; an older workbench refuses a format-2 file, which fails closed. An entry of either format has the fields of
+- **The record.** The `plan-approvals` file moves to `format: 2` (since 2026-10-29 it is written at `format: 3`; the reader accepts
+  formats 1, 2 and 3). The reader accepted formats 1 and 2 and the writer wrote 2; an older workbench refuses a newer file, which
+  fails closed. An entry of either format has the fields of
   "Plan approval records". A format-2 entry may also have `delegate`, an object with exactly: `provider` (the module
   name), `provider_declaration_hash`, `provider_helper_sha256`, `bridge`, `model` (text or null), `rounds_used`,
-  `bound`, `review` and `document_sha256`. An entry with `delegate` is a delegated approval; `approver` is still the
-  account's name from the operating system and grants nothing. The four values that decide `approved` are unchanged, so
+  `bound`, `review` and `document_sha256`. An entry with `delegate` is a delegated approval; at format 3 its `via` is `delegated`
+  exactly when `delegate` is present (an entry written before format 3 has a `delegate` and no `via`), its `approver` is the
+  identity of the person whose setting allowed it, and the entry grants nothing more than any other. The four values that decide `approved` are unchanged, so
   `plan-status` and the edit gate read a delegated approval as they read an owner's, and a change of the region, the
   process declaration or the helper makes it `changed since approval` in the same way.
 - **While the setting stands.** An entry with `delegate` counts only while the effective value of `approve-plan` is
@@ -643,7 +708,8 @@ declaration hash and whole-package tree hash. Only a first-party package may pro
 capability name. The shipped records are in `workbench/shipped_approvals/` in the same layout as the
 store, are read in place and never copied into the store, and are made at release time by
 `release-approvals`, which verifies every package under `packages/` as first-party, writes nothing if
-any module fails, and uses a fixed approver and time so a second run changes nothing. Records of
+any module fails, and uses a fixed approver (the role `workbench-release`, at format 1, with no `via`) and time so a second run
+changes nothing. Records of
 earlier releases are left in place and reported, because nothing deletes them. A first-party
 package changed since its release is third-party until it is released again, and its modules are
 checked against the store. The shipped records count as approval because the distribution is the
@@ -692,9 +758,11 @@ A package is brought into `cache/<id>/` as data only: the files under `package/`
 ### Pinned helpers, the launcher and `wb`
 
 - **Pins.** `projects/<id>/pins` is strict JSON,
-  `{"format": 1, "pins": {"<name>": {"path", "pinned_by", "sha256", "time"}}}`, and an entry may also hold
-  `kit` (the kit API number) and `declaration` (the hash of the `module.json` an installer-made pin was
-  confirmed with; absent from a pin the owner typed). The project id is 64
+  `{"format": 2, "pins": {"<name>": {"path", "pinned_by", "sha256", "time"}}}` (format 1 is read), and an entry may also hold
+  `kit` (the kit API number), `declaration` (the hash of the `module.json` an installer-made pin was
+  confirmed with; absent from a pin the owner typed) and `via` (`terminal` or `none`; only in a format 2 file, and only on a pin
+  made by `pin`, whose `pinned_by` is then `Name <email>`, up to 256 characters; a pin without `via` has role text of up to 64
+  characters, such as `workbench install`). The project id is 64
   lowercase hex digits. A helper name is letters, digits and `._+-`, at most 64 characters, starting
   with a letter or digit. The path is relative to the project root and passes the path validator, so
   clones at different locations share a pin. Reading fails closed.
@@ -828,8 +896,9 @@ instead of retrying. No dollar ceiling is required.
   `verify-opencode`; if it has none, the owner uses a separate terminal.
 - **Image handling.** Which tools open image files, and how location metadata is
   stripped from tracked copies, are decided in the `researcher-fetch-tool` candidate.
-- **Formats still proposals.** The formats in "Concrete formats" are fixed by the code at `format: 1`.
-  The formats of plan approvals and of delegated plan approvals (format 2) are built ("Plan approval records", "Delegated plan
+- **Formats still proposals.** The formats in "Concrete formats" are fixed by the code, most at `format: 1`; the approval records
+  are at 1 and 2, the pins at 2 and the plan approvals at 3 ("The approver and how it was authorized").
+  The formats of plan approvals and of delegated plan approvals (format 2, then 3) are built ("Plan approval records", "Delegated plan
   approval records"); the formats of any other delegated-approval record remain a proposal (the baselines format is built) until
   the way of working that uses them is built. The `caps` setting and the edit gate are built by plan `2026-10-22-checkpoint-settings-and-caps` ("Checkpoint and cap
   settings, and the edit gate"); the checkpoint names are in `code-work.md`.

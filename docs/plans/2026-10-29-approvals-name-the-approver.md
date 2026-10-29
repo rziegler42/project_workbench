@@ -184,7 +184,9 @@ runs with no refusal; `wb check` reports no problems.
 
 **Outcome:** the specs say what is built.
 **Dependencies:** Increment C.
-**Affected areas:** `docs/specs/trust-and-approval.md`, `docs/specs/terms.md`, `docs/specs/installer-interface.md`.
+**Affected areas:** `docs/specs/trust-and-approval.md`, `docs/specs/terms.md`, `docs/specs/installer-interface.md`, and one
+sentence of `docs/development.md` (the owner added it on 2026-10-29, on the reviewer's finding that it still says the approver is the
+account name).
 **Steps:**
 1. In `trust-and-approval.md`, replace the paragraph "Approver" (the operating-system account name) with the identity: the exact
    reading, the grammar, the comparison key, the limit, `via`, and that it is an attribution label and grants nothing. Update the
@@ -192,10 +194,14 @@ runs with no refusal; `wb check` reports no problems.
    the earlier formats are read as history and that the shipped records keep the role `workbench-release`.
 2. In `terms.md`, say in "approver" that it is recorded as `Name <email>` and how the way of authorization is recorded.
 3. In `installer-interface.md`, show the sentence that `approve`, `pin`, `approve-plan` and `delegate-approve-plan` print.
-4. Date the changes and state what was run: the commit, the tests and what was not run (a trial with no identity set on the owner's
+4. In `docs/development.md`, replace the sentence "The recorded approver is the account name from the operating system's user
+   database, not from an environment variable; it is text and grants nothing" with the identity, read as the spec now says, and
+   that it grants nothing. Change nothing else in that file.
+5. Date the changes and state what was run: the commit, the tests and what was not run (a trial with no identity set on the owner's
    own machine, which is the owner's).
 **Verification:** a search of the specs for the operating-system account wording and for "falls back" to `owner` comes back empty
-in these three files; `wb check` and `wb run code-work check` report no problems; only these three files changed.
+in these three files, and the account-name sentence is gone from `docs/development.md`; `wb check` and `wb run code-work check`
+report no problems; only these four files and the plan changed.
 **Evidence:** the one local commit, with the trailer `Plan: 2026-10-29-approvals-name-the-approver#D`.
 
 ## Verification for the plan as a whole
@@ -250,7 +256,7 @@ applied; the third round's finding was applied after the last round, so no round
 ## Result
 
 **Increment A is done and committed (`6f2e957`, `67e4d1a`, `d3b0539`); Increment B is done and committed (`3aae9c5`); Increment C is
-done and awaits the owner's word to commit; D is not started.**
+done and committed (`ab1ed81`); Increment D is done and awaits the owner's word to commit.**
 
 ### Increment A
 
@@ -368,3 +374,28 @@ done and awaits the owner's word to commit; D is not started.**
 - **For Increment D to cover.** `trust-and-approval.md` lines 392, 397, 500, 695 and 831 and the approval record formats; and
   `docs/development.md` line 258 ("the account name from the operating system's user database").
 - **Not done.** The owner's own trial with the real identity.
+
+### Increment D
+
+- **Done, in documents only.** `docs/specs/trust-and-approval.md`: a new section "The approver and how it was authorized" (the
+  exact git reading, the grammar with the owner's clarification note, which record holds what, the sentence form, what the installer
+  cannot tell, the further refusals, the limits the security review found, and the evidence with what was not run); the formats and
+  fields of the approval records, plan approvals, delegated plan approvals (including their printed line), the release paragraph, the
+  pins, and "Formats still proposals". `docs/specs/terms.md`: the word "approver". `docs/specs/installer-interface.md`: a new section
+  "What the approval commands print". `docs/development.md`: the one sentence, as the owner asked, after the plan was amended and
+  approved again; nothing else in that file changed.
+- **Verification as run.** `wb check` and `wb run code-work check` report no problems; only those four files and the plan changed. The
+  search for the old wording finds no description of the old behaviour. Two hits remain in `trust-and-approval.md`, both in the new
+  text that says the old rule is replaced and that there is no fallback to an account name, which the plan's literal search would
+  count; the search is otherwise empty in the three specs and `docs/development.md`.
+- **Review.** One read-only reviewer pass found one blocking item: "Delegated plan approval records" still printed the old
+  `(delegated, N of M rounds)` line, which contradicted the code and the interface spec. Applied, with five non-blocking points: "no
+  shipped record changed" now says two were released again for the package test; `terms.md` says approvals made by a person, not
+  every record; the comparison key is described as provided and not yet used; the evidence says the full run was on the Increment C
+  tree before its last small edits; the refusals, limits and ASCII escaping the code has are in the spec. Not applied: the same
+  sentence about comparing by the lowercased email in the header of `workbench/identity.py` (code, not in this increment).
+- **The plan as a whole.** `wb verify packages/workbench` runs with no refusal; the whole `run_all.py` ran 6,022 tests in 12 roots, OK
+  on the Increment C tree. Four increments and three follow-up commits for A. The owner's own trial of `wb approve-plan` with the real
+  identity, which the agent does not run, is not done.
+- **Left over, for the owner.** The `identity.py` header still says records compare by the lowercased email; nothing does yet. Stored
+  identities are checked strictly when read, which a different Python's Unicode data could break (a known limit).
