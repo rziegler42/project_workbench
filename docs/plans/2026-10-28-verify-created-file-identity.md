@@ -1,6 +1,6 @@
 # Verify that a created file is the one that was written
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-28
 Candidate: none — the Lows of the owner-requested security review of Increment C of `2026-10-28-close-rerender-lows`, not a roadmap candidate
 Specs: harness-refresh
@@ -152,5 +152,5 @@ Empty until a review is asked for.
 
 ### Plan as a whole
 
-Both increments are done (A `c91d26e`; B uncommitted until the owner says commit). Completion criteria 1 to 5 are met on this machine
+Both increments are done and committed (A `c91d26e`; B `f5dfeef`). Completion criteria 1 to 5 are met on this machine
 by the suite and the checks above. Deferred: the same identity check in `replace_file`, Linux, and the cosmetic `Partial` wording.
