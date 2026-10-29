@@ -221,4 +221,27 @@ applied; the third round's finding was applied after the last round, so no round
 
 ## Result
 
-Empty until work starts.
+**Increment A is done and awaits the owner's word to commit; B to D are not started.**
+
+### Increment A
+
+- **Done.** `workbench/identity.py` reads and checks the git identity as decisions 2 and 4 say: two argument-list runs of
+  `git config --global --get`, no shell, the account's home from the account database as the working directory, an environment of
+  exactly `HOME`, a fixed `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`), `GIT_CONFIG_NOSYSTEM=1` and `LC_ALL=C`; git is one of three fixed
+  files; a symbolic link at `~/.gitconfig` or `~/.config/git/config` is refused; the grammar, NFC, the comparison key (the lowercased
+  email) and a refusal that says how to set the value. `tests/test_identity.py` holds 31 tests. Nothing calls the module yet.
+- **Two choices of mine.** A name of nothing but blanks is refused (not in the grammar; it names nobody). Git is accepted when the
+  fixed path is a link, because Homebrew's is one; the plan's "regular, executable file" did not say.
+- **Verification as run.** The new tests failed with the module absent (import error) and pass with it (31 tests, OK). A mutation
+  that passed the caller's environment through made two tests fail, so the environment tests bite. The whole `run_all.py` ran 5,960
+  tests in 12 roots, OK; it ran with the first 28 tests of the file, and the 3 added after the review were run alone (31, OK).
+  `tests/test_boundary.py` passes (19 tests); `wb check` reports no problems. The test that git ignores an `include` ran against the
+  real git, Apple Git 2.54.0, and passed, so the decision's documented-behaviour claim was tested here.
+- **Review.** One read-only reviewer pass: no blocking finding. Applied: an exact environment set and `PATH` value in the
+  invocation test; tests of `account_home` with the account database patched, including its refusals; a test for the XDG symlink; a
+  header note that the output is bounded only after it is read and that only Unix is supported. Not applied: the 210-character check
+  cannot trigger (the maximum is 203), and is kept as a guard; the reviewer's concern that the macOS `/usr/bin/git` shim without the
+  developer tools might exit 1 and be reported as a missing value was not tested here.
+- **Not checked.** A symlinked parent such as `~/.config` is not refused, only the file. A person who keeps their dotfiles as links
+  will see the symbolic-link refusal; the owner's `~/.gitconfig` is a regular file.
+- **For the owner.** The checkpoint after A: whether to run a security review before B.
