@@ -99,4 +99,4 @@ List every record, including rejected and superseded ones.
 | [2026-10-27-rerender-is-terminal-only](2026-10-27-rerender-is-terminal-only.md) | `wb rerender` offers `block` only and always needs a terminal | Accepted by the owner on 2026-10-27 |
 | [2026-10-27-owner-run-arguments-take-a-level](2026-10-27-owner-run-arguments-take-a-level.md) | The owner-run arguments of a module's commands take a level, and the launcher enforces it | Accepted by the owner on 2026-10-27 |
 | [2026-10-28-gate-reads-module-arguments](2026-10-28-gate-reads-module-arguments.md) | The command gate reads the first argument of a module command as data | Accepted by the owner on 2026-10-28 |
-| [2026-10-28-every-key-offers-the-approve-plan-levels](2026-10-28-every-key-offers-the-approve-plan-levels.md) | Eight more keys offer the levels that approve-plan offers | Proposed |
+| [2026-10-28-every-key-offers-the-approve-plan-levels](2026-10-28-every-key-offers-the-approve-plan-levels.md) | Eight more keys offer the levels that approve-plan offers | Accepted by the owner on 2026-10-29 |

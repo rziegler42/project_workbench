@@ -1,6 +1,6 @@
 # Eight more keys offer the levels that approve-plan offers
 
-Status: Proposed
+Status: Accepted by the owner on 2026-10-29
 Date: 2026-10-28
 
 ## Context
