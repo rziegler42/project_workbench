@@ -1,6 +1,6 @@
 # The freecad module: authored skills
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-28
 Candidate: workbench-v1#cad-modules
 Specs: module-contract
@@ -277,6 +277,9 @@ Remaining disagreement: none.
 - **Verification as run:** the full suite, 5864 tests in 13 roots, OK, with no stale-approval skip; `wb run code-work check`
   (61 plans) and `wb check` found no problems; `git diff --check` printed nothing; `python3 -m workbench verify
   packages/workbench --select freecad --select claude` accepted the module.
-- **Roadmap:** criterion 6 is not met. I drafted `Proposed` text for the `cad-modules` entry in chat for the owner; the roadmap
-  was not edited. The plan stays `In Progress` until the owner revises the entry.
-- **Not done:** no independent review (only when the owner asks); the plan is not `Completed`.
+- **Roadmap:** criterion 6 is met. I drafted text for the `cad-modules` entry in chat; the owner asked me to make the edit
+  with the wording I recommended (the "completed by" line left out, since completion is derived from completed plans), and
+  the entry in `docs/roadmaps/workbench-v1.md` now describes the `freecad` module of twenty skills. The plan is `Completed`.
+- **Verification after the roadmap edit:** `wb run code-work check` (61 plans) and `wb check` found no problems; `git diff
+  --check` printed nothing.
+- **Not done:** no independent review (only when the owner asks).

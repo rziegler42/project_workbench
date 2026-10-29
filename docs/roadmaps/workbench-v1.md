@@ -652,13 +652,13 @@ them. The skills are split by the rule of `2026-10-23-one-owner-per-skill-name`.
 
 ### cad-modules — The CAD modules
 
-**Outcome:** a tool-neutral `cad` module (the policy and the document guidance) and a FreeCAD module (the `freecad-scripts`
-skill and its mesh script), each designed against the workbench's contract. Whether the advice about the FreeCAD MCP server
-stays is open.
+**Outcome:** an optional `freecad` module of twenty skills for scripting FreeCAD 1.1 from Python without the interface: the
+original seventeen, plus `freecad-draft`, `freecad-surface` and `freecad-techdraw`. Each example was run headless on
+FreeCAD 1.1.4, and anything not run is marked "read, not run". There is no base `cad` module, no bundled script and no
+owner conventions. The advice about the FreeCAD MCP server is kept as the `freecad-mcp` skill.
 **Dependencies:** `claude-harness`, `groundwork-module`.
-**Boundary:** the two modules. The FreeCAD skill is large (about 28 KB with ten reference files) and carries one script that
-runs only under FreeCAD's own interpreter, so its helper is pinned and approved like any other code. A way of working for
-CAD (`cad-work`) stays deferred.
+**Boundary:** the `freecad` module and its tests. No program is installed or pinned. A way of working for CAD (`cad-work`)
+and skills for CAM, BIM, OpenSCAD and Material stay deferred.
 **Promotion trigger:** the owner chooses to begin it.
 
 ### global-settings-check — Where a global setting may conflict with a project's
