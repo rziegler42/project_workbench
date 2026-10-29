@@ -1,6 +1,6 @@
 # Restore the dropped policy and let a module declare an ask
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-29
 Candidate: workbench-v1#policy-and-module-asks
 Specs: command-permissions, module-contract, module-boundary, safe-git, remote-runner, model-bridge, groundwork, trust-and-approval
@@ -266,8 +266,10 @@ meaningful finding; two findings, both applied. The text applied after round 2 i
 ## Result
 
 **Increment A is done and committed (`0907cbe`); Increment B is done and committed (`41ffe9f`, with a fix in `ce683c0`); Increment C
-is done and committed (`2053f77`, with the upgrade of the installed copies in `64214c7`); Increment D is done and awaits the owner's
-word to commit.**
+is done and committed (`2053f77`, with the upgrade of the installed copies in `64214c7`); Increment D is done and committed
+(`73d22ba`, with the upgrade results); the plan is completed. Completion criteria 1 to 5 are met. Criterion 6 is met in its first
+half only: after the owner's `wb rerender` the rendered settings list the asks and the Codex login read as `ask` rules, but the live
+prompt of a `wb run safe-git remove` has not been seen.**
 
 ### Increment A
 
