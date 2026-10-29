@@ -16,8 +16,8 @@ import unittest
 import unittest.mock
 
 from tests import support_install
-from workbench import (approve, cli, commands, firstparty, harnessplan, install, manifest, neutral, pins, sources,
-                       verify)
+from workbench import (approve, cli, commands, firstparty, harnessplan, identity, install, manifest, neutral, pins,
+                       sources, verify)
 from workbench.wbkit import project
 
 
@@ -523,7 +523,9 @@ class Install(support_install.InstallBase):
 
         def run(*argv, typed=""):
             out, err = io.StringIO(), io.StringIO()
-            with unittest.mock.patch.object(approve, "is_terminal", lambda stream: True):
+            who = identity.check("Example Approver", "12345+example@users.noreply.github.com")
+            with unittest.mock.patch.object(approve, "is_terminal", lambda stream: True), \
+                    unittest.mock.patch.object(identity, "read", lambda home=None: who):
                 code = cli.main(list(argv), out, err, store_root=self.store_root, distribution=self.dist,
                                 stdin=io.StringIO(typed))
             return code, out.getvalue(), err.getvalue()

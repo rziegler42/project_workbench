@@ -21,6 +21,31 @@ def write(path, text, mode=0o644):
     os.chmod(path, mode)
 
 
+class Parsing(unittest.TestCase):
+    """`parse`: the stored text `Name <email>` back to an identity, under the same grammar."""
+
+    def test_a_stored_text_round_trips(self):
+        found = identity.check(NAME, EMAIL)
+        self.assertEqual(found, identity.parse(found.text))
+
+    def test_text_that_is_not_name_and_email_is_refused(self):
+        for text in ("", "bob", "bob <>", "<a@b.c>", "Name a@b.c", "Name <a@b.c", "Name <a@b.c> ", "Name <a@b.c>x",
+                     "Name <a b@c.d>", "Name <a@b.c><d@e.f>", "A <B> <a@b.c>", 5, None):
+            with self.subTest(text=text):
+                with self.assertRaises(identity.IdentityError):
+                    identity.parse(text)
+
+    def test_text_that_would_change_under_normalization_is_refused(self):
+        with self.assertRaises(identity.IdentityError):
+            identity.parse("José <%s>" % EMAIL)
+
+    def test_the_name_rules_apply_on_parsing(self):
+        for text in (" Name <%s>" % EMAIL, "ㅤ <%s>" % EMAIL, "a\nb <%s>" % EMAIL):
+            with self.subTest(text=repr(text)):
+                with self.assertRaises(identity.IdentityError):
+                    identity.parse(text)
+
+
 class Grammar(unittest.TestCase):
     def test_a_valid_identity_is_stored_as_name_and_email(self):
         found = identity.check(NAME, EMAIL)

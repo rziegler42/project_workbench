@@ -32,12 +32,14 @@ refuses, and says how to set the identity, when it cannot read a valid one. The 
 
 - Who may approve. Identity is an unverified label; the decision says this is not decided here.
 - A setting that fixes an identity, or a read of the project's git configuration.
-- Shipped approvals. They are written by `release-approvals` with the fixed approver `workbench-release` and stay at the record
-  format they have (see Assumptions); no re-release is made and nothing under `workbench/shipped_approvals/` changes.
+- Raising the format of the shipped approvals. They are written by `release-approvals` with the fixed approver `workbench-release`
+  and stay at the record format they have (see Assumptions). The one re-release this plan makes (Increment B) is forced by an edit to
+  a package test, and writes records of the same kind.
 - The convention in the decisions and plans READMEs and the seeded `AGENTS.md`. That is module text, and it goes with the policy and
   module-asks plan.
 - Rewriting an approval already made. Entries written before the change are read as they are and stay as history.
-- Any change under `packages/`. If a package test fails because of this plan, stop and ask.
+- Any change under `packages/` other than the one test named in Increment B. If another package test fails because of this plan,
+  stop and ask.
 
 ## Assumptions and constraints
 
@@ -55,7 +57,14 @@ refuses, and says how to set the identity, when it cannot read a valid one. The 
   wording of decision 4, "each record format that holds it is raised one version", in one place, and the owner's approval of this plan
   is the approval of that choice.
 - The approval is bound to hashes. The approver is provenance, and no check reads it, so changing it cannot change what is approved.
-- `workbench/` is not under `packages/`, so editing it does not make a shipped approval stale.
+- `workbench/` is not under `packages/`, so editing it does not make a shipped approval stale. A package is: the whole run of
+  `tests/run_all.py` found, after Increment B's code was written, that `packages/workbench/code-work/tests/test_codework_module.py`
+  runs `approve-plan` in-process and so reads the account's real git identity; editing that test makes the shipped approvals of the
+  `code-work` module and of the `workbench` package stale until the owner runs `wb release-approvals`, and until then the command gate
+  refuses every shell command.
+- On this machine the owner's global git configuration holds neither `user.name` nor `user.email`; the identity is set only in this
+  repository's `.git/config`, which the decision never reads. Until the owner sets the two values with `git config --global`,
+  `approve-plan` and `approve` refuse here. That is the owner's act and is a precondition of the owner's trial.
 - The test for the include directive is real: it runs git in a temporary home with an `include` in the global file and checks the
   identity is not read through it. Tests need a `git` binary and skip, saying so, where there is none.
 
@@ -67,8 +76,9 @@ refuses, and says how to set the identity, when it cannot read a valid one. The 
    sentence. The four records at their earlier formats are still read.
 3. No code writes `owner` as an approver; `approver_name` does not exist; the whole `tests` root passes.
 4. The specs describe the records, the identity and `via`, and `wb check` and `wb run code-work check` report no problems.
-5. `wb verify packages/workbench` runs with no refusal, so no shipped approval went stale, and `git status` shows no file changed
-   outside `workbench/`, `tests/` and `docs/`.
+5. `wb verify packages/workbench` runs with no refusal, so no shipped approval is stale, and `git status` shows no file changed
+   outside `workbench/`, `tests/` and `docs/`, the one package test of Increment B, and the shipped approvals the owner's release
+   rewrote for it.
 
 ## Increments
 
@@ -103,8 +113,10 @@ record. Ask the owner whether to run a security review before B.
 
 **Outcome:** `approve-plan` and `delegate-approve-plan` write the identity and a `via`, at format 3, and print one sentence.
 **Dependencies:** Increment A.
-**Affected areas:** `workbench/planapprovals.py`, `workbench/delegation.py`, `tests/test_planapprovals.py`,
-`tests/test_delegation.py`.
+**Affected areas:** `workbench/planapprovals.py`, `workbench/delegation.py`, `workbench/identity.py` (a `parse` that is the inverse of
+`check`), `tests/support.py` (a helper that fixes the identity), `tests/test_planapprovals.py`, `tests/test_delegation.py`,
+`tests/test_approve_levels.py`, `tests/test_gate_hook.py`, `tests/test_identity.py`, and the one package test
+`packages/workbench/code-work/tests/test_codework_module.py` with the shipped approvals the owner's release rewrites for it.
 **Steps:**
 1. Write the tests first: a format 2 file is read and its entries come back as they were; the next write gives format 3, keeps the old
    entries without `via`, and adds the new one with `approver` and `via`; the limit is 256 for `approver` and the format 3 entry
@@ -119,10 +131,21 @@ record. Ask the owner whether to run a security review before B.
    alone. The tests fix the exact text for all four, and Increment D copies it into `installer-interface.md`.
 2. See them fail. Then raise `FORMAT` to 3 and `FORMATS` to `(1, 2, 3)`, raise the limit, add `via` to the entry, read the identity
    once at the start of the command, record `terminal` when both streams are terminals and the level otherwise, and print the sentence.
-3. Replace the two calls of `approve.approver_name()` here and the one in `delegation.py`.
+3. Replace the two calls of `approve.approver_name()` here and the one in `delegation.py`. Read the identity after the level or the
+   setting is checked and before any helper runs, so a missing identity refuses early; at a terminal, before anything is shown.
 4. Run the test files and the `tests` root.
-**Verification:** the new and the existing plan-approval and delegation tests pass; the `tests` root passes; `wb check` and
-`wb run code-work check` report no problems.
+5. Run `tests/run_all.py`. Make the one package test (`Install.test_a_plan_is_approved_and_read_back_through_the_installed_module`)
+   supply a fixed identity by patching `identity.read` around its `run` helper, as the other tests now do, without changing what it
+   asserts. It is the only package test found to fail; if another does, stop and ask.
+6. The edit makes the shipped approvals stale and the command gate refuses shell commands. Stop and ask the owner to run
+   `wb release-approvals`. Then run `wb verify packages/workbench` and read the paths that changed under
+   `workbench/shipped_approvals/`.
+7. The release leaves the stale records of the earlier release on disk and reports them. List them with
+   `wb run safe-git remove -- <path>...`, show the list to the owner, and remove them only with the owner's approval of that list
+   (`--confirm`, and `--recursive` for a directory).
+**Verification:** the new and the existing plan-approval and delegation tests pass; `tests/run_all.py` passes in every root;
+`wb verify packages/workbench` runs with no refusal; `wb check` and `wb run code-work check` report no problems; `git status` shows
+only the paths named under Affected areas, the new shipped records and the removed stale ones.
 **Evidence:** the one local commit, with the trailer `Plan: 2026-10-29-approvals-name-the-approver#B`.
 
 ### Increment C — Module and package approvals and pins
@@ -194,7 +217,12 @@ in these three files; `wb check` and `wb run code-work check` report no problems
   rewrite, byte for byte in its fields.
 - The departure from decision 4 for shipped records is stated under Assumptions. If the owner prefers the shipped records raised
   too, that is a different plan, because it needs a release and the owner's read of every shipped record.
-- Editing `workbench/` leaves shipped approvals as they are, so no re-release is needed. If a check says otherwise, stop and ask.
+- Editing `workbench/` leaves shipped approvals as they are. Editing the package test in Increment B does not, and shipping with
+  the workbench counts as approval, so the release the owner runs is a trust act: the owner reads what changed in the shipped records
+  (the `code-work` module and the `workbench` package, hashes and nothing else) before the commit. No other package is touched.
+- A stale shipped approval stops every shell command at the command gate until the owner releases it. The package edit and the
+  release are therefore made back to back, and the commit waits for the release.
+- The deletion of stale records is the owner's decision, made on the list the helper prints.
 
 ## Review record
 
@@ -221,7 +249,8 @@ applied; the third round's finding was applied after the last round, so no round
 
 ## Result
 
-**Increment A is done and awaits the owner's word to commit; B to D are not started.**
+**Increment A is done and committed (`6f2e957`, `67e4d1a`, `d3b0539`); Increment B is done and awaits the owner's word to commit; C and
+D are not started.**
 
 ### Increment A
 
@@ -266,3 +295,39 @@ applied; the third round's finding was applied after the last round, so no round
   that refused a name of only blanks. Four tests for it, 15 sub-cases failing before the code; 41 tests in the file pass.
 - **Verification as run.** `tests/test_identity.py`, 37 tests, OK; the whole `run_all.py`, 5,969 tests in 12 roots, OK; `wb check` and
   `wb run code-work check` report no problems.
+
+### Increment B
+
+- **Done.** `workbench/planapprovals.py`: format 3 (`FORMATS` 1 to 3); `via` of `terminal`, `ask`, `none` or `delegated`; `delegated`
+  exactly when `delegate` is present, for an entry that has a `via`; the approver limit 256 in format 3 and 64 before; a new entry's
+  approver must parse as `Name <email>` on read and on write (`identity.parse`, new); `add` refuses an entry with no `via`; an old
+  entry, including a legacy delegated one, is read as it is and never given a `via`. `approve-plan` records `terminal` or the level
+  and `delegate-approve-plan` records `delegated`. The identity is read once, after the level or the setting is checked and before
+  any helper runs (at a terminal, before anything is shown). The line ends ` by X`, ` by X (ask)`, ` by X (no gate)` or
+  ` by X delegated to P (M)`; a repeat names the approver and `via` on file; an old entry shows its approver alone. The delegated
+  line is now `approved: <plan> by X delegated to P (M), N of M rounds`, which changed from `(delegated, N of M rounds)`.
+  `workbench/delegation.py` and the tests follow; `tests/support.py` has `fixed_identity`.
+- **Found by the whole suite, and the amendment.** One package test, `Install.test_a_plan_is_approved_and_read_back_through_the_installed_module`
+  in `packages/workbench/code-work/tests/test_codework_module.py`, ran `approve-plan` in-process and so read the account's real
+  identity. It was the only failure of 5,997 tests. The plan was amended and the owner approved it again. The test now patches
+  `identity.read` around its `run` helper; what it asserts is unchanged. Run with no git at all it still passes, so it supplies its
+  own identity. It was run as its own root: 42 tests, OK.
+- **The release.** The edit made the shipped approvals stale and the command gate refused commands, and a second edit was refused
+  after the first (the gate had locked on the first). The owner ran `wb release-approvals` twice. The records now shipped for it:
+  the `workbench/code-work` module record (`e4759edf…`, tree `fc84faaf…`) and the `workbench` package record (`79ebdf2e…`), both
+  `workbench-release`, format 1, no `via`; only the `code-work` tree hash differs from before. The owner approved the two new records
+  on 2026-10-29. The owner approved removing the four stale records the releases left (the two old tracked ones and the two from the
+  first release), and they were removed with `wb run safe-git remove --recursive --confirm`. `wb verify packages/workbench` runs
+  with no refusal.
+- **Owner's global identity.** On this machine the global git configuration held neither value; the owner set both on 2026-10-29. Until
+  then these commands refuse here.
+- **Verification as run.** `test_planapprovals` 51, `test_delegation` 91, `test_approve_levels` 39, `test_gate_hook` 72 and
+  `test_identity` 45 pass; a mutation that removed the `via` requirement and the via and delegate agreement made 8 tests fail. The whole
+  `run_all.py`, run on the final tree after the release: 6,002 tests in 12 roots, OK. `wb check` and `wb run code-work check` report no
+  problems.
+- **Review.** One read-only reviewer pass: no blocking finding. Applied: the identity is read early, before any helper runs, in both
+  commands (the reviewer found it read late), with tests that it is read once at that point, that a missing identity at `none` and
+  in a delegated run writes and logs nothing and runs no helper, and that the level or the setting is refused before the identity.
+  Not applied: a test of a rewrite of a legacy delegated entry through the file (covered by the parse and serialize round trip).
+- **Not done.** The owner's own trial of `wb approve-plan` with the real identity, which the agent does not run. Increment C removes
+  the last callers of `approve.approver_name`, which `approve` and `pin` still use.

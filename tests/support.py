@@ -24,6 +24,17 @@ def forbid_real_store(case):
     case.addCleanup(finder.stop)
 
 
+def fixed_identity(case, name="Example Approver", email="12345+example@users.noreply.github.com"):
+    """Make the git identity an approval records a fixed one, so a test does not read this machine's. Returns the
+    ``identity.Identity``."""
+    from workbench import identity
+    found = identity.check(name, email)
+    patcher = unittest.mock.patch.object(identity, "read", lambda home=None: found)
+    patcher.start()
+    case.addCleanup(patcher.stop)
+    return found
+
+
 STALE = "the shipped approvals are stale until the owner runs release-approvals"
 
 

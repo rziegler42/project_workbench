@@ -103,8 +103,8 @@ class Gated(support_project.Project):
     def record(self, rel=PLAN):
         report = approvalcmd.region(self.guarded, self.resolved, rel)
         planapprovals.add(self.guarded, self.project_id, planapprovals.Approval(
-            rel, report.region_hash, self.resolved.declaration, self.resolved.helper_sha256, "owner",
-            "2026-10-22T00:00:00Z", "test"))
+            rel, report.region_hash, self.resolved.declaration, self.resolved.helper_sha256,
+            "Test Person <test@example.com>", "2026-10-22T00:00:00Z", "test", None, "terminal"))
 
     def misbehave(self, **control):
         with open(self.control, "w") as handle:

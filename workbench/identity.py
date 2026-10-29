@@ -119,6 +119,18 @@ def check(name, email):
     return Identity(name, email, text, email.lower())
 
 
+def parse(text):
+    """The ``Identity`` whose stored text is `text` (``Name <email>``), or ``IdentityError``. The text must be exactly what
+    ``check`` would store, so a record cannot hold a form that a person could not have configured."""
+    if not isinstance(text, str) or not text.endswith(">") or " <" not in text:
+        raise IdentityError("the approver %r is not a name and an email in the form Name <email>" % _shown(text))
+    name, _, rest = text.rpartition(" <")
+    found = check(name, rest[:-1])
+    if found.text != text:
+        raise IdentityError("the approver %r is not in the form that is stored" % _shown(text))
+    return found
+
+
 def _git():
     for path in GIT_LOCATIONS:
         if os.path.isfile(path) and os.access(path, os.X_OK):
