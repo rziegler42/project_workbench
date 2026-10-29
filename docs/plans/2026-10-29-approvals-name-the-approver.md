@@ -260,8 +260,9 @@ applied; the third round's finding was applied after the last round, so no round
   characters; six new tests, of which four failed before the change; header notes for the limits. 37 tests in the file pass.
 - **Not applied.** Owner and permission checks on the config files and the git path: they stop only an attacker who can plant a
   link but not write the file, and a root-owner rule would refuse Homebrew's git.
-- **Waits for the owner.** The grammar points are a clarification note on the accepted decision, written as proposed and headed "not
-  yet approved by the owner" (invisible-only names and padded names refused; lookalikes and combining runs left). The code does not
-  hold that rule until the owner approves the note.
+- **The grammar note, approved by the owner on 2026-10-29.** A clarification note on the accepted decision: a name must hold a
+  letter, number, punctuation mark or symbol that shows (not a Hangul filler, the Braille blank, a Khmer inherent vowel or the
+  grapheme joiner), and neither begins nor ends with a blank. Lookalikes and combining runs are left. It replaced my earlier rule
+  that refused a name of only blanks. Four tests for it, 15 sub-cases failing before the code; 41 tests in the file pass.
 - **Verification as run.** `tests/test_identity.py`, 37 tests, OK; the whole `run_all.py`, 5,969 tests in 12 roots, OK; `wb check` and
   `wb run code-work check` report no problems.

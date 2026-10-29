@@ -22,8 +22,9 @@ What this does not guard against, found by the security review of 2026-10-29 and
   ownership would refuse Homebrew's git altogether.
 * Which characters count as unassigned (the ``Cn`` category) depends on the Unicode data of the Python that runs this, so the
   allowed set can differ a little between machines. It was read on Python 3.15.0 and Unicode 17.
-* The name grammar is the decision's. It lets through a name that prints as a second identity (lookalike brackets, a lookalike
-  letter) and, as the decision stands, spaces at either end. Records compare by the lowercased ASCII email, never by the name.
+* The name grammar is the decision's with its clarification note. It still lets through a name that prints as a second identity
+  (lookalike brackets, a lookalike letter) and a run of combining marks. Records compare by the lowercased ASCII email, never by
+  the name.
 
 Output is read in pieces and the child is killed when it passes ``MAX_OUTPUT`` bytes of output or ``MAX_ERROR`` of messages, or
 at the timeout. Only Unix is supported (``pwd``, the fixed paths). ``home`` of ``read`` is for tests; a caller in the installer
@@ -33,8 +34,9 @@ A missing, empty or ungrammatical value refuses and says how to set it. There is
 The grammar is the decision's: the name is 1 to 100 characters after NFC normalization with no control, format,
 surrogate, private-use or unassigned character, no line or paragraph separator and neither ``<`` nor ``>``; the email is
 3 to 100 printable ASCII characters from ``!`` to ``~`` other than ``<`` and ``>``, with exactly one ``@`` and something
-on each side; the stored text is at most 210 characters. A name of nothing but blanks is refused too (my call): it names
-nobody. Records compare by the lowercased email, ``Identity.key``, and never by the name.
+on each side; the stored text is at most 210 characters. The clarification note of 2026-10-29 adds two rules for the name:
+it holds a letter, number, punctuation mark or symbol that shows (not one of the fillers in ``_PRINTS_AS_NOTHING``), and it
+neither begins nor ends with a blank (a ``Zs`` character). Records compare by the lowercased email, ``Identity.key``, and never by the name.
 """
 
 import collections
@@ -57,7 +59,10 @@ MAX_TEXT = 210
 Identity = collections.namedtuple("Identity", "name email text key")
 
 _REFUSED_CATEGORIES = ("Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp")
-_SET_NAME = 'set it with: git config --global user.name "Your Name"'
+# Characters that are letters or symbols by category and print as nothing, or combine with nothing (clarification note of
+# 2026-10-29 to decision 4): the Hangul fillers, the Braille blank, the Khmer inherent vowels and the grapheme joiner.
+_PRINTS_AS_NOTHING = "ᅟᅠㅤﾠ⠀឴឵͏"
+_SET_NAME ='set it with: git config --global user.name "Your Name"'
 _SET_EMAIL = 'set it with: git config --global user.email "you@example.com"'
 
 
@@ -93,8 +98,11 @@ def check(name, email):
     if bad or "<" in name or ">" in name:
         raise IdentityError("the git name %r holds a control, format, surrogate, private-use, unassigned or separator "
                             "character, or < or >; %s" % (_shown(name), _SET_NAME))
-    if not name.strip():
-        raise IdentityError("the git name is only blanks; %s" % _SET_NAME)
+    if unicodedata.category(name[0]) == "Zs" or unicodedata.category(name[-1]) == "Zs":
+        raise IdentityError("the git name %r begins or ends with a blank; %s" % (_shown(name), _SET_NAME))
+    if not any(unicodedata.category(c)[0] in "LNPS" and c not in _PRINTS_AS_NOTHING for c in name):
+        raise IdentityError("the git name %r has no letter, number, punctuation mark or symbol that shows; %s"
+                            % (_shown(name), _SET_NAME))
     if not MIN_EMAIL <= len(email) <= MAX_EMAIL:
         raise IdentityError("the git email %r is not %d to %d characters; %s"
                             % (_shown(email), MIN_EMAIL, MAX_EMAIL, _SET_EMAIL))

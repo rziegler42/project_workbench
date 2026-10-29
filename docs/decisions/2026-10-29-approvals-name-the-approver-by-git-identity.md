@@ -83,3 +83,19 @@ Read on 2026-10-29 at commit `5ee1ecce8efa83194f118748666a84fab4be6960`, workben
 email on this machine, and the owner's direction in session on 2026-10-29. Not run: a refusal with no identity configured, since
 the change is not built, and the invocation in decision 2. The claim that `git config --global` follows no `include` directive by
 default is git's documented behaviour for a named file and was not tested here; the plan tests it.
+
+## Clarification note, 2026-10-29 (approved by Robert Ziegler <25854477+rziegler42@users.noreply.github.com> on 2026-10-29; the body above is unchanged)
+
+The security review of the identity reader (Increment A of `2026-10-29-approvals-name-the-approver`, commit `6f2e957`) ran the
+grammar of decision 4 against a copy in a scratch directory (Python 3.15.0, Unicode 17, Apple Git 2.54.0, 2026-10-29) and found two
+names that the grammar admits and that name nobody or are padded: a name made only of characters that print as nothing (U+3164,
+U+115F, U+1160, U+FFA0, U+2800, U+17B4, U+17B5, U+034F, or combining marks alone), and a name with a space at either end. Decision 4
+is clarified, and not otherwise changed, in two ways:
+
+1. The name must hold at least one letter, number, punctuation mark or symbol that is not in that list of characters that print as
+   nothing.
+2. The name neither begins nor ends with a space or other blank (a `Zs` character).
+
+The review also showed names that print as a second identity (lookalike angle brackets, a lookalike letter) and a run of up to 100
+combining marks. They are not restricted: records compare by the lowercased ASCII email and never by the name, and a rule against
+every lookalike would be long and still incomplete. The rest of the decision is unchanged, and the text above is not edited.

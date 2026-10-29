@@ -73,6 +73,28 @@ class Grammar(unittest.TestCase):
         with self.assertRaises(identity.IdentityError):
             identity.check("   ", EMAIL)
 
+    def test_a_name_that_prints_as_nothing_is_refused(self):
+        for bad in ("ㅤ", "ᅟᅠ", "ﾠ", "⠀", "឴឵", "͏", "́̂", "⠀ㅤ ",
+                    "ㅤ" * 5):
+            with self.subTest(name=repr(bad)):
+                with self.assertRaises(identity.IdentityError) as seen:
+                    identity.check(bad, EMAIL)
+                self.assertIn("git config --global user.name", str(seen.exception))
+
+    def test_a_name_with_one_visible_character_is_kept(self):
+        for good in ("A", "é", "黎", "7", "-", "☃", "ㅤA", "Aㅤ"):
+            with self.subTest(name=repr(good)):
+                self.assertEqual(identity.check(good, EMAIL).name, good)
+
+    def test_a_name_with_a_blank_at_either_end_is_refused(self):
+        for bad in (" Name", "Name ", " Name ", " Name", "Name ", "　Name"):
+            with self.subTest(name=repr(bad)):
+                with self.assertRaises(identity.IdentityError):
+                    identity.check(bad, EMAIL)
+
+    def test_a_name_with_inner_blanks_is_kept(self):
+        self.assertEqual(identity.check("Mary  Ann Smith", EMAIL).name, "Mary  Ann Smith")
+
     def test_the_name_is_stored_normalized(self):
         decomposed = "José"
         found = identity.check(decomposed, EMAIL)
