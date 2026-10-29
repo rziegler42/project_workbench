@@ -9,6 +9,9 @@
   "ships": [
     "helper/ask-codex"
   ],
+  "ask_reads": [
+    "~/.codex/auth.json"
+  ],
   "commands": {
     "ask-codex": {
       "helper": "helper/ask-codex",
