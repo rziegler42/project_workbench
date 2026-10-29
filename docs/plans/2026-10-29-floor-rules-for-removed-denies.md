@@ -1,6 +1,6 @@
 # Floor rules for what the global reset removed
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-29
 Candidate: workbench-v1#floor-rules-after-reset
 Specs: trust-and-approval
@@ -137,7 +137,7 @@ approval again, because the edit changes its scope; the earlier approval no long
 
 ## Result
 
-Increment A is implemented, verified and committed as `fe966b0`. Completion criterion 4, the owner's re-render, is open.
+Increment A is implemented, verified and committed as `fe966b0`. All completion criteria are met; the plan is completed.
 
 - **Security review.** The owner answered the checkpoint on 2026-10-29: no security review is needed.
 - **Done.** `FLOOR_RULES` in `workbench/rules.py` has `rmdir`, `unlink` and `shred`, each bare and with arguments, under the stop
@@ -156,8 +156,11 @@ Increment A is implemented, verified and committed as `fe966b0`. Completion crit
   check beyond that.
 - **Review.** One read-only reviewer pass of the increment: no blocking finding. It asked that the spec bullet be one sentence, which
   was fixed, and noted that the plan's approval state should be checked before the commit, which it was (`approved`).
-- **Not done.** Completion criterion 4: the owner's `wb rerender`, then a read of `.claude/settings.local.json` for the four
-  patterns. Until then this clone's rendered permissions file is stale.
+- **Criterion 4, met on 2026-10-29.** The owner ran `wb upgrade` and then `wb rerender --package packages/workbench` (the first
+  rerender was refused because the package's hash differed from the lock). I then read `.claude/settings.local.json`: `Bash(rmdir)`,
+  `Bash(rmdir *)`, `Bash(shred)`, `Bash(shred *)`, `Bash(unlink)`, `Bash(unlink *)` and `Read(//Users/rziegler/.config/gh/**)` are in
+  the `ask` list, which ends before `deny` begins. `wb check` reported no problems. The upgrade left two tracked files changed
+  (`.workbench/manifest.json` and the installed copy of the `diagnose-failure` skill); they are not part of this plan.
 - **Noticed, outside this plan.** Many existing floor rules are not guarded by any test: a rule removed from `FLOOR_RULES` would
   pass `test_the_floor_is_rendered_as_ask_rules`, which checks that what the table holds is rendered. Spot assertions cover only a
   few (`git push --force*`, `rm *`, `pip install*`, `.env`, `~/.ssh/**`). A test that pins the whole table would close that.
