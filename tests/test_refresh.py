@@ -647,7 +647,7 @@ class Writes(Base):
         self.assertEqual(3, code, out)
         self.assertRegex(err, r"(?s)written:\n  %s\n.*not written:\n  %s\n" % (re.escape(SKILL), re.escape(LOCAL)))
 
-    def test_a_file_partly_written_when_the_create_failed_is_named_and_must_be_removed_before_the_next_run(self):
+    def test_a_file_created_when_the_run_was_cut_short_is_named_and_a_refused_one_is_removed_before_the_next_run(self):
         change = self.adding(EXTRA, NEW_TEXT)
 
         def create(writer, rel, data, executable=False):
@@ -659,7 +659,8 @@ class Writes(Base):
             code, out, err = self.run_with(change)
         self.assertEqual(3, code, out)
         self.assertIn("failed: forced", err)
-        self.assertIn("%s may be partly written" % EXTRA, err)
+        self.assertIn("%s was created but the run did not finish" % EXTRA, err)
+        self.assertNotIn("partly written", err)
         with self.staged_as(change):
             self.assertIn("unrecorded", self.refuses(EXTRA))
         os.remove(self.full(EXTRA))

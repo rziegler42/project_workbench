@@ -167,7 +167,8 @@ def write(writer, rows, done):
                 if row.path in writer.written[mark:]:
                     done.append(row.path)
                     cause = "interrupted" if isinstance(exc, KeyboardInterrupt) else str(exc)
-                    raise Partial("%s; %s may be partly written: remove it, then run again"
+                    raise Partial("%s; %s was created but the run did not finish: run again, and if that refuses the file, "
+                                  "remove it and any .workbench-*.tmp beside it, then run again"
                                   % (cause, display.ascii_text(row.path)[:200])) from exc
                 raise
             done.append(row.path)
