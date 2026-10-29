@@ -22,7 +22,8 @@ Non-goals:
 - The program itself. It lives outside this repository (see "What the program must change").
 - Host details: SSH names, workspace roots and capacity. They stay in the owner's personal `~/.claude/remotes.toml`
   (or `~/.config/remote-runner/remotes.toml`). The module never reads or writes them, and the project file never
-  holds a host.
+  holds a host. On 2026-10-29 the first path went with the rest of the user-level configuration, which was reset, and neither path
+  holds a file now, so the program needs a hosts file recreated at one of them before a job can run.
 - Running a command on a runner other than through the program, and any `ssh`, `scp` or `rsync` call.
 - What a profile's command does. The module checks the shape of the file, not the command.
 - Pruning, cancelling, the job log and the list of runners. They are not wrapped (see "The commands").

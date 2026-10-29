@@ -637,7 +637,7 @@ looked at here:
   - Not checked: a repository of another owner (`safe.directory`), a hostile commit-graph or pack index, a case-folding file
     system, the engine's own deadline, and the credential flow of a real push. The owner's remaining step after the plan is
     `wb acknowledge` and `wb upgrade --package packages/workbench`.
-- The shipped approvals (`workbench/shipped_approvals/packages/`) are re-written by the owner's `release-approvals`
+- The shipped approvals (`workbench/shipped_approvals/packages/`) are re-written by the owner's `wb release-approvals`
   after any change under `packages/workbench/`, and the new records are committed with that change. The edit gate
   refuses every edit until the owner has done so, so a change to the package is built and tested in a copy and landed
   with one copy.

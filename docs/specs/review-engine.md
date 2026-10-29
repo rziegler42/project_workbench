@@ -344,10 +344,10 @@ The module conforms when tests against a fake bridge, installed as a real pinned
 Built by plan `2026-10-23-review-engine`, increments C to G (the module `review-engine`, version 0.1.0):
 
 - The declaration provides `peer-review`, requires `model-bridge` (hard) and declares the command `review-engine` with
-  the arguments of "The commands" (fourteen now: `preview` and `convergence` came later) and the `owner` list `amend`, `extend`, `reset`, `archive`, `prune`. It ships
+  the arguments of "The commands" (fourteen now: twelve at first, then `convergence`, the thirteenth, and `preview`, which came later) and the `owner` list `amend`, `extend`, `reset`, `archive`, `prune`. It ships
   the neutral skill `peer-review`. The package approval is shipped (`workbench/shipped_approvals/`), released by the owner at increment G.
-  Plan `2026-10-23-delegated-approval` adds the thirteenth argument, `convergence`, and the declaration field that names
-  it (increment B, below); that edit makes the shipped approval stale until the owner releases it again in that plan's
+  Plan `2026-10-23-delegated-approval` added the thirteenth argument, `convergence`, and the declaration field that names
+  it (increment B, below); that edit made the shipped approval stale until the owner released it again in that plan's
   last increment.
 - Document resolution for the four kinds, the key and the directory name, the state file and its checks, the seal, the
   key and the mark in the guarded store, the lock, atomic writes and the ledger are built as stated above.

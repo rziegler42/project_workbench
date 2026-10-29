@@ -29,6 +29,11 @@ the module spellings were added only by a narrow patch that keeps that dependenc
 from the module that owns the action and leaves the interface open until this engine is planned. This spec
 proposes that interface and the engine around it.
 
+*Note, 2026-10-29.* The approver program, the global `claude-workflow` program, the `safe-committer` agent and `amend-message`
+that this spec names were part of the owner's former user-level configuration, which was reset to factory defaults on 2026-10-29.
+No approver now reviews a command, and the cutover step below has no program left to replace. The engine, the `describe`
+interface and the decisions in this spec stand as the design; what changed is the starting point, not the engine.
+
 ## Goals
 
 1. An engine, `action-review`, that takes facts about one action and returns a verdict with reasons as data,
@@ -81,7 +86,7 @@ commit, stages nothing, writes nothing and runs no program the repository select
 
 ### The engine (default)
 
-A module `action-review` providing the capability of that name (built; the name is still the owner's to confirm, see "Open questions"), requiring `model-bridge`. One
+A module `action-review` providing the capability of that name (built; the module provides this name and the owner has not yet confirmed it as final, see "Open questions"), requiring `model-bridge`. One
 command, `wb run action-review review`, takes the line of the command to be reviewed and, by that line, finds the
 rule, runs the module's `describe`, applies the rule's checks, and only if the checks pass asks the bridge for a
 verdict against the rubric. It prints one verdict object: `verdict` (`approve` or `decline`), `failed_checks` and
@@ -368,7 +373,7 @@ the row cannot be written after the object was printed, the exit is 2 with a who
 **the hook must allow only on exit 0 together with a whole, valid object**, never on the object alone; a closed
 standard error makes every review exit 2.
 
-The reason is at most 500 characters and is display-cleaned, for the hook to show. A decline caused by `truncated:
+The reason is at most 300 characters and is display-cleaned, for the hook to show. A decline caused by `truncated:
 true` or by `ok: false` is a verdict (exit 0, `decline`), because the review ran and the checks said no. Only an
 object on standard output, with exit 0 and `verdict` equal to `approve`, can lead the hook to allow anything; every
 other outcome leaves the owner at the normal prompt. The hook reads the object, never the exit status alone, and
@@ -501,7 +506,7 @@ not measured.
 | today | after |
 |---|---|
 | collectors for commit and remove, via the global program | `safe-git describe commit`, `safe-git describe remove` |
-| collector for a remote job | `remote-runner describe submit`, `describe fetch` of the module, which wraps the owner's global program (M16 and F-C6 apply) |
+| collector for a remote job | `remote-runner describe submit`, `describe fetch` of the module, which wraps the owner's global program (M16 and F-C6 apply); not built: the module declares no `describe` argument |
 | collector for a push | `safe-git describe push` (built by plan `2026-10-26-safe-git-describe-push`; see `safe-git.md`); `push-check` stays for the `push-changes` skill |
 | the rubric, schema and rule files | ported into the engine as data, section by section |
 | `ask-codex-archive` rule | none: the module's `archive` is owner-run and denied (M15) |
@@ -668,7 +673,7 @@ left open.
 - Decided: you label real commands and review a test set, with the bound above. Open: whether 10% stays after
   plan 1's count.
 - `safe-committer` (F-A7) and `amend-message`: decided, see "Decisions on the two leftovers".
-- The capability name `action-review` is a proposal.
+- The capability name `action-review`: the built module provides it, and the owner has not confirmed it as the final name.
 
 ## Acceptance criteria
 

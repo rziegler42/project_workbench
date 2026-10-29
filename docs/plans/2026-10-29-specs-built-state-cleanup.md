@@ -180,8 +180,7 @@ findings, both applied.
 
 ## Result
 
-**Increments A and B are done; Increment C is not started.** Their commits carry the trailers
-`Plan: 2026-10-29-specs-built-state-cleanup#A` and `#B`.
+**All three increments are done.** Their commits carry the trailers `Plan: 2026-10-29-specs-built-state-cleanup#A`, `#B` and `#C`.
 
 ### Increment A
 
@@ -233,3 +232,39 @@ findings, both applied.
   the checks and did not compare the two `draft-decision` skill files byte for byte.
 - **Left for the owner.** Whether `harness-modules.md` and `terms.md`, still `Status: Current`, need re-approval after their status
   text changed: I changed what they say is built, not what they require.
+
+### Increment C
+
+- **Done.**
+  - `action-review.md`: the verdict `reason` limit reads 300 characters everywhere, as the helper enforces (`MAX_REASON`); the two
+    statements about the capability name say the built module provides it and the owner has not confirmed it as final; the
+    collectors table marks `remote-runner describe` as not built; a dated note says the approver program, the global
+    `claude-workflow` program, `safe-committer` and `amend-message` belonged to the former user-level configuration, reset on
+    2026-10-29.
+  - `review-engine.md`: the argument count is stated in order, twelve at first, then `convergence` (the thirteenth), then `preview`
+    (which came later); the sentence about the shipped approval being stale is in the past tense. The audit called the count a
+    contradiction, but it was consistent and only easy to misread.
+  - `model-bridge.md`: the status line and Open questions say `ask-codex` provides the capability name, `review-engine` and
+    `action-review` require it, and the owner has not confirmed it as final.
+  - `remote-runner.md`: a dated note says the user-level hosts file went with the reset and that neither listed path holds one,
+    which I checked by listing both directories on 2026-10-29. The status line already stated the limit that the external program
+    does not yet read the project file from the path the spec gives, so that step needed no edit.
+  - `safe-git.md`: the spelling `wb release-approvals`.
+- **Verification as run.** A search of the specs for "at most 500", "still a proposal" and "fourteen now:" finds only legitimate
+  uses (other fields that are truly 500 characters, a count of changed paths, and the rewritten sentence); `wb check` and
+  `wb run code-work check` report no problems; `wb verify packages/workbench` ran with no refusal; `git status` showed only the
+  five specs changed.
+- **Review.** One read-only reviewer pass: no blocking finding, and it verified the 300 limit against the helper, the module
+  declarations, the spelling and the statuses. Its non-blocking points: the `preview` ordinal rested on declaration order only, so
+  it was removed; a tense mix, fixed; and the approver passages in `action-review.md` that still read as live (see below).
+- **For the owner, step 6, not changed.**
+  - `action-review.md` stays `Draft`. Its status line says the owner has not read the engine sections and that the push rule, the
+    owner's hook, the log writer, the labelled set, the report and the shadow period are not built.
+  - `review-engine.md` stays `Draft`. Its status line still says it was written before the module existed; the module is built. It
+    marks one thing unbuilt: the personal setting for bridge, model and effort (decision 5 of the accepted record).
+  - Setting either to `Current` is the owner's act, and I changed neither.
+  - The sections of `action-review.md` on the shadow period and the cutover (around lines 43 to 61, 267, 478 to 483 and 513 to 514)
+    still describe the approver as running. The dated note at the top says it is gone; whether to point each section at the note
+    is the owner's call and is not in this plan.
+  - `safe-git.md` says the edit gate refuses every edit while the package's approval is stale. The refusal I saw was the command
+    gate refusing shell commands; I did not test the edit gate in that state, so the sentence is unchanged and unverified.

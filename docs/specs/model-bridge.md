@@ -3,7 +3,8 @@
 Status: Current. Contract version 1. Written by plan `2026-10-22-ask-codex-bridge` (increment A), before any
 bridge or engine existed, so that both are built against this text; the first bridge, `ask-codex`, was built and
 reviewed by the same plan, and "As built, and its limits" lists what exists. The capability name `model-bridge`
-is still a proposal (see "Open questions").
+is provided by the built `ask-codex` module and required by `review-engine` and `action-review`, and the owner has not confirmed it
+as the final name (see "Open questions").
 
 Terms are defined in `terms.md`. The declaration it satisfies is defined in `module-contract.md`; the launcher,
 the kit, the pin and the rule for a helper that runs another module's command are in `module-boundary.md`; the
@@ -272,6 +273,6 @@ Limits:
 
 ## Open questions
 
-- The capability name is a proposal.
+- The capability name `model-bridge`: the built modules use it, and the owner has not confirmed it as the final name.
 - Whether `--effort` needs vendor-specific levels beyond `low`, `medium` and `high`.
 - Whether a prompt larger than 262,144 bytes is ever wanted (an engine would pass the file name instead).
