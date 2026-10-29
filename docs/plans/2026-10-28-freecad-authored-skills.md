@@ -206,3 +206,34 @@ Remaining disagreement: none.
 - **Gate:** the owner ran `wb release-approvals` once for this increment. Two records (`969bbb13…`, `abaaf2b7…`) are reported
   stale; none was removed. Increment D removes them after a preview.
 - **Not done:** no independent review (only when the owner asks); no run in the GUI.
+
+### Increment B
+
+- **Read (2026-10-28):** there is no source on the owner's side for Surface. FreeCAD's source tree was not fetched. The
+  skill rests on the runs below and on what the installed FreeCAD reports (`supportedTypes()` and each object's
+  `PropertiesList` and enumerations).
+- **Written:** `freecad-surface` (`SKILL.md` and `reference.md`), and its name in the module's tests (19 skills now).
+- **Run against FreeCAD 1.1.4 (revision 20260928), headless with `freecadcmd`, at the owner's word, from a scratch directory,
+  in memory only:** four probe runs (1, 9, 12 and 7 blocks; 3 blocks of the second raised on a null shape of a failed
+  Filling or Coons and were rewritten to test the null shape instead), then the 10 blocks of the shipped `reference.md` (none
+  raised). Two expected values in the file were guesses and were corrected to what printed (three edges gave area 100.0;
+  extending by 0.5 and 0.1 gave 160.0 from x -1 to 15). Confirmed: the seven Surface types and their properties; that
+  `Surface::CurveOnMesh` is not a document object type; `GeomFillSurface` with `Stretched` and `Curved` on flat and bent
+  boundaries, edges from one wire or separate objects, in any order; `Coons` failing on straight edges and on an arc with
+  two lines ("Curves are disjoint") and working on four arcs; `Filling` on a bent boundary, a circle failing as one edge and
+  working as two half-arcs (area 78.54), a point constraint, `BoundaryOrder` `[1,1,1,1]` making the object `Invalid`, and
+  `Tolerance3d` and `MaximumDegree`; `Sections` in order, reversed and out of order (area 158.77, valid); `Extend` with the
+  symmetric flags on and off, on a plane and on a filled surface; `Sewing` of touching and separate planes; `Cut` of a face by
+  a face, and failing with a solid or a shell; the checks (`isValid`, surface class, area, sampling, `optimalBoundingBox`,
+  `distToShape` against the boundary).
+- **Found:** the `BoundBox` of a surface overstates its height (ZMax 4.0 against a sampled 2.0); `isValid` does not catch
+  sections in the wrong order or a boundary with a side missing; `Extend` values are fractions of the parameter range and the
+  symmetric flags default to true.
+- **Not run, marked read in the skill:** `FeatureBlendCurve` (its properties were listed, no curve was built), `BoundaryOrder` with
+  boundary faces, `Filling` options other than those named, and the Surface commands and everything else that needs the interface.
+- **Verification as run:** test first, 23 tests with 2 failures and 8 errors; then the module tests, 23, OK; package tests,
+  29, OK; the full suite, 5864 tests in 13 roots, OK; `wb run code-work check` (61 plans) and `wb check` found no problems;
+  `git diff --check` printed nothing.
+- **Gate:** the owner ran `wb release-approvals` once for this increment. Four records (`969bbb13…`, `a0335de4…`, `abaaf2b7…`,
+  `deadd047…`) are reported stale; none was removed. Increment D removes them after a preview.
+- **Not done:** no independent review (only when the owner asks); no run in the GUI.
