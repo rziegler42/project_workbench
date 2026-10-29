@@ -118,7 +118,7 @@ class Reads(unittest.TestCase):
 
     def test_a_pattern_the_schema_accepts_is_a_neutral_rule(self):
         for pattern in ("~/.vendor/login.json", "~/.config/vendor/**", "~/a b/c*", "~/.x@y=z+w-v_u", "~/.ssh/**", "~/*.json",
-                        "~/.claude/**"):
+                        "~/.vendor-x/**"):
             with self.subTest(pattern):
                 self.assertEqual(1, len(neutral.read_rules([{"action": "ask", "tool": "read", "pattern": pattern}])))
                 self.assertEqual((pattern,), self.reads([pattern]).ask_reads)
