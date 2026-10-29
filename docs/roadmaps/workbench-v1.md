@@ -1,7 +1,7 @@
 # Roadmap: workbench-v1
 
 Status: Active
-Updated: 2026-10-28
+Updated: 2026-10-29
 
 This roadmap is direction only. It does not authorize implementation and does not
 change any plan. A candidate is referred to as `workbench-v1#<id>`. Candidates are
@@ -700,6 +700,21 @@ and a way to record the level. `wb release-approvals` runs where no project leve
 its level is read from. It does not change who may approve a plan, the hard
 stops, or the owner-run commands. It may be split into a plan per key.
 **Promotion trigger:** the owner chooses to begin it, after accepting the decision.
+
+### debug-artifacts — Retained diagnostics in `code-work`
+
+**Outcome:** a project that installs `code-work` tells its agent where to keep a diagnostic worth retaining (a trace, a
+log, a probe's output): `.workbench/local/debug/<YYYY-MM-DD>-<topic>/`, the untracked scratch place that
+`repository-boundary.md` defines, with a local README stating the commit, the commands and tool versions, the purpose and
+the conclusion. A durable finding is recorded in a tracked document, a decision or a test and cites no path into scratch.
+Today no shipped module says any of this: the rule was in the owner's global configuration and in this repository's own
+`AGENTS.md`, which no longer carries it, and the inventory row for it (IV3) says `keep global`. The owner's direction,
+2026-10-29: follow `repository-boundary.md` and call the folder `debug`, not `.debug`.
+**Dependencies:** `port-superpowers` (the `diagnose-failure` skill, complete).
+**Boundary:** the `diagnose-failure` skill, its tests and the specs that describe it. The `code-work` policy block is at its
+tested length and is not changed. It edits a shipped package, so its approval is released again by the owner. It does not
+add a command, a module or a rule that a check enforces, and it does not change `repository-boundary.md`'s layout.
+**Promotion trigger:** the owner chooses to begin it.
 
 ### global-config-migration — Move the owner's global Claude configuration into modules
 
