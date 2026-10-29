@@ -722,6 +722,23 @@ decision, the identity convention in the module READMEs, the `verilog` module de
 owner can set to `Current`. Accepted decisions are not edited.
 **Promotion trigger:** the owner chooses to begin it.
 
+### policy-and-module-asks — Restore the dropped policy, and let a module declare an ask
+
+**Outcome:** the policy that the audit of 2026-10-29 found dropped is back where it belongs, and a module can declare the prompts it
+needs. The base `AGENTS.md` gains what no module already says: no unrelated cleanup; deploying, using secrets and destructive cleanup
+need the owner's approval; pull request descriptions describe the change only; prefer the project's documented commands; and a
+`## Source of truth` section that the specs already cite. The groundwork policy block says that the level of `accept-decision`
+governs whether an agent may accept a decision. A module may declare, restrictively, an `ask` for an argument of its own command and
+an `ask` for a read under the home directory; `safe-git remove`, `remote-runner submit` and `fetch`, and the Codex login file read
+use it, as `2026-10-29-workbench-asks-for-remove-submit-and-fetch` decides. The seeded plans README stops saying that nothing reads a
+setting, the READMEs state the identity convention, and the `verilog` description stops saying its second skill is later.
+**Dependencies:** none. The decisions are accepted; the floor rules and the approval identity are built.
+**Boundary:** `base/`, this repository's own `AGENTS.md`, the module declaration schema and its rendering in `workbench/`, the
+declarations and text of the `safe-git`, `remote-runner`, `ask-codex`, `groundwork`, `code-work` and `verilog` modules, and the specs
+that describe them. It adds no level, no check and no `allow` rule, and does not build the `ask` level for `accept-decision`
+(`checkpoint-levels-beyond-block`). Each package edit is released again by the owner.
+**Promotion trigger:** the owner chooses to begin it.
+
 ### approval-identity — Approvals that name the approver by git identity
 
 **Outcome:** every approval record the installer writes names the approver as `Name <email>` from the person's global git
