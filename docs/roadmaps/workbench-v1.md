@@ -548,7 +548,7 @@ the first two show.
 `status` and `search` over the owner's installed MemPalace, the owner-run `init` and `mine`, a policy block and a
 neutral skill that route questions and treat answers as data. It is tooling and not an MCP server.
 **Dependencies:** `module-commands`, `claude-harness`. The first plan ran the real program in a scratch
-palace under `/.debug/`; its findings are in `docs/specs/mempalace.md` ("Evidence").
+palace outside the tracked tree; its findings are in `docs/specs/mempalace.md` ("Evidence").
 **Boundary:** the module and its tests, with a fake `mempalace` in the tests. No change to drawer content an agent
 can make (a search rewrites the palace's own bookkeeping, which the owner accepted), no
 MCP rendering, and no installation or configuration of the program. Writes to the palace are owner-run only.

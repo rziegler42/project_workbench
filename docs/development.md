@@ -164,8 +164,8 @@ its own.
   so do not run a search while a `mine` runs. A low match score means the memory has nothing on the subject: the program
   returns its nearest notes for any query.
 - **Evidence and limits.** The run that settled how the program behaves is in `docs/specs/mempalace.md` ("Evidence"); the
-  limits, including what no test covers, are in "As built, and its limits". The raw traces of that run are untracked, in
-  `/.debug/2026-10-24-mempalace-evidence/` on the machine that made them.
+  limits, including what no test covers, are in "As built, and its limits". The raw traces of that run were kept untracked,
+  in scratch on the machine that made them, and are not part of the repository.
 - **A first hand run** has not been made: no live Claude session has used the skill against a real palace.
 
 ## The verify command

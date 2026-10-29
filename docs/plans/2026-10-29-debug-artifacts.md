@@ -1,6 +1,6 @@
 # Retained diagnostics in code-work
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-29
 Candidate: workbench-v1#debug-artifacts
 Specs: code-work, repository-boundary, global-config-inventory
@@ -136,7 +136,11 @@ Outcome: one blocking finding, applied; the rest are answers for the owner.
 
 ## Result
 
-Increment A is implemented and verified; the commit waits for the owner's word.
+Increment A is implemented, verified and committed (`18b8188`). The owner marked the plan Completed while completion
+criterion 4 was still open, and then showed it met: a read of the rendered `.claude/skills/diagnose-failure/SKILL.md` in
+the test project `../test` shows step 7, including `.workbench/local/debug/`. I saw the skill text the owner pasted and
+did not run the upgrade there or read the project myself. The four stale shipped records were removed afterwards in
+`5e27ac3`, outside this plan, after the owner approved the list.
 
 - **Done.** `diagnose-failure` has a step 7 (retained diagnostics under `.workbench/local/debug/<YYYY-MM-DD>-<topic>/`
   with a local README; scratch grants no authority; a durable finding goes into a tracked document, a decision or a
@@ -147,10 +151,10 @@ Increment A is implemented and verified; the commit waits for the owner's word.
   The code-work root ran 339 tests, OK, 2 skipped. `wb check` and `wb run code-work check` report no problems, and
   `wb verify packages/workbench` ran with no refusal, so the package is first-party again. `tests/run_all.py` ran 5,931
   tests in 12 roots, OK, with 3 skipped; the skips are filesystem and account cases and were not listed one by one.
-- **Not done.** Completion criterion 4, a rendered skill in an attached project, is the owner's `wb upgrade` run. The
-  two stale shipped records the release reported from its first run, and the earlier stale ones, are not removed; that
-  is the owner's. The deferred items below were not started.
+- **Not done.** The deferred items below were not started. Completion criterion 4, a rendered skill in an attached
+  project, was the owner's `wb upgrade` run and is shown met above. The stale shipped records were removed by the owner's
+  approval in `5e27ac3`.
 - **Review.** One round of the `reviewer` agent and one finding, applied (see the review record). No second round was
   asked for.
-- **Commit.** Not made. It needs the owner's word, the trailer `Plan: 2026-10-29-debug-artifacts#A`, and these paths:
-  the skill, the practice test, `code-work.md`, the inventory, this plan, and the two records of the final release.
+- **Commit.** `18b8188`, with the trailer `Plan: 2026-10-29-debug-artifacts#A`, holding the skill, the practice test,
+  `code-work.md`, the inventory, this plan, and the two records of the final release.
