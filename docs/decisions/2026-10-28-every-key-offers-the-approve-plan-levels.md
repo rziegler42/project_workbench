@@ -1,6 +1,6 @@
 # Eight more keys offer the levels that approve-plan offers
 
-Status: Accepted by the owner on 2026-10-29
+Status: Accepted by the owner on 2026-10-29; decision 5 refined for accept-decision by 2026-10-29-accept-decision-offers-the-ask-level
 Date: 2026-10-28
 
 ## Context

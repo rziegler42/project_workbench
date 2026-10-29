@@ -1,6 +1,6 @@
 # Approvals name the approver by git identity and record how they were authorized
 
-Status: Proposed
+Status: Accepted by Robert Ziegler <25854477+rziegler42@users.noreply.github.com> on 2026-10-29
 Date: 2026-10-29
 
 ## Context

@@ -1,6 +1,6 @@
 # The workbench renders an ask for safe-git remove and for remote-runner submit and fetch
 
-Status: Proposed
+Status: Accepted by Robert Ziegler <25854477+rziegler42@users.noreply.github.com> on 2026-10-29
 Date: 2026-10-29
 
 ## Context
