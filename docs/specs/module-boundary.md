@@ -1,9 +1,9 @@
 # Module boundary
 
-Status: Current. Approved by the owner on 2026-10-21. It directs the work but changes no other document by
-itself: `module-contract.md`, `trust-and-approval.md` and the accepted decisions stay as they are until they
-are updated, and the decision `2026-10-21-installer-runs-document-checks` stays in force until the owner
-accepts a decision that supersedes it. No code follows from it until a plan is approved.
+Status: Current. Approved by the owner on 2026-10-21. It is built by the plans `2026-10-21-module-boundary-kit`,
+`2026-10-21-module-commands`, `2026-10-21-module-checks` and `2026-10-21-module-harness-paths`, all completed, and
+`module-contract.md` carries the changes it called for. The decision `2026-10-21-installer-runs-document-checks` is
+`Superseded by 2026-10-21-module-code-lives-in-modules`.
 
 Terms are defined in `terms.md`. The terms this specification adds (the **kit**, a **module command**, a
 **module check**, a **maintainer directory**) are added there with the first plan that builds them.
@@ -285,10 +285,9 @@ Behaviour of `wb check`:
    trusted to be read-only exactly as far as its owner-approved bytes are; the kit makes the reading safe
    and cannot make the helper write nothing.
 
-Once this specification is approved and built, `doccheck`, `refcheck` and `refindex` leave the installer.
-That contradicts the accepted decision `2026-10-21-installer-runs-document-checks`, which stays in force
-until the owner accepts a decision that supersedes it. Nothing in this draft changes it, and no
-implementation follows from the draft before that decision is accepted.
+When this specification was built, `doccheck`, `refcheck` and `refindex` left the installer: the installer has no such file now,
+and the `groundwork` module ships the two checks and the index reader. That contradicted the accepted decision
+`2026-10-21-installer-runs-document-checks`, which is now `Superseded by 2026-10-21-module-code-lives-in-modules`.
 
 ## Declaration schema
 
@@ -484,6 +483,6 @@ approves the specification.
 - `module-contract.md`, `trust-and-approval.md` ("Pinned helpers"), `installer-interface.md`,
   `harness-modules.md`, `groundwork.md`, `code-work.md`
 - [2026-10-21-installer-runs-document-checks](../decisions/2026-10-21-installer-runs-document-checks.md)
-  (to be superseded)
+  (superseded by [2026-10-21-module-code-lives-in-modules](../decisions/2026-10-21-module-code-lives-in-modules.md))
 - [2026-10-20-isolated-launcher-invocation](../decisions/2026-10-20-isolated-launcher-invocation.md)
 - [2026-10-20-first-party-by-location-and-shipped-record](../decisions/2026-10-20-first-party-by-location-and-shipped-record.md)

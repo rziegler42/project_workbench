@@ -75,7 +75,8 @@ Non-goals:
     seen                    where the project was first seen (written by install)
     baselines               acknowledgement baselines, path to SHA-256 (written by install,
                             upgrade, add and acknowledge)
-                            (plan approvals are not built yet)
+    plan-approvals          plan approvals: plan path, region hash, approver and time (written by
+                            approve-plan and delegate-approve-plan; `trust-and-approval.md`)
   bin/wb                    the launcher script, fixed text apart from one path
   bin/run/<uuid>/<name>     a private copy of a pinned helper, only while it runs
 ```

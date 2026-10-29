@@ -31,10 +31,10 @@ Non-goals:
 | provides | `specs`, `roadmaps`, `decisions`, `references` |
 | requires | nothing |
 | blocks | nothing |
-| helpers | none |
+| helpers | two check helpers, `doccheck` and `refcheck`, run by `wb check`; no helper that an agent runs |
 | fills | the `docs-index` slot; the policy slot in `AGENTS.md` |
 | writes | `docs/specs/`, `docs/roadmaps/`, `docs/decisions/`, `docs/references/` and their READMEs |
-| ships | nothing code-bearing |
+| ships | `helper/doccheck` and `helper/refcheck`: read-only checks that run no program and fetch nothing |
 
 It ships neutral skills for drafting a spec, a roadmap and a decision. Templates stay
 in the module and are used when a document is created; no placeholder document is
@@ -240,8 +240,8 @@ tier). Recording evidence and correcting a typo are not checkpoints.
 
 ## As built, and its limits
 
-The module is `packages/workbench/groundwork/`. It ships no code: a declaration, four READMEs, two
-slot blocks and four neutral skills: three that draft a document (`draft-spec`, `draft-roadmap`,
+The module is `packages/workbench/groundwork/`. It ships a declaration, four READMEs, two
+slot blocks, two read-only check helpers (below) and four neutral skills: three that draft a document (`draft-spec`, `draft-roadmap`,
 `draft-decision`), each with its own template beside it, and `brainstorm`, which has none. `draft-decision`
 also carries the rules for a record after it is drafted: approval of a design or a request to record a decision is never
 acceptance and the skill ends at `Proposed`; a changed decision is a new record, and the old one changes only its status
@@ -297,7 +297,8 @@ What is not detected:
 - Installing `groundwork` into a project with no process module succeeds, and
   creates the four document areas and their READMEs, but no placeholder spec,
   roadmap, decision or plan, and no researcher.
-- The module's files match its declaration, and it ships no code.
+- The module's files match its declaration, and its only code is the two read-only check helpers, `doccheck` and `refcheck`, which
+  run no program and write nothing.
 - Installing `groundwork-research` without `groundwork` stops with a
   hard-requirement message, and installing it adds the researcher and the
   `fetch-reference` tool, which its approval lists.

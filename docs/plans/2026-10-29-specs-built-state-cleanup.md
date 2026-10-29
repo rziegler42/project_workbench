@@ -180,4 +180,25 @@ findings, both applied.
 
 ## Result
 
-Empty until work starts.
+**Increment A is done; Increments B and C are not started.** Its commit carries the trailer
+`Plan: 2026-10-29-specs-built-state-cleanup#A`.
+
+- **Done, in the five named specs.**
+  - `groundwork.md`: the two table rows and the two "ships no code" sentences now say the module ships the read-only check helpers
+    `doccheck` and `refcheck`.
+  - `code-work.md`: the `requires` row declares no soft requirement; `delegable` is in the helper and `approval` rows; the plugin
+    sentence says it is no longer enabled because the user-level configuration was reset on 2026-10-29; the three increment F
+    statements say it landed (two security passes, fixes, the approvals released by the owner).
+  - `repository-boundary.md`: the store layout has a `plan-approvals` entry in place of "not built yet".
+  - `module-contract.md`: the helper sentence, the `checks` note and the `commands` row are corrected.
+  - `module-boundary.md`: the status, the link text and the body say it is built and the document-check decision is superseded.
+- **Beyond the listed steps, in the same files and of the same kind, after the review.** `code-work.md`: the checkpoint-settings
+  bullet said `delegate` has no effect, now marked as true when built; "once the delegated approval is built" now reads "since it was
+  built". `module-contract.md`: the `approval` row now lists `delegable`.
+- **Verification as run.** A search of the five files for the old wording finds none; `wb check` and `wb run code-work check` report
+  no problems; `wb verify packages/workbench` ran with no refusal; `git status` showed only documents changed.
+- **Review.** One read-only reviewer pass of the increment: no blocking finding, and every factual claim I checked was confirmed,
+  including that increment F landed, the plan names and statuses, and that the installer has no `doccheck`, `refcheck` or `refindex`
+  file. It raised three non-blocking leftovers, all fixed as above. It could not see a diff and did not rerun my searches.
+- **Left for the owner.** The `delegated-approval` plan's own Result still says increment F is "not yet committed"; it is a completed
+  plan, so I left it. The lines that cite `AGENTS.md` sections in `code-work.md` were not touched, as the plan says.
