@@ -237,3 +237,32 @@ Remaining disagreement: none.
 - **Gate:** the owner ran `wb release-approvals` once for this increment. Four records (`969bbb13…`, `a0335de4…`, `abaaf2b7…`,
   `deadd047…`) are reported stale; none was removed. Increment D removes them after a preview.
 - **Not done:** no independent review (only when the owner asks); no run in the GUI.
+
+### Increment C
+
+- **Read (2026-10-29):** there is no source on the owner's side for TechDraw. FreeCAD's source tree was not fetched. The
+  skill rests on the runs below and on what the installed FreeCAD reports (`supportedTypes()`, each object's
+  `PropertiesList` and enumerations, the module's names and its resource folder).
+- **Written:** `freecad-techdraw` (`SKILL.md` and `reference.md`), and its name in the module's tests (20 skills now). The
+  skill points to `freecad-python` for the `Drawing` to `TechDraw` change.
+- **Run against FreeCAD 1.1.4 (revision 20260928), headless with `freecadcmd`, at the owner's word, from a scratch directory,
+  in memory or a temporary folder:** two probe runs (3 and 10 blocks, none raised), then the 10 blocks of the shipped
+  `reference.md` (none raised; every printed value matched the file). Confirmed: `import TechDraw` works and `import
+  TechDrawGui` fails headless ("Cannot load Gui module in console application"); 46 TechDraw object types and the
+  properties of the page, template, view, dimension, annotation, section, projection group and detail; the four template
+  entries in the resource folder; a page from the A4 landscape template (297 by 210 mm, scale 1.0, first angle); a projected
+  view of a box (4 visible edges, 0 hidden, 4 vertices); `TechDraw.project`, `projectEx`, `projectToSVG` and `projectToDXF`
+  without a page; distance dimensions by edge (20.0, 20.0, 40.0, 40.0); an annotation; `writeDXFPage` and `writeDXFView`
+  (4903 bytes each), `viewPartAsSvg` and `viewPartAsDxf`; saving a document with a page.
+- **Found:** a view has no `getBoundingBox` or `getEdgeCount`; computing a page writes a copy of the template into FreeCAD's
+  user cache folder, outside the project (the skill does not name the path); dimension edge numbers are the view's own.
+- **Not run, marked read in the skill:** everything that needs `TechDrawGui` (interface export, printing), section, projection
+  group and detail views, dimension types other than `Distance`, `References3D`, adding a view to the page after setting its
+  source, and what each of the four shapes from `TechDraw.project` holds.
+- **Verification as run:** test first, 23 tests with 2 failures and 8 errors; then the module tests, 23, OK; package tests,
+  29, OK; the full suite, 5864 tests in 13 roots, OK; `wb run code-work check` (61 plans) and `wb check` found no problems;
+  `git diff --check` printed nothing.
+- **Gate:** the owner ran `wb release-approvals` once for this increment (13 approvals). Six records (`14a79110…`,
+  `26acd5f3…`, `969bbb13…`, `a0335de4…`, `abaaf2b7…`, `deadd047…`) are reported stale; none was removed. Increment D removes
+  them after a preview.
+- **Not done:** no independent review (only when the owner asks); no run in the GUI.

@@ -23,7 +23,7 @@ SKILLS = ("freecad-python", "freecad-part", "freecad-sketcher", "freecad-partdes
           "freecad-parameters", "freecad-mesh", "freecad-reverse-engineering",
           "freecad-image-to-model", "freecad-measure-and-inspection", "freecad-import-export",
           "freecad-assembly", "freecad-fem", "freecad-curves", "freecad-curved-shapes",
-          "freecad-gui-and-workbenches", "freecad-macros", "freecad-mcp", "freecad-draft", "freecad-surface")
+          "freecad-gui-and-workbenches", "freecad-macros", "freecad-mcp", "freecad-draft", "freecad-surface", "freecad-techdraw")
 BUNDLED = {"freecad-reverse-engineering": ("scripts/mesh_report.py",)}  # files below a skill besides SKILL.md and reference.md
 SCRIPT = os.path.join(NEUTRAL, "skills", "freecad-reverse-engineering", "scripts", "mesh_report.py")
 # The sha-256 of the owner's script as read on 2026-10-28 (plan 2026-10-28-freecad-module, Assumptions).
