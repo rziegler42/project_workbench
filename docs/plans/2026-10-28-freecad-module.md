@@ -1,6 +1,6 @@
 # The freecad module
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-28
 Candidate: none (first of two plans for `workbench-v1#cad-modules`; the second, `2026-10-28-freecad-authored-skills`, names the candidate, so it completes only when both are done)
 Specs: module-contract
@@ -792,3 +792,18 @@ companion plan will not complete without it.
 - **Gate:** the owner ran `wb release-approvals` once for this increment. Twenty-two records are reported stale; none was
   removed. Increment I removes them after a preview.
 - **Not done:** no independent review (only when the owner asks).
+
+### Increment I
+
+- **Approvals:** the owner's release after H-A was current and the package tree had not changed since, so no further release
+  was needed. The 22 records that release reported as not part of it were previewed with `wb run safe-git remove --recursive`
+  (22 directories, one entry each; 4 tracked, 18 untracked) and removed with `--confirm` on the owner's "remove them". The
+  removal of the 4 tracked records and the records the release wrote, which are untracked, go in this increment's commit.
+- **Verification as run:** the full suite, 5864 tests in 13 roots, OK, with no stale-approval skip; `wb run code-work check`
+  (61 plans) and `wb check` found no problems; `git diff --check` printed nothing; `python3 -m workbench verify packages/workbench
+  --select freecad --select claude` accepts the module (the verify refuses `--select freecad` alone because no harness is
+  selected, so the plan's form needs the harness beside it).
+- **Plan as a whole:** the module has seventeen skills; the module tests (23) and the package tests (29) pass;
+  `tests/test_skill_names.py` passes with the seventeen new names.
+- **Not done:** no independent review or security review (only when the owner asks); nothing pushed or merged; the second plan,
+  `2026-10-28-freecad-authored-skills`, is not started.

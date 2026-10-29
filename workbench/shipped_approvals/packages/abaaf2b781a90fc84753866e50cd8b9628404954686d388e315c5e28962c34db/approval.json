@@ -1,0 +1,10 @@
+{
+  "approver": "workbench-release",
+  "declaration_hash": "3d21c4e5f53370afa1a9fe9785683bcbf37a5a3d261dc8bffe8fc36538768625",
+  "format": 1,
+  "kind": "module",
+  "subject": "workbench/freecad",
+  "time": "1970-01-01T00:00:00Z",
+  "tree_hash": "ae4afcdf868032803f36471ff9ee6a96a48c3c243a25d789d4bb859bb93a5960",
+  "workbench_version": "0.1.0"
+}

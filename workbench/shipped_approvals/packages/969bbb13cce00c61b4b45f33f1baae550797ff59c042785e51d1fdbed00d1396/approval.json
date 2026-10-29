@@ -1,7 +1,7 @@
 {
   "approver": "workbench-release",
   "commit": null,
-  "declaration_hash": "61775495d86d8954297ec6a9369df862b5106218aff58a1d6930fc069d00ed60",
+  "declaration_hash": "995952d31ce87fcb33e5002d91dcb77c255ee9948dc63f220fa9bc4d29755a7d",
   "format": 1,
   "kind": "package",
   "modules": [
@@ -18,17 +18,22 @@
     {
       "declaration_hash": "bbee74d628101045800cfe5e8d75672920a7d21a935171c914cdc932f0c2eb06",
       "name": "claude",
-      "tree_hash": "cf2d34c94863afe550228488ae6ccdaca3e2189a35a302725bfcaa821abc4777"
+      "tree_hash": "4669e0e09543de14fdf50adf5b7dc57dbb54eb5e6e743c2559838e4399f2c294"
     },
     {
       "declaration_hash": "50cfad42b0e477acb499f437f1272f5e189772c689091801639ea3dfc3ad232c",
       "name": "code-work",
-      "tree_hash": "ac74644e3d990ccd4333040f62311da3458c0529f0b5a403fa1aae9b78480594"
+      "tree_hash": "e2a8d08226953b6d9527d1445140d87e341c1b62c711291de10f18adc863d139"
+    },
+    {
+      "declaration_hash": "3d21c4e5f53370afa1a9fe9785683bcbf37a5a3d261dc8bffe8fc36538768625",
+      "name": "freecad",
+      "tree_hash": "ae4afcdf868032803f36471ff9ee6a96a48c3c243a25d789d4bb859bb93a5960"
     },
     {
       "declaration_hash": "eb8f2f640ad950914c8de822f9c50fe8bc387c4938e656f339f11d092329bf3f",
       "name": "groundwork",
-      "tree_hash": "28076ed1411ec19329eba571cfca6834030d2f4cd9dbafb8a451d358fce37b2b"
+      "tree_hash": "5e392b07f298f4d815b68b64f1c3afcf64a6ea91542f6d53923513a928831938"
     },
     {
       "declaration_hash": "184b1eaf0af1a0482a00da156e33ef42e6da16f6a14a2f71c30d77a9418368f9",
@@ -63,6 +68,6 @@
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "4cd0ba7a8c940b5392aeb41109108b92c5ce743a328f99843d59a9195b7dc3d0",
+  "tree_hash": "2e58886080a8da5e339ba6b9dfaec9f24961ba11de643103829de0f85fca6d39",
   "workbench_version": "0.1.0"
 }
