@@ -431,7 +431,7 @@ review or in the security pass:
 - **`wb check` never runs git.** It reads `.git/index` itself (versions 2 to 4, SHA-1 or SHA-256,
   at most 16 MiB and 1,000,000 entries; a split or sparse index is refused), so the repository's
   configuration, hooks and filters cannot run. "Tracked" means in the index, so a staged file
-  counts as committed. It scans Markdown only, within 4 MiB, 5,000 documents and 5,000 existing-
+  counts as committed. It scans Markdown only, within 8 MiB, 5,000 documents and 5,000 existing-
   path lookups; passing any of these bounds is itself a problem, so `check` exits 1. The stray
   scan stops at 5,000 entries and depth 8 and reports a problem past that, and it warns about an
   unknown entry directly under a harness directory (not a `tolerated` path, nor a directory that

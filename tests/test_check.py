@@ -552,6 +552,15 @@ class Tracked(Clone):
             code, out, err = self.check()
         self.assertIn("not all were looked at", err)
 
+    def test_documents_over_four_mebibytes_in_all_are_looked_at_in_full(self):
+        self.ready()
+        for number in range(3):
+            self.write("docs/big%d.md" % number, b"x" * (1536 * 1024) + b"\n")
+        self.git("add", "docs")
+        code, out, err = self.check()
+        self.assertNotIn("not all were looked at", err)
+        self.assertEqual(0, code)
+
     def test_hostile_names_in_what_git_tracks_are_cleaned(self):
         self.ready()
         self.write("docs/x.md", "[a](../ev\x1b[2Jil‮.txt)\n".encode())
