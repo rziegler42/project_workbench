@@ -255,9 +255,27 @@ it, and project against local settings precedence.
   shell sees (so whether `wb` is found); and hooks through a symlinked path. The last 73,000 characters of the
   hooks page were searched for terms and not read in full.
 
+*Note, 2026-10-29, on the four trials below.* They ran from 2026-10-24 to 2026-10-26, three of them under the owner's former
+user-level configuration (stated in the method of one, and inferred for the two of 2026-10-26 from their results, which name auto
+mode), which was reset to factory defaults on 2026-10-29. They are history and were not re-run. What holds, and
+what does not:
+
+- **Holds from Claude Code's behaviour alone (2.1.310):** the results of "Global against project settings", which
+  replaced the user level with a throwaway configuration directory (a project `deny` and `ask` held against a global `allow`, a
+  global hook ran beside the project's, a global skill replaced a project skill of the same name and a project agent replaced a
+  global one).
+- **Not shown to depend on the configuration, but not re-run (2.1.310 and 2.1.311):** what the two hook trials show about a hook (an
+  exit 2 blocks, a word that a text match cannot see gets through, an agent's frontmatter hook runs and blocks, and is skipped in a
+  folder that is not trusted). Both ran under the former configuration, and nothing in them shows that it mattered.
+- **Depended on the former configuration:** every statement that an `ask` rule "overrides auto mode", and every statement that the
+  auto-mode classifier "remained the barrier", because auto mode was the owner's setting. At factory defaults there is no auto
+  mode, so those describe a configuration that no longer exists. The one observation that the owner's real instruction file loaded
+  beside the throwaway one, whose cause was not established, concerned that configuration and cannot be repeated.
+- **Never established:** whether the owner's former approver hook affected the `ask` trials. The trial text says it was not tested.
+
 ### Global against project settings (Claude Code 2.1.310, 2026-10-24)
 
-What happens when the owner's user-level configuration (`~/.claude`) differs from the project's. Method: `claude -p` runs in a
+What happens when the owner's user-level configuration differs from the project's. Method: `claude -p` runs in a
 throwaway workbench project (122 `deny` and 58 `ask` rules rendered by this harness module), with the user level replaced by a
 throwaway configuration directory chosen with `CLAUDE_CONFIG_DIR` and made deliberately noisy: `allow: Bash(*)`, a `PreToolUse`
 hook on Bash that appended a line to a log, a skill and an agent each named like one of the project's with a marker in its text,
@@ -335,7 +353,7 @@ workbench repository head was `1a731fa`. One run of each case, so each result is
   observation of this session.
 - **No answered on the remote side refused the command.** The session said it did not run the command because it was denied,
   and the terminal prompt closed without a keypress there.
-- **No `PermissionRequest` hook was found** by `grep -rn PermissionRequest ~/.claude/settings.json ~/.claude/plugins` (no output),
+- **No `PermissionRequest` hook was found** by a recursive search of the owner's user-level settings file and plugins folder for the word `PermissionRequest` (no output),
   so whether the owner's global hook fires on an `ask` prompt was not tested. Hooks elsewhere were not searched.
 - **A first rule, `Bash(echo ask-trial:*)`, did not prompt** for `echo ask-trial-1`: the command ran with no prompt noticed. The
   likely cause is that the `:*` form matches whole words; that cause was not confirmed.

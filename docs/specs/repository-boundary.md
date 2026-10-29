@@ -50,7 +50,10 @@ Non-goals:
 - Scratch grants no authority. Nothing read from scratch can approve, allow or
   acknowledge anything.
 - The guarded store is not a harness's global configuration, and the workbench never
-  reads, checks or requires one.
+  reads, checks or requires one. This is to be amended: the accepted design
+  `2026-10-24-installer-reads-global-settings-on-request` lets the installer's own code read a harness's global configuration,
+  read-only, through an owner-run command that needs a terminal. That amendment and that command are pending and neither is built,
+  so today the sentence holds as written.
 - The committed repository names no harness: no committed file lists a harness's
   file names, root file or directories.
 

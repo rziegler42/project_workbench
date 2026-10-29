@@ -45,7 +45,9 @@ a harness renders it, and the command gate that protects the rendering.
   the command gate, which read text (see "The command gate" and "Limits").
 - Verified by the owner's trials, recorded in `harness-modules.md`: an `ask` prompt reaches the owner's remote channel and a Yes
   or No given there runs or refuses the command (Claude Code 2.1.310); a `PreToolUse` hook for `Bash` that exits 2 stops a wrapped
-  command in auto and default mode and a hook that exits 0 leaves an `ask` rule in force (2.1.311).
+  command in auto and default mode and a hook that exits 0 leaves an `ask` rule in force (2.1.311). They ran under the owner's former
+  configuration and have not been re-run since the reset of 2026-10-29; the note before the trials in `harness-modules.md` says
+  what still holds.
 
 ## Behavior
 
@@ -228,8 +230,9 @@ escapes are applied to the pair, so `w""b install`, `wb inst""all` and `wb $'\x6
 commit message or a path that holds the word are allowed. The exact pair `preview <action>` for each action of
 `rules.PREVIEW_ACTIONS` is removed before the search, as `delegate-approve-plan` is, for these keys only; the pattern rule still reads the text as written,
 so a preview that holds an expansion or a glob (`--dir $PWD`) is blocked and is run with the path spelled out. A command that names the word with no launcher
-before it, such as an alias or a script the agent wrote that wraps the call, is not seen; the classifier remains the barrier for
-it, as for the other limits listed under "Limits".
+before it, such as an alias or a script the agent wrote that wraps the call, is not seen; the auto-mode classifier was the barrier
+for it, as for the other limits listed under "Limits", while auto mode was the owner's setting. The reset of 2026-10-29 ended that
+setting, and no barrier for these cases is claimed here under factory defaults.
 
 For these keys two more forms are not taken for the word (built by Increment I; decision `2026-10-27-command-gate-literal-arguments`).
 A command that is exactly one literal `wb run <name> <arguments>`, matched in full on the raw text through `wb` or the store's `bin/wb`, with a
@@ -587,7 +590,9 @@ clarification note) and are tested where a test can show them (`tests/test_comma
   a differently named command that holds the words of such a key (`wb run safe-git commit --subject 'review-engine extend'`) stays
   blocked.
 - A hook is not a boundary. The `ask` rule and the gate are best-effort matches; the auto-mode classifier remained the barrier for the
-  rest (it denied the script and base64 cases in the owner's probe, which the gate did not control).
+  rest (it denied the script and base64 cases in the owner's probe, which the gate did not control), while auto mode was the owner's
+  setting. The reset of 2026-10-29 ended that setting, so for those cases no barrier is claimed here under factory defaults, and
+  that was not tested.
 - A store or settings file that cannot be read blocks every Bash call while a key is relaxed, `wb check` included; the recovery is
   the owner's terminal. "Yes, and don't ask again" writes an allow rule into the per-clone settings file, whose changed hash makes the
   keys read `block`.

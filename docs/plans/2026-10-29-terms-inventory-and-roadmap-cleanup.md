@@ -207,8 +207,8 @@ Plan review by Codex through the `ask-codex` bridge (model `gpt-5.6-terra`), rou
 
 ## Result
 
-**Increment A is done; Increments B, C and D are not started.** Its commit carries the trailer
-`Plan: 2026-10-29-terms-inventory-and-roadmap-cleanup#A`.
+**Increments A and B are done; Increments C and D are not started.** Their commits carry the trailers
+`Plan: 2026-10-29-terms-inventory-and-roadmap-cleanup#A` and `#B`.
 
 ### Increment A
 
@@ -242,3 +242,38 @@ Plan review by Codex through the `ask-codex` bridge (model `gpt-5.6-terra`), rou
   - The root `README.md` and `docs/development.md` say owner-run commands "refuse to run from an agent session". That is true at
     the default and is worded as absolute. They are outside this plan.
   - The identity form in **approver** is marked "not built yet", because the approval-identity plan is not written.
+
+### Increment B
+
+- **Done.**
+  - `superpowers-ports.md`: the purpose is in the past tense; the evidence of use is cited by role, with the statement that this
+    spec read the two files on 2026-10-23 and recorded no hash, that the inventory records a hash of each as read on 2026-10-25, and
+    that the copy kept at the reset, hashed on 2026-10-29, equals neither (the two copy hashes are in the spec); the section written
+    in the future tense carries a dated note; two sentences that gave `global-config-migration` work the reset already did are
+    corrected.
+  - `knowledge-tools.md`: the memory assumption is restated directly and the path to the old repository's instruction file is gone.
+    The backup's instruction file does carry that rule (line 252), so the parenthetical that it was once also the owner's own
+    instruction is true.
+  - `harness-modules.md` and `command-permissions.md`: a dated note before the trial sections says what holds from Claude Code's
+    behaviour alone (the "Global against project settings" trial, which used a throwaway configuration directory), what is not shown
+    to depend on the configuration but was not re-run (the two hook trials), and what depended on the owner's auto mode (every
+    "overrides auto mode" and "the classifier remained the barrier" statement). Three places in `command-permissions.md` say so. A
+    quoted command line that named two user-level paths is restated by role.
+  - `repository-boundary.md`: a note says the amendment and the command of the accepted global-settings design are pending.
+- **Verification as run.** A search of the specs, outside the inventory, for the old instruction and settings file paths, the
+  plugins path and the old repository's name finds none; `wb check` and `wb run code-work check` report no problems;
+  `wb verify packages/workbench` ran with no refusal; `git status` showed only the five specs changed. There was no security
+  checkpoint in this increment.
+- **Review.** One read-only reviewer pass: no blocking finding. Its points, all applied: the claim that the files "changed" was
+  stronger than differing hashes show, so it now says the copy differs for a reason the records do not show, and the hashes are
+  given as provenance; a user-level path in prose was restated by role; the note now says that "three under the former
+  configuration" is inferred, from their results, for the two trials of 2026-10-26, and the two hook trials are labelled "not shown
+  to depend" and not "holds"; and "This is amended, but not yet" reads "This is to be amended".
+- **For the owner.**
+  - An audit report said the "Global against project settings" trial ran on the owner's real configuration. Its method says it used
+    a throwaway configuration directory, so that report was wrong on this point and the spec says what its method says.
+  - The trial of 2026-10-26 found no `PermissionRequest` hook in the owner's user-level settings. The copy of that file kept at the
+    reset holds one. So the hook was probably added after that trial, but nothing in the repository establishes it, and the spec
+    claims nothing beyond the trial's own words.
+  - The script and base64 cases that the classifier denied "in the owner's probe" (`command-permissions.md`) are unchanged text
+    whose source I did not trace to a plan's Result.
