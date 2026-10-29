@@ -1,6 +1,6 @@
 # Specs that say what is built, and agree with each other
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-29
 Candidate: workbench-v1#docs-cleanup-after-reset
 Specs: groundwork, code-work, repository-boundary, module-contract, module-boundary, harness-modules, trust-and-approval, command-permissions, terms, review-engine, action-review, model-bridge, remote-runner, safe-git
