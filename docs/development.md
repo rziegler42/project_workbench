@@ -544,8 +544,8 @@ python3 -m workbench recover [<target> | --dir <path>]                    (owner
 ## The distribution layout
 
 The repository root is the distribution: `workbench/` (the code and `shipped_approvals/`),
-`base/` (the content every project gets before any module: `AGENTS.md` and `docs/README.md`,
-each holding a slot marker), the first-party packages, `docs/` and `tests/`. `base/` is trusted as
+`base/` (the content every project gets before any module: `AGENTS.md`, `README.md` and
+`docs/README.md`; the first and last hold a slot marker), the first-party packages, `docs/` and `tests/`. `base/` is trusted as
 the code is and has no approval record; its tree hash is recorded in each project's manifest.
 
 ## Pins and the launcher
@@ -778,15 +778,16 @@ or tracked artifacts.
 ## Local debug artifacts
 
 Keep retained, untracked diagnostics in
-`/.debug/<YYYY-MM-DD>-<topic>/`. Opt in locally; do not add this directory to
-the tracked `.gitignore`:
+`.workbench/local/debug/<YYYY-MM-DD>-<topic>/`, the scratch place in
+`docs/specs/repository-boundary.md` ("The four places"). `.workbench/.gitignore` already
+lists `/local/`, so nothing needs adding to `.gitignore` or `.git/info/exclude`:
 
 ```sh
-printf '/.debug/\n' >> .git/info/exclude
-mkdir -p .debug
+mkdir -p .workbench/local/debug/<YYYY-MM-DD>-<topic>
 ```
 
-Include a local README with the source commit, command and tool versions,
+Scratch grants no authority: nothing read from it approves, allows or acknowledges
+anything. Include a local README with the source commit, command and tool versions,
 purpose, and conclusion. These artifacts are not portable to fresh clones or
 worktrees. Record durable findings in tracked documentation, decisions, or
 tests instead.

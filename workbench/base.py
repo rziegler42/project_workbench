@@ -6,7 +6,8 @@ approval record (``docs/specs/repository-boundary.md``, "The base"). It owns two
 ``policy`` in ``AGENTS.md`` and ``docs-index`` in ``docs/README.md``, each marked by one
 ``<!-- @slot: <name> -->`` line.
 
-``.workbench/.gitignore`` is the third base file. It is generated from
+``README.md`` is a stub with placeholders and holds no slot. ``.workbench/.gitignore`` is
+the fourth base file. It is generated from
 ``manifest.BASE_IGNORE`` and is not stored here, so ``files`` and the tree hash cover the
 stored files only.
 """

@@ -335,7 +335,7 @@ plan made and the owner may still change.
   | the path | outcome |
   |---|---|
   | does not exist | **create**, exclusively, as `install` does |
-  | a seeded file (the base's `AGENTS.md` and `docs/README.md`, or a file from a module's `writes`) that is a regular file | **keep**: hashed (the content is never printed), never written, recorded in the manifest as `seeded` with the hash of the bytes there |
+  | a seeded file (the base's `AGENTS.md`, `README.md` and `docs/README.md`, or a file from a module's `writes`) that is a regular file | **keep**: hashed (the content is never printed), never written, recorded in the manifest as `seeded` with the hash of the bytes there |
   | a directory the plan needs, which is a real directory | reused |
   | a module-owned path or a living or historical path that exists in any form | **refuse** the whole command |
   | a file where the plan has a directory, a directory or any non-regular file where it has a file, a link at any component of a planned path, a seeded file with more than one hard link, or one over the bound | **refuse** the whole command |

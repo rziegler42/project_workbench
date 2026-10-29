@@ -363,7 +363,7 @@ boundary".
 |---|---|---|---|
 | IV1: prefer test-driven development when a meaningful test is practical | TDD | `test-first` | `move` |
 | IV2: smallest change supported by evidence; no new dependencies or wider public behavior without approval | change size | none as a block; this repository's `AGENTS.md` states it | `keep global`, with OP1 |
-| IV3: retained local diagnostics in `/.debug/<date>-<topic>/`, excluded in `.git/info/exclude` with a README | diagnostics | no module block; this repository's `AGENTS.md` states it for itself, and `repository-boundary.md` names the path | `keep global`: nothing a module carries |
+| IV3: retained local diagnostics in `/.debug/<date>-<topic>/`, excluded in `.git/info/exclude` with a README | diagnostics | no module block; `repository-boundary.md` names the path (`.workbench/local/debug/<date>-<topic>/`) and `docs/development.md` ("Local debug artifacts") describes the practice; this repository's `AGENTS.md` no longer states it | `keep global`: nothing a module carries |
 | IV4: when a test or build fails, use Superpowers systematic debugging and an evidence loop | debugging | `diagnose-failure` | `redesign`: names the plugin skill |
 | IV5: offload long verification to a declared `remote-runner` profile when the project's remote-runner file defines one | when to offload | `remote-runner` module and `run-remote-job` | `move`, once the program reads the project file at its new path (M16; F-C6). The program itself stays. |
 | IV6: `recommend --profile`, `submit --best --profile`, select by declared labels | remote selection | the module's `recommend` and `submit` | `move`, with IV5 |

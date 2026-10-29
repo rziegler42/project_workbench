@@ -370,7 +370,7 @@ class Install(support_install.InstallBase):
         for base, dirs, files in os.walk(place):
             dirs[:] = [d for d in dirs if d not in (".git", ".workbench", ".claude")]
             found += [os.path.relpath(os.path.join(base, n), place) for n in files]
-        self.assertEqual(sorted(READMES + ["AGENTS.md", "CLAUDE.md", "docs/README.md"]),
+        self.assertEqual(sorted(READMES + ["AGENTS.md", "CLAUDE.md", "README.md", "docs/README.md"]),
                          sorted(found))
         self.assertFalse(os.path.exists(os.path.join(place, "docs", "plans")))
         self.assertFalse(os.path.exists(os.path.join(place, ".claude", "agents")))

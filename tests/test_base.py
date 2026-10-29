@@ -24,7 +24,7 @@ class BaseTest(unittest.TestCase):
 
     def test_load_base_hashes_files(self):
         loaded = base.load_base(self.dist)
-        self.assertEqual(["AGENTS.md", "docs/README.md"], sorted(loaded.files))
+        self.assertEqual(["AGENTS.md", "README.md", "docs/README.md"], sorted(loaded.files))
         self.assertEqual(hashing.tree_hash(os.path.join(self.dist, "base"), "the base"),
                          loaded.tree_hash)
         before = loaded.tree_hash
@@ -33,7 +33,7 @@ class BaseTest(unittest.TestCase):
 
     def test_the_shipped_base_loads(self):
         loaded = base.load_base()
-        self.assertEqual(["AGENTS.md", "docs/README.md"], sorted(loaded.files))
+        self.assertEqual(["AGENTS.md", "README.md", "docs/README.md"], sorted(loaded.files))
 
     def test_base_refuses_link_and_special_files(self):
         path = os.path.join(self.dist, "base", "link.md")

@@ -1,21 +1,23 @@
 {
   "modules": ["claude", "groundwork", "code-work", "safe-git", "mempalace", "security-review", "review-engine", "ask-codex", "remote-runner"],
   "seeded": [
-    {"path": "AGENTS.md", "disposition": "diverged",
-     "reason": "the owner's project instructions, written for this repository before the installer existed",
+    {"path": "AGENTS.md", "disposition": "identical",
+     "reason": "reset by the owner to the seed text, with the module policy blocks",
      "blocks": ["workbench/code-work slot:policy", "workbench/groundwork slot:policy", "workbench/mempalace slot:policy"]},
-    {"path": "docs/README.md", "disposition": "diverged",
-     "reason": "this repository's own documentation index and its checks",
+    {"path": "README.md", "disposition": "diverged",
+     "reason": "this repository's own README describes the workbench; the seed is the placeholder stub for a new project"},
+    {"path": "docs/README.md", "disposition": "identical",
+     "reason": "reset by the owner to the seed text, with the module index blocks",
      "blocks": ["workbench/code-work slot:docs-index", "workbench/groundwork slot:docs-index"]},
-    {"path": "docs/plans/README.md", "disposition": "diverged",
-     "reason": "the plan format as adopted by this repository; the seed is the module's longer text"},
-    {"path": "docs/decisions/README.md", "disposition": "diverged",
-     "reason": "this repository's decision index and conventions; the seed is a short stub"},
+    {"path": "docs/plans/README.md", "disposition": "identical",
+     "reason": "reset by the owner to the module's seed text"},
+    {"path": "docs/decisions/README.md", "disposition": "identical",
+     "reason": "reset by the owner to the module's seed text"},
     {"path": "docs/references/README.md", "disposition": "identical",
      "reason": "created by wb adopt from the groundwork seed; this repository keeps no references yet"},
-    {"path": "docs/roadmaps/README.md", "disposition": "diverged",
-     "reason": "this repository's roadmap conventions"},
-    {"path": "docs/specs/README.md", "disposition": "diverged",
-     "reason": "this repository's spec conventions"}
+    {"path": "docs/roadmaps/README.md", "disposition": "identical",
+     "reason": "reset by the owner to the module's seed text"},
+    {"path": "docs/specs/README.md", "disposition": "identical",
+     "reason": "reset by the owner to the module's seed text"}
   ]
 }

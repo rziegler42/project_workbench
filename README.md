@@ -1,89 +1,93 @@
 # project-workbench
 
-A vendor-neutral workbench that creates and maintains projects from packages of
-modules. It serves software, electronics, HDL, research, CAD, 3D printing and reverse
-engineering, with two supported AI harnesses described in the
-[harness modules specification](docs/specs/harness-modules.md).
+A vendor-neutral workbench that creates and maintains projects from packages of modules,
+for people who want reviewed, owner-approved work with a coding agent. It serves software,
+electronics, HDL, research, CAD, 3D printing and reverse engineering, with two supported AI
+harnesses described in the [harness modules specification](docs/specs/harness-modules.md).
 
-> Status: early implementation. The installer, the verifier, owner approvals, the
-> base project, ownership and upgrade, recovery of unfinished writes, and the Claude
-> harness are built and tested. The first content module, `groundwork`, is planned.
-> Nothing here is released yet.
+> **Status:** early implementation. The installer, verifier, owner approvals, base project,
+> ownership and upgrade, unfinished-write recovery, the Claude harness and the first
+> content modules are built and tested. Nothing is released yet.
 
-## What is built
+## Quick start
 
-The code is Python 3 using only the standard library, in `workbench/`, with tests in
-`tests/`. The commands are listed in [Development](docs/development.md).
+Requirements: Python 3.11 or later (standard library only), git and a POSIX shell. There
+is nothing to install; the code runs from a checkout of this repository.
 
-- **Verify and approve.** `verify` checks a package without writing into it. `approve`,
-  `pin` and `release-approvals` are the owner's acts and run only from a terminal.
-- **Install, upgrade and add.** `install` creates a project from a package, `upgrade`
-  and `add` change one, and `preview` shows each change first. `acknowledge` accepts
-  changes made by others, and `recover` clears the marker of an unfinished write.
-- **Claude harness.** The first-party module `claude` in `packages/workbench/` places
-  the instructions, skills, agents, commands and permissions that other modules ship.
-  `attach` renders them per clone, and `install` runs it as its last step.
-- **Memory.** The first-party module `mempalace` lets an agent search the owner's MemPalace (`wb run mempalace search`)
-  and gives the owner terminal-only commands to build it. It is tooling over a pinned helper, not an MCP server, and an
-  agent cannot write to the memory. See the [mempalace specification](docs/specs/mempalace.md) for what it guarantees and
-  what no test covers.
-- **Check.** `check` is read-only. It reads the git index itself and never runs git,
-  and it reports tracked files that point at untracked content.
+Run the commands from a directory you trust, such as this repository's root. A `workbench/`
+directory or a `json.py` in the current directory of an untrusted project would run instead
+of this code. [docs/development.md](docs/development.md) explains this and the `wb` launcher
+that avoids it.
 
-The next plan, `groundwork-module`, adds a module for specs, roadmaps, decisions and
-references, with three neutral skills and document checks in `check`.
+```sh
+python3 -m workbench verify <package>
+python3 -m workbench preview install <target> --package <source> --select <module>
+```
 
-## Install
-
-There is nothing to install. The code is Python 3 using only the standard library, and
-it runs from a checkout of this repository. Nothing is released as a package yet.
-
-Run the commands from a directory you trust, such as this repository's root. A
-`workbench/` directory or a `json.py` in the current directory of an untrusted project
-would run instead of this code. [Development](docs/development.md) explains this and
-the `wb` launcher that avoids it.
+Expected result: `verify` reports on the package and writes nothing into it, and `preview`
+shows what an install would write without writing it.
 
 ## Usage
 
 The documented flow, in order. It has not been run end to end by hand yet, so treat the
-exact arguments as the command table in [Development](docs/development.md) states them.
+exact arguments as the command table in [docs/development.md](docs/development.md) states
+them.
 
 1. `python3 -m workbench verify <package>` checks a package and writes nothing into it.
-2. `python3 -m workbench approve <package>` records your approval. It is owner-run and
-   works only from a terminal.
+2. `python3 -m workbench approve <package>` records your approval. It is owner-run and works
+   only from a terminal.
 3. `python3 -m workbench preview install <target> --package <source> --select <module> ...`
    shows what an install would write.
-4. `python3 -m workbench install <target> --package <source> --select <module> ...`
-   creates the project and attaches the harness as its last step. It is owner-run.
+4. `python3 -m workbench install <target> --package <source> --select <module> ...` creates
+   the project and attaches the harness as its last step. It is owner-run.
 5. `python3 -m workbench check <target>` reports drift and tracked files that depend on
    untracked content. It is read-only.
 
-A repository that already has content is adopted instead, with `python3 -m workbench preview adopt` and
-`python3 -m workbench adopt` (same arguments as `preview install` and `install`). `adopt` creates only
-what is missing and changes no file that exists; it attaches nothing, so run `attach` and then
-`upgrade` to add the blocks it could not fill. See "Adopting a repository that has content" in
-[Development](docs/development.md).
+A repository that already has content is adopted instead, with `preview adopt` and `adopt`
+(same arguments as `preview install` and `install`). `adopt` creates only what is missing and
+changes no file that exists; it attaches nothing, so run `attach` and then `upgrade` to add
+the blocks it could not fill. `upgrade`, `add`, `acknowledge`, `recover` and `attach` are
+described in [docs/development.md](docs/development.md). The owner-run commands refuse to run
+from an agent session.
 
-`upgrade`, `add`, `acknowledge`, `recover` and `attach` are described in
-[Development](docs/development.md). The owner-run commands refuse to run from an agent
-session. Run the tests with `python3 -B -W error tests/run_all.py`.
+The first-party modules are in `packages/workbench/`. Among them, `claude` places the harness
+files, `groundwork` adds specs, roadmaps, decisions and references, `code-work` adds plans and
+the increment loop, and `mempalace` lets an agent search the owner's memory but never write to
+it.
+
+## Development
+
+```sh
+python3 -B -W error tests/run_all.py
+```
+
+Run this before asking for a review or a commit. Project conventions for people and coding
+agents are in [AGENTS.md](AGENTS.md).
+
+| Path | Contents |
+|---|---|
+| `workbench/` | The installer and its commands, in Python 3 |
+| `tests/` | The repository's own tests; each module keeps its own under its `tests/` |
+| `base/` | The files every new project starts with |
+| `packages/workbench/` | The first-party modules |
+| `docs/` | Project documents, indexed in [docs/README.md](docs/README.md) |
 
 ## Documentation
 
-- [Specifications](docs/specs/README.md) — the approved design
-- [Decisions](docs/decisions/README.md) — why the design is the way it is
-- [Roadmap](docs/roadmaps/workbench-v1.md) — the first version, as candidates
-- [Plans](docs/plans/README.md) — the work, one file per plan
-- [Architecture](docs/architecture.md)
-- [Development](docs/development.md) — commands and checks
-- [Documentation guide](docs/README.md)
+All project documents are indexed in [docs/README.md](docs/README.md). The commands, checks and
+workflows are in [docs/development.md](docs/development.md). The `workbench-v1`
+[roadmap](docs/roadmaps/workbench-v1.md) lists the work, and completion is derived from the
+plans that name each candidate. Known limits are recorded in each specification, notably the
+"As built, and its limits" section of the harness modules specification.
 
-## Project status
+## Contributing
 
-The `workbench-v1` roadmap lists the work, and completion is derived from the plans
-that name each candidate. Known limits and open items are recorded in each
-specification, notably the "As built, and its limits" section of the harness modules
-specification.
+Changes follow [AGENTS.md](AGENTS.md). A change starts as a roadmap candidate, becomes a plan
+the owner approves, and lands as reviewed local commits.
+
+## Security
+
+No private reporting channel is defined yet.
 
 ## License
 

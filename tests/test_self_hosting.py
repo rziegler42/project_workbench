@@ -138,7 +138,10 @@ class Relation(unittest.TestCase):
 
     def test_a_seed_equal_file_must_be_recorded_identical(self):
         planned = installer_plan(self.modules)
-        path, (_, blocks) = next(iter(sorted(planned.items())))
+        diverged = sorted(r["path"] for r in self.records if r["disposition"] == "diverged")
+        self.assertTrue(diverged, "no seeded path is recorded diverged")
+        path = diverged[0]
+        _, blocks = planned[path]
         stand_in = dict(planned)
         stand_in[path] = (hashlib.sha256(read(path)).hexdigest(), blocks)
         records = [dict(r) for r in self.records]
