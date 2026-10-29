@@ -266,3 +266,17 @@ Remaining disagreement: none.
   `26acd5f3…`, `969bbb13…`, `a0335de4…`, `abaaf2b7…`, `deadd047…`) are reported stale; none was removed. Increment D removes
   them after a preview.
 - **Not done:** no independent review (only when the owner asks); no run in the GUI.
+
+### Increment D
+
+- **Approvals:** the owner's release after Increment C (13 approvals) covers the final package tree; nothing under
+  `packages/` changed afterwards. The preview of `wb run safe-git remove --recursive` listed six stale records (`14a79110…`,
+  `26acd5f3…`, `969bbb13…`, `a0335de4…`, `abaaf2b7…`, `deadd047…`, one file each; two were tracked, four untracked) and, on the
+  owner's "remove them", they were removed. The two records of the current release (`da4c0e05…`, `f5529bae…`) are new and
+  are committed with this increment.
+- **Verification as run:** the full suite, 5864 tests in 13 roots, OK, with no stale-approval skip; `wb run code-work check`
+  (61 plans) and `wb check` found no problems; `git diff --check` printed nothing; `python3 -m workbench verify
+  packages/workbench --select freecad --select claude` accepted the module.
+- **Roadmap:** criterion 6 is not met. I drafted `Proposed` text for the `cad-modules` entry in chat for the owner; the roadmap
+  was not edited. The plan stays `In Progress` until the owner revises the entry.
+- **Not done:** no independent review (only when the owner asks); the plan is not `Completed`.

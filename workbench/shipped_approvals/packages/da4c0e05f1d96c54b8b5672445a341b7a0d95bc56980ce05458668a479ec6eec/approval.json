@@ -28,7 +28,7 @@
     {
       "declaration_hash": "3d21c4e5f53370afa1a9fe9785683bcbf37a5a3d261dc8bffe8fc36538768625",
       "name": "freecad",
-      "tree_hash": "ae4afcdf868032803f36471ff9ee6a96a48c3c243a25d789d4bb859bb93a5960"
+      "tree_hash": "0df2eb03950df880d7aafe5bdb1f3a0814a82acc1ebe11aa1becf9c40c04a533"
     },
     {
       "declaration_hash": "eb8f2f640ad950914c8de822f9c50fe8bc387c4938e656f339f11d092329bf3f",
@@ -68,6 +68,6 @@
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "2e58886080a8da5e339ba6b9dfaec9f24961ba11de643103829de0f85fca6d39",
+  "tree_hash": "fbdb1e2af19812be8a0bf59ef1079665bebf5782514e6b86c545ebed2f6aa8fb",
   "workbench_version": "0.1.0"
 }
