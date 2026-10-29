@@ -91,6 +91,12 @@ class Skills(unittest.TestCase):
             self.assertGreater(len(match.group(1)), 40, name)
             self.assertLessEqual(len(match.group(1)), neutral.MAX_DESCRIPTION_CHARS, name)
 
+    def test_the_module_description_names_both_skills_and_not_a_later_one(self):
+        description = declaration()["description"]
+        self.assertNotIn("later", description)
+        self.assertIn("Verilator", description)
+        self.assertIn("SymbiYosys", description)
+
     def test_each_begins_with_its_scope(self):
         for name in SKILLS:
             body = skill_text(name).split("\n---\n", 1)[1]

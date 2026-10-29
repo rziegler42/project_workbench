@@ -15,9 +15,13 @@ One status line, `Status: <value>`, comes before the first `##` heading. The val
 `Proposed`, `Accepted`, `Rejected` and `Superseded`. A superseded record names its successor
 with a line `Superseded by <name>` beside the status line.
 
-Accepting a decision is the owner's act. An agent writes a record as `Proposed` and asks.
-Once accepted, a record is not rewritten: a correction or a change of mind is a new record
-that supersedes it.
+Accepting a decision is the owner's act, unless the owner has set the level of `accept-decision`
+to let the agent accept (the `draft-decision` skill says how); otherwise an agent writes a
+record as `Proposed` and asks. Once accepted, a record is not rewritten: a correction or a
+change of mind is a new record that supersedes it.
+
+A status line that says who accepted a record names that person by their git identity, as
+`Status: Accepted by Name <email> on YYYY-MM-DD`. An older record keeps the form it was written in.
 
 ## Contents
 

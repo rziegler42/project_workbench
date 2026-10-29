@@ -329,7 +329,9 @@ Increment C of the plan `2026-10-27-levels-for-the-review-workflow`; "Which leve
 that key has a preview digest of its own, built as `approve-plan`'s is (for an owner-run argument of a module's command, once its
 declaration names a `preview` argument; `verify` checks the name, and the digest the argument prints is the module's to build). Every key built by the plan offers `none`; the keys that still offer `block` only are listed under "Not built". Only the review engine's five owner-run arguments have a digest of their own and so offer `ask` besides `approve-plan` (built by Increments E and F of the plan `2026-10-27-levels-for-the-review-workflow`). At `none` an owner-run command runs without a terminal
 and without a harness `deny`; the command's own checks of its input and its log entry apply, and the terminal prompt does not.
-`accept-decision` offers `block` and `none`, and `AGENTS.md` says that the owner decides who accepts a decision.
+`accept-decision` offers `block` and `none`. Since 2026-10-29 the groundwork policy block in `AGENTS.md` says that accepting a
+decision is a checkpoint that stops by default and that the level `wb settings` prints for it says whether the agent may accept; the
+`draft-decision` skill says what each level allows.
 
 **One table** (built by Increment B). The `levels` table is the only place a level is set. A version 1 file's `checkpoints` are read as a fallback for a
 key the table does not mention, and a table entry wins in either direction, so loosening a key is one edit. The checkpoint words

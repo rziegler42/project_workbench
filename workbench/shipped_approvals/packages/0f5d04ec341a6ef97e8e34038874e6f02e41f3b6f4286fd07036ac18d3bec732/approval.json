@@ -1,10 +1,10 @@
 {
   "approver": "workbench-release",
-  "declaration_hash": "e4fad68679b21445975210f29eb8076779bf046f2f9303807a194da1f7e4057f",
+  "declaration_hash": "aef7bdecf2bcba0b2c8da77bea31b713e296e96a22900f13fd4e4b58a39678da",
   "format": 1,
   "kind": "module",
   "subject": "workbench/verilog",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "1f9418a666288901f8657efa6faf97c860cb414b932cf6822ea20bf21edf6241",
+  "tree_hash": "23392f5ed6ad08dc6f8e7fdabde4456e3411433ae7dad88eb587c442fd928cb7",
   "workbench_version": "0.1.0"
 }

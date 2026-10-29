@@ -189,22 +189,34 @@ new shipped records and the removed stale ones.
 **Dependencies:** Increment C (so that the release of D follows the release of C).
 **Affected areas:** `packages/workbench/groundwork/files/blocks/policy.md`,
 `packages/workbench/groundwork/files/docs/decisions/README.md`, `packages/workbench/code-work/files/docs/plans/README.md`,
-`packages/workbench/verilog/module.json`, their tests, `docs/specs/groundwork.md`, and the shipped approvals the release rewrites.
+`packages/workbench/verilog/module.json`, their tests (the groundwork test that pins the policy line among five rules),
+`docs/specs/groundwork.md`, the shipped approvals the release rewrites, and this repository's own copies of the three texts, which
+`tests/fixtures/self_hosting_dispositions.json` says are `identical` to the seed: `AGENTS.md` (the groundwork policy block),
+`docs/decisions/README.md` and `docs/plans/README.md`.
 **Steps:**
 1. In the groundwork policy block, replace the line "Only the owner accepts a decision. Write it as `Proposed` and stop to ask." with
    one that says that accepting a decision is a checkpoint whose level `wb settings` prints, and that the `draft-decision` skill says
    what the agent does at each level. It repeats nothing the skill says; the skill is the one place that spells out the `none` case.
 2. In the seeded decisions README, say that a status line that names who accepted a record names that person by git identity,
-   `Name <email>`, as `Accepted by Name <email> on YYYY-MM-DD`, and that an older record keeps the form it was written in. In the
+   `Name <email>`, as `Accepted by Name <email> on YYYY-MM-DD`, and that an older record keeps the form it was written in. Its
+   sentence "Accepting a decision is the owner's act. An agent writes a record as `Proposed` and asks." leaves out the `none` case
+   that the policy block now points at, so it says instead that accepting a decision is the owner's act unless the owner has set
+   the level of `accept-decision` to let the agent accept (the `draft-decision` skill says how), and that otherwise an agent writes
+   the record as `Proposed` and asks. In the
    seeded plans README, replace "and nothing yet reads a setting to proceed" with the true statement that `wb settings` prints the
    level of each checkpoint and that the default, `block`, stops; and say that a plan's approval is a record that names the approver
    by git identity. Nothing in a seeded README cites a spec that a new project lacks.
 3. In `verilog/module.json`, replace "a skill for simulation with Verilator and, later, one for formal proofs with SymbiYosys" with a
    description of its two skills, which exist.
 4. Write the tests first where a test can see the text (the module tests that read these files), and update `groundwork.md` where it
-   still describes the block or the levels as it was.
-5. The edits make the shipped approvals stale. Stop and ask the owner to run `wb release-approvals`; then run the tests, read the
-   changed shipped records, list the stale ones and remove them only with the owner's approval of the list.
+   still describes the block or the levels as it was. The groundwork test that lists the five rules of the policy block names the
+   old sentence "Only the owner accepts a decision" and is changed to the new one.
+5. Make the same three text changes in this repository's own `AGENTS.md` (the groundwork block between its markers),
+   `docs/decisions/README.md` and `docs/plans/README.md`, so that the self-hosting test still finds them identical to the seed.
+6. The package edits (the seeded texts, the `verilog` description and the groundwork test) make the shipped approvals stale and the
+   edit gate refuses the next edit, so they are made in one scripted pass, as in Increment C, with the owner's word each time. Stop
+   and ask the owner to run `wb release-approvals`; then run the tests, read the changed shipped records, list the stale ones and
+   remove them only with the owner's approval of the list.
 **Verification:** the module tests pass; the `tests` root passes; `wb verify packages/workbench` runs with no refusal after the
 release; `wb check` and `wb run code-work check` report no problems; only the named paths, the new shipped records and the removed
 stale ones changed.
@@ -254,7 +266,8 @@ meaningful finding; two findings, both applied. The text applied after round 2 i
 ## Result
 
 **Increment A is done and committed (`0907cbe`); Increment B is done and committed (`41ffe9f`, with a fix in `ce683c0`); Increment C
-is done and awaits the owner's word to commit; D is not started.**
+is done and committed (`2053f77`, with the upgrade of the installed copies in `64214c7`); Increment D is done and awaits the owner's
+word to commit.**
 
 ### Increment A
 
@@ -370,5 +383,51 @@ is done and awaits the owner's word to commit; D is not started.**
   `commit-changes` and `run-remote-job` need no change.
 - **The inventory.** On the owner's word, one dated line was added to the status of F-B2 in `global-config-inventory.md`, saying the
   `ask` was built on 2026-10-29. The rows above it remain the state of 2026-10-25 to 28.
-- **Not done.** Nothing is committed. The owner's `wb rerender` and a check that the rendered settings list the asks and that a
-  `wb run safe-git remove` raises the harness's prompt (criterion 6) is the owner's run, after the commit.
+- **Not done.** Committed as `2053f77`. The owner then ran `wb upgrade` and `wb rerender`, and the rendered
+  `.claude/settings.local.json` was read: `remove`, `submit` and `fetch` are in `ask` in every spelling, `commit` is in neither
+  list, `fetch-overwrite` is in `deny` only, `Read(//Users/rziegler/.codex/auth.json)` is in `ask`, and there is no `allow` key. What
+  was not seen is the live prompt itself (criterion 6), which only a use of one of the commands shows.
+
+### Increment D
+
+- **The plan was amended before the work.** Reading the files showed what the approved Increment D did not cover: this repository's own
+  `AGENTS.md`, `docs/decisions/README.md` and `docs/plans/README.md` are `identical` to the seeds in
+  `tests/fixtures/self_hosting_dispositions.json`; a groundwork test pinned the old policy sentence; and the seeded decisions README
+  said "Accepting a decision is the owner's act" with no `none` case. The plan was edited to cover them and the owner approved it
+  again at the level `ask` (region `cec490cb…`) before any edit.
+- **Done.**
+  - The groundwork policy block says that accepting a decision is a checkpoint that stops by default, and that the level of
+    `accept-decision` that `wb settings` prints says whether the agent may accept; the `draft-decision` skill says what each level
+    allows.
+  - The seeded decisions README says that accepting a decision is the owner's act unless the owner has set that level to let the
+    agent accept, and that a status line that names who accepted a record names that person by git identity, `Name <email>`, an
+    older record keeping its form.
+  - The seeded plans README says that every checkpoint stops by default, that `wb settings` prints the level of each, and that a
+    plan's approval record names the approver by git identity and how the run was authorized; the sentence "nothing yet reads a
+    setting to proceed" is gone.
+  - The `verilog` description names its two skills.
+  - The repository's own `docs/decisions/README.md` and `docs/plans/README.md` match the seeds; `docs/specs/groundwork.md` and two
+    lines of `command-permissions.md` say what is now true.
+- **A mistake of mine.** I first edited the groundwork block in this repository's own `AGENTS.md` by hand. That block is
+  upgrade-managed: the manifest records it, so `wb check` reported "the block workbench/groundwork differs from the manifest" and the
+  upgrade preview called it a conflict. I restored the old block, and the owner's `wb upgrade` wrote the new one; the seeded READMEs
+  are different, because an upgrade never touches a seeded file, so their hand edits are the right route.
+- **How the package edits were made.** The pass was a script (`apply_d.py`) under the owner's word, with every anchor checked once and
+  the seeds checked equal to this repository's copies and to the `AGENTS.md` text before anything was written. One test I had not
+  seen needed a second edit: `test_an_edited_policy_block_is_a_conflict_…` made its "edited" block by replacing the words "Only the
+  owner", which no longer exist, so the block stayed unedited. The whole suite found it, and a one-word change fixed it with one more
+  release.
+- **The releases and records.** The owner ran `wb release-approvals` twice for D and read and approved the records each time. The
+  shipped records now are format 1, `workbench-release`, no `via`: module `groundwork` (declaration `eb8f2f640ad9`, tree
+  `d8cc0ff2bbbf`), `code-work` (`50cfad42b0e4`, `9c1116bd317f`), `verilog` (`aef7bdecf2bc`, `23392f5ed6ad`) and the package
+  (`61775495d86d`, `978de0e7e114`). Six stale records were removed with `wb run safe-git remove --recursive --confirm` on the owner's
+  approval of the list. The other eight module records are unchanged.
+- **Verification as run.** The whole `run_all.py` on the final package tree: 6,053 tests in 12 roots, OK. After the owner's
+  `wb upgrade`, `wb check` reports no problems, the groundwork block in `AGENTS.md` equals `policy.md`, and `test_self_hosting` (3)
+  and `test_base` (8) pass; the `tests` root was run again after the upgrade. `wb verify packages/workbench` runs with no refusal;
+  `wb run code-work check` reports no problems.
+- **Review.** One read-only reviewer pass: no blocking finding. Applied: the stale lines in `command-permissions.md` and
+  `groundwork.md`. Not applied, each non-blocking and each needing another release for a small gain: the block says "unless the
+  level … says otherwise", which is wider than the skill's `none` (it defers to the skill and keeps the stop as the default; the
+  `ask` wording is planned in the eight-key work); the five-rules test does not assert the `accept-decision` clause.
+- **Not done.** Nothing is committed. A project already created from the base keeps its own seeded texts.
