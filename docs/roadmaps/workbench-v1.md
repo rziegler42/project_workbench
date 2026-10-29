@@ -722,6 +722,19 @@ decision, the identity convention in the module READMEs, the `verilog` module de
 owner can set to `Current`. Accepted decisions are not edited.
 **Promotion trigger:** the owner chooses to begin it.
 
+### approval-identity — Approvals that name the approver by git identity
+
+**Outcome:** every approval record the installer writes names the approver as `Name <email>` from the person's global git
+configuration, records how it was authorized (`via`: terminal, ask, delegated or none), and no longer falls back to the word
+`owner`, as `2026-10-29-approvals-name-the-approver-by-git-identity` decides. The record formats that hold the approver are
+raised one version, and the commands and the specs show the approval as one sentence.
+**Dependencies:** none. The decision is accepted and the approval records are built (`module-approvals`, plan approval records,
+`delegated-approval`).
+**Boundary:** `workbench/` and its tests, and the specs that describe the records and the word "approver". It does not decide who
+may approve, add a setting for an identity, or change the shipped approvals. The convention in the decisions and plans READMEs is
+module text and goes with the policy and module-asks work.
+**Promotion trigger:** the owner chooses to begin it.
+
 ### global-config-migration — What remains of the owner's global Claude configuration
 
 **Outcome:** what `~/.claude` carried for project work is supplied by installed modules, so a project gives a consistent
