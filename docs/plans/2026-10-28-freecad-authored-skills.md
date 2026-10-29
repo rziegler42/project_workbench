@@ -1,6 +1,6 @@
 # The freecad module: authored skills
 
-Status: In Progress
+Status: Completed
 Created: 2026-10-28
 Candidate: workbench-v1#cad-modules
 Specs: module-contract
@@ -138,6 +138,33 @@ that need a display are marked not run. The `Drawing` to `TechDraw` change is a 
 5. On the owner's word, make the one local commit with `wb run safe-git commit`, the exact paths and the trailer below.
 **Verification:** `python3 -B -W error tests/run_all.py` green with no stale-approval skip; the document checks print nothing.
 **Evidence:** the one local commit, trailer `Plan: 2026-10-28-freecad-authored-skills#D`.
+
+### Increment E — Corrections from the independent review
+
+**Outcome:** the three authored skills state as fact only what their shipped `reference.md` shows, and the points the
+independent review of 2026-10-29 found are corrected or recorded as not done. The review's findings are untrusted input and
+each is judged on the evidence before it is applied.
+**Dependencies:** D.
+**Affected areas:** the `SKILL.md` and `reference.md` of `freecad-draft`, `freecad-surface` and `freecad-techdraw`; the module's
+tests only if the owner asks for a stronger test of distinct descriptions; the shipped approvals (by `release-approvals`);
+this plan's Result.
+**Steps:**
+1. Judge each finding of the review on the files, and record the decision for each in the Result. Findings: the Surface
+   `Extend` result that `reference.md` does not show; the Draft signature table that omits `face` and shortens parameter
+   names; "six extend values" in the Surface table; statements of fact in the three `SKILL.md` files that no shipped block
+   shows; the Draft "Common mistakes" row about fusing an array; the TechDraw description's cross-reference and the
+   "every block" sentence in its reference; the wording of "Do every check below".
+2. For each statement of fact without a shipped run, either add a block to `reference.md` or mark the statement read. Each
+   new block is run in FreeCAD 1.1.4 headless only at the owner's word, from a scratch directory, and a printed value that
+   differs from an expected one is corrected to what printed.
+3. Stage the changed files in a scratch directory and copy them in with one command; ask the owner to run `wb release-approvals`.
+4. Run the module's tests, the package tests, the full suite, `wb run code-work check`, `wb check` and `git diff --check`.
+5. Record the increment in the Result, set the plan `Completed` only when criterion 3 and criterion 6 hold, and stop for the owner.
+6. On the owner's word, make the one local commit with `wb run safe-git commit`, the exact paths (the new approval records
+   and any stale ones removed after a preview and the owner's "remove them" included) and the trailer below.
+**Verification:** the module's tests; the package tests; the full suite with no stale-approval skip; the recorded FreeCAD
+runs of every new block.
+**Evidence:** the one local commit, trailer `Plan: 2026-10-28-freecad-authored-skills#E`.
 
 ## Verification for the plan as a whole
 
@@ -291,3 +318,43 @@ Remaining disagreement: none.
 - **Verification after the roadmap edit:** `wb run code-work check` (61 plans) and `wb check` found no problems; `git diff
   --check` printed nothing.
 - **Not done:** no independent review (only when the owner asks).
+
+### Increment E
+
+- **Decisions on the review of 2026-10-29** (the reviewer's report is untrusted input; each finding was checked against the
+  files):
+  - F1, the roadmap said "no bundled script": applied before this increment (commit `0a7ae69`).
+  - F2, the `Extend` result in `freecad-surface` that `reference.md` did not show: applied; the text now quotes the shipped
+    case (`ExtendUPos` 0.5 with `ExtendUNeg` 0.1: x -1 to 15, area 160.0).
+  - F3, facts with no shipped run: applied, each by a run or by removal. Run and recorded: the seven Surface types, the module
+    names `BlendCurve` and `BlendPoint`, `Surface::CurveOnMesh` refused as a document object type, `Curved` and `Coons` on the
+    flat square, `Cut` with a solid, a shell and a box face; `rotate` and `scale` in place and on a list, `offset` before a
+    recompute (raised `AttributeError`) and with a reversed parallel vector, the `TypeId` of a wire, spline, clone and mirror,
+    the signatures of `make_point` and `makeArray`; the TechDraw type count, the template folder and the template copy in the
+    cache folder. Removed or reworded because the runs did not support them: "a boundary of an arc and two lines" for Coons, the
+    quoted `Cut` error message and "a solid or a shell failed", "printed no warning" for the camelCase names (what the runs
+    show is that they are the same function objects), "an older argument order" for `makeArray`, "write nothing" for
+    `viewPartAsSvg` and `viewPartAsDxf`.
+  - F4, the Draft signature table: applied; it now gives the printed signatures and a note to pass optional arguments by keyword.
+  - F5, the fuse row: applied; it names Part's `multiFuse` and `freecad-part`.
+  - F6, wording: applied (four extend fractions and two flags, "Use these checks", the TechDraw description's cross-reference
+    to `freecad-part`, the sentence about which blocks use the helpers).
+  - F7, a stronger test of distinct descriptions, the test docstring and a separate count assertion: not done; the owner did not
+    ask for it.
+- **Corrections to earlier claims, found by the new runs:** a Draft clone is a `Part::Part2DObjectPython`, not a
+  `Part::FeaturePython`; there are 45 TechDraw types, not 46; `Surface::Cut` with a solid gave a valid shell (area 364.0) and
+  with a shell gave 400.0, the plane unchanged, with no error, so the earlier statement that it fails was wrong.
+- **Run against FreeCAD 1.1.4 (revision 20260928), headless with `freecadcmd`, at the owner's word, from a scratch directory,
+  in memory or a temporary folder:** the three changed `reference.md` files: Draft 21 blocks, Surface 13, TechDraw 11; none
+  raised. The TechDraw file was run twice because its first new block lacked `import TechDraw` (the type count printed 0); it
+  was fixed and rerun. After the runs only the expected-value comments and the text of the `SKILL.md` files changed.
+- **Written:** the `SKILL.md` and `reference.md` of `freecad-draft`, `freecad-surface` and `freecad-techdraw`. The module's tests
+  did not change.
+- **Verification as run:** the module tests, 23, OK; package tests, 29, OK; the full suite, 5864 tests in 13 roots, OK; `wb run
+  code-work check` (61 plans) and `wb check` found no problems; `git diff --check` printed nothing; `python3 -m workbench
+  verify packages/workbench --select freecad --select claude` accepted the module.
+- **Gate:** the owner ran `wb release-approvals` once for this increment (13 approvals). Two records (`da4c0e05…`,
+  `f5529bae…`, both tracked) are reported stale and previewed for removal; they are removed only on the owner's word.
+- **Criteria:** 3 (each fact in a new skill has a recorded run, every other statement is marked read) and 6 (the roadmap entry)
+  now hold, so the plan is set `Completed`.
+- **Not done:** no second independent review of these corrections (only when the owner asks); no run in the GUI.

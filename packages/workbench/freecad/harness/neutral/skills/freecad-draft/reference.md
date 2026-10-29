@@ -57,6 +57,7 @@ doc.recompute()
 print(open_wire.Closed, round(open_wire.Shape.Length, 3))                                      # False 15.0
 print(closed_wire.Closed, closed_wire.Shape.ShapeType, len(closed_wire.Shape.Faces))          # True Face 1
 print(round(spline.Shape.Length, 3))                                                          # 14.789
+print(open_wire.TypeId, closed_wire.TypeId, spline.TypeId)                                    # Part::FeaturePython Part::FeaturePython Part::FeaturePython
 ```
 
 ## Face or wire, then a solid
@@ -138,6 +139,31 @@ copies = Draft.move([a, b], V(0, 5, 0), copy=True)
 print(type(copies).__name__, [o.Name for o in copies])                                        # list ['Rectangle001', 'Circle001']
 ```
 
+## Rotate and scale in place, and on a list
+
+```python
+import FreeCAD as App
+import Draft
+
+V = App.Vector
+doc = App.newDocument("d")
+a = Draft.make_rectangle(10, 5)
+b = Draft.make_rectangle(10, 5)
+doc.recompute()
+same = Draft.rotate(a, 90, V(0, 0, 0))
+doc.recompute()
+bb = a.Shape.BoundBox
+print(same is a, round(bb.XMin, 3), round(bb.XMax, 3), round(bb.YMin, 3), round(bb.YMax, 3))    # True -5.0 0.0 0.0 10.0
+bigger = Draft.scale(a, V(2, 2, 2), center=V(0, 0, 0))
+doc.recompute()
+print(bigger is a, round(a.Shape.Area, 3), [o.Name for o in doc.Objects])                     # True 200.0 ['Rectangle', 'Rectangle001']
+turned = Draft.rotate([a, b], 90, V(0, 0, 0), copy=True)
+resized = Draft.scale([a, b], V(2, 2, 2), center=V(0, 0, 0), copy=True)
+doc.recompute()
+print(type(turned).__name__, [o.Name for o in turned], type(resized).__name__, [o.Name for o in resized])
+# list ['Rectangle002', 'Rectangle003'] list ['Rectangle004', 'Rectangle005']
+```
+
 ## Offset
 
 ```python
@@ -170,9 +196,27 @@ off = Draft.offset(wire, V(1, 0, 0), copy=True)      # parallel to the first edg
 doc.recompute()
 bb = off.Shape.BoundBox
 print(round(bb.XMin, 3), round(bb.XMax, 3), round(bb.YMin, 3), round(bb.YMax, 3))             # -1.0 11.0 0.0 11.0   a notice "something wrong with firstDir" is printed
+back = Draft.offset(wire, V(-1, 0, 0), copy=True)     # parallel to the first edge but pointing the other way
+doc.recompute()
+bb = back.Shape.BoundBox
+print(round(bb.XMin, 3), round(bb.XMax, 3), round(bb.YMin, 3), round(bb.YMax, 3))             # -1.0 11.0 0.0 11.0   the same result: the sign along the first edge makes no difference
 inplace = Draft.offset(wire, V(0, -1, 0))             # copy=False changes the object itself
 doc.recompute()
 print(inplace is wire, round(wire.Shape.BoundBox.XMin, 3), round(wire.Shape.BoundBox.XMax, 3))    # True -1.0 11.0
+```
+
+```python
+import FreeCAD as App
+import Draft
+
+V = App.Vector
+doc = App.newDocument("d")
+wire = Draft.make_wire([V(0, 0, 0), V(10, 0, 0), V(10, 10, 0), V(0, 10, 0)], closed=True)
+try:
+    Draft.offset(wire, V(0, -1, 0), copy=True)        # no recompute yet, so the shape is not computed
+    print("no error")
+except Exception as error:
+    print("raised", type(error).__name__)                  # raised AttributeError   a notice "Either Part.Wire or Part.Edges should be provided" is printed first
 ```
 
 ```python
@@ -301,6 +345,7 @@ clone = Draft.make_clone(rect)
 mirrored = Draft.mirror(rect, V(0, 0, 0), V(0, 1, 0))       # the mirror line passes through the two points
 doc.recompute()
 print(clone.Shape.BoundBox.XMax, mirrored.Name, mirrored.Shape.BoundBox.XMin, mirrored.Shape.BoundBox.XMax)    # 10.0 Mirror -10.0 0.0
+print(clone.TypeId, mirrored.TypeId)                                                          # Part::Part2DObjectPython Part::Mirroring
 rect.Length = 20                                      # a clone follows its original
 doc.recompute()
 print(clone.Shape.BoundBox.XMax)                                                              # 20.0
@@ -323,8 +368,9 @@ import inspect
 
 import Draft
 
-for name in ("make_line", "make_circle", "make_rectangle", "make_polygon", "make_wire", "make_bspline", "move", "rotate",
-             "scale", "offset", "make_ortho_array", "make_polar_array", "make_circular_array", "make_path_array"):
+for name in ("make_line", "make_circle", "make_rectangle", "make_polygon", "make_wire", "make_bspline", "make_point", "move",
+             "rotate", "scale", "offset", "make_ortho_array", "make_polar_array", "make_circular_array", "make_path_array",
+             "makeArray"):
     print(name, inspect.signature(getattr(Draft, name)))
 # make_line (first_param, last_param=None)
 # make_circle (radius, placement=None, face=None, startangle=None, endangle=None, support=None)

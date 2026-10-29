@@ -2,6 +2,23 @@
 
 Each block is self-contained and was run headless with `freecadcmd` on FreeCAD 1.1.4. The printed value is in the comment. A Surface object is created with `doc.addObject("Surface::...", name)`; its inputs are links to other objects, written as `(object, "Edge1")` for one sub-element or `(object, ["Edge1", "Edge2"])` for several.
 
+## The types and the module
+
+```python
+import FreeCAD as App
+import Surface
+
+doc = App.newDocument("d")
+types = [t for t in doc.supportedTypes() if t.startswith("Surface::")]
+print(len(types), types)                                                                      # 7 ['Surface::Filling', 'Surface::Sewing', 'Surface::Cut', 'Surface::GeomFillSurface', 'Surface::Extend', 'Surface::FeatureBlendCurve', 'Surface::Sections']
+print([n for n in dir(Surface) if not n.startswith("_")])                                   # ['BlendCurve', 'BlendPoint']
+try:
+    doc.addObject("Surface::CurveOnMesh", "C")
+    print("CurveOnMesh created")
+except Exception as error:
+    print("CurveOnMesh", type(error).__name__, error)       # CurveOnMesh TypeError Document::addObject: 'Surface::CurveOnMesh' is not a document object type
+```
+
 ## A surface from four edges
 
 ```python
@@ -58,6 +75,27 @@ for label, order in (("in order", edges), ("shuffled", [edges[0], edges[2], edge
 # in order ['Up-to-date'] False True 100.0
 # shuffled ['Up-to-date'] False True 100.0
 # three ['Up-to-date'] False True 100.0     with one side left out the shape was still a valid face of area 100.0
+```
+
+## The flat square with each fill type
+
+```python
+import FreeCAD as App
+import Part
+
+V = App.Vector
+doc = App.newDocument("d")
+square = doc.addObject("Part::Feature", "Square")
+square.Shape = Part.makePolygon([V(0, 0, 0), V(10, 0, 0), V(10, 10, 0), V(0, 10, 0), V(0, 0, 0)])
+for fill in ("Stretched", "Coons", "Curved"):
+    s = doc.addObject("Surface::GeomFillSurface", "S")
+    s.BoundaryList = [(square, "Edge%d" % (i + 1)) for i in range(4)]
+    s.FillType = fill
+    doc.recompute()
+    print(fill, s.State, "null" if s.Shape.isNull() else (s.Shape.isValid(), round(s.Shape.Area, 3)))
+# Stretched ['Up-to-date'] (True, 100.0)
+# Coons ['Touched', 'Invalid'] null
+# Curved ['Up-to-date'] (True, 100.0)
 ```
 
 ## Coons: only some boundaries worked
@@ -287,9 +325,38 @@ print(sew.Tolerance, sew.SewingOption, sew.CutFreeEdges, sew.DegenerateShape, se
 plane = part(Part.makePlane(20, 20), "Plane")
 hole = part(Part.makePlane(6, 6, V(5, 5, 0)), "Hole")
 cut = doc.addObject("Surface::Cut", "Cut")
-cut.ShapeList = [(plane, ["Face1"]), (hole, ["Face1"])]       # a face and a face; a solid or a shell did not work
+cut.ShapeList = [(plane, ["Face1"]), (hole, ["Face1"])]       # a face and a face
 doc.recompute()
 print(cut.State, cut.Shape.ShapeType, cut.Shape.isValid(), round(cut.Shape.Area, 3))          # ['Up-to-date'] Shell True 364.0
+```
+
+## Cut with a solid or a shell
+
+```python
+import FreeCAD as App
+import Part
+
+V = App.Vector
+doc = App.newDocument("d")
+
+
+def part(shape, name):
+    o = doc.addObject("Part::Feature", name)
+    o.Shape = shape
+    return o
+
+
+plane = part(Part.makePlane(20, 20), "Plane")
+box = part(Part.makeBox(6, 6, 6, V(5, 5, -3)), "Box")
+shell = part(Part.makeBox(6, 6, 6, V(5, 5, -3)).Shells[0], "Shell")
+for label, other, sub in (("solid", box, "Solid1"), ("shell", shell, "Shell1"), ("box face", box, "Face1")):
+    cut = doc.addObject("Surface::Cut", "Cut")
+    cut.ShapeList = [(plane, ["Face1"]), (other, [sub])]
+    doc.recompute()
+    print(label, cut.State, "null" if cut.Shape.isNull() else (cut.Shape.ShapeType, round(cut.Shape.Area, 3)))
+# solid ['Up-to-date'] ('Shell', 364.0)
+# shell ['Up-to-date'] ('Shell', 400.0)       no error, and the plane is unchanged
+# box face ['Up-to-date'] ('Shell', 364.0)
 ```
 
 ## Checking a result

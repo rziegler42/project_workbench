@@ -9,19 +9,19 @@ This skill is for the Draft workbench in FreeCAD 1.1, used from Python without t
 
 ## What a Draft object is
 
-Each `Draft.make_...` call adds a document object and returns it: a `Part::Part2DObjectPython` for a circle, rectangle or polygon, and a `Part::FeaturePython` for a line, wire, spline, array or clone. Call `doc.recompute()` and then read `obj.Shape`; every run did. The shapes are plain Part shapes, so `Length`, `Area`, `BoundBox` and the rest of `freecad-part` apply.
+Each `Draft.make_...` call adds a document object and returns it: a `Part::Part2DObjectPython` for a circle, rectangle, polygon or clone, and a `Part::FeaturePython` for a line, wire, spline or array. Call `doc.recompute()` and then read `obj.Shape`; every run did. The shapes are plain Part shapes, so `Length`, `Area`, `BoundBox` and the rest of `freecad-part` apply.
 
 | Call | Gives |
 |---|---|
-| `make_line(p1, p2)` | a `Wire` of one edge, length 10.0 for (0,0,0) to (10,0,0) |
-| `make_circle(radius, placement=None, startangle=None, endangle=None)` | a `Face`, or an `Edge` when both angles are given |
-| `make_rectangle(length, height)` | a `Face` of area length times height |
-| `make_polygon(nfaces, radius=1, inscribed=True)` | a regular polygon `Face`; `radius=5` with 6 sides gave area 64.952 |
-| `make_wire(points, closed=False)` | a `Wire`; `closed=True` gives a `Face` |
-| `make_bspline(points)` | a spline through the points |
-| `make_point(x, y, z)` | a `Vertex` |
+| `make_line(first_param, last_param=None)` | a `Wire` of one edge, length 10.0 for (0,0,0) to (10,0,0) |
+| `make_circle(radius, placement=None, face=None, startangle=None, endangle=None, support=None)` | a `Face`, or an `Edge` when both angles are given |
+| `make_rectangle(length, height=0, placement=None, face=None, support=None)` | a `Face` of area length times height |
+| `make_polygon(nfaces, radius=1, inscribed=True, placement=None, face=None, support=None)` | a regular polygon `Face`; `radius=5` with 6 sides gave area 64.952 |
+| `make_wire(pointslist, closed=False, placement=None, face=None, support=None, bs2wire=False)` | a `Wire`; `closed=True` gives a `Face` |
+| `make_bspline(pointslist, closed=False, placement=None, face=None, support=None)` | a spline through the points |
+| `make_point(X=0, Y=0, Z=0, color=None, name='Point', point_size=5)` | a `Vertex` |
 
-A circle, rectangle, polygon or closed wire has `MakeFace` true, so its shape is a `Face`. Set `MakeFace = False` and recompute to get the closed `Wire`. To make a solid, extrude the face: `obj.Shape.extrude(vector)` gave a `Solid` of volume 150.0 for a 10 by 5 rectangle and 3 high, and `Draft.extrude(obj, vector)` gave a `Part::Extrusion` of the same volume. `Draft.make_sketch([obj])` turns objects into a Sketcher sketch (4 geometry elements for a rectangle), with no constraints; `autoconstraints=True` was not run (read).
+The names are the ones printed by `inspect.signature` in `reference.md`. Give the optional arguments by keyword: `make_circle(5, None, 0, 90)` would put 0 into `face`. A circle, rectangle, polygon or closed wire has `MakeFace` true, so its shape is a `Face`. Set `MakeFace = False` and recompute to get the closed `Wire`. To make a solid, extrude the face: `obj.Shape.extrude(vector)` gave a `Solid` of volume 150.0 for a 10 by 5 rectangle and 3 high, and `Draft.extrude(obj, vector)` gave a `Part::Extrusion` of the same volume. `Draft.make_sketch([obj])` turns objects into a Sketcher sketch (4 geometry elements for a rectangle), with no constraints; `autoconstraints=True` was not run (read).
 
 ## Move, rotate, scale
 
@@ -35,16 +35,16 @@ A circle, rectangle, polygon or closed wire has `MakeFace` true, so its shape is
 
 | Call | Meaning | Result |
 |---|---|---|
-| `make_ortho_array(base, v_x, v_y, v_z, n_x, n_y, n_z)` | a grid; the vectors are the steps | a 3 by 2 grid of a 10 by 5 rectangle at a step of 15 gave 6 faces, 40.0 wide |
-| `make_polar_array(base, number, angle, center)` | copies turned about the centre | over 360 the copies are evenly spread; over 180 the last copy is at 180 |
-| `make_circular_array(base, r_distance, tan_distance, number, symmetry, axis, center)` | rings of copies | `number` is the number of rings, and the copies on a ring follow `tan_distance` |
-| `make_path_array(base, path, count)` | copies along a path object | 4 copies along a line 30 long |
+| `make_ortho_array(base_object, v_x, v_y, v_z, n_x, n_y, n_z)` | a grid; the vectors are the steps | a 3 by 2 grid of a 10 by 5 rectangle at a step of 15 gave 6 faces, 40.0 wide |
+| `make_polar_array(base_object, number, angle, center)` | copies turned about the centre | over 360 the copies are evenly spread; over 180 the last copy is at 180 |
+| `make_circular_array(base_object, r_distance, tan_distance, number, symmetry, axis, center)` | rings of copies | `number` is the number of rings, and the copies on a ring follow `tan_distance` |
+| `make_path_array(base_object, path_object, count)` | copies along a path object | 4 copies along a line 30 long |
 
 An array is a `Part::FeaturePython` whose shape is a `Compound` of the copies. It is parametric: setting `NumberX` from 3 to 5 and recomputing gave 10 faces, and the array follows its base object (changing the base rectangle's `Length` widened it). The other count, interval and angle properties are listed in its `PropertiesList` but were not set (read). `Fuse` is false by default; with it true, copies that do not touch stayed a `Compound` of the same faces, and what it does to touching copies was not run. `use_link=True` is the default; a grid made with `use_link=False` had the same type and gave the same faces. Do not measure a `Compound` of overlapping copies as one shape (see `freecad-part`).
 
 ## Names
 
-The snake_case functions are the current names. The camelCase names that were run (`makeLine`, `makeCircle`, `makeRectangle`, `makePolygon`, `makeWire`) are the same function objects and printed no warning, so old code still works, but write the snake_case names in new code. `makeArray` is a different function with an older argument order: it works for a grid, prints a notice to use `make_ortho_array`, `make_polar_array` or `make_circular_array`, and is not the same object as `make_array`. `reference.md` lists the signatures read from 1.1.4.
+The snake_case functions are the current names. The camelCase names that were run (`makeLine`, `makeCircle`, `makeRectangle`, `makePolygon`, `makeWire`) are the same function objects as the snake_case names, so old code still works, but write the snake_case names in new code. `makeArray` is a different function with its own arguments (`baseobject, arg1, arg2, arg3, arg4=None, arg5=None, arg6=None, name='Array', use_link=False`): it works for a grid, prints a notice to use `make_ortho_array`, `make_polar_array` or `make_circular_array`, and is not the same object as `make_array`. `reference.md` lists the signatures read from 1.1.4.
 
 ## Not run
 
@@ -58,5 +58,5 @@ The module has 38 `make_...` functions. This skill covers only those above. Dime
 | Calling `offset` before a recompute | Recompute first |
 | Expecting `move`, `rotate` or `scale` to leave the original | Pass `copy=True` |
 | Reading the number of an array as the number of copies | For a circular array it is the number of rings |
-| Measuring an array of overlapping copies as one shape | Fuse them first |
+| Measuring an array of overlapping copies as one shape | Fuse the copies with Part's `multiFuse` first (see `freecad-part`) |
 | Using `makeArray` in new code | Use the three `make_..._array` functions |

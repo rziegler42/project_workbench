@@ -1,6 +1,6 @@
 # Reference: TechDraw examples
 
-Each block was run headless with `freecadcmd` on FreeCAD 1.1.4. The printed value is in the comment. Every block after Helpers uses `make_page` and `make_box` from the Helpers block, which must be defined first. A TechDraw object is created with `doc.addObject("TechDraw::...", name)`.
+Each block was run headless with `freecadcmd` on FreeCAD 1.1.4. The printed value is in the comment. The blocks that make a page or a box use `make_page` and `make_box` from the Helpers block, which must be defined first. A TechDraw object is created with `doc.addObject("TechDraw::...", name)`.
 
 ## Helpers
 
@@ -27,9 +27,28 @@ def make_box(doc):
     return box
 ```
 
+## The types and the templates
+
+```python
+import os
+
+import FreeCAD as App
+import TechDraw
+
+doc = App.newDocument("d")
+types = [t for t in doc.supportedTypes() if t.startswith("TechDraw")]
+print(len(types), types[:6])
+# 45 ['TechDraw::DrawPage', 'TechDraw::DrawView', 'TechDraw::DrawViewCollection', 'TechDraw::DrawViewPart', 'TechDraw::DrawViewAnnotation', 'TechDraw::DrawViewSymbol']
+base = os.path.join(App.getResourceDir(), "Mod", "TechDraw", "Templates")
+print(sorted(os.listdir(base)))
+# ['ASME', 'Default_Template_A4_Landscape.svg', 'HowToExample.svg', 'ISO']
+```
+
 ## A page from a template
 
 ```python
+import os
+
 import FreeCAD as App
 
 doc = App.newDocument("d")
@@ -40,6 +59,8 @@ print(page.State, template.State, template.Width, template.Height, template.Orie
 print(page.getEnumerationsOfProperty("ProjectionType"), page.Views)
 # ['First angle', 'Third angle'] []
 print(template.EditableTexts)                                                                  # {}
+result = template.PageResult
+print(os.path.exists(result), os.path.dirname(result) != os.path.dirname(template.Template))   # True True   the copy lives in FreeCAD's cache folder
 ```
 
 ## A projected view

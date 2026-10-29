@@ -1,6 +1,6 @@
 ---
 name: freecad-techdraw
-description: Use when scripting FreeCAD's TechDraw workbench: a drawing page from a template, projected views of a part, dimensions and annotations, and DXF or SVG export. For the older Drawing workbench see freecad-python; for sketches use freecad-sketcher.
+description: Use when scripting FreeCAD's TechDraw workbench: a drawing page from a template, projected views of a part, dimensions and annotations, and DXF or SVG export. For the older Drawing workbench see freecad-python; the shape a view shows comes from freecad-part.
 ---
 
 # FreeCAD TechDraw
@@ -9,7 +9,7 @@ This skill is for the TechDraw workbench in FreeCAD 1.1, used from Python withou
 
 ## What works headless
 
-`import TechDraw` works with `freecadcmd`. `import TechDrawGui` fails there ("Cannot load Gui module in console application"), so everything that needs the interface is out of reach: the TechDraw commands, the page viewer, and anything that draws a page on screen (read). Document objects of the 46 TechDraw types can be created and computed without it.
+`import TechDraw` works with `freecadcmd`. `import TechDrawGui` fails there ("Cannot load Gui module in console application"), so everything that needs the interface is out of reach: the TechDraw commands, the page viewer, and anything that draws a page on screen (read). Document objects of the 45 TechDraw types can be created and computed without it.
 
 | Object | Made with | Main properties |
 |---|---|---|
@@ -23,7 +23,7 @@ This skill is for the TechDraw workbench in FreeCAD 1.1, used from Python withou
 
 ## A page from a template
 
-FreeCAD's resource folder holds `Mod/TechDraw/Templates` with `Default_Template_A4_Landscape.svg`, `HowToExample.svg` and the folders `ASME` and `ISO`. Build the template path from `App.getResourceDir()`, as the Helpers block in `reference.md` does. The A4 landscape template gave a page 297 mm by 210 mm, `Scale` 1.0 and `ProjectionType` `First angle`. Create the page and the template object, set `page.Template = template`, and recompute; both were `Up-to-date`. `EditableTexts` was empty for this template. Computing a page writes a copy of the template into FreeCAD's user cache folder, outside the project.
+FreeCAD's resource folder holds `Mod/TechDraw/Templates` with `Default_Template_A4_Landscape.svg`, `HowToExample.svg` and the folders `ASME` and `ISO`. Build the template path from `App.getResourceDir()`, as the Helpers block in `reference.md` does. The A4 landscape template gave a page 297 mm by 210 mm, `Scale` 1.0 and `ProjectionType` `First angle`. Create the page and the template object, set `page.Template = template`, and recompute; both were `Up-to-date`. `EditableTexts` was empty for this template. After a recompute the template's `PageResult` is a file in FreeCAD's user cache folder, not next to the template, so computing a page writes outside the project.
 
 ## A projected view
 
@@ -39,7 +39,7 @@ An annotation is a `DrawViewAnnotation` with `Text` set to a list of lines, a po
 
 ## Export
 
-`TechDraw.writeDXFPage(page, path)` and `TechDraw.writeDXFView(view, path)` each wrote a DXF file (4903 bytes for the box page and for the box view). `viewPartAsSvg(view)` and `viewPartAsDxf(view)` return strings and write nothing. A document with a page saved with `doc.saveAs` to a temporary folder. Exporting a page as PDF or SVG with the interface, and printing, were not run (read).
+`TechDraw.writeDXFPage(page, path)` and `TechDraw.writeDXFView(view, path)` each wrote a DXF file (4903 bytes for the box page and for the box view). `viewPartAsSvg(view)` and `viewPartAsDxf(view)` return strings. A document with a page saved with `doc.saveAs` to a temporary folder. Exporting a page as PDF or SVG with the interface, and printing, were not run (read).
 
 ## Check the result
 
