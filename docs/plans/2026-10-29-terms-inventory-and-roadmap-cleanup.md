@@ -207,4 +207,38 @@ Plan review by Codex through the `ask-codex` bridge (model `gpt-5.6-terra`), rou
 
 ## Result
 
-Empty until work starts.
+**Increment A is done; Increments B, C and D are not started.** Its commit carries the trailer
+`Plan: 2026-10-29-terms-inventory-and-roadmap-cleanup#A`.
+
+### Increment A
+
+- **Done.**
+  - `terms.md`: a new section "Permissions and approval" defines **owner**, **approver**, **owner-run command**, **agent-safe
+    command**, **level**, **key**, **levels table**, **pin**, **rendering record**, **rerender**, **local manifest**, **edit
+    gate**, **command gate** and **agent gate**, each from the spec or code that owns it. The entries **checkpoint** and
+    **delegation** read in terms of levels. The **manifest** and **scratch** entries point to the **local manifest** entry, and
+    **block** (a slot's content) says it is not the level `block`.
+  - The owner-run definition says the default level is `block`, that the approver may set a key to a level it offers (`none` for
+    an installer command, `ask`, `delegated` or `none` for `approve-plan`, `ask` or `none` for a module command that declares
+    `levels`), that `delegated` exists only where a command declares a gate, and that it never means an agent can never run it.
+  - `installer-interface.md`: five lines said "Agent may run it: no" (`install`, `adopt`, `attach`, `acknowledge`, `recover`); each
+    now says "by default no" and names the key that the approver may set to `none`.
+  - `module-boundary.md` and `module-contract.md`: a module's `owner` arguments are the ones only the owner runs "by default".
+- **Verification as run.** A script finds 75 terms, none defined twice, and none of the 16 wanted terms missing; a search of the
+  specs for absolute statements that an agent can never run an owner-run command finds only default-level statements (the `block`
+  level row, the `wb rerender` key, which offers `block` only, and a sentence that already names the exception); `wb check` and
+  `wb run code-work check` report no problems.
+- **Review.** One read-only reviewer pass. It found no contradiction with the two accepted decisions and no `AGENTS.md` citation,
+  dead link or unknown plan name. It found one problem against this plan's own verification line (the five "Agent may run it: no"
+  lines, which my search missed because I searched for other phrases) and ten smaller points, all applied: the offer sets and the
+  default of an agent-safe command, hedges on what `block` denies and what `none` logs, the conditions under which the command gate
+  and edit gate exist, a double definition of the local manifest, the slot `block` versus the level `block`, and the four levels
+  and the `peer-review` provider in the `checkpoint` and `delegation` entries.
+- **For the owner.**
+  - **Approver** says "a specification that says 'the owner' at a checkpoint means the approver". No spec says that; it is the
+    interpretive rule of your decision to use "approver" in rule text. It grants no authority, but read it.
+  - **Owner** is scoped to "a machine that holds the workbench's guarded store". That scoping is my wording and appears in no
+    source.
+  - The root `README.md` and `docs/development.md` say owner-run commands "refuse to run from an agent session". That is true at
+    the default and is worded as absolute. They are outside this plan.
+  - The identity form in **approver** is marked "not built yet", because the approval-identity plan is not written.

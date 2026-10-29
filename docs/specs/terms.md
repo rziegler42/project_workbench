@@ -127,7 +127,7 @@ path or field.
 **block**
 : Content a module contributes into a slot, delimited by markers that name the
   module and the slot. A block belongs to the installer, not to the project's
-  author, even though it sits inside the project's file.
+  author, even though it sits inside the project's file. Not the level `block`.
 
 ## Harness
 
@@ -179,7 +179,7 @@ path or field.
 **scratch**
 : Untracked, agent-writable local state that grants no authority, held under
   `.workbench/local/`: debug output, the reference cache and index, and the local
-  harness manifest.
+  harness manifest (with the one exception its entry names).
 
 **guarded store**
 : The workbench's user-level store at `~/.config/project-workbench/`, outside any
@@ -194,7 +194,7 @@ path or field.
 **manifest**
 : A record the workbench keeps about a project. The committed manifest lists
   modules, versions, hashes and file ownership and never names a harness. The
-  local manifest, in scratch, records the attached harness.
+  local manifest has its own entry under "Permissions and approval".
 
 **lock**
 : The part of the committed manifest that pins each package and module to an exact
@@ -220,12 +220,14 @@ path or field.
 
 **checkpoint**
 : A named point at which the agent may need authority before continuing, such as
-  approving a plan or pushing a shared branch. A checkpoint stops by default and
-  may be delegated by the owner's personal setting.
+  approving a plan or pushing a shared branch. A checkpoint stops by default: its level is `block`. The approver may set it, in the
+  personal settings, to `ask`, `delegated` or `none`, where its key offers that level; `delegated` takes effect where a command
+  declares a gate.
 
 **delegation**
-: The owner granting a checkpoint's verdict to a second reviewer. Delegation is a
-  personal setting held in the guarded store, never project policy.
+: The approver letting the converged verdict of a second reviewer, supplied by a `peer-review` provider, stand for a checkpoint:
+  the level `delegated`, written `delegate` in the checkpoint settings. Delegation is a personal setting held in the guarded
+  store, never project policy.
 
 **hard stop**
 : An irreversible or externally-effecting action that always stops for the owner,
@@ -274,6 +276,78 @@ path or field.
 **work record**
 : A plan whose `Candidate:` line names a roadmap candidate and whose status is
   `Completed`. A candidate is complete when a work record refers to it.
+
+## Permissions and approval
+
+**owner**
+: The person who decides at a checkpoint on a machine that holds the workbench's guarded store: who approves, accepts,
+  acknowledges and sets levels. Read it with **approver**. It names a role at the moment of acting, not the author of a document
+  and not a named individual.
+
+**approver**
+: The person who may approve a plan, accept a decision, acknowledge a change or set a level, defined by that capability and not by
+  having written the document. A specification that says "the owner" at a checkpoint means the approver. A record of what happened
+  names the person who acted by their git identity, `Name <email>`, in the form the accepted record
+  `2026-10-29-approvals-name-the-approver-by-git-identity` sets (not built yet). That identity is an attribution and not authority.
+
+**owner-run command**
+: A command whose default level is `block`: by default only the owner runs it, and the harness denies it to an agent.
+  The approver may set the level of its key to one the key offers (`command-permissions.md`, "Which levels a key offers"): `none`
+  for an installer command, `ask`, `delegated` or `none` for `approve-plan`, and `ask` or `none` for a module command that declares
+  `levels`. `delegated` exists only where a command declares a gate. An agent may then run the command at that level. A key that
+  offers only `block`, such as `wb rerender`, stays with the owner. It does not mean that an agent can never run it.
+
+**agent-safe command**
+: A command an agent may run by default, because it only reads or runs a pinned helper that checks its own pin. One that has a key
+  defaults to `none`, and the approver may set it to `block`. The hook entry points and the words that only dispatch (`wb run`,
+  `wb preview`) have no key, and `wb delegate-approve-plan` reaches the key `approve-plan` (`command-permissions.md`, "`wb settings`").
+
+**level**
+: How a key is gated, from strictest to least strict. `block`: the agent never runs it, and the harness denies it where a command
+  exists to deny. `ask`: the agent runs it after the approver confirms a harness prompt that carries the digest of a read-only
+  preview. `delegated`: the agent runs it after a gate that the command declares has passed, such as a converged review. `none`:
+  nothing stops it, and a run that changes something is logged. A key offers only some of these (`command-permissions.md`, "A level
+  for every command"). Not the slot **block**.
+
+**key**
+: The name a level is set under: a declared checkpoint such as `approve-plan`, or a command in the `wb` spelling, such as
+  `wb install` or `wb run <command> <argument>`.
+
+**levels table**
+: The `levels` object of the personal settings (version 2), which maps a key to a level. A key's level is its table entry, else its
+  checkpoint reading (`stop` as `block`, `delegate` as `delegated`), else its shipped default.
+
+**pin**
+: The record, in the guarded store, of a shipped helper's path (relative to the project root) and its SHA-256. The launcher runs a
+  helper only while its bytes still match the pin.
+
+**rendering record**
+: The record the installer writes in the guarded store at attach and at re-render: the hash of the permissions file it rendered,
+  the digest of the levels table it rendered from, and for every key whether a `deny`, an `ask` or nothing was rendered. While it
+  does not match, a relaxed key reads `block` (`command-permissions.md`, "Rendering").
+
+**rerender**
+: `wb rerender`. It renders an attached clone's harness files and permissions again from the installed modules and the current
+  levels table, carries the live permissions file's `allow` rules into the new one and shows each in a preview. It is owner-run
+  and needs a terminal at every level (`harness-rerender.md`).
+
+**local manifest**
+: The record, in scratch (`.workbench/local/harness.json`), of the attached harness and the hash of each rendered file. Scratch
+  grants no authority, except that `wb rerender` trusts these hashes to tell an edited rendered file from a stale one.
+
+**edit gate**
+: The hook the installer renders, running `wb gate` before an edit, which refuses an edit while a plan under way is not approved
+  (`harness-modules.md`, "The edit gate hook").
+
+**command gate**
+: The hook the installer renders for the shell tool, while a key is relaxed to `ask` or `none` and the harness's layout describes
+  it, running `wb gate-command`, which blocks a command whose text names a relaxed command, unless it is exactly the simple form
+  the `ask` rule matches. It is a best-effort match on
+  command text (`command-permissions.md`, "The command gate").
+
+**agent gate**
+: The hook the installer renders into a confined agent's own file, running `wb agent-gate`, which holds the agent to the limits its
+  declaration states: where it may write and which commands it may run (`harness-modules.md`, "The agent gate").
 
 ## Project documents
 

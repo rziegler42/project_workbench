@@ -307,7 +307,7 @@ checked with the rest of its declaration, before anything is written.
   - `arguments` (optional): a list of at most 16 distinct strings, each `^[a-z][a-z0-9-]*$` and at most 32
     characters, default empty.
   - `owner` (optional, built by plan `2026-10-23-review-engine`): a list of distinct strings, each one of this
-    command's `arguments`, default empty. These are the arguments only the owner runs. A harness that provides
+    command's `arguments`, default empty. These are the arguments only the owner runs by default. A harness that provides
     `permissions` denies the agent each of them (`trust-and-approval.md`, "Rendering rules"), and `wb run` and
     `wb launch` run one only when standard input and output are both terminals (plan
     `2026-10-24-owner-run-in-code`), except that `wb run` runs one without a terminal when the owner has set its key to `ask` (with the

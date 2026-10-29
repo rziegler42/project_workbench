@@ -306,7 +306,7 @@ publishes, and none edits a living or historical document** (`repository-boundar
   refused target. After a failure part-way, the report says what was written ("Failure part-way").
 - **Contacts the network and writes a cache directory** for each source that is not a local
   directory, in `install` itself and never in `preview`.
-- **Agent may run it:** no *(owner)*. The owner runs `install`, from a terminal, and approves the
+- **Agent may run it:** by default no *(owner)*; the approver may set `wb install` to `none`. The owner runs `install`, from a terminal, and approves the
   preview there. An agent runs `wb preview install ...` to see the same preview and write
   nothing (the preview and approval section).
 
@@ -383,7 +383,7 @@ plan made and the owner may still change.
   committed, and the `wb attach` and `wb upgrade` that follow.
 - **Contacts the network and writes a cache directory** for each source that is not a local
   directory, in `adopt` itself and never in `preview`.
-- **Agent may run it:** no. The owner runs `adopt` from a terminal and approves the preview there.
+- **Agent may run it:** by default no; the approver may set `wb adopt` to `none`. The owner runs `adopt` from a terminal and approves the preview there.
   An agent runs `wb preview adopt ...` to see the same plan and write nothing. Every harness denies
   `wb adopt` as it denies `wb install` (see "The preview and approval", rule 2).
 - **An adopted project is an existing project** for every other command. `check`, `acknowledge`,
@@ -417,7 +417,7 @@ plan made and the owner may still change.
   version between the lock and the installed workbench warns and continues.
 - **Prints** post-install notes for steps it cannot perform, such as a harness's project trust,
   and warns when a file it wrote changes the agent's permissions.
-- **Agent may run it:** no *(owner)*. Attach writes the files that set an agent's own
+- **Agent may run it:** by default no *(owner)*; the approver may set `wb attach` to `none`. Attach writes the files that set an agent's own
   permissions, deny rules and instructions. Choosing and attaching a harness is the owner's
   act in setting up a clone, before an agent runs in it; the harness's deny rule on `wb
   attach` is the barrier, as it is for `approve`. It is not terminal-gated, because setting up
@@ -570,7 +570,7 @@ plan made and the owner may still change.
   the preview approval. On a match it replaces the baselines for exactly the listed paths, then the moved pins. Any
   other answer writes nothing and exits 1; no differences says `nothing to acknowledge` and
   exits 0.
-- **Agent may run it:** no. It is denied to an agent by the harness as `approve` is.
+- **Agent may run it:** by default no; the approver may set `acknowledge-first-tier` or `acknowledge-second-tier` to `none`. It is denied to an agent by the harness as `approve` is.
 - **As built.** A link, a directory or another non-regular file where a file is expected, and a
   name under `.workbench/` that fails the path rules (control character, non-UTF-8, colon,
   backslash), cannot be acknowledged: it is listed as a difference with its reason, never
@@ -622,7 +622,7 @@ plan made and the owner may still change.
 - **Exit codes:** 0 cleared or nothing to recover; 1 refused or cancelled; 2 usage; 3 a removal
   failed or was interrupted (the message says whether the marker remains); 130 interrupted at the
   prompt.
-- **Agent may run it:** no. It is owner-run and terminal-only; a harness's deny rule is the
+- **Agent may run it:** by default no; the approver may set `wb recover` to `none`. It is owner-run and terminal-only by default; a harness's deny rule is the
   barrier, as for `acknowledge`.
 - **Limits.** The marker is unlinked by name after the second examination, so a marker swapped in
   that window is removed instead of the one shown. A forged record can make `recover` remove empty
