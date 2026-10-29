@@ -183,8 +183,13 @@ class Writer:
         The file appears whole or not at all. A sibling in the same directory is created exclusively, filled and synced, then
         linked to `rel`, which fails when anything is there, a link included; the sibling is unlinked on every path out. A
         failure before the link leaves nothing at `rel` and does not list it in `written`. A crash between the link and the
-        unlink leaves the finished file with a second name, which a later read refuses (more than one hard link) until the
-        sibling, named ``.workbench-<pid>-<hex>.tmp``, is removed."""
+        unlink leaves the finished file with a second name, which a later read refuses by its final path (more than one hard
+        link) until the sibling, named ``.workbench-<pid>-<hex>.tmp``, is removed.
+
+        The sibling is a plain file (0644 under the umask, 0755 when `executable`) that anyone who can write the directory can
+        replace before the link. After the link `rel` is read without following a link and must be a regular file with the
+        device and inode of the file written here and two links; otherwise `WriteConflict` is raised, `rel` is not listed and
+        what is there is left alone. A swap after that check is not prevented."""
         parts = safefs.validate_relpath(rel)
         if not isinstance(data, bytes):
             raise safefs.SafeFsError("content is not bytes: %s" % rel)
@@ -224,6 +229,7 @@ class Writer:
                     if executable:
                         os.fchmod(fd, 0o755)
                     os.fsync(fd)
+                    made = os.fstat(fd)
                 except OSError as exc:
                     raise _os_error("write", shown, exc)
             finally:
@@ -237,6 +243,15 @@ class Writer:
                 if exc.errno in (errno.ELOOP, errno.ENOTDIR):
                     raise WriteConflict("a link or a file is in the way: %s" % shown)
                 raise _os_error("create", shown, exc)
+            # The sibling can be replaced between the fill and the link by whoever can write the directory; the link then made
+            # `rel` that other object. It is listed only when it is the file written here, with the sibling as its one other name.
+            try:
+                found = os.stat(parts[-1], dir_fd=dirfd, follow_symlinks=False)
+            except OSError as exc:
+                raise _os_error("create", shown, exc)
+            if (not stat.S_ISREG(found.st_mode) or (found.st_dev, found.st_ino) != (made.st_dev, made.st_ino)
+                    or found.st_nlink != 2):
+                raise WriteConflict("the file is not the one that was written: %s" % shown)
             self.written.append(rel)
         finally:
             if sibling is not None:

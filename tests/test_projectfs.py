@@ -254,6 +254,66 @@ class WriterTest(Fixture):
         self.writer().create_file("a", b"x")
         self.assertEqual(0o640, stat.S_IMODE(os.stat(os.path.join(self.root, "a")).st_mode))
 
+    def swap_sibling(self, make):
+        """Replace the private sibling by what `make(path)` creates, as a process that can write the directory could."""
+        def swap(name, **info):
+            if name == "projectfs_filled":
+                (sibling,) = [each for each in os.listdir(self.root) if each.startswith(".workbench-")]
+                path = os.path.join(self.root, sibling)
+                os.unlink(path)
+                make(path)
+        safefs._hook = swap
+
+    def victim(self):
+        path = os.path.join(self.outside, "victim")
+        with open(path, "wb") as handle:
+            handle.write(b"keep")
+        os.chmod(path, 0o600)
+        return path
+
+    def assert_swap_refused(self, writer, victim):
+        with self.assertRaises(WriteConflict):
+            writer.create_file("a", b"mine")
+        self.assertEqual([], writer.written)
+        self.assertEqual([], [each for each in os.listdir(self.root) if each.startswith(".workbench-")])
+        with open(victim, "rb") as handle:
+            self.assertEqual(b"keep", handle.read())
+        self.assertEqual(0o600, stat.S_IMODE(os.stat(victim).st_mode))
+
+    def test_a_sibling_swapped_for_a_link_is_a_conflict_and_is_not_listed(self):
+        victim = self.victim()
+        self.swap_sibling(lambda path: os.symlink(victim, path))
+        writer = self.writer()
+        self.assert_swap_refused(writer, victim)
+
+    def test_a_sibling_swapped_for_a_hard_link_to_another_file_is_a_conflict_and_is_not_listed(self):
+        victim = self.victim()
+        self.swap_sibling(lambda path: os.link(victim, path))
+        writer = self.writer()
+        self.assert_swap_refused(writer, victim)
+
+    def test_a_hard_link_to_the_sibling_made_before_the_link_is_a_conflict_and_is_not_listed(self):
+        def extra(name, **info):
+            if name == "projectfs_filled":
+                (sibling,) = [each for each in os.listdir(self.root) if each.startswith(".workbench-")]
+                os.link(os.path.join(self.root, sibling), os.path.join(self.outside, "second-name"))
+        safefs._hook = extra
+        writer = self.writer()
+        with self.assertRaises(WriteConflict):
+            writer.create_file("a", b"mine")
+        self.assertEqual([], writer.written)
+        self.assertEqual([], [each for each in os.listdir(self.root) if each.startswith(".workbench-")])
+
+    def test_a_sibling_swapped_for_another_file_is_a_conflict_and_is_not_listed(self):
+        victim = self.victim()
+
+        def other(path):
+            with open(path, "wb") as handle:
+                handle.write(b"theirs")
+        self.swap_sibling(other)
+        writer = self.writer()
+        self.assert_swap_refused(writer, victim)
+
     def test_a_closed_target_is_refused(self):
         writer = self.writer()
         writer.target.close()
