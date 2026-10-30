@@ -241,4 +241,61 @@ Left for the owner: the approval of the plan, and the question of a security rev
 
 ## Result
 
-Empty until work starts.
+### Increment A — the reading and the spec (not yet committed)
+
+Changed: `docs/specs/command-permissions.md` only: a new section "`wb release-approvals` at `ask` (specified, not built)" (the reading
+below, a table of forms, the preview, what the command does at `ask`, and what the digest does not cover), a note on the offers of the
+key in the paragraph on `acknowledge`, `recover`, `attach` and `release-approvals` at `none`, and an entry under "Not built".
+`docs/specs/trust-and-approval.md` names the key in its list of owner-run commands and in its release paragraph and says nothing about
+levels, so it was not changed.
+
+The reading, as run on 2026-10-30 (`rules.py`, `rendering.py`, `levels.py`, `levelrun.py`, `command_gate.py`, `cli.py`,
+`firstparty.py`; the tests were listed, not read):
+- **`rendering.plan`** is generic: a key `wb <word>` of `rules.OWNER_RUN` at `ask` renders an `ask` rule on the `wb` spellings and
+  leaves the interpreter spellings denied; at `block` it renders a `deny`. So Increment D needs the offer of `ask` in `levels._OFFERS`
+  and no new rendering code for this key; `rules.py` and `rendering.py` need no edit unless a test shows otherwise.
+- **`command_gate`** is generic for such keys: `words` and `forms` give the exact simple command `wb release-approvals [<token> ...]`,
+  through `wb` or the guarded store's `bin/wb`, and `--digest <32 hex>` is a `_TOKEN`. So the gate needs no edit; Increment D tests it.
+- **`levelrun.optional`**, which `cli._unattended_call` uses, returns a route only at a verified `none`; at `ask` it returns `None` and
+  the command goes on as it always did. Increment C therefore needs a new reading (a function beside `optional`) that returns the route
+  at `ask` and at `none`, used by `_release` only, so that `attach` is unchanged. This is the one place the plan's list needs
+  sharpening; it was already in Increment C's affected areas ("`levelrun.py` (reading the level at `ask`)").
+- **`firstparty.release_approvals`** reads and verifies the packages and writes in one function; Increment B splits it.
+- **Not read in detail, to be read in the increment that needs it:** `settingscmd.py` (how it prints the offered levels) in D; the
+  tests that pin the key: `tests/test_levels.py`, `test_rendering.py`, `test_ack_recover_levels.py`, `test_approve_levels.py`,
+  `test_permissions.py`, `test_firstparty.py`, `test_owner_run_arguments.py` and `tests/support.py`.
+
+Choices written into the spec, for the owner: (1) a `--digest` at `none` is refused before the run, as for a module's mapped argument; (2)
+a `--digest` at a terminal is refused, and a terminal run without one is as today (so the plan's "a terminal run goes on as it does
+today" holds; the review showed that checking a digest at a terminal has no level to read there); (3) the digest enforcement counts
+only while the level reads `ask` through the rendering record, so where it reads `block` because the record is stale the command does
+not refuse itself, as it never did, and the harness's own rule is the barrier; (4) the preview prints every hash in full and not the
+path of the distribution: the digest covers the hashes whole, which the plan's criterion 1 needs.
+
+Places the later increments need that the reading above did not list (from the review, each read in the code):
+- **Increment C.** `cli.py` lines 100 to 101 add `release-approvals` to the parser with no arguments, so `--digest` is a usage error
+  before any level is read; the parser and the `USAGE` string change. `_unattended_call` wraps the whole call between an attempt and an
+  outcome with evidence `""`; at `ask` the attempt must come after the plan is built and checked and carry `digest:<32 hex>`, so the
+  command builds and checks the plan first and calls `levelrun.apply_logged` around the write only.
+- **Increment B.** Adding `release-approvals` to `rules.PREVIEW_ACTIONS` makes `levels.agent_keys` derive an agent-safe key `wb
+  preview release-approvals`, `command_gate.PREVIEW_ACTIONS` derive from it (the gate strips the pair `preview <action>`),
+  `rendering.key_patterns` read it, and `cli._preview` and the `USAGE` lines (which say preview takes install, adopt, upgrade, add or
+  rerender) change. Tests pin the list: `tests/test_levels.py`, `tests/test_command_gate.py` and `tests/test_rerender.py`. The specs
+  that list the preview actions (`installer-interface.md`, and `command-permissions.md` near its list of agent-safe keys) change too.
+- **Increment E (statements that still give the key as `block` and `none` only, left for E because the key does not offer `ask` until D;
+  a deviation from step 3 of this increment, recorded here).** `command-permissions.md`: the list of what each level offers
+  ("Which levels a key offers"), the paragraph that says every key offers `block` and `none` and that only the review engine's five
+  offer `ask` besides the plan key, the line P4, the table row that says the key "has none and keeps none" (it has no terminal test; at
+  `ask` it refuses without a digest), the lines that say it has "no terminal test and no digest", and the log exception for `attach`
+  and `release-approvals` (at `ask` the run is logged). `installer-interface.md`: the lines that call it a release-time command that needs no
+  terminal.
+- **Read in D:** `settingscmd.py` has nothing key-specific (a grep found only a generic loop over the effective levels), and the tests
+  that pin the key were listed and not read; Increment D reads them before it edits.
+
+Verification as run: `wb check` and `wb run code-work check` (75 plans): no problems. No file under `packages/` changed.
+
+Review: the `reviewer` agent, one exchange. It confirmed the reading of the code (the rendering and the gate are generic, so the key
+needs only the offer of `ask`; `levelrun.optional` returns a route only at `none`). One blocking finding, applied: the preview printed
+12-character prefixes of the hashes, so the digest could not change with every hash, and the spec overstated what it binds; the preview
+now prints the hashes in full. Applied: the terminal row (the digest is refused at a terminal); the places for Increments B, C and E
+recorded above. Recorded: the tests were listed and not read (a gap in step 1, to be closed in the increment that needs each).

@@ -400,7 +400,8 @@ read once, before the fetch and the second verification, so a harness edit made 
 `--root` as spelled and refuses one that names the project only through a link or `..`.
 
 **`acknowledge`, `recover`, `attach` and `release-approvals` at `none`** (built by Increment J). The keys `acknowledge-first-tier`,
-`acknowledge-second-tier`, `wb recover`, `wb attach` and `wb release-approvals` offer `block` and `none`; the shipped defaults stay
+`acknowledge-second-tier`, `wb recover`, `wb attach` and `wb release-approvals` offer `block` and `none` (`ask` for `wb release-approvals` is
+specified under "`wb release-approvals` at `ask`" and not built); the shipped defaults stay
 `block`. The command line reads the level for the project the working directory is in (`levelrun.route`), as for the commands above.
 *`acknowledge`* is governed by the checkpoint `acknowledge-first-tier` (the owner's choice): every path the command can list has a
 baseline, so it is the manifest, a file under `.workbench/`, `AGENTS.md` or a seeded file, which are first-tier material, and the
@@ -641,8 +642,54 @@ edit tool is held by the rule it follows and not by this gate, as it is for `acc
 logged, while a hand edit of a status line is never gated and never logged; that is the difference between the two routes. At `ask` the
 owner confirms a command and a digest, not that they read the record.
 
+## `wb release-approvals` at `ask` (specified, not built)
+
+The plan `2026-10-30-release-approvals-at-ask` builds this in its Increments B to D; none of it is built until those are committed.
+Until then the key offers `block` and `none` only. The key `wb release-approvals` will offer `block`, `ask` and `none`, and defaults to
+`block`. `delegated` is not built for it (the roadmap candidate `checkpoint-levels-beyond-block` stays open).
+
+**How the existing parts treat it** (read on 2026-10-30, Increment A). The rendering is generic over the keys of the form
+`wb <word>` of `rules.OWNER_RUN`: a key at `ask` renders an `ask` rule on the launcher spellings of the command and leaves the
+interpreter spellings denied, and a key at `block` renders a `deny`, so the key needs only the offer of the level
+(`levels._OFFERS`). The command gate reads the same keys generically: the exact simple command `wb release-approvals [<token> ...]`,
+through `wb` or the guarded store's `bin/wb`, is what the `ask` rule matches, and `--digest <32 hex>` is such a token. The level of an
+owner-run command with no terminal test is read by `levelrun.optional`, which returns a route only at a verified `none`; at `ask` and
+at `block` it returns nothing and the command goes on as it always did, so the digest check below needs a reading that returns the
+route at `ask` too, for this command alone and not for `attach`.
+
+| Form | Level | Result |
+|---|---|---|
+| `wb release-approvals`, standard input and output terminals | not read | as today: it runs and needs no digest. A `--digest` at a terminal is refused: a digest is for a run without a terminal at `ask` |
+| `wb release-approvals --digest <32 hex>`, no terminal | `ask` | writes the release, from the one release plan built now, when the digest equals that of the plan's preview |
+| `wb release-approvals`, no terminal, no digest, a malformed digest or a wrong digest | `ask` | refused; nothing is written; the refusal names `wb preview release-approvals` |
+| `wb release-approvals --digest …`, no terminal | `none` | refused before the run: a digest needs the level `ask`; nothing is written |
+| `wb release-approvals`, no terminal | `none` | as today: it runs and is logged |
+| `wb release-approvals` | `block` | the harness denies the agent; the command does not refuse itself, as today |
+| any form without a terminal, in a directory where no level can be read | | as today: it runs and writes no entry (a `--digest` there is not checked) |
+
+**The preview.** `wb preview release-approvals` is agent-safe and read-only. It builds the release plan and prints text: the number of
+first-party packages and modules; for each package and module its declaration hash and tree hash in full (64 lowercase hexadecimal
+characters each, so that the digest covers them whole and a change at any position changes it), and whether the record for those
+hashes already exists in `workbench/shipped_approvals` or would be new; the approver and the time the records would carry; the shipped
+records the release would leave stale, by their full keys; and a line that says what it does not cover. A last line `digest: <32 lowercase hex>` is the first 32 hexadecimal characters of the SHA-256 of that text, as
+`wb plan-status --digest` computes it. A refused package refuses the preview with the reasons the release gives and no digest.
+
+**What the command does at `ask`.** It builds the release plan once, takes the digest of that plan's preview text, compares it with the
+one given and writes only on equality. It writes the records of that plan and does not read `packages/` again, because the kit has no
+lock: a package changed after the plan was built is not released by the run, since the records name the hashes that were confirmed and
+the changed tree no longer matches them. The attempt is written to the level log just before the write (`wb release-approvals`, `ask`,
+`digest:<32 hex>`) and the outcome after (`done`, `written`).
+
+**What it does not cover.** The digest binds the owner's confirmation to the hashes of the previewed release, the approver and the
+time, not to the content of the packages: the owner who confirms trusts whatever the packages hold at those hashes, and reads the change
+with `git diff` before confirming. The level is read for the project the working directory is in and counts only while the rendering
+record is sound (`rendering.effective_level`); where it reads `block` because the record, the harness file or the command gate does not
+agree, the command does not refuse itself and the harness's own rule is the barrier, as for the keys that already offer `none`.
+
 ## Not built
 
+- `ask` for `wb release-approvals`, specified above and built by the plan `2026-10-30-release-approvals-at-ask`; until that plan's
+  Increments B to D are committed the key offers `block` and `none` only.
 - `delegated` for `accept-decision` and for the other seven keys that do not offer it (every key but `approve-plan`). The plan
   `2026-10-29-accept-decision-at-ask` built `ask` for `accept-decision` and left `delegated` reading `block`: the accepted record leaves
   undecided what a delegated review's subject is for a decision, and the roadmap candidate `checkpoint-levels-beyond-block` stays open.
