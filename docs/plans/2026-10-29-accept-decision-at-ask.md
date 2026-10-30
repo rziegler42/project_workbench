@@ -633,11 +633,11 @@ Completion criteria, each marked as met or not met:
    process module that declares the checkpoint) are tested in `tests/test_checkpoint_command.py` (Increment C, `02098d4`).
 2. **Met.** `wb settings` in this clone prints `level accept-decision: ask` and no longer says `ask` is not offered; `delegated` reads
    `block` with the note (`tests/test_levels.py`, `tests/test_settingscmd.py`).
-3. **Met by tests, not run end to end.** The 48 tests over the real module (`test_decision_accept_helper.py`) and the launcher tests
+3. **Met by tests, and run once end to end on 2026-10-30** (see "The live check" below). The 48 tests over the real module (`test_decision_accept_helper.py`) and the launcher tests
    (`tests/test_checkpoint_command_run.py`, with a synthetic module) cover the preview, the replacement of the status line only, each
    refusal, the digest at `none` refused before the helper starts, the second run changing nothing, the outcome line naming approver,
-   route and digest, and no entry for a terminal run. The real helper was not run through the real launcher, the real level log or a
-   real terminal.
+   route and digest, and no entry for a terminal run. The live check ran the real helper through the real launcher and the real level
+   log at `ask`. Not run: the route `none` and a real terminal (the owner's level is `ask`; both are covered by tests).
 4. **Met for the rule's text.** The rendered `.claude/settings.local.json` lists `wb run groundwork accept` (and the `--provides` and
    absolute-`wb` spellings) under `ask`, and the `python -m workbench run groundwork accept` spellings under `deny`; the rendering tests
    cover `block` and `none`. A live prompt was not observed (criterion 7).
@@ -646,9 +646,17 @@ Completion criteria, each marked as met or not met:
 6. **Met.** After the owner's releases, `wb verify packages/workbench`, `wb check` and `wb run code-work check` report no problem, the
    stale shipped records were removed with the owner's approval (four in all, in two steps, and two more in E), and the whole `tests` root
    and every package test root pass (6251 tests, 13 roots).
-7. **Partly met.** After the owner's `wb upgrade` and `wb rerender` the rendered permissions list the command as an `ask` rule (read in
-   `.claude/settings.local.json`) and the command gate refuses text that could spell it. NOT met: the harness prompt for the command with
-   the digest in a live session, which is the owner's run, and a real `preview` and `accept` through the launcher at `ask` and `none`.
+7. **Met.** After the owner's `wb upgrade` and `wb rerender` the rendered permissions list the command as an `ask` rule (read in
+   `.claude/settings.local.json`), the command gate refuses text that could spell it, and in the live check the owner saw the harness
+   prompt for the command (second run; the owner did not remember the first).
 
-Open for the owner: the live runs of criterion 7 and of criterion 3 above; the follow-up plan for `delegated` for `accept-decision` and
-the other seven keys (the roadmap candidate stays open); the stale roadmap wording above; and a push, which needs the owner's word.
+The live check, 2026-10-30, with two throwaway `Proposed` records in `docs/decisions/` (deleted afterwards with the owner's approval and
+never committed): `wb run groundwork preview <record>` printed the digest and wrote nothing; `wb run groundwork accept <record> --digest
+<digest>` then replaced only the status line with `Status: Accepted by Robert Ziegler <email> on 2026-10-30`, printed the result line with
+`"via": "ask"` and the record's pre-change hash, and the level log gained the pair `accept-decision ask digest:<32 hex>` and `done
+accepted by <email> via ask sha256:<hex>`. This was done twice (one run, then a second after the owner could not say whether a prompt had
+appeared); on the second the owner saw the prompt.
+
+Open for the owner: the route `none` and a real terminal acceptance, if wanted (tested, not run live); the follow-up plan for
+`delegated` for `accept-decision` and the other seven keys (the roadmap candidate stays open); the stale roadmap wording above; and a
+push, which needs the owner's word.
