@@ -17,6 +17,7 @@
   ],
   "ships": [
     "helper/doccheck",
+    "helper/groundwork",
     "helper/refcheck"
   ],
   "checks": [
@@ -29,6 +30,30 @@
       "kit": 1
     }
   ],
+  "commands": {
+    "groundwork": {
+      "helper": "helper/groundwork",
+      "runtime": "python",
+      "kit": 1,
+      "arguments": [
+        "preview",
+        "accept"
+      ],
+      "owner": [
+        "accept"
+      ],
+      "levels": {
+        "accept": [
+          "ask",
+          "none"
+        ]
+      },
+      "preview": "preview",
+      "checkpoint_of": {
+        "accept": "accept-decision"
+      }
+    }
+  },
   "fills": [
     {
       "slot": "slot:docs-index",
