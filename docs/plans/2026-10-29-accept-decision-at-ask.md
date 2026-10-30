@@ -422,7 +422,7 @@ and the later labels shifted by one). A first report said a hard-linked record w
 `Root.read_if_present` refuses a file with more than one hard link. What is missing is the comparison at the moment of the rename.
 The shipped approvals released before this stop are unaffected, since no package file changed.
 
-### Increment D — a hash-checked replace in the kit (not yet committed)
+### Increment D — a hash-checked replace in the kit (committed as `246ace4`; the security-review fix below is a second commit)
 
 Changed: `workbench/wbkit/safefs.py` (`Root.replace_file`; a `read` test seam in `_read_present`, the same stage `read_file` has, a
 no-op outside tests; `import hashlib`; a docstring bullet), `tests/test_safefs.py` (`ReplaceFileTest`, 25 tests), the kit bullet of
@@ -446,3 +446,18 @@ deviation (2). Finding 3 (`os.access`): kept, documented, deviation (3). Finding
 before the rename, a failing rename and a failing write of the staged file; the gap between the first stat and the read has no seam and
 is covered by the final identity comparison. Finding 5 (a flaky swap test): applied, the replacement file now differs in size. The
 reviewer could not run anything. Whether to run a security review is the owner's call at the checkpoint after D.
+
+Security review (asked for by the owner after the commit): the `security-reviewer` agent, one exchange, on a copy in its scratch
+directory. No blocking finding. It tried link, directory, FIFO, hard-link and same-size-rewrite swaps at the `read` and
+`before_replace` stages, mode bits, failing write, fsync, fchmod and rename, a pre-planted staged name and a shrinking file; each was
+refused with the old bytes kept and no staged file left. Medium, applied: the staged sibling's name is visible in the directory from its
+creation, and the descriptor was closed before the rename, so a same-user process with write access to the directory could substitute
+the staged file (a link, or other bytes) and the call returned success. The function now keeps the descriptor open and compares the
+staged name with it (regular file, same device and inode, one link, the size written) immediately before the rename; three tests cover
+a link, other bytes and a removed staged file (they failed first). A substitute swapped in after that comparison is still installed; unlike
+a write to the record, a read-back through the no-follow reader shows it, and Increment E's helper must make that read-back. The spec
+statements and the docstrings say so. Low, not changed: `replace_file` fires only the `read` and `before_replace` stages (not
+`validated`), no test relies on `validated` for it; a failed rename followed by a failed unlink can leave the staged file (best effort,
+as for a killed process); a shared writable mapping might change bytes without a visible timestamp change, which the module's timestamp
+limit covers; a directory renamed after its descriptor was held still receives the write through the descriptor, with no link followed.
+The reviewer could not run `git status` or read the test body.

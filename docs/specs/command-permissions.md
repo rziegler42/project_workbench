@@ -605,7 +605,10 @@ followed, regular file, one hard link), recomputes the digest, checks that the s
 the kit's hash-checked replace (`Root.replace_file`, plan `2026-10-29-accept-decision-at-ask`, Increment D), reads the result back and
 compares it with what it meant to write, and prints one result line. The replace compares the file's identity just before its rename and
 the kit has no lock, so a write that lands in that short window is overwritten without notice, and the read-back cannot show it (the file
-then holds the helper's bytes); the read-back confirms what the helper wrote, and the window is a known limit. It refuses, with nothing written, a record whose bytes differ from the digest, a status that is not `Proposed`, a path that
+then holds the helper's bytes); the read-back confirms what the helper wrote, and the window is a known limit. The staged file is also
+compared with its open descriptor just before the rename; a substitute swapped in after that comparison is installed, and the read-back,
+which opens the result with the kit's no-follow reader and compares its bytes, shows it. The helper refuses and reports a result that
+is not the bytes it meant to write. It refuses, with nothing written, a record whose bytes differ from the digest, a status that is not `Proposed`, a path that
 is not under `docs/decisions/`, a link, a file over its bound, a status line that is missing or repeated, and a missing or refused
 identity. A record that already reads `Accepted` is reported as such and not changed (exit 0) only after the digest check has passed, so a
 changed record is refused whatever its status; at `none`, which has no digest, the check is on the status alone. Exit codes: 0 done or already accepted, 1

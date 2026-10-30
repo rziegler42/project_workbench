@@ -655,6 +655,55 @@ class ReplaceFileTest(TempTest):
         self.assertEqual(self.content(), b"Status: Proposed\nanother file\n")
         self.assertEqual(os.listdir(self.root), ["f"])
 
+    def staged_name(self):
+        return [n for n in os.listdir(self.root) if n.startswith(".workbench-")][0]
+
+    def test_the_staged_file_swapped_for_a_link_before_the_rename_is_refused(self):
+        self.put("f", self.OLD)
+        target = self.put("target", b"attacker's file\n", base=self.outside)
+
+        def swap(stage, **info):
+            if stage == "before_replace":
+                staged = os.path.join(self.root, self.staged_name())
+                os.unlink(staged)
+                os.symlink(target, staged)
+
+        safefs._hook = swap
+        with self.assertRaisesRegex(SafeFsError, "staged"):
+            self.replace()
+        self.assertEqual(self.content(), self.OLD)
+        self.assertFalse(os.path.islink(os.path.join(self.root, "f")))
+        self.assertEqual(os.listdir(self.root), ["f"])
+
+    def test_the_staged_file_swapped_for_other_bytes_before_the_rename_is_refused(self):
+        self.put("f", self.OLD)
+
+        def swap(stage, **info):
+            if stage == "before_replace":
+                staged = os.path.join(self.root, self.staged_name())
+                os.unlink(staged)
+                with open(staged, "wb") as handle:
+                    handle.write(b"attacker's bytes\n")
+
+        safefs._hook = swap
+        with self.assertRaisesRegex(SafeFsError, "staged"):
+            self.replace()
+        self.assertEqual(self.content(), self.OLD)
+        self.assertEqual(os.listdir(self.root), ["f"])
+
+    def test_the_staged_file_removed_before_the_rename_is_refused(self):
+        self.put("f", self.OLD)
+
+        def remove(stage, **info):
+            if stage == "before_replace":
+                os.unlink(os.path.join(self.root, self.staged_name()))
+
+        safefs._hook = remove
+        with self.assertRaisesRegex(SafeFsError, "staged"):
+            self.replace()
+        self.assertEqual(self.content(), self.OLD)
+        self.assertEqual(os.listdir(self.root), ["f"])
+
     def test_a_hard_link_added_before_the_rename_is_refused(self):
         path = self.put("f", self.OLD)
 

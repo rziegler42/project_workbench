@@ -78,7 +78,8 @@ needs in order to read untrusted repository content safely and to report:
   read as `read_if_present` reads it, replaced only if it still has the expected SHA-256, and the identity read is compared again just
   before the rename (the identity taken before the read); a link, a file that is not regular, one with another hard link, a read-only
   file and one over the limit are refused, and nothing is created. The kit has no lock, so a write inside the window between that
-  comparison and the rename is overwritten without notice, and a read-back cannot show it (rule 5 below: the installer's `replace_file` in `projectfs.py` and the `groundwork`
+  comparison and the rename is overwritten without notice, and a read-back cannot show it; the staged file is compared with its open
+  descriptor in the same instant, and a substitute swapped in after that is installed and shown by a read-back (rule 5 below: the installer's `replace_file` in `projectfs.py` and the `groundwork`
   helper both need it; the installer is not changed to call it, and no helper uses it yet);
 - the report form of a module check (below) and the exit-code convention.
 

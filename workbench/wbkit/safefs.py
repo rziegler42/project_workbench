@@ -31,8 +31,11 @@ Limits of the checks, recorded here on purpose:
 * ``Root.replace_file`` replaces an existing file only if it still holds the bytes the caller read (their SHA-256). The
   file's identity is compared with the one taken before it was read, just before the rename; the kit has no lock, so a
   write that lands between that comparison and the rename is overwritten without notice, and reading the file back
-  cannot show it (the file then holds the caller's bytes). The staged sibling and the permission bits are those of a
-  write (above).
+  cannot show it (the file then holds the caller's bytes). The staged sibling's name is in the directory from its
+  creation, so just before the rename it is compared with the descriptor it was written through (same file, one link,
+  the size written); a substitute swapped in after that comparison is installed, and a read-back through the no-follow
+  reader shows it, because the result is not `data`. The staged sibling and the permission bits are those of a write
+  (above).
 * Deletion is not provided yet.
 
 A platform that lacks the no-follow and directory-relative calls used here is
@@ -440,7 +443,9 @@ class Root:
         compared with the one taken before the file was read, and a change is refused with nothing written and the
         staged file removed. The kit has no lock, so a write that lands between that comparison and the rename is
         overwritten without notice, and reading the file back cannot show it, because the file then holds `data`; a
-        read-back shows only a write made after the rename. A file that is absent is refused: nothing is created."""
+        read-back shows only a write made after the rename. The staged file is checked against its descriptor in the same
+        instant, so a substitute swapped in after that check is installed; the caller's read-back, through this reader,
+        shows it. A file that is absent is refused: nothing is created."""
         parts = validate_relpath(rel)
         shown = "%s/%s" % (self.path, rel)
         if not isinstance(data, bytes):
@@ -485,15 +490,24 @@ class Root:
                     os.fsync(fd)
                 except OSError as exc:
                     raise _os_error("write", shown, exc)
+                _fire("before_replace", root=self.path, rel=rel)
+                try:
+                    now = os.stat(name, dir_fd=dirfd, follow_symlinks=False)
+                except OSError:
+                    raise SafeFsError("the file changed before it was replaced: %s" % shown)
+                if identity(now) != identity(before) or now.st_nlink > 1:
+                    raise SafeFsError("the file changed before it was replaced: %s" % shown)
+                # The staged name is in the directory from its creation: it must still be the file written through `fd`.
+                try:
+                    named = os.stat(staged, dir_fd=dirfd, follow_symlinks=False)
+                except OSError:
+                    raise SafeFsError("the staged file was removed or replaced before the rename: %s" % shown)
+                held = os.fstat(fd)
+                if not stat.S_ISREG(named.st_mode) or (named.st_dev, named.st_ino) != (held.st_dev, held.st_ino) \
+                        or named.st_nlink != 1 or named.st_size != len(data):
+                    raise SafeFsError("the staged file was removed or replaced before the rename: %s" % shown)
             finally:
                 os.close(fd)
-            _fire("before_replace", root=self.path, rel=rel)
-            try:
-                now = os.stat(name, dir_fd=dirfd, follow_symlinks=False)
-            except OSError:
-                raise SafeFsError("the file changed before it was replaced: %s" % shown)
-            if identity(now) != identity(before) or now.st_nlink > 1:
-                raise SafeFsError("the file changed before it was replaced: %s" % shown)
             try:
                 os.rename(staged, name, src_dir_fd=dirfd, dst_dir_fd=dirfd)
             except OSError as exc:
