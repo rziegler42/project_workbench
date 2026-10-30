@@ -33,7 +33,7 @@
     {
       "declaration_hash": "9b33ab9498d038ba445ceb79d86c51a0825c4071cd1b8f73f240ab3e6525a855",
       "name": "groundwork",
-      "tree_hash": "d6c7348f44531d4f917d848f15a4df42f195177e9cd409089e35476845264479"
+      "tree_hash": "cf1158c9f814fdaecd2e5c4435f594f1f2b63e73cd5b0cd9c97a45e67c23c3c9"
     },
     {
       "declaration_hash": "184b1eaf0af1a0482a00da156e33ef42e6da16f6a14a2f71c30d77a9418368f9",
@@ -68,6 +68,6 @@
   ],
   "subject": "workbench",
   "time": "1970-01-01T00:00:00Z",
-  "tree_hash": "0673b9eac8f0cdb8c168950ea80c5f812400d951d72ff8db2066510530203bb5",
+  "tree_hash": "dcbc58f4ea350d6be2943ea431ddaa97b879340dbb7f555fe2c417568c0f2d26",
   "workbench_version": "0.1.0"
 }

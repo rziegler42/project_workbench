@@ -487,7 +487,7 @@ as for a killed process); a shared writable mapping might change bytes without a
 limit covers; a directory renamed after its descriptor was held still receives the write through the descriptor, with no link followed.
 The reviewer could not run `git status` or read the test body.
 
-### Increment E — the groundwork helper (not yet committed)
+### Increment E — the groundwork helper (committed as `6f01c98`)
 
 Changed: `packages/workbench/groundwork/helper/groundwork` (new: `preview <record>` and `accept <record> [--digest <hex>]`),
 `packages/workbench/groundwork/module.json` (ships the helper; the command `groundwork` with `preview`, and `accept` owner-run,
@@ -545,7 +545,7 @@ deviation (11) above. Noted, no change: text after `Proposed` on the status line
 digest; a status line inside an HTML comment is accepted, as `doccheck` reads it; a stdout failure after the replace was not tested;
 the end-to-end `wb run` through the real launcher, the real level log and a real terminal were not run.
 
-### Increment F — refuse a digest at the level none (not yet committed)
+### Increment F — refuse a digest at the level none (committed as `3eda1a1`)
 
 Changed: `workbench/ownerargs.py` (`permit`: for a mapped argument at a level other than `ask`, a run whose second-to-last argument is
 `--digest` is refused before the helper starts, whatever follows it, with a reason that says a digest needs the level `ask`; the
@@ -573,3 +573,34 @@ Review: the `reviewer` agent, one exchange, no blocking finding. Applied: the st
 shows the digest was passed on (7); tests for a digest with no record, a digest not among the last two arguments and a digest at
 `block` (7). Recorded: the dependence on the helper's argument count, choice (3) (1). Findings 2, 3, 4, 5, 6 and 8 found nothing to
 change. The reviewer could not run anything.
+
+### Increment G — what each level allows (committed with the trailer `#G`)
+
+Changed: `packages/workbench/groundwork/harness/neutral/skills/draft-decision/SKILL.md` (a section per level: at `block` and any other
+reading stop at `Proposed`; at `ask` run `preview`, show its whole text, then run `accept` with the digest, the last line `digest: <32
+hex>`, as a command of its own for the owner to confirm; at `none` run `accept`; `delegated` reads `block`; the agent never writes
+`Accepted` itself; the index row is updated after an acceptance; a refusal stops the run; the commands the skill may run are now `wb
+settings`, `wb run groundwork preview` and `wb run groundwork accept`), `files/blocks/policy.md` and `files/docs/decisions/README.md`
+(the same four level sentences, word for word), `tests/test_groundwork_module.py` (a new class `LevelTexts`, a changed skill test, the
+policy block's line limit 14 to 16), this repository's `docs/decisions/README.md` (a copy of the new seed, so its disposition stays
+`identical`), `docs/specs/groundwork.md` (three stale statements that `ask` was not built, and a dated note) and the shipped records
+(two current ones added, four stale ones removed with the owner's approval in two steps).
+
+Choices, for the owner: (1) The spec edit of `groundwork.md` is outside G's listed areas; it states what G makes true and was stale. (2)
+The seeded decisions README now carries the level sentences too, so a project that adopts it sees them. (3) Two scripted package passes
+and two releases were needed, the second for the review's findings 2 and 4. (4) This repository's `AGENTS.md` still holds the old
+policy block; only the owner's `wb upgrade` replaces it.
+
+Verification as run: the level tests failed first (7 failures against the old texts; then 1 against the second pass's new clauses) and
+passed staged (36 tests); `wb verify packages/workbench`, `wb check` and `wb run code-work check` (73 plans) clean after the second
+release; `python3 -B -W error tests/run_all.py`: 6251 tests in 13 roots with ONE failure,
+`test_self_hosting.Relation.test_every_seeded_path_has_one_disposition_that_holds`, because `AGENTS.md` is recorded identical to the
+seed and differs until the owner's `wb upgrade`. Not run: `wb upgrade`, `wb rerender` and the harness prompt for the `ask` rule
+(criterion 7, the owner's runs); the helper end to end through the real launcher.
+
+Review: the `reviewer` agent, one exchange, no blocking finding. Applied: the skill names the digest line `digest: <32 hex>` (4);
+"no other command" reworded to "no command but those under Rules" (2); tests for the fail-closed clauses, the `<record>` form and the
+command spellings against `module.json` (5); `docs/specs/groundwork.md` line 123 (1). Not applied: the first sentence of "Approval and
+acceptance" is stricter than the later sections (3, wording, no contradiction); the literal stale-phrase list (5, accepted). The
+reviewer could not run anything or read the settings output; the line `level accept-decision: ask` is the one `wb settings` prints for a
+level (`tests/test_settingscmd.py`).

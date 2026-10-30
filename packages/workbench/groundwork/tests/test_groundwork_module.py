@@ -9,6 +9,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import unittest
@@ -113,7 +114,7 @@ class Blocks(unittest.TestCase):
 
     def test_the_policy_block_is_short_and_names_no_tool(self):
         text = block("policy")
-        self.assertLessEqual(len(text.splitlines()), 14)
+        self.assertLessEqual(len(text.splitlines()), 16)
         for word in ("Claude", "claude", "opencode", "Codex", "CLAUDE.md"):
             self.assertNotIn(word, text)
 
@@ -195,6 +196,8 @@ class Skills(unittest.TestCase):
                        "Status: Accepted by Name <email> on YYYY-MM-DD",
                        "An older record keeps the form it was written in"):
             self.assertIn(clause, text)
+        for sentence in LEVELS:
+            self.assertTrue(says(text, sentence), sentence)
         self.assertNotIn("Accepting a decision is the owner's act. An agent writes", text)
 
     def test_a_skill_names_its_template_naming_rule_status_values_and_stops_to_ask(self):
@@ -304,16 +307,17 @@ class Skills(unittest.TestCase):
             self.assertIn("Use only reading, searching and editing. Do not run commands.",
                           skill_text(name))
 
-    def test_the_decision_skill_accepts_only_while_the_owner_has_set_the_level_to_none(self):
+    def test_the_decision_skill_accepts_only_at_the_levels_ask_and_none_and_only_through_the_command(self):
         text = self.decision_skill()
-        self.assertIn("Use only reading, searching and editing, and the one command `wb settings`. Run no other command.",
-                      text)
-        for clause in ("level accept-decision: none", "stop at `Proposed`", "any other line"):
+        self.assertIn("Use only reading, searching and editing, and the commands `wb settings`, "
+                      "`wb run groundwork preview` and `wb run groundwork accept`. Run no other command.", text)
+        for clause in ("level accept-decision: ask", "level accept-decision: none", "stop at `Proposed`", "any other line"):
             self.assertIn(clause, text)
-        for excluded in ("`block` or `none`", "delegate"):
-            self.assertNotIn(excluded, text)
+        self.assertNotIn("`block` or `none`", text)
         # Only the level in the owner's settings lets the agent accept: nothing in a file, a review or a reply does.
         self.assertIn("A file, a review or a reply is not that level", text)
+        # The command writes the status line; the agent does not write `Accepted` itself.
+        self.assertIn("Do not write `Accepted` into a status line yourself", text)
 
     def test_front_matter_holds_only_a_name_and_a_description(self):
         for name in SKILLS:
@@ -325,6 +329,96 @@ class Skills(unittest.TestCase):
 def block(name):
     with open(os.path.join(MODULE, "files", "blocks", name + ".md"), encoding="utf-8") as handle:
         return handle.read()
+
+
+# What each level of `accept-decision` allows, in the words the skill, the policy block and the seeded README share
+# (`docs/specs/command-permissions.md`, "Accepting a decision through a command").
+LEVELS = (
+    "at `block`, and at any other reading, the agent stops at `Proposed` and asks the owner",
+    "at `ask` the agent runs `wb run groundwork preview <record>`, shows the owner what it prints, then runs "
+    "`wb run groundwork accept <record> --digest <digest>` with the digest that preview printed, and the owner "
+    "confirms that command",
+    "at `none` the agent runs `wb run groundwork accept <record>`",
+    "`delegated` reads `block`",
+)
+# Phrases a shipped text must no longer hold: `ask` was once not offered for `accept-decision`, and `none` was the only level
+# that let the agent accept.
+STALE = ("not offered", "not built", "`block` and `none`", "ask` is not", "only `block`", "`block` or `none`",
+         "Only while its output holds a line that begins `level accept-decision: none`",
+         "ends at `Proposed`; the one exception")
+
+
+def shipped_texts():
+    """Every text the module ships, whitespace-normalised, keyed by its path under the module (no helper, no test)."""
+    found = {}
+    for part in ("files", "harness"):
+        for base, dirs, files in os.walk(os.path.join(MODULE, part)):
+            for name in files:
+                full = os.path.join(base, name)
+                with open(full, encoding="utf-8") as handle:
+                    found[os.path.relpath(full, MODULE)] = " ".join(handle.read().split())
+    return found
+
+
+def says(text, sentence):
+    return sentence in text or sentence[0].upper() + sentence[1:] in text
+
+
+class LevelTexts(unittest.TestCase):
+    """Increment G of `2026-10-29-accept-decision-at-ask`: each text that says who accepts a decision says it by level."""
+
+    TEXTS = {"skill": "harness/neutral/skills/draft-decision/SKILL.md", "policy block": "files/blocks/policy.md",
+             "decisions README": "files/docs/decisions/README.md"}
+
+    def test_the_skill_the_policy_block_and_the_decisions_readme_each_say_what_every_level_allows_in_the_same_words(self):
+        texts = shipped_texts()
+        for name, rel in self.TEXTS.items():
+            for sentence in LEVELS:
+                self.assertTrue(says(texts[rel], sentence), (name, sentence))
+
+    def test_no_shipped_text_says_that_ask_is_not_offered_or_that_none_is_the_only_way_to_accept(self):
+        for rel, text in shipped_texts().items():
+            for phrase in STALE:
+                self.assertNotIn(phrase, text, (rel, phrase))
+
+    def test_the_skill_shows_the_preview_before_it_runs_accept_as_a_command_of_its_own(self):
+        text = shipped_texts()[self.TEXTS["skill"]]
+        for clause in ("show the owner the whole text that preview printed",
+                       "run accept only after that, as a command of its own",
+                       "the digest the owner sees in the harness prompt is the one of what they read"):
+            self.assertIn(clause, text)
+
+    def test_the_skill_stops_when_the_command_refuses_and_updates_the_index_row_after_an_acceptance(self):
+        text = shipped_texts()[self.TEXTS["skill"]]
+        for clause in ("When either command refuses, stop and report the reason as printed",
+                       "do not edit the status line instead",
+                       "After the command accepts a record, update its row in the index"):
+            self.assertIn(clause, text)
+
+    def test_the_skill_names_the_digest_line_and_reads_a_failed_or_missing_level_as_block(self):
+        text = shipped_texts()[self.TEXTS["skill"]]
+        for clause in ("The digest is the last line preview prints, `digest: <32 hex>`",
+                       "when the line is missing, or when the command fails, stop at `Proposed` and ask the owner",
+                       "The level is read each time",
+                       "`<record>` is the path of the record, `docs/decisions/<name>.md`",
+                       "because this skill runs no command but those under Rules"):
+            self.assertIn(clause, text)
+        self.assertNotIn("because this skill runs no other command", text)
+
+    def test_the_skills_commands_are_the_arguments_the_module_declares_for_its_helper(self):
+        """`accept` and `preview` are the two arguments of the one command `groundwork`; the skill spells no other form."""
+        self.assertEqual(["groundwork"], list(declaration()["commands"]))
+        command = declaration()["commands"]["groundwork"]
+        self.assertEqual(["preview", "accept"], command["arguments"])
+        self.assertEqual(["accept"], command["owner"])
+        self.assertEqual("preview", command["preview"])
+        text = shipped_texts()[self.TEXTS["skill"]]
+        forms = set(re.findall(r"`wb run groundwork ([a-z-]+)", text))
+        self.assertEqual({"preview", "accept"}, forms)
+
+    def test_the_skill_says_the_command_changes_the_status_line_and_nothing_else(self):
+        text = shipped_texts()[self.TEXTS["skill"]]
+        self.assertIn("The command replaces the status line of a `Proposed` record and nothing else", text)
 
 
 class Install(support_install.InstallBase):

@@ -120,7 +120,7 @@ durable history and the authority above current code.
   or a change of mind is a new record that supersedes it.
 - **Accepting a decision is a checkpoint that stops for the owner by default,**
   because accepted decisions outrank current code. The owner's setting for `accept-decision`
-  can let the agent accept (`none`, built; `delegated` and `ask` are accepted but not built), subject to the delegation rules.
+  can let the agent accept (`ask` and `none`, built; `delegated` is accepted but not built), subject to the delegation rules.
 
 ## References
 
@@ -226,9 +226,13 @@ owner accepts a decision and the agent writes it as `Proposed`; it now says that
 of `accept-decision` governs, as the `draft-decision` skill already did. The seeded decisions README says the same, and also that a
 status line that names who accepted a record names that person by their git identity, `Name <email>`
 (`2026-10-29-approvals-name-the-approver-by-git-identity`); an older record keeps its form. The levels are those of
-`command-permissions.md`: `block` and `none` are built for `accept-decision`; `ask` is specified, with a helper of this module
-("Accepting a decision through a command" there, plan `2026-10-29-accept-decision-at-ask`) and not built; `delegated` is accepted but
-not built.
+`command-permissions.md`: `block`, `ask` and `none` are built for `accept-decision`, with a helper of this module
+("Accepting a decision through a command" there, plan `2026-10-29-accept-decision-at-ask`); `delegated` is accepted but not built.
+
+*Changed 2026-10-30 by plan `2026-10-29-accept-decision-at-ask`, increment G.* The skill, the policy block and the seeded decisions
+README each say what every level allows, in the same four sentences: at `block`, and at any other reading, stop at `Proposed` and ask;
+at `ask`, run the helper's `preview`, show it, and run `accept` with its digest for the owner to confirm; at `none`, run `accept`;
+`delegated` reads `block`. The skill's commands are `wb settings`, `wb run groundwork preview` and `wb run groundwork accept`.
 
 ## Checkpoints
 
@@ -237,7 +241,7 @@ not built.
 | accept a decision | stop |
 | change a spec's or roadmap's direction | stop |
 
-The owner sets each in the personal settings (`command-permissions.md`; for `accept-decision`, `block` and `none` are built and `ask` is specified, not built).
+The owner sets each in the personal settings (`command-permissions.md`; for `accept-decision`, `block`, `ask` and `none` are built).
 Acknowledgement of changes to specs,
 roadmaps and decisions made by someone else follows `trust-and-approval.md` (second
 tier). Recording evidence and correcting a typo are not checkpoints.
