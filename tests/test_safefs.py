@@ -1,5 +1,6 @@
 import contextlib
 import errno
+import hashlib
 import os
 import stat
 import tempfile
@@ -482,6 +483,265 @@ class WriteTest(TempTest):
         self.assertFalse(os.path.islink(path))
         with open(path, "rb") as handle:
             self.assertEqual(handle.read(), b"new")
+
+
+class ReplaceFileTest(TempTest):
+    """Plan ``2026-10-29-accept-decision-at-ask``, Increment D: ``Root.replace_file`` replaces one existing file only if it still
+    has the bytes the caller read, and writes nothing otherwise."""
+
+    OLD = b"Status: Proposed\nbody\n"
+    NEW = b"Status: Accepted by A <a@example.org> on 2026-10-30\nbody\n"
+
+    @staticmethod
+    def sha(data):
+        return hashlib.sha256(data).hexdigest()
+
+    def replace(self, rel="f", expected=None, data=None, **kwargs):
+        with safefs.Root(self.root) as root:
+            return root.replace_file(rel, self.sha(self.OLD) if expected is None else expected,
+                                     self.NEW if data is None else data, **kwargs)
+
+    def content(self, rel="f"):
+        with open(os.path.join(self.root, *rel.split("/")), "rb") as handle:
+            return handle.read()
+
+    def test_replaces_the_bytes_returns_their_hash_and_keeps_the_mode(self):
+        path = self.put("f", self.OLD)
+        os.chmod(path, 0o640)
+        self.assertEqual(self.replace(), self.sha(self.NEW))
+        self.assertEqual(self.content(), self.NEW)
+        self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o640)
+        self.assertEqual(os.listdir(self.root), ["f"])
+
+    def test_replaces_a_file_below_a_directory(self):
+        self.put("docs/decisions/f", self.OLD)
+        self.replace("docs/decisions/f")
+        self.assertEqual(self.content("docs/decisions/f"), self.NEW)
+
+    def test_setuid_bits_of_the_old_file_are_not_carried_over(self):
+        path = self.put("f", self.OLD)
+        os.chmod(path, 0o4755)
+        self.replace()
+        self.assertEqual(stat.S_IMODE(os.stat(path).st_mode), 0o755)
+
+    def test_bytes_that_differ_from_the_expected_hash_are_refused_and_nothing_is_written(self):
+        self.put("f", b"someone else's text\n")
+        with self.assertRaisesRegex(SafeFsError, "differs"):
+            self.replace()
+        self.assertEqual(self.content(), b"someone else's text\n")
+        self.assertEqual(os.listdir(self.root), ["f"])
+
+    def test_a_malformed_expected_hash_is_refused(self):
+        self.put("f", self.OLD)
+        for expected in ("", "abc", self.sha(self.OLD).upper(), self.sha(self.OLD)[:-1], self.sha(self.OLD) + "0", 5,
+                         self.sha(self.OLD).encode()):
+            with self.subTest(expected=expected):
+                with self.assertRaises(SafeFsError):
+                    self.replace(expected=expected)
+        self.assertEqual(self.content(), self.OLD)
+
+    def test_data_that_is_not_bytes_is_refused(self):
+        self.put("f", self.OLD)
+        for data in ("text", bytearray(b"x"), None, 3):
+            with self.subTest(data=data):
+                with self.assertRaises(SafeFsError):
+                    with safefs.Root(self.root) as root:
+                        root.replace_file("f", self.sha(self.OLD), data)
+        self.assertEqual(self.content(), self.OLD)
+
+    def test_a_symbolic_link_as_the_file_is_refused_and_its_target_is_untouched(self):
+        target = self.put("target", self.OLD, base=self.outside)
+        os.symlink(target, os.path.join(self.root, "f"))
+        with self.assertRaises(SafeFsError):
+            self.replace()
+        with open(target, "rb") as handle:
+            self.assertEqual(handle.read(), self.OLD)
+        self.assertTrue(os.path.islink(os.path.join(self.root, "f")))
+
+    def test_a_symbolic_link_as_a_directory_is_refused(self):
+        self.put("f", self.OLD, base=self.outside)
+        os.symlink(self.outside, os.path.join(self.root, "sub"))
+        with self.assertRaises(SafeFsError):
+            self.replace("sub/f")
+        self.assertEqual(os.listdir(self.outside), ["f"])
+        with open(os.path.join(self.outside, "f"), "rb") as handle:
+            self.assertEqual(handle.read(), self.OLD)
+
+    def test_a_directory_and_a_fifo_are_refused(self):
+        os.mkdir(os.path.join(self.root, "d"))
+        os.mkfifo(os.path.join(self.root, "p"))
+        for rel in ("d", "p"):
+            with self.subTest(rel=rel):
+                with self.assertRaises(SafeFsError):
+                    self.replace(rel)
+
+    def test_a_file_with_another_hard_link_is_refused(self):
+        path = self.put("f", self.OLD)
+        other = os.path.join(self.outside, "link")
+        os.link(path, other)
+        with self.assertRaisesRegex(SafeFsError, "hard link"):
+            self.replace()
+        with open(other, "rb") as handle:
+            self.assertEqual(handle.read(), self.OLD)
+
+    def test_a_file_over_the_limit_is_refused(self):
+        self.put("f", self.OLD)
+        with self.assertRaisesRegex(SafeFsError, "too large"):
+            self.replace(limit=len(self.OLD) - 1)
+        self.assertEqual(self.content(), self.OLD)
+
+    def test_new_data_over_the_limit_is_refused(self):
+        self.put("f", self.OLD)
+        with self.assertRaisesRegex(SafeFsError, "too large"):
+            self.replace(limit=len(self.OLD), data=self.OLD + b"x")
+        self.assertEqual(self.content(), self.OLD)
+
+    def test_unsafe_paths_are_refused_and_write_nothing(self):
+        for rel in ("/abs", "../x", "a/../../x", "a\\b", "C:/x", ".git/config", ".GIT./x", "", None):
+            with self.subTest(rel=rel):
+                with self.assertRaises(SafeFsError):
+                    self.replace(rel)
+        self.assertEqual(self.listing(), [])
+        self.assertEqual(self.listing(self.outside), [])
+
+    def test_a_file_that_is_not_there_is_refused_and_nothing_is_created(self):
+        for rel in ("f", "sub/f"):
+            with self.subTest(rel=rel):
+                with self.assertRaises(SafeFsError):
+                    self.replace(rel)
+        self.assertEqual(self.listing(), [])
+
+    def test_a_read_only_file_is_refused(self):
+        if os.geteuid() == 0:
+            self.skipTest("root can write a read-only file")
+        path = self.put("f", self.OLD)
+        os.chmod(path, 0o444)
+        with self.assertRaisesRegex(SafeFsError, "not writable"):
+            self.replace()
+        self.assertEqual(self.content(), self.OLD)
+
+    def test_a_closed_root_is_refused(self):
+        self.put("f", self.OLD)
+        root = safefs.Root(self.root)
+        root.close()
+        with self.assertRaisesRegex(SafeFsError, "closed"):
+            root.replace_file("f", self.sha(self.OLD), self.NEW)
+
+    def test_a_file_rewritten_before_the_rename_is_refused_and_keeps_the_other_writers_text(self):
+        path = self.put("f", self.OLD)
+
+        def rewrite(stage, **info):
+            if stage == "before_replace":
+                with open(path, "wb") as handle:
+                    handle.write(b"Status: Proposed\nedited\n")
+
+        safefs._hook = rewrite
+        with self.assertRaisesRegex(SafeFsError, "changed"):
+            self.replace()
+        self.assertEqual(self.content(), b"Status: Proposed\nedited\n")
+        self.assertEqual(os.listdir(self.root), ["f"])
+
+    def test_a_file_swapped_for_another_before_the_rename_is_refused(self):
+        path = self.put("f", self.OLD)
+
+        def swap(stage, **info):
+            if stage == "before_replace":
+                os.unlink(path)
+                self.put("f", b"Status: Proposed\nanother file\n")
+
+        safefs._hook = swap
+        with self.assertRaisesRegex(SafeFsError, "changed"):
+            self.replace()
+        self.assertEqual(self.content(), b"Status: Proposed\nanother file\n")
+        self.assertEqual(os.listdir(self.root), ["f"])
+
+    def test_a_hard_link_added_before_the_rename_is_refused(self):
+        path = self.put("f", self.OLD)
+
+        def link(stage, **info):
+            if stage == "before_replace":
+                os.link(path, os.path.join(self.outside, "other"))
+
+        safefs._hook = link
+        with self.assertRaisesRegex(SafeFsError, "changed"):
+            self.replace()
+        self.assertEqual(self.content(), self.OLD)
+        self.assertEqual(os.listdir(self.root), ["f"])
+
+    def test_a_failing_rename_removes_the_staged_file(self):
+        self.put("f", self.OLD)
+        with safefs.Root(self.root) as root:
+            with unittest.mock.patch("os.rename", side_effect=OSError(errno.EIO, "injected")):
+                with self.assertRaisesRegex(SafeFsError, "cannot write"):
+                    root.replace_file("f", self.sha(self.OLD), self.NEW)
+        self.assertEqual(self.content(), self.OLD)
+        self.assertEqual(os.listdir(self.root), ["f"])
+
+    def test_a_failing_write_of_the_staged_file_leaves_nothing_behind(self):
+        self.put("f", self.OLD)
+        with unittest.mock.patch("os.fchmod", side_effect=OSError(errno.EPERM, "injected")):
+            with self.assertRaisesRegex(SafeFsError, "cannot write"):
+                self.replace()
+        self.assertEqual(self.content(), self.OLD)
+        self.assertEqual(os.listdir(self.root), ["f"])
+
+    def test_a_file_swapped_for_a_link_before_the_rename_is_refused(self):
+        path = self.put("f", self.OLD)
+        target = self.put("target", self.OLD, base=self.outside)
+
+        def swap(stage, **info):
+            if stage == "before_replace":
+                os.unlink(path)
+                os.symlink(target, path)
+
+        safefs._hook = swap
+        with self.assertRaises(SafeFsError):
+            self.replace()
+        with open(target, "rb") as handle:
+            self.assertEqual(handle.read(), self.OLD)
+        self.assertEqual(os.listdir(self.root), ["f"])
+
+    def test_a_directory_swapped_for_a_link_before_the_rename_cannot_redirect_the_write(self):
+        self.put("sub/f", self.OLD)
+        moved = os.path.join(self.root, "sub.orig")
+
+        def swap(stage, **info):
+            if stage == "before_replace":
+                os.rename(os.path.join(self.root, "sub"), moved)
+                os.symlink(self.outside, os.path.join(self.root, "sub"))
+
+        safefs._hook = swap
+        self.replace("sub/f")
+        self.assertEqual(os.listdir(self.outside), [])
+        with open(os.path.join(moved, "f"), "rb") as handle:
+            self.assertEqual(handle.read(), self.NEW)
+
+    def test_a_failure_before_the_rename_leaves_the_old_bytes_and_no_temporary(self):
+        self.put("f", self.OLD)
+
+        def fail(stage, **info):
+            if stage == "before_replace":
+                raise SafeFsError("injected failure")
+
+        safefs._hook = fail
+        with self.assertRaisesRegex(SafeFsError, "injected"):
+            self.replace()
+        self.assertEqual(self.content(), self.OLD)
+        self.assertEqual(os.listdir(self.root), ["f"])
+
+    def test_a_file_that_changes_while_it_is_read_is_refused(self):
+        path = self.put("f", self.OLD)
+
+        def rewrite(stage, **info):
+            if stage == "read":
+                with open(path, "ab") as handle:
+                    handle.write(b"more\n")
+
+        safefs._hook = rewrite
+        with self.assertRaises(SafeFsError):
+            self.replace()
+        self.assertEqual(self.content(), self.OLD + b"more\n")
+        self.assertEqual(os.listdir(self.root), ["f"])
 
 
 class AppendCreateRaceTest(TempTest):

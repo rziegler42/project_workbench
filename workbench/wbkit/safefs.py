@@ -28,6 +28,11 @@ Limits of the checks, recorded here on purpose:
   write, so concurrent writers can exceed it by their lines. When the creating open fails with ``ENOENT`` it is tried
   once more, because on macOS it can fail that way while another writer creates the same file; a second ``ENOENT`` is
   an error.
+* ``Root.replace_file`` replaces an existing file only if it still holds the bytes the caller read (their SHA-256). The
+  file's identity is compared with the one taken before it was read, just before the rename; the kit has no lock, so a
+  write that lands between that comparison and the rename is overwritten without notice, and reading the file back
+  cannot show it (the file then holds the caller's bytes). The staged sibling and the permission bits are those of a
+  write (above).
 * Deletion is not provided yet.
 
 A platform that lacks the no-follow and directory-relative calls used here is
@@ -36,6 +41,7 @@ refused with a message; nothing falls back to a path-based call.
 
 import collections
 import errno
+import hashlib
 import os
 import stat
 import unicodedata
@@ -398,6 +404,7 @@ class Root:
                 raise _os_error("read", shown, exc)
             if total > limit:
                 raise SafeFsError("file too large (over %d bytes): %s" % (limit, shown))
+            _fire("read", root=self.path, rel="/".join(parts))
             final = os.fstat(fd)
             if identity(final) != listed or total != final.st_size:
                 raise SafeFsError("file changed while it was read: %s" % shown)
@@ -421,6 +428,86 @@ class Root:
         finally:
             for fd in fds:
                 os.close(fd)
+
+    def replace_file(self, rel, expected_sha256, data, limit=MAX_FILE_BYTES):
+        """Replace the regular file `rel` with the bytes `data`, only if it still holds the bytes whose SHA-256 is
+        `expected_sha256` (64 lowercase hexadecimal characters), and return the SHA-256 of `data`.
+
+        The file is read as ``read_if_present`` reads it: nothing is followed, and a file that is not regular, has
+        another hard link, is not writable or is over `limit` is refused, as is `data` over `limit`. The new bytes are
+        staged in an exclusively created sibling that has the file's permission bits (without setuid or setgid), and the
+        rename that replaces the file names the held directory descriptor. Just before it, the file's identity is
+        compared with the one taken before the file was read, and a change is refused with nothing written and the
+        staged file removed. The kit has no lock, so a write that lands between that comparison and the rename is
+        overwritten without notice, and reading the file back cannot show it, because the file then holds `data`; a
+        read-back shows only a write made after the rename. A file that is absent is refused: nothing is created."""
+        parts = validate_relpath(rel)
+        shown = "%s/%s" % (self.path, rel)
+        if not isinstance(data, bytes):
+            raise SafeFsError("content is not bytes: %s" % shown)
+        if not isinstance(expected_sha256, str) or len(expected_sha256) != 64 \
+                or any(c not in "0123456789abcdef" for c in expected_sha256):
+            raise SafeFsError("the expected hash is not 64 lowercase hexadecimal characters: %s" % shown)
+        if len(data) > limit:
+            raise SafeFsError("file too large (new content is %d bytes, limit %d): %s" % (len(data), limit, shown))
+        fds = []
+        staged = None
+        try:
+            dirfd = self._descend_present(parts[:-1], fds)
+            if dirfd is None:
+                raise SafeFsError("there is no file to replace: %s" % shown)
+            name = parts[-1]
+            try:
+                before = os.stat(name, dir_fd=dirfd, follow_symlinks=False)
+            except FileNotFoundError:
+                raise SafeFsError("there is no file to replace: %s" % shown)
+            except OSError as exc:
+                raise _os_error("read", shown, exc)
+            current = self._read_present(parts, dirfd, shown, limit)
+            if current is None:
+                raise SafeFsError("there is no file to replace: %s" % shown)
+            if hashlib.sha256(current).hexdigest() != expected_sha256:
+                raise SafeFsError("the file differs from what was read, so it was not replaced: %s" % shown)
+            if not os.access(name, os.W_OK, dir_fd=dirfd):
+                raise SafeFsError("not writable: %s" % shown)
+            staged = ".workbench-%d-%s.tmp" % (os.getpid(), os.urandom(6).hex())
+            try:
+                fd = os.open(staged, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=dirfd)
+            except OSError as exc:
+                staged = None
+                raise _os_error("write", shown, exc)
+            try:
+                try:
+                    view = memoryview(data)
+                    while view:
+                        view = view[os.write(fd, view):]
+                    os.fchmod(fd, stat.S_IMODE(before.st_mode) & 0o777)
+                    os.fsync(fd)
+                except OSError as exc:
+                    raise _os_error("write", shown, exc)
+            finally:
+                os.close(fd)
+            _fire("before_replace", root=self.path, rel=rel)
+            try:
+                now = os.stat(name, dir_fd=dirfd, follow_symlinks=False)
+            except OSError:
+                raise SafeFsError("the file changed before it was replaced: %s" % shown)
+            if identity(now) != identity(before) or now.st_nlink > 1:
+                raise SafeFsError("the file changed before it was replaced: %s" % shown)
+            try:
+                os.rename(staged, name, src_dir_fd=dirfd, dst_dir_fd=dirfd)
+            except OSError as exc:
+                raise _os_error("write", shown, exc)
+            staged = None
+        finally:
+            if staged is not None:
+                try:
+                    os.unlink(staged, dir_fd=dirfd)
+                except OSError:
+                    pass
+            for fd in fds:
+                os.close(fd)
+        return hashlib.sha256(data).hexdigest()
 
     def list_dir(self, rel, lenient=False):
         """The entries of directory `rel` as sorted ``(name, kind)`` pairs, `kind` being what

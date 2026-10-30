@@ -71,8 +71,8 @@ seven keys. Until then `accept-decision` offers three of its four levels, and th
   status line and the SHA-256 of its bytes, and `digest: <32 hex>` over that canonical text, as `plan-status --digest` does. The `accept`
   argument recomputes the digest inside its own run, reads the record again (bounded, no link followed), and refuses unless the digest,
   the hash and the status `Proposed` all hold; it replaces only the status line, through the kit's hash-checked replace (`Root.replace_file`, built by Increment D), and
-  verifies the result. The kit has no lock, so a window remains between the replace's last comparison and its rename; the read-back
-  catches a change made inside it.
+  verifies the result. The kit has no lock, so a window remains between the replace's last comparison and its rename; a write inside it is
+  overwritten without notice, and the read-back cannot show it (it confirms only what the helper wrote).
 - **The terminal form** is the owner's: the owner types the first 12 characters of the record's hash, as for a plan. It reads no level.
 - **The log.** The accepted record says the acceptance is logged in the guarded store "with the approver, `via` and the digest, as the
   level log does for other keys". The level log records an attempt line (key, level, digest) before the helper starts and an outcome line
@@ -206,9 +206,9 @@ Increment E, first run, stopped on this (the plan's "What `ask` binds" says it m
 2. Add `Root.replace_file(rel, expected_sha256, data, limit=MAX_FILE_BYTES)`: descend with no-follow flags and keep the directory
    descriptors; read the target as `read_if_present` does; compare its SHA-256 with `expected_sha256`; stage the new bytes in an
    exclusively created sibling with the target's mode; fsync; compare the target's identity (device, inode, size, modification time) with
-   the one read, immediately before a rename that names the held directory descriptor; remove the staged file on any failure. The
-   window between that last comparison and the rename remains, because the kit has no lock; the function's docstring and the spec say
-   so, and a caller checks the result by reading it back.
+   the one taken before the read, immediately before a rename that names the held directory descriptor; remove the staged file on any
+   failure. The window between that last comparison and the rename remains, because the kit has no lock: a write inside it is
+   overwritten without notice, and a read-back cannot show it; the function's docstring and the spec say so.
 3. Record the function in the kit bullet of the boundary spec (rule 5: the installer's `replace_file` and the `groundwork` helper both
    need it; the installer is not changed to call it here), and correct the sentence in `command-permissions.md` to name the kit's
    function and the window.
@@ -421,3 +421,28 @@ report; the owner chose to build the function in the kit, as its own increment, 
 and the later labels shifted by one). A first report said a hard-linked record would go unchecked; that was wrong, since
 `Root.read_if_present` refuses a file with more than one hard link. What is missing is the comparison at the moment of the rename.
 The shipped approvals released before this stop are unaffected, since no package file changed.
+
+### Increment D — a hash-checked replace in the kit (not yet committed)
+
+Changed: `workbench/wbkit/safefs.py` (`Root.replace_file`; a `read` test seam in `_read_present`, the same stage `read_file` has, a
+no-op outside tests; `import hashlib`; a docstring bullet), `tests/test_safefs.py` (`ReplaceFileTest`, 25 tests), the kit bullet of
+`docs/specs/module-boundary.md` and the sentence in `docs/specs/command-permissions.md` ("What `accept` does, in order"). No file under
+`packages/` changed.
+
+Deviations, for the owner: (1) The review found that the first wording ("the read-back is what notices it") was false: a write that
+lands between the last identity comparison and the rename is overwritten, the file then holds exactly the bytes the helper wrote, and a
+read-back passes. The docstring, both specs and two sentences of this plan (step 2 and "What `ask` binds") now say the window is silent
+and a read-back cannot show it. Editing those sentences changes the plan's region, so the approval needs renewing. (2) The identity
+compared before the rename is the one taken before the read, not the one the read itself saw; a change between the two is refused
+(the safe side), and the docs say "taken before the read". (3) A read-only file is refused (`os.access`, real uid), a policy beyond "the
+bytes match" that the docstring and spec state.
+
+Verification as run: the new tests failed first with `AttributeError` (no `replace_file`) and one failed until the `read` seam existed;
+`python3 -m unittest tests.test_safefs tests.test_boundary` (93 tests, OK); `python3 tests/run_all.py` (6187 tests in 13 roots, OK,
+run on the final files); `wb check` and `wb run code-work check` (73 plans) clean; `git diff --check` clean.
+
+Review: the `reviewer` agent, one exchange. Finding 1 (blocking, wording): applied, deviation (1). Finding 2 (identity wording): applied,
+deviation (2). Finding 3 (`os.access`): kept, documented, deviation (3). Finding 4 (test gaps): applied, tests for a hard link added
+before the rename, a failing rename and a failing write of the staged file; the gap between the first stat and the read has no seam and
+is covered by the final identity comparison. Finding 5 (a flaky swap test): applied, the replacement file now differs in size. The
+reviewer could not run anything. Whether to run a security review is the owner's call at the checkpoint after D.
