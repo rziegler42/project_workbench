@@ -167,7 +167,7 @@ work; M12 says "a corresponding test, in a real session with no plugin enabled" 
 inventory (3); the history note on proposal 5 reads correctly (4). The roadmap's wording about the superpowers dependencies is left
 for the owner, as the plan's non-goals say. The reviewer could not run the checks or read a diff.
 
-### Increment B — the session-start test (not yet committed)
+### Increment B — the session-start test (committed as `e6fb410`)
 
 Changed: `docs/specs/superpowers-ports.md`: a new section "The session-start test" with the procedure, the four runs recorded in
 the owner's words, the harness version, and a reading; the sentence in "What stops working" that said the reliance "has not been
@@ -199,3 +199,44 @@ agent asked" and "no file write is shown" for the second run (3); the version is
 the stale "is untested" sentence of the inventory (7). Checked against the owner's own messages: the quoted words and the transcript
 details of the second run are verbatim (1, 4). Recorded: step 4 of the increment, to list the follow-up in Deferred work, is not done
 because the plan is approved; the owner decides how it is carried (6).
+
+### Increment C — the decision on routing outside the workbench (not yet committed)
+
+Changed: `docs/decisions/2026-10-30-routing-outside-the-workbench.md` (new, `Proposed`). Nothing else: the decisions README has no
+index table (it lists no record), so there was no row to add, which the plan's step 5 assumed. No file under `packages/` changed.
+
+The record states the context (what the former user-level instruction file carried, by role and date; what a workbench project has and
+another repository lacks; the floor decision `2026-10-24-project-guarantees-a-floor`; the owner's runs of 2026-10-30 and their limits),
+four options each with what it costs (nothing at the user level; attach the workbench per repository; a short user-level instruction
+file; only the two guards, as instruction or as permission rules), the consequences, and the evidence with its provenance. The
+decision itself is stated as open: the owner has not chosen, and no recommendation is written into the record. Whether `brainstorm`
+should be forced for new behaviour inside a workbench project is named as a separate question and is not decided there.
+
+The record is `Proposed` and was not accepted. The owner's level for `accept-decision` is `ask`, so accepting it is the owner's
+confirmation of the `groundwork accept` command with its digest, which has not been asked for.
+
+Verification as run: `wb check` and `wb run code-work check` (74 plans): no problems; the record has the template's sections.
+
+Review: the `reviewer` agent, one exchange, no blocking finding. Applied: option 1 no longer says the guards are held by the harness's
+prompts (the specs do not say so) and says that no compiled floor applies outside the workbench; an invented preference ("what the
+owner liked") and unsourced costs ("heavy for a throwaway repository") are gone; option 2 states the `brainstorm` gap observed inside
+an attached project and no longer says "the tests cover" it; the advantage argued only for option 4 is removed and its cost says how a
+harness treats such a rule is not tested; each option says which harnesses it reaches; the consequences and the evidence conclusion
+are narrowed to the one plain-folder run; the version is stated as reported once after all the runs; and the record notes that the
+floor decision rejected resetting the user level, which the owner has since done (1 to 7). The reviewer could not run the checks or
+read the owner's messages.
+
+Verification for the plan as a whole, as run: `wb check` and `wb run code-work check` (74 plans): no problems;
+`python3 -B -W error tests/run_all.py`: 6251 tests in 13 roots, all OK; no file under `packages/` changed by this plan.
+
+Completion criteria: (1) met: M10, M11 and M12 carry an "Overtaken, 2026-10-29" note and `retire-superpowers-plugin` appears only in
+those moves' own lines, each followed by the note (Increment A); (2) met: `superpowers-ports.md` records the runs with date, the
+harness version as reported once, the requests and what loaded (Increment B); (3) met: the record exists as `Proposed`, with the four
+options and their costs and the choice open, and no row in the decisions index because the README has none (Increment C); (4) met:
+the checks report no problems, no file under `packages/` changed, and each increment is committed with its trailer (C's commit is
+the last).
+
+Open for the owner: the choice among the four options (accepting the record is the owner's confirmation of `groundwork accept` at
+the level `ask`); whether the `brainstorm` gap needs a deferred-work entry, which needs a new approval of this plan; the roadmap
+wording of `global-config-migration` about the superpowers dependencies; and the other deferred gaps (`evaluate-findings`,
+`git diff --check`, a fresh implementer, `writing-skills`).
