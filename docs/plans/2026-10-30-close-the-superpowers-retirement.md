@@ -236,7 +236,14 @@ options and their costs and the choice open, and no row in the decisions index b
 the checks report no problems, no file under `packages/` changed, and each increment is committed with its trailer (C's commit is
 the last).
 
-Open for the owner: the choice among the four options (accepting the record is the owner's confirmation of `groundwork accept` at
-the level `ask`); whether the `brainstorm` gap needs a deferred-work entry, which needs a new approval of this plan; the roadmap
+After the commit of C, on 2026-10-30 the owner chose options 2 and 4 (attach the workbench per repository where the process is
+wanted, and keep only the two guards at the user level) on the author's recommendation; the Decision section, the alternatives and the
+consequences were written to say so while the record was still `Proposed`, and the owner accepted it through `groundwork accept` at
+the level `ask`, with the previewed digest and the harness prompt: the status line reads "Accepted by" the owner's git identity on
+2026-10-30, the level log has the pair `accept-decision ask` and `done accepted ... via ask`, and the decisions README has no index
+row to update. That change is committed after C, not inside it.
+
+Open for the owner: the wording or rules of the two user-level guards, which are the owner's to write; which repositories get the
+workbench; whether the `brainstorm` gap needs a deferred-work entry, which needs a new approval of this plan; the roadmap
 wording of `global-config-migration` about the superpowers dependencies; and the other deferred gaps (`evaluate-findings`,
 `git diff --check`, a fresh implementer, `writing-skills`).
