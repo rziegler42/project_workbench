@@ -643,14 +643,15 @@ edit tool is held by the rule it follows and not by this gate, as it is for `acc
 logged, while a hand edit of a status line is never gated and never logged; that is the difference between the two routes. At `ask` the
 owner confirms a command and a digest, not that they read the record.
 
-## `wb release-approvals` at `ask` (specified, not built)
+## `wb release-approvals` at `ask`
 
-The plan `2026-10-30-release-approvals-at-ask` builds this in its Increments B to D. The preview (Increment B) and the digest
-check (Increment C) are built; the offer of `ask` and the rendered rules are not built until Increment D is committed. Until then the
-key offers `block` and `none` only, so the digest check runs only where a level of `ask` is read (the tests patch that reading), and
-`wb preview release-approvals` does not open the guarded store or write anything. The check is in `cli._release`, reading the level
-through `levelrun.unattended` (the reading of `attach` is unchanged). The key `wb release-approvals` will offer `block`, `ask` and `none`, and defaults to
-`block`. `delegated` is not built for it (the roadmap candidate `checkpoint-levels-beyond-block` stays open).
+The plan `2026-10-30-release-approvals-at-ask` built this in its Increments B to D: the preview (Increment B), the digest check
+(Increment C) and the offer of `ask` with the rendered rules and the gate's reading (Increment D). The key `wb release-approvals`
+offers `block`, `ask` and `none` and defaults to `block`; `delegated` is not built for it (the roadmap candidate
+`checkpoint-levels-beyond-block` stays open). `wb preview release-approvals` does not open the guarded store or write anything. The
+check is in `cli._release`, reading the level through `levelrun.unattended` (the reading of `attach` is unchanged). The owner's
+live run at `ask`, and the statements elsewhere in the specs that still give the key as `block` and `none` only, are Increments E
+and F of the plan.
 
 **How the existing parts treat it** (read on 2026-10-30, Increment A). The rendering is generic over the keys of the form
 `wb <word>` of `rules.OWNER_RUN`: a key at `ask` renders an `ask` rule on the launcher spellings of the command and leaves the
@@ -666,34 +667,48 @@ route at `ask` too, for this command alone and not for `attach`.
 | `wb release-approvals`, standard input and output terminals | not read | as today: it runs and needs no digest. A `--digest` at a terminal is refused: a digest is for a run without a terminal at `ask` |
 | `wb release-approvals --digest <32 hex>`, no terminal | `ask` | writes the release, from the one release plan built now, when the digest equals that of the plan's preview |
 | `wb release-approvals`, no terminal, no digest, a malformed digest or a wrong digest | `ask` | refused; nothing is written; the refusal names `wb preview release-approvals` |
+| `wb release-approvals --digest …` given more than once, any level | | refused: give `--digest` once (the prompt shows the whole command, and the command checks one digest) |
 | `wb release-approvals --digest …`, no terminal | `none` | refused before the run: a digest needs the level `ask`; nothing is written |
 | `wb release-approvals`, no terminal | `none` | as today: it runs and is logged |
-| `wb release-approvals` | `block` | the harness denies the agent; the command does not refuse itself, as today |
-| any form without a terminal, in a directory where no level can be read | | as today: it runs and writes no entry (a `--digest` there is not checked) |
+| `wb release-approvals`, no terminal, the verified level cannot be read or reads `block`, and the owner's own setting for the key is `ask` | `ask` (the owner's setting) | as at `ask`: the digest is required and checked, and the run is logged at `ask` |
+| `wb release-approvals`, no terminal, the verified level cannot be read or reads `block`, and the owner's settings cannot be read (a file that is not JSON, a `levels` that is not an object, an invalid key name, an unsupported version) | `ask` (read so, and the refusal says the settings are damaged and to run `wb settings`) | as at `ask`: the check does not turn itself off when the owner's own settings cannot be read (the owner's decision of 2026-10-30) |
+| `wb release-approvals`, the verified level reads `block` or cannot be read, and the owner's settings are sound and do not say `ask` for the key (a missing file is seeded and is sound) | `block` | the harness denies the agent; the command does not refuse itself, as today |
 
 **The preview.** `wb preview release-approvals` is agent-safe and read-only. It builds the release plan and prints text: the number of
 first-party packages and modules; for each package and module its declaration hash and tree hash in full (64 lowercase hexadecimal
 characters each, so that the digest covers them whole and a change at any position changes it), and whether the record for those
 hashes already exists in `workbench/shipped_approvals` or would be new; the approver and the time the records would carry; the shipped
 records the release would leave stale, by their full keys; and a line that says what it does not cover. A last line `digest: <32 lowercase hex>` is the first 32 hexadecimal characters of the SHA-256 of that text, as
-`wb plan-status --digest` computes it. A refused package refuses the preview with the reasons the release gives and no digest.
+`wb plan-status --digest` computes it. A refused package refuses the preview with the reasons the release gives and no digest. When the
+shipped tree exists and cannot be listed (a name the safe walk refuses), the line reads `stale records: unreadable` and not a count; the
+release itself goes on as it always did, writes the same records, and adds the warning that the shipped records could not be listed.
 
 **What the command does at `ask`.** It builds the release plan once, takes the digest of that plan's preview text, compares it with the
 one given and writes only on equality. It writes the records of that plan and does not read `packages/` again, because the kit has no
 lock: a package changed after the plan was built is not released by the run, since the records name the hashes that were confirmed and
 the changed tree no longer matches them. The attempt is written to the level log just before the write (`wb release-approvals`, `ask`,
-`digest:<32 hex>`) and the outcome after (`done`, `written`).
+`digest:<32 hex>`) and the outcome after (`done`, `written`). A write that fails part way leaves the records written before the failure
+(valid, and a rerun is idempotent): the command exits with 4 and the outcome reads `stopped after writing (exit 4)`; a failure before
+any record exits with 1 and reads `refused before writing`.
 
 **What it does not cover.** The digest binds the owner's confirmation to the hashes of the previewed release, the approver and the
 time, not to the content of the packages: the owner who confirms trusts whatever the packages hold at those hashes, and reads the change
-with `git diff` before confirming. The level is read for the project the working directory is in and counts only while the rendering
-record is sound (`rendering.effective_level`); where it reads `block` because the record, the harness file or the command gate does not
-agree, the command does not refuse itself and the harness's own rule is the barrier, as for the keys that already offer `none`.
+with `git diff` before confirming. The verified level is read for the project the working directory is in and counts only while the
+rendering record is sound (`rendering.effective_level`). It reads `block` when the record, the local manifest or the harness file does
+not agree, and cannot be read from a directory that is no project; an agent can bring either about with a write that no edit tool
+guards. So the command also reads the owner's own setting in the guarded store (`cli._owner_says_ask`): where the setting for the key is
+`ask`, the digest is required whatever the verified level reads (the security review of Increments B to D found that the digest check
+could otherwise be skipped), and so it is where the settings cannot be read at all, because a damaged file reads every key as `block`
+and the check must not turn itself off then (the owner's decision after the second look). Where the setting is sound and is not `ask`, the command does not refuse itself and the harness's own rule is the barrier,
+as for the keys that already offer `none`; refusing there would refuse the owner's own runs without a terminal at the default level
+`block`. What remains: a write by an agent to the owner's settings in the guarded store, to a harness file that removes the `ask` rule,
+and to the shipped records themselves, none of which an edit tool is allowed to do and a shell write can, which is the limit of a hook
+that is not a boundary; the owner's review of the commit that holds the records is what the specs rely on.
 
 ## Not built
 
-- `ask` for `wb release-approvals`, specified above and built by the plan `2026-10-30-release-approvals-at-ask`; until that plan's
-  Increment D is committed the key offers `block` and `none` only.
+- `ask` for `wb release-approvals`, specified above and built by the plan `2026-10-30-release-approvals-at-ask`; the key offers it from
+  Increment D of that plan, and the owner's live run is recorded in that plan's Result (Increment F).
 - `delegated` for `accept-decision` and for the other seven keys that do not offer it (every key but `approve-plan`). The plan
   `2026-10-29-accept-decision-at-ask` built `ask` for `accept-decision` and left `delegated` reading `block`: the accepted record leaves
   undecided what a delegated review's subject is for a decision, and the roadmap candidate `checkpoint-levels-beyond-block` stays open.

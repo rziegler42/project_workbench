@@ -100,8 +100,8 @@ def _parser():
     run_cmd.add_argument("--root", required=True, metavar="DIR", help="the project directory")
     release = commands.add_parser("release-approvals", allow_abbrev=False,
                                   help="release time: write the approvals shipped for first-party packages")
-    release.add_argument("--digest", metavar="HEX",
-                         help="at the level ask without a terminal: the digest `preview release-approvals` printed")
+    release.add_argument("--digest", metavar="HEX", action="append",
+                         help="at the level ask without a terminal: the digest `preview release-approvals` printed (once)")
     return parser
 
 
@@ -122,23 +122,48 @@ RELEASE_KEY = "wb release-approvals"
 _RELEASE_DIGEST = re.compile(r"[0-9a-f]{32}\Z")
 
 
-def _release(guarded, stdin, distribution, out, err, digest=None):
+def _owner_reading(guarded):
+    """What the owner's own settings, in the guarded store, say of the key ``wb release-approvals``: ``"ask"`` when they give it the
+    level ``ask``, ``"damaged"`` when they cannot be read (a file that is not JSON, a ``levels`` that is not an object, an invalid
+    key name, an unsupported version) and the key therefore reads as ``block`` and every checkpoint stops, ``None`` otherwise. The
+    store is not written by an edit tool, and a project file, a harness file or the working directory cannot change it, unlike the
+    verified level, which reads ``block`` when the rendering record, the local manifest or the harness file disagree and cannot be
+    read from a directory that is no project (security review of Increments B to D). A damaged file is read as ``ask`` for this
+    key, so the check does not turn itself off when the owner's own settings cannot be read (the owner's decision)."""
+    loaded = settings.load(guarded)
+    if loaded.levels_blocked:
+        return "damaged"
+    return "ask" if loaded.levels.get(RELEASE_KEY) == levels.ASK else None
+
+
+def _release(guarded, stdin, distribution, out, err, digests=None):
     """``release-approvals`` (``docs/specs/command-permissions.md``, "`wb release-approvals` at `ask`"). At a terminal it runs as it
     always did and takes no digest. Without a terminal and at a verified ``none`` it runs and is logged, and takes no digest.
-    At a verified ``ask`` it builds the release plan once, compares the digest of that plan's preview with the one given and
-    writes that plan and no second reading of the packages. Where no level can be read, or at ``block``, it goes on as it
-    always did; the harness's own rule is the barrier there."""
+    At ``ask`` it builds the release plan once, compares the digest of that plan's preview with the one given and writes that
+    plan and no second reading of the packages. ``ask`` is the verified level or, where the level cannot be verified (the
+    rendering record, the local manifest or the harness file no longer agree, or the directory is no project), the owner's own
+    setting. Where the level cannot be verified and the owner's setting is not ``ask``, or at a verified ``block``, it goes on
+    as it always did; the harness's own rule is the barrier there. `digests` is the list of ``--digest`` values given."""
     def refuse(stream, text):
         err.write("refused: %s\n" % _clean(text))
         return 1
 
-    if digest is not None and approve.is_terminal(stdin) and approve.is_terminal(out):
+    if digests is not None and len(digests) > 1:
+        return refuse(err, "give --digest once: the prompt shows the whole command, and the command checks one digest")
+    digest = digests[0] if digests else None
+    terminal = approve.is_terminal(stdin) and approve.is_terminal(out)
+    if digest is not None and terminal:
         return refuse(err, "a digest is for a run without a terminal at the level ask; at a terminal run %s without --digest"
                       % RELEASE_KEY)
     try:
         route = levelrun.unattended(guarded, os.getcwd(), RELEASE_KEY, stdin, out)
     except OSError:
         route = None
+    reading = None
+    if route is None and not terminal:
+        reading = _owner_reading(guarded)
+        if reading is not None:
+            route = levelrun.Route(False, levels.ASK, None, None)
     if route is None:
         return _release_approvals(distribution, out, err)
     if route.level == levels.NONE:
@@ -148,8 +173,10 @@ def _release(guarded, stdin, distribution, out, err, digest=None):
         return levelrun.apply_logged(guarded, route, RELEASE_KEY, "", lambda: _release_approvals(distribution, out, err),
                                      err, refuse)
     if digest is None or not _RELEASE_DIGEST.match(digest):
-        return refuse(err, "%s is at the level ask: run `wb preview release-approvals` and give the digest it prints as --digest "
-                           "followed by 32 lowercase hexadecimal characters" % RELEASE_KEY)
+        why = ("%s is at the level ask" % RELEASE_KEY if reading != "damaged" else
+               "the owner's settings are damaged, so %s is read as ask until they are repaired (run `wb settings`)" % RELEASE_KEY)
+        return refuse(err, "%s: run `wb preview release-approvals` and give the digest it prints as --digest followed by 32 "
+                           "lowercase hexadecimal characters" % why)
     try:
         plan = firstparty.plan_release(distribution)
     except firstparty.ReleaseError as exc:
@@ -162,14 +189,21 @@ def _release(guarded, stdin, distribution, out, err, digest=None):
         try:
             done = firstparty.write_release(plan, distribution)
         except firstparty.ReleaseError as exc:
-            # A write that fails part way leaves the records written before the failure; a rerun is idempotent. The level
-            # log still names the outcome `refused`, which does not say that records may exist.
-            err.write("refused: %s; records written before the failure remain, and a rerun with a new preview repeats the "
-                      "release\n" % _clean(str(exc)))
-            return 1
+            return _release_failed(exc, err)
         return _release_report(done, out)
 
     return levelrun.apply_logged(guarded, route, RELEASE_KEY, digest, write, err, refuse)
+
+
+def _release_failed(exc, err):
+    """The exit code of a release that failed: 1 when nothing was written, 4 when some records were (they are valid and a rerun is
+    idempotent; ``levelrun.apply_logged`` then logs `stopped after writing`, not `refused before writing`)."""
+    if exc.written:
+        err.write("refused: %s; records written before the failure remain, and a rerun with a new preview repeats the "
+                  "release\n" % _clean(str(exc)))
+        return 4
+    err.write("refused: %s\n" % _clean(str(exc)))
+    return 1
 
 
 def _release_report(done, out):
@@ -186,8 +220,7 @@ def _release_approvals(distribution, out, err):
     try:
         done = firstparty.release_approvals(distribution)
     except firstparty.ReleaseError as exc:
-        err.write("refused: %s\n" % _clean(str(exc)))
-        return 1
+        return _release_failed(exc, err)
     return _release_report(done, out)
 
 

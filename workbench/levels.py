@@ -7,7 +7,8 @@ the agent-safe actions and the arguments of the installed commands. No module is
 
 A level is offered by a key only from the increment that builds it for that key; until then the key offers
 ``block`` only. In this version ``approve-plan`` also offers ``delegated`` (``wb delegate-approve-plan`` is its
-gate), ``ask`` (a digest of its preview) and ``none``; no other key offers ``ask`` unless an installed command's
+gate), ``ask`` (a digest of its preview) and ``none``; ``wb release-approvals`` offers ``ask`` (a digest of the preview of its
+release, ``2026-10-30-release-approvals-at-ask``) and ``none``; no other key offers ``ask`` unless an installed command's
 declaration gives its owner-run argument ``levels`` (``declarations.ARGUMENT_LEVELS``) and ``checkpoint_of`` maps that
 argument to the key (then the checkpoint offers the levels the argument does; ``checkpoint_commands``), and ``none`` is offered by the owner-run
 installer commands, ``accept-decision`` and the keys of ``_OFFERS``. An agent-safe key and a declared argument that is not
@@ -43,7 +44,7 @@ class RegistryError(ValueError):
 _OFFERS = {APPROVE_PLAN: (DELEGATED, ASK, NONE), "wb install": (NONE,), "wb adopt": (NONE,), "wb upgrade": (NONE,),
            "wb add": (NONE,), "wb approve": (NONE,), "wb pin": (NONE,),
            "acknowledge-first-tier": (NONE,), "acknowledge-second-tier": (NONE,), "wb recover": (NONE,),
-           "wb attach": (NONE,), "wb release-approvals": (NONE,), "accept-decision": (NONE,)}
+           "wb attach": (NONE,), "wb release-approvals": (ASK, NONE), "accept-decision": (NONE,)}
 # The shipped default of a key that is not ``block``; none yet among the owner-run keys.
 _DEFAULTS = {}
 # An agent-safe action, and a declared module argument that is not owner-run, is one an agent may run today, so it

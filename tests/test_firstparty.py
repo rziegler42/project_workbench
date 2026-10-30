@@ -278,14 +278,21 @@ class PreviewTest(Base):
         self.assertFalse(os.path.lexists(missing))
 
     def test_a_stale_name_with_a_newline_cannot_forge_a_line_or_a_digest(self):
-        # The safe walk of the shipped tree refuses such a name, so it never reaches the text (the stale list reads as
-        # empty, as it did before the plan step existed) ...
+        # The safe walk of the shipped tree refuses such a name, so it never reaches the text; the preview says the stale
+        # records are unreadable instead of printing none (security review of Increments B to D) ...
         forged = "x\ndigest: " + "0" * 32
         os.makedirs(os.path.join(self.shipped, "packages", forged))
         code, out, err = self.preview()
         self.assertEqual(0, code)
         self.assertEqual(1, out.count("digest: "), out)
         self.assertRegex(out, r"digest: [0-9a-f]{32}\n\Z")
+        self.assertIn("stale records: unreadable\n", out)
+        self.assertNotIn("stale records: 0", out)
+        # The release goes on as before and writes the same records; it now says that stale records could not be listed.
+        done = self.release()
+        self.assertEqual((1, 3), (done.packages, done.records))
+        self.assertEqual(1, len(done.warnings))
+        self.assertIn("could not be listed", done.warnings[0])
         # ... and if one ever did, the text prints it through ``display.clean``.
         plan = firstparty.ReleasePlan((), "approver\nforged: 1", "time\x1b[2J", (forged,))
         text = firstparty.preview_text(plan)

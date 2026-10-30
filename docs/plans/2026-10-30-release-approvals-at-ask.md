@@ -346,7 +346,7 @@ stale list dropped from the text, fails a test.
 After the review's changes: `python3 -B -W error tests/run_all.py`: 6269 tests in 13 roots, all OK; `wb check`, `wb run code-work check`
 (75 plans) and `wb verify packages/workbench`: no problems. No file under `packages/` changed.
 
-### Increment C — the digest check at `ask` (committed with the trailer `#C`)
+### Increment C — the digest check at `ask` (committed as `eba9a2b`)
 
 Changed: `workbench/cli.py` (`--digest` on the parser and the usage text; `_release` reads the level and applies the rules below;
 `_release_report` and `_release_approvals` share the report), `workbench/levelrun.py` (`unattended`, beside `optional`, which still
@@ -395,3 +395,74 @@ at a terminal does not.
 
 After the review's changes: `python3 -B -W error tests/run_all.py`: 6284 tests in 13 roots, all OK; `wb check` and `wb run code-work
 check` (75 plans): no problems. No file under `packages/` changed.
+
+### Increment D — the level, the rules and the gate (committed with the trailer `#D`)
+
+Changed: `workbench/levels.py` (`_OFFERS` gives `wb release-approvals` the offers `ask` and `none`, after `block`; the module docstring
+says so; `_DEFAULTS` is untouched, so the default stays `block` and the digest of the default table is unchanged), `tests/test_release_ask.py`
+(a class `AtAskFromTheOwnersSettings`: the level is the owner's setting, with no patch of the level reading), `tests/test_levels.py`,
+`tests/test_approve_levels.py` and `tests/test_ack_recover_levels.py` (the pinned offers of the key), `tests/test_command_gate.py` (what
+the gate lets reach the harness prompt and what it refuses), and the status wording of `docs/specs/command-permissions.md` and
+`docs/development.md`. The rendering and the command gate needed no edit, as the reading of Increment A said: they are generic for a key
+`wb <word>` of `rules.OWNER_RUN`. No file under `packages/` changed.
+
+The new tests (12, with the pinned ones updated): `wb settings` prints `level wb release-approvals: ask`; the plan's `ask`, `open` and
+`deny` lists at `ask`, `block` and `none`; the rendered file's `permissions.ask` and `permissions.deny` lists at each level (the launcher
+spellings asked at `ask`, denied at `block`, in neither at `none`, the interpreter spellings denied at all three); at `ask` with the real
+setting a bare run is refused and the right digest writes with the log naming it; `--digest=<hex>` and a repeated `--digest` are checked by
+the last value; the gate lets the exact plain-token forms reach the prompt and refuses `;`, `&&`, `|`, `$(...)`, a quoted digest and
+`bash -c`; a setting of `ask` for a key that does not offer it (`wb attach`) is still read as `block`; and a harness file edited after
+attach makes the level read `block`, so the command goes on unchecked, which pins the stated limit.
+
+A fact for the owner, found by the review and confirmed with `wb settings`: the owner's personal settings already say `ask` for
+`wb release-approvals` (and for `wb upgrade`, `wb attach`, `wb approve` and `acknowledge-first-tier`, which still read `block` because they
+do not offer it). Until this increment that `ask` was noted and read as `block`; with it the key reads `ask` in the effective table. In
+this clone the command gate reads that table, so it already refuses a command that names the word in any form but the exact simple one;
+the rendered permissions and the digest requirement take effect only after the owner's `wb rerender`, which Increment F asks for. After it,
+the owner's own run without a terminal (the `!` prefix) needs the digest as well.
+
+Verification as run: the new tests failed first (the key did not offer `ask`, so the owner's setting read `block`); `python3 -B -m unittest
+tests.test_release_ask tests.test_levels tests.test_command_gate tests.test_approve_levels tests.test_ack_recover_levels`: 232 tests OK;
+`tests.test_release_ask` after the review's added tests: 26 tests OK. The whole suite is running (it was started before the review's
+tests were added to `test_release_ask.py`, which are run on their own as above).
+
+Review: the `reviewer` agent, one exchange, no blocking finding. It confirmed that nothing else needs to change in code (rendering,
+`harnessplan.render_permissions` and the gate are generic; the interpreter spellings stay denied at `ask` and `none`; the default and
+its digest are unchanged), that no spelling reaches the command without the prompt that the stated limits of the gate do not already
+allow, and that no other test pinned the offers. Applied: a test that parses the rendered file's `ask` and `deny` lists at each level
+(the gap it found; a string search could not tell `ask` from `deny`). Recorded, not applied: no test drives `command_gate.run` with the
+real table (every gate test gives `judge` its keys; the owner's live run in Increment F covers the real harness); the statements in the
+specs that still give the key as `block` and `none` only, and the dated reading of Increment A, are Increment E's. The reviewer could
+not run anything.
+
+Security review (plan step 4): the owner asked for it ("run it"). The `security-reviewer` agent reviewed B to D, ran experiments on a copy
+with a fake home and a throwaway store, and then, after the fixes, made an independent second look.
+- **Medium, fixed.** An agent could force the verified level to read `block` (edit the harness file or `.workbench/local/harness.json`
+  with a shell write, edit the seed of the manifest, or run from a directory that is no project or from a nested decoy), which skipped the
+  digest check: the bare command wrote the release with no log entry, and the prompt showed a bare command. Fix: where there is no terminal
+  and the verified level could not be read, the owner's own setting in the guarded store (`cli._owner_says_ask`) decides; at `ask` the digest
+  is required, checked and logged as at a verified `ask`. A setting that is not `ask` goes on as before, so the owner's runs at the default
+  `block` are not refused. Tests: the harness file edited, the local manifest removed and a directory that is no project each need the digest
+  (they failed before the fix and fail again if the rule is switched off), and `block` with a setting that is not `ask` goes on as before.
+- **Low, fixed:** a repeated `--digest` is refused (the prompt shows the whole command; the command checks one digest); a write that fails part
+  way exits with 4 and the level log reads `stopped after writing (exit 4)`, and a failure before any record exits with 1 and reads `refused
+  before writing` (`ReleaseError.written`); a shipped tree that cannot be listed makes the preview say `stale records: unreadable` and the
+  release add a warning that stale records are not reported (the writes are unchanged).
+- **Low, recorded and not fixed:** a record planted for other hashes still makes the write fail part way (exit 4, logged honestly); an agent
+  that can plant a record can write valid ones directly, so the trust is held by the owner's review of the commit that holds the records,
+  as the specs say.
+- **Second look, no Critical, High or Medium.** It confirmed the fixes hold (297 tests, and 16 constructed cases, including variants of the
+  key and of the option, a version 1 settings file and another key set to an invalid level). Three Lows: (1) a damaged settings file, or
+  any invalid key name in its `levels`, makes `_owner_says_ask` answer no, so the command fails open if the verified level is also
+  unreadable; the agent cannot damage the store, so the owner would have to. The owner decided (after the author recommended it) that it
+  fails closed: a damaged file reads as `ask` for this key where there is no terminal and the verified level cannot be read, the refusal
+  says the settings are damaged and to run `wb settings`, and a missing file (which every command seeds) is sound; three tests (a file that
+  is not JSON, a `levels` that is not an object, an invalid key name) failed first and pass; (2) with the setting at `none` and the verified level unreadable the run is not logged: rejected, because the
+  spec records as the owner's earlier decision that a run where no level can be read is not logged and that the log is a record and not a
+  control; (3) the release did not warn when the stale list was unreadable: fixed above.
+- **What remains, stated in the spec:** a shell write to the owner's settings in the guarded store, to a harness file that removes the `ask`
+  rule, or to the shipped records themselves is not stopped by an edit tool and the hook is not a boundary; the harness's prompt and the
+  owner's review of the commit are the barrier.
+
+After the security fixes and the fail-closed change: `python3 -B -W error tests/run_all.py`: 6307 tests in 13 roots, all OK; `wb check`
+and `wb run code-work check` (75 plans): no problems. No file under `packages/` changed.

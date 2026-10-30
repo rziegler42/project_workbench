@@ -211,12 +211,12 @@ class OfferedLevelsTest(unittest.TestCase):
                  "acknowledge-first-tier", "acknowledge-second-tier", "wb recover", "wb attach", "wb release-approvals",
                  "accept-decision")
 
-    def test_only_approve_plan_offers_ask_among_the_owner_run_keys(self):
+    def test_only_approve_plan_and_the_release_offer_ask_among_the_owner_run_keys(self):
         for name, key in self.keys().items():
             if name in AGENT_KEYS:
                 continue
             with self.subTest(key=name):
-                self.assertEqual(name == "approve-plan", "ask" in key.offers)
+                self.assertEqual(name in ("approve-plan", "wb release-approvals"), "ask" in key.offers)
 
     def test_the_owner_run_keys_that_offer_none_are_those_built_so_far(self):
         for name, key in self.keys().items():
@@ -225,10 +225,14 @@ class OfferedLevelsTest(unittest.TestCase):
             with self.subTest(key=name):
                 self.assertEqual(name in self.NONE_KEYS, "none" in key.offers)
 
-    def test_no_key_offers_ask_except_approve_plan(self):
+    def test_no_key_offers_ask_except_the_plan_key_and_the_release(self):
         for name, key in self.keys().items():
             with self.subTest(key=name):
-                self.assertEqual(name == "approve-plan", "ask" in key.offers)
+                self.assertEqual(name in ("approve-plan", "wb release-approvals"), "ask" in key.offers)
+
+    def test_the_release_offers_block_ask_and_none_and_defaults_to_block(self):
+        key = self.keys()["wb release-approvals"]
+        self.assertEqual((("block", "ask", "none"), "block"), (key.offers, key.default))
 
     def test_accept_decision_offers_block_and_none_and_defaults_to_block(self):
         key = self.keys()["accept-decision"]

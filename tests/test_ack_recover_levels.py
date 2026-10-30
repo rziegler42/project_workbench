@@ -446,10 +446,15 @@ class ReleaseApprovalsAtNone(NoTerminalTest):
 class Offers(unittest.TestCase):
     def test_the_keys_offer_block_and_none(self):
         registry = levels.registry(checkpoints=(FIRST, SECOND))
-        for key in (FIRST, SECOND, "wb recover", "wb attach", "wb release-approvals"):
+        for key in (FIRST, SECOND, "wb recover", "wb attach"):
             with self.subTest(key=key):
                 self.assertEqual(("block", "none"), registry[key].offers)
                 self.assertEqual("block", registry[key].default)
+
+    def test_the_release_offers_block_ask_and_none_and_defaults_to_block(self):
+        key = levels.registry(checkpoints=(FIRST, SECOND))["wb release-approvals"]
+        self.assertEqual(("block", "ask", "none"), key.offers)
+        self.assertEqual("block", key.default)
 
     def test_the_first_tier_key_names_the_acknowledge_command(self):
         self.assertEqual(rendering.key_patterns(FIRST), rendering.rules.owner_run_command_patterns("acknowledge"))

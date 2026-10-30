@@ -328,7 +328,8 @@ class OfferedLevels(Ask):
                  "wb adopt": ("block", "none"), "wb upgrade": ("block", "none"), "wb add": ("block", "none"),
                  "wb approve": ("block", "none"), "wb pin": ("block", "none"),
                  "acknowledge-first-tier": ("block", "none"), "acknowledge-second-tier": ("block", "none"),
-                 "wb recover": ("block", "none"), "wb attach": ("block", "none"), "wb release-approvals": ("block", "none"),
+                 "wb recover": ("block", "none"), "wb attach": ("block", "none"),
+                 "wb release-approvals": ("block", "ask", "none"),
                  "accept-decision": ("block", "none")}
         for name, key in levels.registry(checkpoints=("a", "accept-decision")).items():
             if name not in agent:

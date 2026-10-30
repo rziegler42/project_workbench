@@ -53,11 +53,17 @@ Release = collections.namedtuple("Release", "packages records warnings")
 # shipped record for those hashes exists now; `stale` is the full keys of the shipped records that this release leaves behind.
 PlannedModule = collections.namedtuple("PlannedModule", "name declaration_hash tree_hash recorded")
 PlannedPackage = collections.namedtuple("PlannedPackage", "name declaration_hash tree_hash recorded modules")
-ReleasePlan = collections.namedtuple("ReleasePlan", "packages approver time stale")
+# `unreadable` is true when the shipped tree exists and could not be listed (a refused name, for one), so `stale` is not known.
+ReleasePlan = collections.namedtuple("ReleasePlan", "packages approver time stale unreadable", defaults=(False,))
 
 
 class ReleaseError(Exception):
-    """The release could not be generated; nothing was written."""
+    """The release could not be generated. Nothing was written, unless `written` (the records written before the failure)
+    says some were: a write that fails part way leaves them, valid, and a rerun is idempotent."""
+
+    def __init__(self, message="", written=0):
+        super().__init__(message)
+        self.written = written
 
 
 class _Shipped(store.Tree):
@@ -207,8 +213,8 @@ def plan_release(distribution=None, approver=RELEASE_APPROVER, time=RELEASE_TIME
             wanted.add(approvals.record_key("package", decl, tree))
     except approvals.ApprovalError as exc:
         raise ReleaseError("could not plan the shipped approvals: %s" % exc)
-    stale = _stale(os.path.join(distribution, SHIPPED), wanted)
-    return ReleasePlan(tuple(planned), approver, time, tuple(stale))
+    stale, unreadable = _stale(os.path.join(distribution, SHIPPED), wanted)
+    return ReleasePlan(tuple(planned), approver, time, tuple(stale), unreadable)
 
 
 def write_release(plan, distribution=None):
@@ -219,10 +225,10 @@ def write_release(plan, distribution=None):
     if not plan.packages:
         return Release(0, 0, [])
     shipped_root = os.path.join(distribution, SHIPPED)
+    records = 0
     try:
         os.makedirs(shipped_root, exist_ok=True)
         writer = _ShippedWriter(shipped_root)
-        records = 0
         for item in plan.packages:
             for module in item.modules:
                 approvals.record_module(writer, "%s/%s" % (item.name, module.name), module.declaration_hash,
@@ -233,22 +239,27 @@ def write_release(plan, distribution=None):
                 [(m.name, m.declaration_hash, m.tree_hash) for m in item.modules], plan.approver, plan.time)
             records += 1
     except (safefs.SafeFsError, approvals.ApprovalError, OSError) as exc:
-        raise ReleaseError("could not write the shipped approvals: %s" % exc)
+        raise ReleaseError("could not write the shipped approvals: %s" % exc, records)
     warnings = ["shipped record %s is not part of this release; remove it by hand" % key[:12] for key in plan.stale]
+    if plan.unreadable:
+        warnings.append("the shipped records could not be listed, so stale records, if any, are not reported")
     return Release(len(plan.packages), records, warnings)
 
 
 def _stale(shipped_root, wanted):
-    """The full keys of the shipped records under `shipped_root` that are not in `wanted`, sorted; none when there is no
-    shipped directory yet."""
+    """``(keys, unreadable)``: the full keys of the shipped records under `shipped_root` that are not in `wanted`, sorted, and
+    whether the tree exists and could not be listed (a refused name stops the safe walk), in which case the keys are empty
+    and unknown. No shipped directory yet is not unreadable."""
+    if not os.path.lexists(shipped_root):
+        return [], False
     try:
         with safefs.Root(shipped_root, "shipped approvals") as root:
             entries = root.walk()
     except (safefs.SafeFsError, OSError):
-        return []
+        return [], True
     found = sorted(e.rel.split("/")[1] for e in entries
                    if e.rel.count("/") == 1 and e.rel.startswith(PACKAGES + "/"))
-    return [key for key in found if key not in wanted]
+    return [key for key in found if key not in wanted], False
 
 
 def preview_text(plan):
@@ -268,7 +279,7 @@ def preview_text(plan):
                             "recorded" if module.recorded else "new"))
     lines.append("approver: %s" % display.clean(plan.approver))
     lines.append("time: %s" % display.clean(plan.time))
-    lines.append("stale records: %d" % len(plan.stale))
+    lines.append("stale records: unreadable" if plan.unreadable else "stale records: %d" % len(plan.stale))
     lines.extend("  %s" % display.clean(key) for key in plan.stale)
     lines.append("not covered: the content of the packages; read the change with git diff before confirming")
     return "\n".join(lines) + "\n"

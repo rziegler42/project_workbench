@@ -343,6 +343,25 @@ class SingleWordKeys(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertIsNotNone(self.judge(command, keys=(key,)))
 
+    def test_the_ask_form_of_the_release_is_allowed_to_reach_the_harness_prompt_and_nothing_wider(self):
+        key, digest = "wb release-approvals", "0" * 32
+        # Plain tokens after the word, through wb or the guarded store's own bin/wb: the harness's ask rule then prompts, and
+        # the owner reads the whole text. The command itself takes the last --digest it is given and checks that one.
+        for command in ("wb release-approvals", "wb release-approvals --digest " + digest,
+                        "%s release-approvals --digest %s" % (STORE_BIN, digest),
+                        "wb release-approvals --digest=" + digest,
+                        "wb release-approvals --digest %s --digest %s" % (digest, digest)):
+            with self.subTest(command=command):
+                self.assertIsNone(self.judge(command, keys=(key,)))
+        for command in ("wb release-approvals --digest $(echo %s)" % digest,
+                        "wb release-approvals --digest %s; echo done" % digest,
+                        "wb release-approvals --digest %s && wb check" % digest,
+                        "wb release-approvals --digest '%s'" % digest,
+                        "bash -c 'wb release-approvals --digest %s'" % digest,
+                        "echo x | wb release-approvals --digest " + digest):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command, keys=(key,)))
+
     def test_every_owner_run_command_is_read_in_command_position(self):
         from workbench import rules
         for command in rules.OWNER_RUN:
