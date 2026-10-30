@@ -144,4 +144,25 @@ Empty until a review is asked for.
 
 ## Result
 
-Empty until work starts.
+### Increment A — M10 to M12 closed in the specs (not yet committed)
+
+Changed: `docs/specs/global-config-inventory.md` only. M10, M11 and M12 each gain a dated note, "Overtaken, 2026-10-29": the reset
+removed what the move would have edited, no carrying plan will be written, and the owner step is no longer outstanding. M11's note
+says where the two guards and `git diff --check` are carried (the decision drafted in Increment C and this plan's deferred work), and
+M12's says that its gate, the session-start test, is run by Increment B. The sentence in "Superpowers dependencies: proposals" that said
+the owner can disable the plugin only after proposals 1 to 3 gains a history note. The moves' own text is unchanged.
+
+Search as run: `retire-superpowers-plugin` appears three times in `docs/specs`, all in the moves' own "Carrying plan:" lines, each now
+followed by an "Overtaken" note; no other spec names it. "Disable the plugin" appears in M12 (noted) and in the proposals section
+(noted) and in the "After the reset" paragraph, which already says the proposals are history. `docs/specs/superpowers-ports.md` named
+no owner step, so it was not changed; its sentence that the session-start reliance "has not been tested" is for Increment B.
+
+Verification as run: `wb check` and `wb run code-work check` (74 plans): no problems. The whole `tests` root is for the plan as a
+whole, after Increment C. No file under `packages/` changed.
+
+Review: the `reviewer` agent, one exchange, no blocking finding. Applied: M11's and M12's notes no longer speak in the present tense of
+work that is not done (M11 says the plan "picks up" the guards in the options of its decision and `git diff --check` in its deferred
+work; M12 says "a corresponding test, in a real session with no plugin enabled" is Increment B's work and its result goes to
+`superpowers-ports.md` once run) (1, 2). Recorded: the notes' claims about the reset are supported by `superpowers-ports.md` and the
+inventory (3); the history note on proposal 5 reads correctly (4). The roadmap's wording about the superpowers dependencies is left
+for the owner, as the plan's non-goals say. The reviewer could not run the checks or read a diff.

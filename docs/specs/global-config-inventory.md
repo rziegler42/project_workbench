@@ -495,7 +495,8 @@ among them becomes a decision record only when the owner asks for one and accept
    asks for it. A fresh implementer per increment stays deferred; the vehicle, if the owner wants it, is the `implementer`
    agent's `redesign` row.
 5. **The plugin.** `superpowers` stays `redesign`. The owner can disable it only after proposals 1 to 3 are done; before that,
-   disabling it silently breaks the routing text and three agents.
+   disabling it silently breaks the routing text and three agents. *History: the reset of 2026-10-29 removed the plugin, the routing
+   text and the agents together; see "After the reset" and M12.*
 
 ## The move list
 
@@ -724,18 +725,28 @@ applies: repoint or drop the plugin skills; the owner chooses. Gate: a recorded 
 off showing each agent still loads and does its slice. Blocker: the owner's choice; a repointed list loads nothing in a project
 without `code-work`. Carrying plan: `retire-superpowers-plugin` (M10 to M12). Owner step: edit the two agent definitions and the
 agent-routing paragraph.
+*Overtaken, 2026-10-29.* The reset removed the plugin, the agent definitions and the routing text this move would have edited. No
+carrying plan will be written and the owner step is no longer outstanding (plan `2026-10-30-close-the-superpowers-retirement`).
 
 **M11: the routing paragraphs.** Items: SR2, SA1, SA2, SA3, SA4, IV4, IV15. Proposal 2 applies: name the workbench skills
 alongside the plugin names while the plugin is enabled for repositories outside the workbench. The two guards the workbench does
 not carry (no automatic worktree; no merge or cleanup without approval) stay in the text. IV15 also gains `git diff --check`,
 which `verify-before-claiming` does not name. Gate: a read showing the eight skills of the `superpowers-ports.md` table exist in
 an attached project. Blocker: M10. Carrying plan: `retire-superpowers-plugin`. Owner step: edit the paragraphs.
+*Overtaken, 2026-10-29.* The reset removed the routing paragraphs together with the rest of the owner's instruction file. No carrying
+plan will be written and the owner step is no longer outstanding. What the move would have kept, the two guards and `git diff --check`,
+is picked up by plan `2026-10-30-close-the-superpowers-retirement`: the guards in the options of the decision its Increment C drafts,
+and `git diff --check` in its deferred work.
 
 **M12: the `superpowers` plugin.** Items: the plugin `superpowers`. Proposal 3 and 5 apply. Gate: the session-start test run once
 in an attached project with the plugin off in a scratch configuration: a request for new behavior loads `brainstorm`. Blockers:
 M10 and M11; M3, or the owner's decision to drop the plugin skill from the global `security-reviewer` (F-A6: its list also
 names one, and M10 does not touch that agent); `dispatching-parallel-agents` and `writing-skills` are accepted as gaps. Carrying plan:
 `retire-superpowers-plugin`. Owner step: disable the plugin in the settings file.
+*Overtaken, 2026-10-29.* The plugin is not enabled: the reset removed it. No carrying plan will be written and the owner step is no
+longer outstanding. The gate, the session-start test, was not run before the plugin went; a corresponding test, in a real session
+with no plugin enabled, is the work of Increment B of plan `2026-10-30-close-the-superpowers-retirement`, and its result is recorded in
+`superpowers-ports.md` when it has been run.
 
 **M13: instruction text that contradicts the workbench.** Items: RP2, SA8, DI2, DI3, DI4. These are `redesign`: the new text is
 not settled here. Each stays in force for a repository outside the workbench, and the carrying plan drafts wording that defers
