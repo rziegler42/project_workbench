@@ -711,8 +711,6 @@ that is not a boundary; the owner's review of the commit that holds the records 
 
 ## Not built
 
-- `ask` for `wb release-approvals`, specified above and built by the plan `2026-10-30-release-approvals-at-ask`; the key offers it from
-  Increment D of that plan, and the owner's live run is recorded in that plan's Result (Increment F).
 - `delegated` for `accept-decision` and for the other seven keys that do not offer it (every key but `approve-plan`). The plan
   `2026-10-29-accept-decision-at-ask` built `ask` for `accept-decision` and left `delegated` reading `block`: the accepted record leaves
   undecided what a delegated review's subject is for a decision, and the roadmap candidate `checkpoint-levels-beyond-block` stays open.

@@ -467,7 +467,7 @@ with a fake home and a throwaway store, and then, after the fixes, made an indep
 After the security fixes and the fail-closed change: `python3 -B -W error tests/run_all.py`: 6307 tests in 13 roots, all OK; `wb check`
 and `wb run code-work check` (75 plans): no problems. No file under `packages/` changed.
 
-### Increment E — the texts (not yet committed)
+### Increment E — the texts (committed as `f044c33`)
 
 Changed, all documents: `docs/specs/command-permissions.md`, `docs/specs/installer-interface.md`, `docs/specs/terms.md`,
 `docs/specs/code-work.md` and `docs/development.md`. The search (step 1) was made by a read-only agent, because the command gate at the
@@ -499,3 +499,49 @@ now says E corrected them and F is the live run (1); the exit codes of `developm
 Recorded: whether a duplicated key in the settings counts under "not JSON" was not checked by the reviewer (3); the spec names the
 causes it lists, and a duplicate is read by `declarations.parse_json`, which refuses it as a damaged file. The roadmap sentences and the
 entry under "Not built" are left as stated above.
+
+### Increment F — the close-out and the owner's live run (committed with the trailer `#F`)
+
+Changed: the entry for the key under "Not built" in `docs/specs/command-permissions.md` is removed (it is built and the live run is
+recorded here), `docs/roadmaps/workbench-v1.md` (the two sentences of `checkpoint-levels-beyond-block`, edited with the owner's word and
+committed on their own: the key is no longer one of those that offer `block` and `none` only, and its level source is no longer an open
+decision; the candidate stays open and nothing is written as complete), and this Result.
+
+The live run, 2026-10-30, with the owner's `wb rerender` already done (read in `.claude/settings.local.json`: the `ask` rules for the
+launcher spelling and for the guarded store's `bin/wb` spelling of the key are rendered): `wb preview release-approvals` printed one
+package, 12 modules, 13 records all `recorded`, 0 stale and `digest: 16dfb6816d2c92bee43f2f61aebbf61a`, and wrote nothing; then `wb
+release-approvals --digest 16dfb6816d2c92bee43f2f61aebbf61a` ran as a command of its own and printed `wrote 13 approvals for 1 first-party
+packages`; the tree was unchanged (the release is idempotent), and the level log holds the pair `wb release-approvals ask
+digest:16dfb681...` and `done written`. The owner did not notice a prompt on the first run and could not say whether one appeared. The same
+command was run again, with the owner watching, and the owner saw the harness prompt: the second pair of lines in the log is the same.
+
+Deviation from step 3 of this increment, chosen with the owner's word ("do live run") after the author recommended it: the run did not first
+make a throwaway edit under `packages/`. With nothing changed the release rewrites identical records, so the run shows the prompt, the
+digest check and the log line without making the shipped approvals stale and then releasing again. The write of a release that changes
+records is covered by the tests (the preview, the digest, the window between the check and the write, and the part-way failure), not by the
+live run.
+
+Not run: the bare command with no digest in a live session (the tests cover its refusal at a verified `ask`, where the settings are damaged
+and where the verified level is forced to `block`).
+
+Completion criteria, each marked met or not met:
+1. **Met.** The preview prints the packages and modules with their full hashes, whether each record exists, the approver, the time and
+   the stale records, and a digest, and writes nothing; the digest changes with a hash, the approver, the time and the stale list
+   (`PreviewTest`, Increment B; the live preview wrote nothing).
+2. **Met.** At a verified `ask` without a terminal the command refuses with no, a malformed or a wrong digest and writes nothing; with the
+   right digest it writes the plan it checked and logs the attempt and the outcome naming the key, the level and the digest; a terminal, `none` and
+   `block` behave as before (`tests/test_release_ask.py`, Increments C and D; two live runs). The security review added that the owner's own
+   settings decide where the verified level cannot be read, and that damaged settings read as `ask` for the key.
+3. **Met.** The key offers `block`, `ask` and `none` and defaults to `block`; `wb settings` prints it; the rendered file holds the `ask`
+   rules at `ask`, the `deny` at `block` and neither at `none`; the gate's reading of the exact forms and of the refused ones is tested
+   (Increment D).
+4. **Met.** The specs, the development guide and the roadmap say what each level allows (Increment E and the roadmap edit); the reviewer's
+   search found no remaining statement that the key offers `block` and `none` only.
+5. **Met, as run.** `wb check`, `wb run code-work check` (75 plans) and `wb verify packages/workbench` report no problems; the whole `tests`
+   root and every package test root pass: `python3 -B -W error tests/run_all.py`: 6307 tests in 13 roots, all OK.
+6. **Met.** After the owner's `wb rerender` the rendered permissions list the command as an `ask` rule, and in a live session the
+   owner saw the harness prompt for `wb release-approvals --digest <hex>` on the second run, and the release it recorded is in the level log.
+
+Open for the owner: `delegated` for this key and for the other keys that do not offer it (the roadmap candidate stays open); the
+`brainstorm` gap and the follow-up of the plan `2026-10-30-close-the-superpowers-retirement`; and a push of the local commits, which needs the
+owner's word.
