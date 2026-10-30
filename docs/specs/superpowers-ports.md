@@ -96,7 +96,11 @@ Reasons for the rows that are not a plain port:
   the push is a checkpoint (`push-changes`). Not revisited here.
 - **using-superpowers.** It tells an agent to look for a skill before every reply. That is behaviour of the harness and of the
   policy text, not a project practice. In a workbench project the `policy` slot in `AGENTS.md` and the harness's own skill
-  listing do this work. The routing in the owner's old user-level instruction file went with the reset of 2026-10-29.
+  listing do this work. The routing in the owner's old user-level instruction file went with the reset of 2026-10-29. Run on
+  2026-10-30 ("The session-start test"), a request for new behaviour in a workbench project that asked to build one had not invoked
+  `brainstorm` when the agent asked how to proceed (it offered it as an option and recommended drafting a plan first), while one that
+  asked to design one loaded it. That is a gap against the expectation that new behaviour starts with `brainstorm`; it is recorded and
+  not closed, and one run of each wording does not show that the wording is the cause.
 - **diagnosing-superpowers.** It diagnoses sessions of the plugin itself. It has no meaning once the plugin is gone.
 - **dispatching-parallel-agents, writing-skills.** Not named by any file of the owner's. If the owner wants either, it is its
   own candidate: the first would belong to `code-work`, the second to a module about writing skills for the workbench.
@@ -142,9 +146,63 @@ file.
   workbench counterpart of each is the inventory table's row; worktrees are not ported.
 - **The session-start rule.** The plugin injects `using-superpowers` at the start of a session, which tells an agent to look
   for a skill first. Nothing else the owner has does that. For a workbench project this document relies on the `policy` slot of
-  `AGENTS.md` and the harness's skill listing (see the row for `using-superpowers`); that is stated and has not been tested.
+  `AGENTS.md` and the harness's skill listing (see the row for `using-superpowers`); that is stated and was not tested when the plugin went; "The session-start test" below is the procedure and holds the runs.
 - **Evidence of use.** Each skill the agents name is also named by the routing text, so dropping or rewriting an agent does
   not by itself change a row's "used" status; removing the routing lines would.
+
+## The session-start test
+
+Added 2026-10-30 by plan `2026-10-30-close-the-superpowers-retirement`, Increment B. The plugin used to inject `using-superpowers` at
+the start of a session, which told an agent to look for a skill first. In a workbench project the `policy` slot of `AGENTS.md` and the
+harness's skill listing stand in for it; until the runs below, that was stated and not tested. The test is the owner's run, because
+the result is what a live session does and a model of it would prove nothing.
+
+Procedure. With no plugin enabled, start a new session and type a request for a new behaviour in plain words, with no mention of a
+skill or a command, then note whether the `brainstorm` skill is invoked before any code or file is written. Do it twice:
+
+1. In a project with `groundwork` and `code-work` installed and attached (this repository qualifies). Expected: `brainstorm` is
+   invoked.
+2. In a project with no workbench skills. Expected: no skill is invoked, which is the cost of having no routing outside the
+   workbench (the decision drafted by the plan's Increment C).
+
+Each run records the date, the harness version the owner reports, the request as typed, and what loaded, in the owner's words. A run
+whose result differs from the expectation is recorded as it happened and listed as a gap; this section does not change a skill or a
+policy block to make it pass.
+
+Runs, in the owner's words and as the owner pasted them:
+
+- **2026-10-30, first run, inconclusive.** The owner reported: "I did not see the brainstorm load, but it might have been my prompt."
+  The project, the harness version and the request were not reported, and the owner thought the prompt may have been the cause, so
+  this run is not counted as a result.
+- **2026-10-30, second run, in a separate test project of the owner's with the workbench's skills attached** (the agent offered both
+  `draft-plan` and `brainstorm`, so both skill sets were present; the harness version is the one reported below). Request typed: "I want to add
+  a new command to this project that lists every plan with its status. Let's build it." What the owner pasted: the agent said it would
+  start by reading the project docs and seeing how commands are defined, ran two shell commands, and then asked how to proceed "given
+  the project policy that work needs an approved plan first", with the options "Draft a plan (Recommended)" (use the `draft-plan`
+  skill, then stop for the owner to run `wb approve-plan`), "Brainstorm first" (run the `brainstorm` skill to settle requirements
+  before drafting the plan), "Type something" and "Chat about this". The pasted transcript ends at that question: `brainstorm` was offered
+  and had not been invoked when the agent asked, and no code or file write is shown in it.
+- **2026-10-30, third run, in the same test project.** The owner reported: "With the prompt: 'I want to design a new feature' the
+  brainstorm skill loaded in the [test project]." (The path the owner gave is elided: a tracked document does not point to an untracked
+  one.) Request typed: "I want to design a new feature". `brainstorm` loaded.
+- **Harness version,** asked for after all four runs and reported once by the owner as "Claude Code v2.1.314". The owner did not say
+  which run it belongs to, so it is the version of the harness the owner was using that day, not a per-run record.
+- **Reading, against the expectation above.** The expectation was that `brainstorm` is invoked before any code or file is written.
+  In the second run it had not been invoked when the agent asked; it was offered as the second option, and the first, recommended
+  option was to draft a plan. The agent cited the project policy that work needs an approved plan first, so the policy text reached it
+  and did some of the work of a session-start rule, but it routed to `draft-plan` and left `brainstorm` to the owner's choice. Whether
+  `brainstorm` would have run after the owner chose is not known. The third run shows the other side: a request that says "design"
+  loaded `brainstorm`. The two results are consistent with the wording of the request mattering, as the owner suspected of the first
+  run, but they do not isolate it: the second request was longer and named a command and a status listing, the agent's answer was a
+  question and not a skill decision, and each wording was run once. This is recorded as a gap against the expectation that
+  `brainstorm` is invoked for a request for new behaviour, not as a failure of a skill. What the plugin did is not shown by these runs
+  (it was not enabled); the plugin's own skill, as this spec describes it, tells an agent to look for a skill before every reply.
+  Whether the workbench should force brainstorming for new behaviour is the owner's decision.
+- **2026-10-30, item 2 of the procedure above, a folder that is not a project.** The owner reported: "In a non-project folder the
+  brainstorm skill did not load with the same prompt", meaning "I want to design a new feature". That matches the expectation. A
+  folder that is not a project would not have the workbench's skills, so `brainstorm` would not be there to load (an inference; the
+  owner did not report the folder's contents). It is one prompt, and it is the cost the decision of the plan's Increment C weighs: with
+  no workbench, nothing sends the agent to a skill. The owner did not report what the agent did instead.
 
 ## Where a skill goes when it belongs in more than one module
 

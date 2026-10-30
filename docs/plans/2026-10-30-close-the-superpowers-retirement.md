@@ -144,7 +144,7 @@ Empty until a review is asked for.
 
 ## Result
 
-### Increment A — M10 to M12 closed in the specs (not yet committed)
+### Increment A — M10 to M12 closed in the specs (committed as `7553b64`)
 
 Changed: `docs/specs/global-config-inventory.md` only. M10, M11 and M12 each gain a dated note, "Overtaken, 2026-10-29": the reset
 removed what the move would have edited, no carrying plan will be written, and the owner step is no longer outstanding. M11's note
@@ -166,3 +166,36 @@ work; M12 says "a corresponding test, in a real session with no plugin enabled" 
 `superpowers-ports.md` once run) (1, 2). Recorded: the notes' claims about the reset are supported by `superpowers-ports.md` and the
 inventory (3); the history note on proposal 5 reads correctly (4). The roadmap's wording about the superpowers dependencies is left
 for the owner, as the plan's non-goals say. The reviewer could not run the checks or read a diff.
+
+### Increment B — the session-start test (not yet committed)
+
+Changed: `docs/specs/superpowers-ports.md`: a new section "The session-start test" with the procedure, the four runs recorded in
+the owner's words, the harness version, and a reading; the sentence in "What stops working" that said the reliance "has not been
+tested" now points to the section; the reasoning for `using-superpowers` gains the finding. Also, outside the plan's listed areas,
+one sentence of `docs/specs/global-config-inventory.md` ("After the reset") that said the reliance "is untested" now says it was
+untested on 2026-10-29 and points to the runs. The owner ran the sessions, and nothing was changed to make a result pass.
+
+Results as the owner reported them, 2026-10-30, with the harness version the owner reported once after all four runs, Claude Code
+v2.1.314 (the owner did not say which run it belongs to, so it is not recorded per run): (1) a first run, "I did not see the brainstorm load, but it might have been my prompt", with the
+project and request not reported: inconclusive; (2) in the owner's test project with the workbench's skills attached, "I want to add a
+new command to this project that lists every plan with its status. Let's build it." did NOT invoke `brainstorm`: the agent read the
+docs, then asked how to proceed with "Draft a plan (Recommended)" and "Brainstorm first" among the options (the pasted transcript
+ends at the question and shows no file write); (3) in the same project, "I want to design a new feature" DID load `brainstorm`; (4) in
+a non-project folder the same prompt: "the brainstorm skill did not load", which matches the expectation.
+
+Reading, recorded in the spec: against the expectation (a request for new behaviour in a workbench project invokes `brainstorm`
+before any file is written) the result is a gap. It is consistent with the wording of the request mattering, but the runs do not
+isolate it (the requests differ in more than the verb, the second ended in a question to the owner, and each was run once), and they
+do not show what the plugin did. It is recorded and not closed here, as the plan says. The spec's path for the owner's test project is
+elided in the quote of the third run, so that no tracked text points to an untracked path. Because the plan's Deferred work is part of the approved text, the follow-up is
+not added there: the owner can ask for a deferred-work entry, which needs a new approval, or take it into the decision of Increment C.
+
+Verification as run: `wb check` and `wb run code-work check` (74 plans): no problems. No file under `packages/` changed.
+
+Review: the `reviewer` agent, one exchange, no blocking finding. Applied: the owner's path to the test project is elided from the
+quote of the third run (1); "nothing loaded, as expected" narrowed to what was reported, and the inference about the folder marked as
+one (2); the reading no longer says the wording is the cause, no longer asserts what the plugin did, and says "not invoked when the
+agent asked" and "no file write is shown" for the second run (3); the version is stated as reported once after all four runs (5);
+the stale "is untested" sentence of the inventory (7). Checked against the owner's own messages: the quoted words and the transcript
+details of the second run are verbatim (1, 4). Recorded: step 4 of the increment, to list the follow-up in Deferred work, is not done
+because the plan is approved; the owner decides how it is carried (6).

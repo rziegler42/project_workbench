@@ -27,7 +27,8 @@ What changed in kind, as read on 2026-10-29. The rows and findings below are unc
   review of a module command runs. The engine of `action-review.md` has no program to replace.
 - **The superpowers plugin is not enabled.** The three proposals for disabling it ("Superpowers dependencies: proposals") are
   history. The reliance, stated in `superpowers-ports.md`, on the `policy` slot of `AGENTS.md` and the harness's skill listing in place of the
-  plugin's session-start rule is now the state of every session, and it is untested, as that spec says.
+  plugin's session-start rule is now the state of every session. It was untested on 2026-10-29; the runs of 2026-10-30 are recorded in that spec ("The
+  session-start test").
 - **The global `deny` list is gone.** None of its 18 entries is in force outside the project. The compiled floor carries `ask`
   rules, from commit `fe966b0`, for `rmdir`, `unlink`, `shred` and reads of the GitHub CLI's configuration; a clone renders them
   only after the owner's `wb rerender`. It already carried an `ask` for reads of `.env`, `.ssh` and `.aws` and for `rm`,
