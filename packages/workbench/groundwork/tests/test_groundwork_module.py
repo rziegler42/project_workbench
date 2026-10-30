@@ -47,12 +47,12 @@ class Declaration(unittest.TestCase):
         self.assertEqual("module", document["type"])
         self.assertEqual(list(AREAS), document["provides"])
         self.assertEqual(sorted(READMES), document["writes"])
-        self.assertEqual(["helper/%s" % name for name in HELPERS], document["ships"])
+        self.assertEqual(["helper/%s" % name for name in sorted(HELPERS + ("groundwork",))], document["ships"])
         self.assertEqual([{"helper": "helper/%s" % name, "kit": 1} for name in HELPERS], document["checks"])
-        for field in ("commands", "helpers", "requires", "blocks", "slots", "layout"):
+        for field in ("helpers", "requires", "blocks", "slots", "layout"):
             self.assertNotIn(field, document)
 
-    def test_it_ships_two_check_helpers_and_every_other_file_is_a_readme_a_block_a_skill_file_or_the_declaration(self):
+    def test_it_ships_its_helpers_and_every_other_file_is_a_readme_a_block_a_skill_file_or_the_declaration(self):
         found = []
         for base, dirs, files in os.walk(MODULE):
             if base == MODULE:
@@ -62,7 +62,8 @@ class Declaration(unittest.TestCase):
                 self.assertEqual(0, os.stat(os.path.join(base, name)).st_mode & 0o111, name)
         skills = ["harness/neutral/skills/%s/%s" % (name, file) for name in SKILLS
                   for file in (("SKILL.md", "template.md") if name in TEMPLATED else ("SKILL.md",))]
-        self.assertEqual(sorted(["module.json", "helper/doccheck", "helper/refcheck", "files/blocks/docs-index.md",
+        self.assertEqual(sorted(["module.json", "helper/doccheck", "helper/groundwork", "helper/refcheck",
+                                 "files/blocks/docs-index.md",
                                  "files/blocks/policy.md"] + skills
                                 + ["files/" + rel for rel in READMES]), sorted(found))
 

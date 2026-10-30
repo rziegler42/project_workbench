@@ -33,8 +33,10 @@ seven keys. Until then `accept-decision` offers three of its four levels, and th
 - Increment D: a hash-checked replace of one file in the kit, which the helper needs and the kit lacked (added after Increment E, first
   run, found it missing; the owner chose to build it in the kit).
 - Increment E: the groundwork helper, its declaration and its tests.
-- Increment F: the texts that say what each level allows, in the module and in this repository's installed copies.
-- Increment G: the close-out record. The owner's own runs are listed there; they are not increments.
+- Increment F: the launcher refuses a digest at the level `none` for a mapped argument (added after the security review of
+  Increment E found that the helper cannot refuse it, and the owner chose to fix it in the launcher).
+- Increment G: the texts that say what each level allows, in the module and in this repository's installed copies.
+- Increment H: the close-out record. The owner's own runs are listed there; they are not increments.
 
 ## Non-goals
 
@@ -106,7 +108,8 @@ seven keys. Until then `accept-decision` offers three of its four levels, and th
    `block` with the note that it is not offered.
 3. `groundwork` declares the helper, and a test over the real module shows: the preview prints a digest and writes nothing; `accept`
    replaces only the status line of a `Proposed` record, with the git identity and the date; it refuses a changed record, a wrong digest,
-   a status that is not `Proposed`, a link, an oversized file and a missing identity; and a second run changes nothing. A non-terminal
+   a status that is not `Proposed`, a link, an oversized file and a missing identity; a `--digest` at the level `none` is refused before
+   the helper starts; and a second run changes nothing. A non-terminal
    run writes an outcome line in the level log that names the approver, the route and the digest; a terminal run writes none.
 4. The rendered rules, on the module's own Claude layout, deny the command at `block`, ask for it at `ask` for the exact spelling the
    launcher requires, and leave it at `none`.
@@ -245,10 +248,32 @@ security review before E.
 **Checkpoint after E.** The change touches authorization, the filesystem and a subprocess. Ask the owner whether to run a security
 review before F.
 
-### Increment F — What each level allows
+### Increment F — Refuse a digest at the level none
+
+**Outcome:** a run of a mapped owner-run argument at the level `none` that carries a trailing `--digest <32 hex>` is refused before the
+helper starts, with nothing run and nothing written, as the forms table of `command-permissions.md` says ("a digest needs the level
+`ask`"). Added after the security review of Increment E: the helper cannot tell its level, takes any matching digest as the route `ask`,
+writes the record, and the launcher then logs the outcome `refused` because the route is not the level, so the audit log says the
+opposite of what happened.
+**Dependencies:** C and E.
+**Affected areas:** `workbench/ownerargs.py` (`permit`), `tests/test_checkpoint_command_run.py`, and the forms table and "The log" of
+`docs/specs/command-permissions.md`. No file under `packages/` changes, so no release is needed.
+**Steps:**
+1. Write the tests first, with the synthetic module and checkpoint: at `none` the digest form of a mapped argument is refused, the
+   helper is not started, and no attempt or outcome line is written; without a digest the run is as before; at `ask` and `block` nothing
+   changes; an owner-run argument that is not mapped still passes a trailing digest at `none` to its helper, as the review engine's
+   arguments rely on.
+2. In `permit`, for a mapped argument at a level that is not `ask`, refuse a trailing `--digest <32 hex>` with a reason that says a
+   digest needs the level `ask`.
+3. Correct the spec where it describes this refusal as built, and run the whole `tests` root.
+**Verification:** the tests of step 1 fail before and pass after; the whole `tests` root passes; `wb check` and `wb run code-work check`
+report no problems.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-29-accept-decision-at-ask#F`.
+
+### Increment G — What each level allows
 
 **Outcome:** every shipped text that says who accepts a decision says it by level and names the command.
-**Dependencies:** E.
+**Dependencies:** E and F.
 **Affected areas:** the `draft-decision` skill and the policy block of `groundwork`, `files/docs/decisions/README.md`, this
 repository's `AGENTS.md` (written by the owner's `wb upgrade`, never by hand), the installed copies, the shipped records.
 **Steps:**
@@ -260,12 +285,12 @@ repository's `AGENTS.md` (written by the owner's `wb upgrade`, never by hand), t
 4. Stop for the owner's scripted-pass word and release as in E; then ask the owner to run `wb upgrade` and `wb rerender`, and read the
    results.
 **Verification:** the tests of step 1; the module tests; the whole `tests` root; `wb check`.
-**Evidence:** the one local commit, with the trailer `Plan: 2026-10-29-accept-decision-at-ask#F`, then a commit of the upgrade results.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-29-accept-decision-at-ask#G`, then a commit of the upgrade results.
 
-### Increment G — The close-out
+### Increment H — The close-out
 
 **Outcome:** the plan's Result records what was run, and the specs' "Not built" and the roadmap's remaining work are true.
-**Dependencies:** F.
+**Dependencies:** G.
 **Affected areas:** `docs/specs/command-permissions.md` ("Not built"), this plan's Result.
 **Steps:**
 1. Remove `ask` for `accept-decision` from "Not built", and record `delegated` for it and for the other seven keys as still not built,
@@ -273,7 +298,7 @@ repository's `AGENTS.md` (written by the owner's `wb upgrade`, never by hand), t
 2. Write the Result: each increment, the verification as run, what was not run, the review outcomes and the owner's runs from criterion 7.
 3. Run `wb check`, `wb run code-work check`, `doccheck`, `refcheck` and the whole `tests` root.
 **Verification:** the checks above report no problem; every completion criterion is marked met or not met with its evidence.
-**Evidence:** the one local commit, with the trailer `Plan: 2026-10-29-accept-decision-at-ask#G`.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-29-accept-decision-at-ask#H`.
 
 ## Verification for the plan as a whole
 
@@ -461,3 +486,90 @@ statements and the docstrings say so. Low, not changed: `replace_file` fires onl
 as for a killed process); a shared writable mapping might change bytes without a visible timestamp change, which the module's timestamp
 limit covers; a directory renamed after its descriptor was held still receives the write through the descriptor, with no link followed.
 The reviewer could not run `git status` or read the test body.
+
+### Increment E — the groundwork helper (not yet committed)
+
+Changed: `packages/workbench/groundwork/helper/groundwork` (new: `preview <record>` and `accept <record> [--digest <hex>]`),
+`packages/workbench/groundwork/module.json` (ships the helper; the command `groundwork` with `preview`, and `accept` owner-run,
+offering `ask` and `none`, mapped to `accept-decision`), `packages/workbench/groundwork/tests/test_decision_accept_helper.py` (new, 48
+tests), `packages/workbench/groundwork/tests/test_groundwork_module.py` (four expectations: the helper is shipped, `commands` is
+declared), `tests/support_helpers.py` (the kit's `identity` is registered for helper tests) and the sentence in
+`docs/specs/command-permissions.md` about a terminal run and an already-accepted record. The new files were written into `packages/`
+by the owner-approved scripted passes (three: the build, the review fixes, the security-review fix), each followed by the owner's
+`wb release-approvals`.
+
+Choices and deviations, for the owner: (1) The record must be a `.md` file directly under `docs/decisions/` (not nested), stricter than
+"under". (2) The result line's `sha256` is the hash of the record as the digest bound it (the bytes before the status line changed), not
+of the bytes after; the spec says "the record's hash". (3) For an already-accepted record the line names the approver of that run and
+the launcher logs it like an acceptance although nothing changed (the owner decided the line is printed; the spec now says so). (4) A
+`--digest` given at a terminal is checked and needs no typing, and a terminal run prints no result line; the spec's "checked the same
+way" read this way (the reviewer called the wording ambiguous). (5) The status line is found by a copy of the document check's rule
+(the helper cannot import `doccheck`); a test compares the two on 24 documents, by the count of status lines. (6) A name that
+JSON-escapes past 512 bytes (about 70 non-ASCII characters) cannot accept, and is refused before anything is written. (7) A failure
+after the replace (a read-back that differs or cannot be read) exits 1 with "the record was replaced ... look at <record>", not
+"nothing written". (8) The kit has no lock, so a write to the record in `replace_file`'s last window is overwritten without notice
+(Increment D); the helper's read-back confirms only what it wrote. (9) The shipped approvals went stale at each package edit and
+the owner released three times; `wb release-approvals` now warns of six shipped records not part of this release: four untracked,
+written by the intermediate releases, and two tracked (`63fe163a…`, `b0ad94d0…`); the two current ones are untracked (`a6a3758f…`,
+`b9be9135…`). Removing the stale records, and committing the current ones under `workbench/shipped_approvals/packages/`, is for the
+owner to approve and has not been done. (11) Security review finding 1, for the owner: at the level `none` a `--digest` is taken by the
+helper as route `ask`, so the record is written and the launcher then logs the outcome `refused` (the route is not the level); the spec
+row says such a run is refused with nothing written. Only the launcher can refuse it before the helper starts (`ownerargs.permit`); that
+is outside this increment; the owner chose to fix it in the launcher, and the plan gained Increment F for it. (10) A hand-run test that loaded a helper
+from `packages/` without `-B` left a `__pycache__` there, which made the workbench stop recognising the `claude` harness (every gate
+refused) until the owner removed it; every hand-run of a test since uses `-B`, and `tests/run_all.py` already writes no bytecode.
+
+Verification as run: the new tests failed first with the helper absent (`LookupError`), then passed (42, then 47 after the review
+fixes, 48 after the security review); the two behaviour tests added by the review failed against the first packaged helper; eight hand-made mutants of the helper (no
+digest check, no `Proposed` check, no code-fence rule, no expected hash, wrong route, no read-back, no typed-hash check, no digest check
+for an accepted record) were each caught by 1 to 15 failing tests. The groundwork root passes (244 tests). `python3 -B -W error
+tests/run_all.py`: 6232 tests in 13 roots OK before the review fixes, 6237 after them, then 6238 tests in 13 roots OK on the final files.
+`wb verify packages/workbench` reports no refusal; `wb check` and `wb run code-work check` (73 plans) are clean; `git diff --check` is clean.
+Not run: the helper through the real launcher at `ask` and `none` (the launcher's reading of the result line is tested with a synthetic
+module in Increment C, and the real module's declaration is checked here), and a run at a real terminal.
+
+Review: the `reviewer` agent, one exchange, no blocking finding. Applied: a terminal run prints no result line (1); the message after a
+failed read-back (3); the tests (4): a closed handle in `tree()`, mixed line endings, a byte-order mark, a status line over 2000
+characters, the 40-line header edge, more documents in the parity test, and a terminal run of an accepted record. Recorded, not
+changed: (2) the already-accepted line, deviation (3); (5) the long-name limit, deviation (6). The reviewer could not run anything or read
+`Root.replace_file`.
+
+Security review (asked for by the owner at the checkpoint after E): the `security-reviewer` agent, one exchange, on a copy in its
+scratch directory with the kit's identity replaced by a fixed one. No critical or high finding. It tried status lines of every form
+(line endings, a byte-order mark, a status line on line 41, one in a fence or a quotation, Unicode line separators, 30,000 random
+documents against `doccheck`: no disagreement on the count or the word), links, hard links, directories and FIFOs as records, hostile
+manifests and names, the three routes, digest reuse, a file that grows or is swapped before the rename, the size bound and the
+preview. Applied: the digest text cut the record's path to 200 characters, so two records with identical bytes and the same first 200
+characters of their path shared a digest; the path is no longer cut (a test fails against the old helper). Recorded for the owner:
+deviation (11) above. Noted, no change: text after `Proposed` on the status line is dropped but shown in the preview and bound by the
+digest; a status line inside an HTML comment is accepted, as `doccheck` reads it; a stdout failure after the replace was not tested;
+the end-to-end `wb run` through the real launcher, the real level log and a real terminal were not run.
+
+### Increment F — refuse a digest at the level none (not yet committed)
+
+Changed: `workbench/ownerargs.py` (`permit`: for a mapped argument at a level other than `ask`, a run whose second-to-last argument is
+`--digest` is refused before the helper starts, whatever follows it, with a reason that says a digest needs the level `ask`; the
+module docstring says so), `tests/test_checkpoint_command_run.py` (in `AtNone`: four digest forms, a digest with no record, a digest
+that is not among the last two arguments, and a digest at a terminal; in `AtBlock`: a digest is refused as before; a new class
+`AnArgumentThatIsNotMapped`: an unmapped owner-run argument still passes a trailing digest at `none` to its helper; the stub helper
+now records its arguments) and the paragraph after the forms table in `docs/specs/command-permissions.md`. No file under `packages/`
+changed, so no release.
+
+Choices, for the owner: (1) The refusal reads the second-to-last argument alone (`--digest` followed by anything), wider than the
+plan's "a trailing `--digest <32 hex>`", so a malformed or empty digest cannot reach the helper at `none` either. (2) The condition is
+"a mapped argument at a level other than `ask`", not "at `none`"; `block` and `delegated` are refused earlier for another reason, so
+today it applies to `none` alone. (3) A digest that is not among the last two arguments is not refused by the launcher; the real
+helper takes a digest only as the last two of exactly four arguments and refuses any other count as a usage error. The launcher's
+refusal therefore depends on the helper's strict argument count: a helper that later takes a digest elsewhere needs `permit` changed
+with it. (4) The plan's "The log" of the spec needed no edit; the paragraph after the forms table carries the change.
+
+Verification as run: the new `AtNone` test failed first (the helper started and the digest reached it); `python3 -B -m unittest
+tests.test_checkpoint_command_run tests.test_checkpoint_command tests.test_approve_levels` (123 tests, OK) and, after the review's
+test additions, `tests.test_checkpoint_command_run` (36 tests, OK); `python3 -B -W error tests/run_all.py`: 6241 tests in 13 roots OK
+(run before the review's test-only additions; the whole suite was not run again after them); `wb check` and `wb run code-work check`
+(73 plans) clean; `git diff --check` clean.
+
+Review: the `reviewer` agent, one exchange, no blocking finding. Applied: the stub helper records its arguments, so the unmapped test
+shows the digest was passed on (7); tests for a digest with no record, a digest not among the last two arguments and a digest at
+`block` (7). Recorded: the dependence on the helper's argument count, choice (3) (1). Findings 2, 3, 4, 5, 6 and 8 found nothing to
+change. The reviewer could not run anything.

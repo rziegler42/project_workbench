@@ -566,7 +566,7 @@ Also, in the same flow:
 
 The decision `2026-10-29-accept-decision-offers-the-ask-level` (accepted on 2026-10-29) gives `accept-decision` the levels `block`, `ask`, `delegated` and
 `none`. The plan `2026-10-29-accept-decision-at-ask` builds `block`, `ask` and `none`; this section is what it builds against, and
-none of it is built until that plan's Increments B to F are committed. `delegated` for `accept-decision` is not built by that plan:
+none of it is built until that plan's Increments B to G are committed. `delegated` for `accept-decision` is not built by that plan:
 the accepted record leaves a delegated review's subject for a decision undecided, so `delegated` reads `block` here, as it does for
 every key but `approve-plan`.
 
@@ -593,6 +593,11 @@ offers `block`, `ask` and `none`; `delegated` reads `block` with the note that i
 | `accept <record>`, no terminal | `none` | recorded, with no digest |
 | any other form without a terminal | `block`, `delegated` | refused: accepting a decision is owner-run |
 | `accept <record> --digest …` | not `ask` here | refused: a digest needs the level `ask` and its rendered rule |
+
+The last row is enforced by the launcher (plan `2026-10-29-accept-decision-at-ask`, Increment F), because the helper cannot tell its
+level and would take a digest as the route `ask`: at `none` a run of a mapped argument whose last two arguments are `--digest` and
+anything is refused before the helper starts, with nothing run and no entry written. Any other owner-run argument at `none` passes a
+trailing digest on to its helper, as before.
 
 **What `preview` prints.** Text, then a last line `digest: <32 lowercase hex>`: the project, the command and argument, the record's path,
 its status line, the SHA-256 of its bytes, and what accepting does not cover (that the owner read the record; the index row). The digest
@@ -624,7 +629,9 @@ characters and the line within its 1,024 bytes; the name, which may be non-ASCII
 and not in the log. A missing, malformed, over-long or mismatching line, or an approver that does not pass the grammar, makes the
 outcome `refused`, not `done`.
 A run at a terminal reads no level and writes no entry, so a terminal acceptance is recorded by the tracked status line (the approver
-and the date) and by git history only. The helper writes nothing to the guarded store.
+and the date) and by git history only. The helper writes nothing to the guarded store. A run at a terminal prints no result line, with or without a
+`--digest`. For a record that is already accepted the line names the approver of that run, and the entry reads like an acceptance
+although nothing was changed (the helper's own text line says `already accepted`; the log keeps no such line).
 
 **What stays outside the command.** The index row of `docs/decisions/README.md` is not written by the command; the `draft-decision` skill
 tells the agent to update it afterwards, and the document check reports a row that disagrees with a status line. A hand edit of a status
@@ -636,7 +643,7 @@ owner confirms a command and a digest, not that they read the record.
 ## Not built
 
 - `ask` for `accept-decision` is specified above and built by the plan `2026-10-29-accept-decision-at-ask`; until that plan's
-  Increments B to F are committed, `accept-decision` offers `block` and `none` only, and `delegated` for it and for the other seven keys
+  Increments B to G are committed, `accept-decision` offers `block` and `none` only, and `delegated` for it and for the other seven keys
   is not built by that plan.
 - `ask` and `none` for the owner-run arguments of the other module commands (`wb run mempalace init`, `mine`, and
   `wb run remote-runner fetch-overwrite`). The declaration fields (`levels` and `preview`), the launcher that reads the level and logs the run,
