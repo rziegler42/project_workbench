@@ -26,7 +26,7 @@ APPROVER = "Example Approver <%s>" % EMAIL
 COMMAND = {"cmd": {"helper": HELPER_PATH, "arguments": ["check", "show", "wipe", "keep"], "owner": ["wipe", "keep"],
                    "levels": {"wipe": ["ask", "none"]}, "preview": "show", "checkpoint_of": {"wipe": STEP}}}
 HELPER = (b"#!/bin/sh\n"
-          b"echo ran >> \"$WB_TEST_LOG\"\n"
+          b"echo \"ran $*\" >> \"$WB_TEST_LOG\"\n"
           b"echo working\n"
           b"if [ -n \"$WB_TEST_RESULT\" ]; then printf '%s\\n' \"$WB_TEST_RESULT\"; fi\n"
           b"if [ -n \"$WB_TEST_NOTE\" ]; then echo noted >&2; fi\n"
@@ -72,6 +72,11 @@ class Mapped(Ask):
 
     def ran(self):
         return os.path.exists(self.ran_log)
+
+    def ran_with(self):
+        """The arguments the helper was started with, one string for each start."""
+        with open(self.ran_log, encoding="utf-8") as handle:
+            return [line.rstrip("\n")[len("ran "):] for line in handle]
 
     def entries(self):
         return [line.split("\t") for line in self.log_lines()]
@@ -256,6 +261,55 @@ class AtNone(Mapped):
         _, outcome = self.outcome()
         self.assertEqual("refused", outcome[3])
 
+    def test_a_digest_is_refused_before_the_helper_starts_and_nothing_is_written(self):
+        # Plan 2026-10-29-accept-decision-at-ask, Increment F: the helper cannot tell its level and would take the digest as
+        # the route ask, change the record and be logged `refused`, so the launcher refuses the form.
+        for digest in (DIGEST, "zz", "A" * 32, ""):
+            with self.subTest(digest=digest):
+                code, out, err = self.go("cmd", "wipe", "docs/decisions/x.md", "--digest", digest)
+                self.assertEqual((1, ""), (code, out))
+                self.assertIn("digest", err)
+                self.assertIn("ask", err)
+                self.assertFalse(self.ran())
+                self.assertEqual([], self.log_lines())
+
+    def test_a_digest_with_no_record_is_refused_too(self):
+        code, out, err = self.go("cmd", "wipe", "--digest", DIGEST)
+        self.assertEqual((1, ""), (code, out))
+        self.assertFalse(self.ran())
+
+    def test_a_digest_that_is_not_among_the_last_two_arguments_is_left_to_the_helpers_argument_count(self):
+        # The launcher reads the last two arguments, as `ask` does; the helper takes a digest only as the last two of exactly
+        # four arguments and refuses any other count as a usage error, so nothing here reaches its change.
+        code, out, err = self.go("cmd", "wipe", "docs/decisions/x.md", "--digest", DIGEST, "extra")
+        self.assertEqual(0, code, err)
+        self.assertEqual(["wipe docs/decisions/x.md --digest %s extra" % DIGEST], self.ran_with())
+
+    def test_a_digest_at_a_terminal_is_left_to_the_helper(self):
+        code, out, err = self.go("cmd", "wipe", "docs/decisions/x.md", "--digest", DIGEST, terminal=True)
+        self.assertEqual(0, code, err)
+        self.assertTrue(self.ran())
+        self.assertEqual([], self.log_lines())
+
+
+UNMAPPED = {"cmd": dict(COMMAND["cmd"], arguments=["check", "show", "wipe", "rinse"], owner=["wipe", "rinse"],
+                        levels={"wipe": ["ask", "none"], "rinse": ["ask", "none"]})}
+
+
+class AnArgumentThatIsNotMapped(Mapped):
+    """An owner-run argument that is not the command of a checkpoint keeps passing a trailing digest at `none` to its helper
+    (the review engine's arguments do)."""
+
+    MODULES = dict(Ask.MODULES, cmd=tool(UNMAPPED, helper=HELPER))
+    TABLE = {STEP: "none", "wb run cmd rinse": "none"}
+
+    def test_a_digest_at_none_reaches_the_helper(self):
+        code, out, err = self.go("cmd", "rinse", "docs/decisions/x.md", "--digest", DIGEST)
+        self.assertEqual(0, code, err)
+        self.assertEqual(["rinse docs/decisions/x.md --digest %s" % DIGEST], self.ran_with())
+        attempt, _ = self.outcome()
+        self.assertEqual(["A", "wb run cmd rinse", "none", ""], [attempt[0]] + attempt[3:])
+
 
 class OnlyTheArgumentsOwnKeyIsSet(Mapped):
     TABLE = {WIPE: "ask"}
@@ -272,6 +326,13 @@ class AtBlock(Mapped):
 
     def test_nothing_runs_without_a_terminal(self):
         code, out, err = self.go("cmd", "wipe", "docs/decisions/x.md")
+        self.assertEqual((1, ""), (code, out))
+        self.assertIn("terminal", err)
+        self.assertFalse(self.ran())
+        self.assertEqual([], self.log_lines())
+
+    def test_a_digest_is_refused_as_before(self):
+        code, out, err = self.go("cmd", "wipe", "docs/decisions/x.md", "--digest", DIGEST)
         self.assertEqual((1, ""), (code, out))
         self.assertIn("terminal", err)
         self.assertFalse(self.ran())

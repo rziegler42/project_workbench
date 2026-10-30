@@ -8,7 +8,10 @@ output are terminals. When that refusal would apply, it asks ``permit`` first, a
   reads that level now for the project that holds the working directory (``levelrun.level_now``, so the rendering record,
   the table, the permissions file and the command gate must agree and the key must be listed); and
 * at ``ask``, the last two arguments are ``--digest`` and 32 lowercase hexadecimal characters. The launcher does not compute
-  or compare the digest: the helper recomputes it inside the lock that guards its change and refuses unless it is equal.
+  or compare the digest: the helper recomputes it inside the lock that guards its change and refuses unless it is equal; and
+* at ``none``, an argument that a declaration maps to a checkpoint (``checkpoint_of``) carries no ``--digest``: its helper cannot
+  tell its level, so a digest would make it take the route ``ask`` and the outcome would be ``refused`` after a change. Another
+  argument at ``none`` passes a trailing digest on to its helper, which checks it as at a terminal.
 
 Anything else reads ``block`` and the refusal is the one ``commands.owner_refusal`` gives. ``run_logged`` then starts the helper
 with the arguments unchanged. It writes the attempt line after the pin and the bytes are checked and just before the helper
@@ -64,6 +67,12 @@ def permit(guarded, request, start, reason):
         raise commands.CommandError(reason)
     checked = word in dict(request.checkpoint_of)
     if level != levels.ASK:
+        if checked and len(request.arguments) >= 3 and request.arguments[-2] == "--digest":
+            # The helper of a mapped argument cannot tell its level and would take a digest as the route `ask`, change the
+            # record and be logged `refused`; a digest needs the level ask (Increment F of 2026-10-29-accept-decision-at-ask).
+            raise commands.CommandError(
+                "%s of the command %s is at the level %s, which takes no digest: a digest needs the level ask; run it without "
+                "--digest" % (commands._shown(word), commands._shown(request.name), level))
         return Permit(key, level, "", checked)
     digest = _digest(request.arguments)
     if digest is None:
