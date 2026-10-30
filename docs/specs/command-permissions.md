@@ -645,9 +645,11 @@ owner confirms a command and a digest, not that they read the record.
 
 ## `wb release-approvals` at `ask` (specified, not built)
 
-The plan `2026-10-30-release-approvals-at-ask` builds this in its Increments B to D. The preview is built (Increment B); the digest
-check, the offer of `ask` and the rendered rules are not built until Increments C and D are committed. Until then the key offers
-`block` and `none` only, and `wb preview release-approvals` does not open the guarded store or write anything. The key `wb release-approvals` will offer `block`, `ask` and `none`, and defaults to
+The plan `2026-10-30-release-approvals-at-ask` builds this in its Increments B to D. The preview (Increment B) and the digest
+check (Increment C) are built; the offer of `ask` and the rendered rules are not built until Increment D is committed. Until then the
+key offers `block` and `none` only, so the digest check runs only where a level of `ask` is read (the tests patch that reading), and
+`wb preview release-approvals` does not open the guarded store or write anything. The check is in `cli._release`, reading the level
+through `levelrun.unattended` (the reading of `attach` is unchanged). The key `wb release-approvals` will offer `block`, `ask` and `none`, and defaults to
 `block`. `delegated` is not built for it (the roadmap candidate `checkpoint-levels-beyond-block` stays open).
 
 **How the existing parts treat it** (read on 2026-10-30, Increment A). The rendering is generic over the keys of the form
@@ -691,7 +693,7 @@ agree, the command does not refuse itself and the harness's own rule is the barr
 ## Not built
 
 - `ask` for `wb release-approvals`, specified above and built by the plan `2026-10-30-release-approvals-at-ask`; until that plan's
-  Increments B to D are committed the key offers `block` and `none` only.
+  Increment D is committed the key offers `block` and `none` only.
 - `delegated` for `accept-decision` and for the other seven keys that do not offer it (every key but `approve-plan`). The plan
   `2026-10-29-accept-decision-at-ask` built `ask` for `accept-decision` and left `delegated` reading `block`: the accepted record leaves
   undecided what a delegated review's subject is for a decision, and the roadmap candidate `checkpoint-levels-beyond-block` stays open.

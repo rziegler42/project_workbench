@@ -300,7 +300,7 @@ needs only the offer of `ask`; `levelrun.optional` returns a route only at `none
 now prints the hashes in full. Applied: the terminal row (the digest is refused at a terminal); the places for Increments B, C and E
 recorded above. Recorded: the tests were listed and not read (a gap in step 1, to be closed in the increment that needs each).
 
-### Increment B — the preview (committed with the trailer `#B`)
+### Increment B — the preview (committed as `d7556b8`)
 
 Changed: `workbench/firstparty.py` (`release_approvals` is now `plan_release` followed by `write_release`; the new `ReleasePlan`,
 `PlannedPackage` and `PlannedModule` hold the hashes in full, whether each record exists now, the approver, the time and the stale
@@ -345,3 +345,53 @@ stale list dropped from the text, fails a test.
 
 After the review's changes: `python3 -B -W error tests/run_all.py`: 6269 tests in 13 roots, all OK; `wb check`, `wb run code-work check`
 (75 plans) and `wb verify packages/workbench`: no problems. No file under `packages/` changed.
+
+### Increment C — the digest check at `ask` (committed with the trailer `#C`)
+
+Changed: `workbench/cli.py` (`--digest` on the parser and the usage text; `_release` reads the level and applies the rules below;
+`_release_report` and `_release_approvals` share the report), `workbench/levelrun.py` (`unattended`, beside `optional`, which still
+serves `attach` alone), `tests/test_release_ask.py` (new, 14 tests), `docs/development.md` and `docs/specs/command-permissions.md`
+(the digest check is built; the offer of `ask` is Increment D's). No file under `packages/` changed.
+
+The rules as built: at a terminal a run goes on as it did and a `--digest` is refused; without a terminal at a verified `none` it runs
+and is logged as before and a `--digest` is refused before the run ("a digest needs the level ask"); at a verified `ask` a missing or
+malformed digest is refused with the way to the preview, `plan_release` is built once (a refused package refuses with its reasons),
+the digest of its preview text is compared with the one given, a wrong one is refused with nothing written and no log entry, and the
+right one is written from that same plan through `levelrun.apply_logged` (the attempt, with `digest:<32 hex>`, just before the write,
+and the outcome after; if the attempt cannot be written nothing is written); at `block` or where no level can be read it goes on as it
+always did (a `--digest` is not checked there).
+
+Choices, for the owner: (1) a malformed digest is a refusal with exit 1 and a reason, not a usage error with exit 2; (2) at `block` and
+where no level can be read a `--digest` is ignored, as the spec's stated limit says: the command never refused itself there and the
+harness's rule is the barrier, so a stale rendering record that reads `block` while the harness file still holds the `ask` rule would
+run an agent's `--digest` unchecked after the owner's confirmation of the prompt; Increment D's rules and the owner's `wb rerender`
+keep the record and the file in agreement; (3) until Increment D the key does not offer `ask`, so the check is tested through a patch
+of the level reading (`levelrun.level_now`) and not through the owner's settings.
+
+Verification as run: the new tests failed first (the parser took no `--digest`, and without one the command at `ask` still wrote);
+`python3 -B -m unittest tests.test_release_ask tests.test_ack_recover_levels`: 55 tests OK (14 new; the existing release tests at
+`none`, which mock `firstparty.release_approvals`, pass unchanged); two hand-made mutants, each reverted, were caught: the write
+re-planning (`firstparty.release_approvals` in place of `write_release`) fails the test of the window, and a skipped comparison fails
+the wrong-digest and the earlier-digest tests. The whole suite is run after the review.
+
+Review: the `reviewer` agent, one exchange, adversarial, no blocking finding; it found no way to write a release at a verified `ask`
+without the digest of the plan the command built now (abbreviated options are off, `wb run` has no route to `_release`, the plan is
+built once and the same plan is written). Applied: (F2) a test at `block`, with and without a digest, that the command goes on and
+logs nothing, which pins choice 2; (F3) a refusal after a part-way write now says that records written before the failure remain
+and that a rerun repeats the release (the level log still says `refused`; `apply_logged` takes no reason, and the old release
+could leave earlier records too); (F4) the format refusal is told from the wrong-digest refusal, the failed-attempt test checks the
+message and an empty log, and the no-level test checks that the release was written. Recorded, not applied: (F1) the check fails open
+where the level cannot be read for the working directory (outside a project, or a stale or unreadable rendering record), which the
+spec states as a limit. Refusing there was weighed and not done: the command has no terminal test and the owner's own `!` runs have
+no terminal either, so refusing unattended runs where the level is not a verified `ask` or `none` would refuse the owner's runs at the
+default level `block`; the harness's `ask` prompt on the command text still applies, and the owner sees a bare command with no
+digest in it. Criterion 2 therefore holds where the level is verified for the working directory's project. A directory that is
+no project, and a project whose rendering record is not sound, remain as exposed as before this plan. (F5) argparse accepts
+`--digest=<hex>` and a repeated `--digest` (the last is checked, logged and used, so there is no bypass); Increment D tests how the
+command gate matches those spellings. The reviewer could not run anything.
+
+One consequence for the owner: at a verified `ask` the owner's own run without a terminal (the `!` prefix) needs the digest too; a run
+at a terminal does not.
+
+After the review's changes: `python3 -B -W error tests/run_all.py`: 6284 tests in 13 roots, all OK; `wb check` and `wb run code-work
+check` (75 plans): no problems. No file under `packages/` changed.

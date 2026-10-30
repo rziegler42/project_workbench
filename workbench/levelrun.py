@@ -129,3 +129,17 @@ def optional(guarded, start, key, stdin, out):
     except (Refusal, OSError):
         return None
     return Route(False, level, ident, root) if level == levels.NONE else None
+
+
+def unattended(guarded, start, key, stdin, out):
+    """For ``release-approvals`` alone: the ``Route`` when it runs without a terminal at a verified ``ask`` or ``none`` for the
+    project that holds `start`; ``None`` otherwise (at a terminal, at ``block``, or where no level can be read), and the command
+    goes on as it always did there. ``optional`` stays the reading of ``attach``, which has no digest and so no use for ``ask``
+    (``docs/specs/command-permissions.md``, "`wb release-approvals` at `ask`")."""
+    if approve.is_terminal(stdin) and approve.is_terminal(out):
+        return None
+    try:
+        level, ident, root = level_now(guarded, start, key)
+    except (Refusal, OSError):
+        return None
+    return Route(False, level, ident, root) if level in (levels.ASK, levels.NONE) else None
