@@ -604,3 +604,51 @@ command spellings against `module.json` (5); `docs/specs/groundwork.md` line 123
 acceptance" is stricter than the later sections (3, wording, no contradiction); the literal stale-phrase list (5, accepted). The
 reviewer could not run anything or read the settings output; the line `level accept-decision: ask` is the one `wb settings` prints for a
 level (`tests/test_settingscmd.py`).
+
+The upgrade results (the policy block in `AGENTS.md`, the installed copies and the installed helper) were committed after the owner ran
+`wb upgrade` and `wb rerender`, as `417d67d`.
+
+### Increment H — the close-out (committed with the trailer `#H`)
+
+Changed, all documents and none under `packages/`: `docs/specs/command-permissions.md` ("Not built" now lists only `delegated` for
+`accept-decision` and the other seven keys, with the roadmap candidate `checkpoint-levels-beyond-block` still open and the decision on a
+delegated review's subject still owed; the section on the command is no longer "specified, not built"; the stale statements that `ask`
+was not built, in the levels paragraph, the `accept-decision` at `none` paragraph, the table row, the opt-in sentence and the log
+paragraph, now say what is built), `docs/specs/code-work.md` (the checkpoint table row) and `docs/specs/module-contract.md` (the
+`checkpoint_of` entry no longer says that no shipped module uses it).
+
+Not changed, for the owner: `docs/roadmaps/workbench-v1.md` still has older wording about `accept-decision` (lines near 666, 675 and
+738, for example "which no command runs" and "does not build the `ask` level"). A roadmap changes only with the owner's word, so it is
+listed here and left alone. `doccheck` and `refcheck` are not installed as `wb run` commands in this clone; `wb check` runs the
+project's document checks and found no problem.
+
+Verification as run: `wb check` ("check found no problems"), `wb run code-work check` (73 plans, no problems) and
+`python3 -B -W error tests/run_all.py`: 6251 tests in 13 roots, all OK (one skipped in the `tests` root, two in `code-work`), run after
+the owner's `wb upgrade` and `wb rerender`, so the self-hosting test passes with the new policy block.
+
+Completion criteria, each marked as met or not met:
+
+1. **Met.** A command's `checkpoint_of` mapping, its refusals (an argument that is not an owner-run argument offering a level, a malformed
+   name, a name claimed twice), the unchanged hash of a module that does not use it, and the key in both cases (with and without a
+   process module that declares the checkpoint) are tested in `tests/test_checkpoint_command.py` (Increment C, `02098d4`).
+2. **Met.** `wb settings` in this clone prints `level accept-decision: ask` and no longer says `ask` is not offered; `delegated` reads
+   `block` with the note (`tests/test_levels.py`, `tests/test_settingscmd.py`).
+3. **Met by tests, not run end to end.** The 48 tests over the real module (`test_decision_accept_helper.py`) and the launcher tests
+   (`tests/test_checkpoint_command_run.py`, with a synthetic module) cover the preview, the replacement of the status line only, each
+   refusal, the digest at `none` refused before the helper starts, the second run changing nothing, the outcome line naming approver,
+   route and digest, and no entry for a terminal run. The real helper was not run through the real launcher, the real level log or a
+   real terminal.
+4. **Met for the rule's text.** The rendered `.claude/settings.local.json` lists `wb run groundwork accept` (and the `--provides` and
+   absolute-`wb` spellings) under `ask`, and the `python -m workbench run groundwork accept` spellings under `deny`; the rendering tests
+   cover `block` and `none`. A live prompt was not observed (criterion 7).
+5. **Met.** The skill, the policy block and the seeded decisions README carry the same four level sentences
+   (`LevelTexts` in `test_groundwork_module.py`), and no shipped text says `ask` is not offered.
+6. **Met.** After the owner's releases, `wb verify packages/workbench`, `wb check` and `wb run code-work check` report no problem, the
+   stale shipped records were removed with the owner's approval (four in all, in two steps, and two more in E), and the whole `tests` root
+   and every package test root pass (6251 tests, 13 roots).
+7. **Partly met.** After the owner's `wb upgrade` and `wb rerender` the rendered permissions list the command as an `ask` rule (read in
+   `.claude/settings.local.json`) and the command gate refuses text that could spell it. NOT met: the harness prompt for the command with
+   the digest in a live session, which is the owner's run, and a real `preview` and `accept` through the launcher at `ask` and `none`.
+
+Open for the owner: the live runs of criterion 7 and of criterion 3 above; the follow-up plan for `delegated` for `accept-decision` and
+the other seven keys (the roadmap candidate stays open); the stale roadmap wording above; and a push, which needs the owner's word.

@@ -314,7 +314,7 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   arguments unchanged and its last two arguments are `--digest <32 lowercase hex>`: it takes them off before it counts its other
   arguments, recomputes the digest of what the argument would change now inside the lock that guards the change, and changes
   nothing unless the two are equal. At a terminal a `--digest` is checked the same way and a run without one works as before.
-- `commands[].checkpoint_of` *(built by plan `2026-10-29-accept-decision-at-ask`, Increment C; no shipped module uses it yet)*: optional. An object that
+- `commands[].checkpoint_of` *(built by plan `2026-10-29-accept-decision-at-ask`, Increment C; the `groundwork` module uses it for `accept`)*: optional. An object that
   maps an argument listed in `owner` to the name of a checkpoint, the key that argument then uses (`command-permissions.md`, "Accepting a
   decision through a command"). The argument must also appear in `levels` (it offers a level beyond `block`); a name must have the form
   of a checkpoint name (`^[a-z][a-z0-9-]*$`, at most 64 characters); two arguments may not claim one name. A declaration is read alone, so
