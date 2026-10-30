@@ -175,7 +175,7 @@ says so.
 | `approve` | package | a package directory, or `--source` with an optional `--ref`; `--module` | the guarded store: approval records, the cache | yes | built; `--dir` proposed |
 | `pin` | package | a project id, a name, a helper, `--root` | the guarded store: a pin (the installer pins declared helpers itself; this is for any other) | yes | built |
 | `launch` | package | a project id, a name, `--root`, arguments after `--` | a private copy of the pinned helper under `bin/run/` while it runs, removed afterwards | no | built |
-| `release-approvals` | package | nothing | the shipped first-party records in the workbench distribution | no | built |
+| `release-approvals` | package | nothing, and at `ask` without a terminal `--digest <32 hex>` from `preview release-approvals` | the shipped first-party records in the workbench distribution, and the level log when it runs without a terminal at `ask` or `none` | no terminal test; the owner may set it to `ask` or `none` | built |
 | `approve-plan` | project | a plan path, and at `ask` `--digest <32 hex>` | the guarded store: a plan approval record, and the level log when it runs without a terminal | yes, owner-run; the owner may set it to `ask` or `none` | built |
 | `plan-status` | project | a plan path, optionally `--digest` | nothing | no | built |
 | `delegate-approve-plan` | project | a plan path | the guarded store: a delegated plan approval record | no, agent-run | built |
@@ -196,7 +196,9 @@ says so.
   store (`trust-and-approval.md`, "Residual risk").
 - `release-approvals` is a maintainer's release-time command. It needs no terminal and
   writes only the shipped records in the workbench distribution, never an owner approval in
-  the guarded store.
+  the guarded store. At the level `ask`, without a terminal, it requires the digest of
+  `preview release-approvals` and writes only the plan that digest names
+  (`command-permissions.md`, "`wb release-approvals` at `ask`").
 - `launch` returns the helper's own exit code, so a helper that exits 1 looks like a refusal
   by code alone; the refusal text on standard error tells them apart.
 
@@ -732,7 +734,9 @@ the rules above are named so a later plan can change them; this plan changes non
   distribution. Needs no terminal. A maintainer's command at release time. Agent may not run
   it *(my call)*: its records count as approval because the distribution is the trust root
   (`trust-and-approval.md`), so running it in a modified checkout would approve modified
-  first-party packages. The harness's deny rule on it is the barrier.
+  first-party packages. The harness's deny rule on it is the barrier at the level `block`, the default; at `ask` the harness
+  asks for it and the command requires the digest of `preview release-approvals` when it runs without a terminal; at `none` an
+  agent may run it and the run is logged (`command-permissions.md`, "`wb release-approvals` at `ask`").
 - **Usage text and name.** The usage text and the program name say `python3 -m workbench`;
   the rule above is `wb`. A later plan changes the text.
 
@@ -757,7 +761,8 @@ see its section). The split between a read-only
    refuse with `refused:` and exit 1 otherwise. They are denied to an agent by the harness,
    exactly as `approve`, `pin` and `attach` are. **rule:** the harness modules render a `deny`
    for `wb install`, `wb adopt`, `wb upgrade`, `wb add`, `wb attach`, `wb rerender`, `wb acknowledge`, `wb approve`,
-   `wb pin` and `wb release-approvals`, and the neutral rule list carries them (`harness-modules.md`,
+   `wb pin` and `wb release-approvals` (at the default level `block`; at `ask` the launcher spelling is asked for and at `none` it is open,
+   `command-permissions.md`), and the neutral rule list carries them (`harness-modules.md`,
    "Permissions"; `trust-and-approval.md`, "Rendering rules"). *(This requirement is not yet
    in those two specifications; the plan `2026-10-20-installer-interface` adds it.)*
 3. **One process, nothing stored.** A write command computes the preview itself, in its own

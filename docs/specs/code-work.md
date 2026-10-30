@@ -245,7 +245,7 @@ the personal settings (`trust-and-approval.md`). Setting `delegate` takes effect
 (built by `delegated-approval`, increment D); every other checkpoint stops, whatever the setting says. `wb settings`
 reports the effective values. The owner may also set a key, `approve-plan` among them, to `ask` or `none` in the `levels` table
 (`command-permissions.md`); the checkpoint names are the keys of that table. `approve-plan` offers `ask`, `delegated` and `none`;
-`accept-decision`, `acknowledge-first-tier` and `acknowledge-second-tier` offer `none`; `push-shared-branch`, `submit-remote-job`,
+`accept-decision` offers `ask` and `none`; `acknowledge-first-tier` and `acknowledge-second-tier` offer `none`; `push-shared-branch`, `submit-remote-job`,
 `fetch-remote-output` and `change-direction` offer `block` only. The `delegable` marks above describe what a way of working may
 allow; they do not make a checkpoint delegable until the installer builds it, and the installer builds `delegate` for
 `approve-plan` only.

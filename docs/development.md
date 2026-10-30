@@ -186,7 +186,8 @@ and prints the install order. A harness module is required in a selection unless
 | 2 | usage error |
 
 `release-approvals` uses the same codes: 0 done (or nothing to do), 1 refused, 2 usage; and 4 when a write failed part way, so that
-some records were written (they are valid and a rerun is idempotent).
+some records were written (they are valid and a rerun is idempotent). A run that is logged (without a terminal, at `ask` or `none`) can
+also exit 3, when the records were written but the outcome could not be logged, and 130 when it was interrupted.
 
 ## Inert download
 
@@ -621,15 +622,16 @@ the records are read from the installed workbench, never copied into the guarded
   repository can add a package and run `release-approvals`, and the records it writes count
   as approval, so review what a release changes in `workbench/shipped_approvals/` (its git
   diff) before accepting it. The command does not need a terminal, because releases may run
-  unattended.
+  unattended. At the level `ask` the digest of `python3 -m workbench preview release-approvals`
+  binds the owner's confirmation to the hashes of the release, not to the content of the packages.
 - `python3 -m workbench release-approvals` is a release-time command, not one for users of a
   project. It verifies every package under `packages/` as first-party, writes nothing if
   any module fails verification (exit 1; a write that fails part way can leave the earlier
   records of that run, which are valid and a rerun is idempotent), and otherwise writes one record per module and per package with
   a fixed approver (`workbench-release`) and time, so a second run changes nothing. Records
   of an earlier release are left in place and reported with a warning, because deletion is
-  not provided; remove them by hand. With no packages it prints `no first-party packages`
-  and exits 0.
+  not provided; remove them by hand (`python3 -m workbench preview release-approvals` lists them first, and says when the shipped
+  tree cannot be listed). With no packages it prints `no first-party packages` and exits 0.
 - A first-party package changed since release has no shipped approval for its new hashes,
   so its modules are checked against the guarded store like any other package.
 
@@ -650,7 +652,7 @@ the records are read from the installed workbench, never copied into the guarded
   --package <source>` (each rendered file is current, stale, new, missing, applied or orphaned; an edited or linked file refuses
   the whole run, and you move an edited file aside to have it recreated), then `wb rerender --package <source>` from your
   terminal. `wb check` does not report a stale rendered file. `wb settings` prints a `level <key>:
-  <level>` line for every key. The default is `block`, except for an agent-safe action and a declared module argument that is not owner-run, which default to `none`. A `block` set on an agent-safe action or a declared module argument is rendered as a `deny` at the next attach or re-render; at its default `none` nothing is rendered. A damaged settings file blocks every owner-run key and leaves the agent-safe ones at `none`, so `wb settings` and `wb check` still run to report it; an explicit `block` on an agent-safe key is not honored until the file is repaired. The checkpoint `accept-decision` offers `block` (the default) and `none`: at `none`, `wb settings` prints `level accept-decision: none` and the `draft-decision` skill lets an agent mark a decision it drafted `Accepted`; otherwise only the owner accepts a decision (`AGENTS.md`). Not every key offers `none`: the owner-run arguments of module commands (except the review engine's `extend`, `reset`, `archive`, `amend` and `prune`, which offer `ask` and `none`), `push-shared-branch`, `submit-remote-job`, `fetch-remote-output`, `change-direction` and `wb rerender` offer `block` only (`docs/specs/command-permissions.md`, "Not built" and "Re-rendering an attached clone").
+  <level>` line for every key. The default is `block`, except for an agent-safe action and a declared module argument that is not owner-run, which default to `none`. A `block` set on an agent-safe action or a declared module argument is rendered as a `deny` at the next attach or re-render; at its default `none` nothing is rendered. A damaged settings file blocks every owner-run key and leaves the agent-safe ones at `none`, so `wb settings` and `wb check` still run to report it; an explicit `block` on an agent-safe key is not honored until the file is repaired. The checkpoint `accept-decision` offers `block` (the default), `ask` and `none`: at `ask`, `wb settings` prints `level accept-decision: ask` and the `draft-decision` skill has the agent show the preview of `wb run groundwork preview` and run `wb run groundwork accept` with its digest, which the owner confirms; at `none` the agent runs `accept` without a digest; otherwise only the owner accepts a decision (`AGENTS.md`). Not every key offers `none`: the owner-run arguments of module commands (except the review engine's `extend`, `reset`, `archive`, `amend` and `prune`, which offer `ask` and `none`), `push-shared-branch`, `submit-remote-job`, `fetch-remote-output`, `change-direction` and `wb rerender` offer `block` only (`docs/specs/command-permissions.md`, "Not built" and "Re-rendering an attached clone").
 - **What it asks of the agent.** The agent runs `wb plan-status <plan> --digest`, shows you the preview, and runs
   `wb approve-plan <plan> --digest <digest>` as one simple command on its own; the harness then prompts you. A command that wraps or
   rewrites it (`bash -c`, `env`, a quote splice, an escape, an expansion) is blocked by `wb gate-command`, and a command that only

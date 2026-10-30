@@ -396,7 +396,7 @@ at a terminal does not.
 After the review's changes: `python3 -B -W error tests/run_all.py`: 6284 tests in 13 roots, all OK; `wb check` and `wb run code-work
 check` (75 plans): no problems. No file under `packages/` changed.
 
-### Increment D — the level, the rules and the gate (committed with the trailer `#D`)
+### Increment D — the level, the rules and the gate (committed as `a3b4007`)
 
 Changed: `workbench/levels.py` (`_OFFERS` gives `wb release-approvals` the offers `ask` and `none`, after `block`; the module docstring
 says so; `_DEFAULTS` is untouched, so the default stays `block` and the digest of the default table is unchanged), `tests/test_release_ask.py`
@@ -466,3 +466,36 @@ with a fake home and a throwaway store, and then, after the fixes, made an indep
 
 After the security fixes and the fail-closed change: `python3 -B -W error tests/run_all.py`: 6307 tests in 13 roots, all OK; `wb check`
 and `wb run code-work check` (75 plans): no problems. No file under `packages/` changed.
+
+### Increment E — the texts (not yet committed)
+
+Changed, all documents: `docs/specs/command-permissions.md`, `docs/specs/installer-interface.md`, `docs/specs/terms.md`,
+`docs/specs/code-work.md` and `docs/development.md`. The search (step 1) was made by a read-only agent, because the command gate at the
+owner's level `ask` refuses a shell search that names the key; it listed 60-odd lines, each marked still true, partly true or stale, and
+each location was read before it was edited. Changed, with the stale statement they replace: the list of keys that offer `ask` and the
+opening paragraph of `command-permissions.md` (the key now offers it, as does `accept-decision`, which the list had also omitted); the
+row of the table of levels ("has none and keeps none" now says what happens at `ask`); the "Which levels a key offers" list; the log
+paragraph, the `Levels offered` paragraph, the paragraph on `acknowledge`, `recover`, `attach` and `release-approvals` (the offers, the
+digest and the owner's own settings read where the verified level cannot be) and the dated reading of Increment A (now says
+`levelrun.unattended` was built); the table row, the paragraph and the rules in `installer-interface.md` (the arguments, the levels,
+`--digest`, the rendered `ask` rule at `ask`); the list of what an owner may set in `terms.md`; the checkpoint list of `code-work.md`
+(`accept-decision` offers `ask`); and in `development.md` the paragraphs on the release-time command (the digest, the preview that lists
+stale records) and the sentence on `accept-decision` that still said it offers `block` and `none`.
+
+Left for the owner (step 3): the two sentences of `docs/roadmaps/workbench-v1.md` under `checkpoint-levels-beyond-block` that still say
+the key is one of the three that offer `block` and `none` only (about line 666) and that `wb release-approvals` "needs a decision on where
+its level is read from" (about line 678). A roadmap edit stops for the owner's word. Left alone because they are still true or are other
+plans' history: `harness-modules.md` and `trust-and-approval.md` (they name the key in the deny list and describe the review of the
+diff, and defer the levels to `command-permissions.md`), and the entry under "Not built", which stays until the owner's live run in
+Increment F.
+
+Verification as run: `wb check` and `wb run code-work check` (75 plans): no problems.
+
+Review: the `reviewer` agent, one exchange, no blocking finding. It repeated the search itself (with a search tool that may name the key)
+and judged every hit against the code: the offers, the lists of keys that offer `ask` (only `approve-plan` and the release key through
+`_OFFERS`, `accept-decision` and the review engine's five through their declarations), the digest rules, the owner-settings fallback and
+the log entries all hold. Applied: the opening of the section still said that the statements elsewhere were Increments E and F, so it
+now says E corrected them and F is the live run (1); the exit codes of `development.md` now also name 3 and 130 for a logged run (2).
+Recorded: whether a duplicated key in the settings counts under "not JSON" was not checked by the reviewer (3); the spec names the
+causes it lists, and a duplicate is read by `declarations.parse_json`, which refuses it as a damaged file. The roadmap sentences and the
+entry under "Not built" are left as stated above.

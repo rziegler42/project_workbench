@@ -297,8 +297,8 @@ path or field.
 **owner-run command**
 : A command whose default level is `block`: by default only the owner runs it, and the harness denies it to an agent.
   The approver may set the level of its key to one the key offers (`command-permissions.md`, "Which levels a key offers"): `none`
-  for an installer command, `ask`, `delegated` or `none` for `approve-plan`, and `ask` or `none` for a module command that declares
-  `levels`. `delegated` exists only where a command declares a gate. An agent may then run the command at that level. A key that
+  for an installer command (and `ask` for `wb release-approvals`, with the digest of its preview), `ask`, `delegated` or `none` for
+  `approve-plan`, `ask` or `none` for `accept-decision`, and `ask` or `none` for a module command that declares `levels`. `delegated` exists only where a command declares a gate. An agent may then run the command at that level. A key that
   offers only `block`, such as `wb rerender`, stays with the owner. It does not mean that an agent can never run it.
 
 **agent-safe command**
