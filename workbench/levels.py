@@ -8,7 +8,8 @@ the agent-safe actions and the arguments of the installed commands. No module is
 A level is offered by a key only from the increment that builds it for that key; until then the key offers
 ``block`` only. In this version ``approve-plan`` also offers ``delegated`` (``wb delegate-approve-plan`` is its
 gate), ``ask`` (a digest of its preview) and ``none``; no other key offers ``ask`` unless an installed command's
-declaration gives its owner-run argument ``levels`` (``declarations.ARGUMENT_LEVELS``), and ``none`` is offered by the owner-run
+declaration gives its owner-run argument ``levels`` (``declarations.ARGUMENT_LEVELS``) and ``checkpoint_of`` maps that
+argument to the key (then the checkpoint offers the levels the argument does; ``checkpoint_commands``), and ``none`` is offered by the owner-run
 installer commands, ``accept-decision`` and the keys of ``_OFFERS``. An agent-safe key and a declared argument that is not
 owner-run offer ``none`` and default to it; every other default is
 ``block``: the shipped default of ``approve-plan`` becomes ``ask`` only after the probe the decision
@@ -62,8 +63,29 @@ def _key(name, agent=False, declared=()):
     if agent:
         return Key(name, (BLOCK,) + _AGENT_OFFERS, NONE, True)
     fixed = _OFFERS.get(name, ())
-    offers = fixed + tuple(level for level in (ASK, NONE) if level in declared and level not in fixed)
+    extra = tuple(level for level in (ASK, NONE) if level in declared and level not in fixed)
+    offers = tuple(sorted(fixed + extra, key=LEVELS.index)) if extra and fixed else fixed + extra
     return Key(name, (BLOCK,) + offers, _DEFAULTS.get(name, BLOCK))
+
+
+def checkpoint_commands(checkpoints, commands):
+    """``{checkpoint: "wb run <command> <argument>"}`` for each ``checkpoint_of`` mapping of `commands` that applies: the
+    checkpoint is one of the process module's declared `checkpoints`, and the argument is owner-run and offers a level.
+    A mapping to a checkpoint nobody declares does not apply, and its argument keeps its own key. ``RegistryError`` when two
+    arguments claim one declared checkpoint. `commands` are the entries ``registry`` takes; the mapping is their fifth item,
+    ``((argument, checkpoint), ...)`` (``2026-10-29-accept-decision-at-ask``)."""
+    declared = set(checkpoints)
+    found = {}
+    for entry in commands:
+        owner = entry[1]
+        leveled = {argument for argument, wanted in (entry[3] if len(entry) > 3 else ()) if wanted}
+        for argument, checkpoint in (entry[4] if len(entry) > 4 else ()):
+            if checkpoint in declared and argument in owner and argument in leveled:
+                key = "wb run %s %s" % (entry[0], argument)
+                if checkpoint in found and found[checkpoint] != key:
+                    raise RegistryError("more than one declaration gives the key %s" % checkpoint)
+                found[checkpoint] = key
+    return found
 
 
 def agent_keys():
@@ -92,7 +114,9 @@ def registry(checkpoints=(), commands=(), agent=True):
     with `agent` true, one for each agent-safe action (``agent_keys``); then ``wb run <command> <argument>`` for each
     declared argument of `commands`, a sequence of ``(command name, owner-run arguments)``,
     ``(command name, owner-run arguments, all declared arguments)`` or that with a fourth item, the command's ``levels``
-    as ``((argument, (level, ...)), ...)``: an owner-run argument defaults to ``block`` and any
+    as ``((argument, (level, ...)), ...)``, and a fifth, its ``checkpoint_of`` as ``((argument, checkpoint), ...)`` (an
+    argument so mapped to one of `checkpoints` has that checkpoint as its key and no key of its own, see
+    ``checkpoint_commands``): an owner-run argument defaults to ``block`` and any
     other declared argument to ``none`` (with `agent` false the keys of the arguments that are not owner-run are left out
     with those of the agent-safe actions). Two declarations of one key are refused (``RegistryError``). A repeated
     checkpoint is one key, and a floor action is not a key.
@@ -104,13 +128,16 @@ def registry(checkpoints=(), commands=(), agent=True):
     if agent:
         names.extend((name, True) for name in agent_keys())
     declared, declared_offers = [], {}
+    own = {key: checkpoint for checkpoint, key in checkpoint_commands(checkpoints, commands).items()}
     for entry in commands:
         command, owner = entry[0], entry[1]
         arguments = entry[2] if len(entry) > 2 else ()
-        declared.extend(("wb run %s %s" % (command, argument), False) for argument in owner)
+        declared.extend(("wb run %s %s" % (command, argument), False) for argument in owner
+                        if "wb run %s %s" % (command, argument) not in own)
         for argument, wanted in (entry[3] if len(entry) > 3 else ()):
             if argument in owner:
-                declared_offers["wb run %s %s" % (command, argument)] = tuple(wanted)
+                key = "wb run %s %s" % (command, argument)
+                declared_offers[own.get(key, key)] = tuple(wanted)
         if agent:
             declared.extend(("wb run %s %s" % (command, argument), True) for argument in arguments
                             if argument not in owner)

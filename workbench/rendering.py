@@ -34,6 +34,16 @@ RULES = ("deny", "ask", "none", "unruled")
 
 Plan = collections.namedtuple("Plan", "keys ask open deny", defaults=((),))
 
+
+class Table(dict):
+    """The effective table (key to level) with `command_of`: for a checkpoint that a command's owner-run argument is the
+    command of (``levels.checkpoint_commands``), the key ``wb run <command> <argument>`` whose spellings the rules and the
+    command gate match. A plain ``dict`` is a table with no such checkpoint."""
+
+    def __init__(self, table=(), command_of=None):
+        super().__init__(table)
+        self.command_of = dict(command_of or {})
+
 # The single-word agent-safe actions that have a key (``levels.agent_keys``), as the word after ``wb``.
 _AGENT_WORDS = frozenset(key[3:] for key in levels.agent_keys() if " " not in key[3:])
 
@@ -72,8 +82,9 @@ def plan(table, gated=True):
     patterns not to deny (those at ``ask`` and ``none``, and only their ``wb`` spellings). With `gated` false the harness
     cannot render the command gate, so no key is relaxed and every command renders a ``deny``."""
     keys, ask, opened, denied = {}, [], [], []
+    command_of = getattr(table, "command_of", {})
     for key in table:
-        patterns = key_patterns(key)
+        patterns = key_patterns(command_of.get(key, key))
         level = table[key]
         if not patterns:
             keys[key] = "unruled"
@@ -91,8 +102,12 @@ def plan(table, gated=True):
 
 
 def digest(table):
-    """A digest of the effective table, so a record says which table it rendered."""
-    text = json.dumps(dict(table), sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    """A digest of the effective table, so a record says which table it rendered. A table with a checkpoint that an argument is
+    the command of also hashes which argument, so a record does not carry over to a declaration that maps another
+    (``Table.command_of``); a table with none hashes as it always did."""
+    command_of = getattr(table, "command_of", {})
+    body = [dict(table), dict(command_of)] if command_of else dict(table)
+    text = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(text.encode("ascii")).hexdigest()
 
 
@@ -106,7 +121,8 @@ def table_of(guarded, checkpoints, commands):
     level, and a key the owner sets to ``block`` is in it and renders a ``deny``."""
     keys = levels.registry(checkpoints, commands)
     table = settings.effective(settings.load(guarded), checkpoints, (), commands).levels
-    return {name: level for name, level in table.items() if not (keys[name].agent and level == levels.NONE)}
+    return Table({name: level for name, level in table.items() if not (keys[name].agent and level == levels.NONE)},
+                 levels.checkpoint_commands(checkpoints, commands))
 
 
 def current_table(guarded, start):
@@ -119,7 +135,7 @@ def current_table(guarded, start):
     table = table_of(
         guarded,
         tuple(name for item in found if item.module.type == "process" for name in item.module.checkpoints),
-        [(command.name, command.owner, command.arguments, command.levels)
+        [(command.name, command.owner, command.arguments, command.levels, command.checkpoint_of)
          for item in found for command in item.module.commands])
     return table, root, ident
 

@@ -39,6 +39,9 @@ commands    an object of at most ``MAX_COMMANDS`` entries, each a command name i
             offers ``ask`` (``2026-10-27-owner-run-arguments-take-a-level``). ``asks`` is a non-empty
             list of that command's ``arguments``, none of them owner-run, before which a harness that
             provides permissions asks the owner (``2026-10-29-workbench-asks-for-remove-submit-and-fetch``).
+            ``checkpoint_of`` is an object that maps an ``owner`` argument that appears in ``levels`` to the name of a
+            checkpoint, the key that argument then uses when a process module declares it; no two arguments claim one
+            name (``2026-10-29-accept-decision-at-ask``).
 checks     a list of at most ``MAX_CHECKS`` objects ``{"helper", "kit"}``, both required. The
             helper is an item of ``ships`` or a file below one, and its last path segment, the
             check's pin name, is in the helper-name form (``module-boundary.md``).
@@ -123,8 +126,9 @@ Module = collections.namedtuple(
     "Module", "name version type description provides requires blocks helpers slots fills "
               "writes ships commands checks layout declaration approval checkpoints caps convergence ask_reads",
     defaults=(None, (), (), None, ()))
-Command = collections.namedtuple("Command", "name helper runtime kit arguments owner describes levels preview asks",
-                                 defaults=((), (), (), None, ()))
+Command = collections.namedtuple("Command", "name helper runtime kit arguments owner describes levels preview asks "
+                                             "checkpoint_of",
+                                 defaults=((), (), (), None, (), ()))
 # The levels, beyond ``block``, that a declaration may give an owner-run argument (``module-contract.md``).
 ARGUMENT_LEVELS = ("ask", "none")
 Cap = collections.namedtuple("Cap", "name default ceiling")
@@ -305,7 +309,7 @@ def _commands(check, value, ships):
                                    "with a letter or digit, at most %d characters"
                        % (_shown(name), MAX_NAME_CHARS))
         check.exact_keys(entry, "commands", ("helper",), ("runtime", "kit", "arguments", "owner", "describes", "levels", "preview",
-                                                           "asks"))
+                                                           "asks", "checkpoint_of"))
         helper = check.path(entry["helper"], "commands")
         helper = "/".join(helper)
         if not any("/".join(helper.split("/")[:n]) in ships
@@ -363,9 +367,35 @@ def _commands(check, value, ships):
             check.fail("commands", "command %s: 'describes' needs 'describe' among its 'arguments'" % name)
         offered, preview = _argument_levels(check, name, entry, arguments, owner)
         asks = _asks(check, name, entry, arguments, owner)
+        mapped = _checkpoint_of(check, name, entry, offered)
         commands.append(Command(name, helper, runtime, kit, tuple(arguments), tuple(owner), tuple(describes), offered,
-                                preview, asks))
+                                preview, asks, mapped))
     return tuple(commands)
+
+
+def _checkpoint_of(check, name, entry, offered):
+    """The ``checkpoint_of`` field of a command entry as ``((argument, checkpoint), ...)`` in the order written. Each key is an
+    owner-run argument that offers a level (it is a key of `offered`), each value has the form of a checkpoint name, and no two
+    arguments claim one name. Whether a process module declares the checkpoint cannot be known from one declaration, so only the
+    form is checked here; ``levels.registry`` applies the mapping when one does
+    (``2026-10-29-accept-decision-at-ask``)."""
+    if "checkpoint_of" not in entry:
+        return ()
+    given = entry["checkpoint_of"]
+    if not isinstance(given, dict):
+        check.fail("commands", "command %s: 'checkpoint_of' must be an object of owner-run arguments" % name)
+    leveled = {argument for argument, _ in offered}
+    mapped = []
+    for argument, checkpoint in given.items():
+        if argument not in leveled:
+            check.fail("commands", "command %s: 'checkpoint_of' names %s, which is not an owner-run argument that offers a level"
+                       % (name, _shown(argument)))
+        if not isinstance(checkpoint, str) or len(checkpoint) > MAX_NAME_CHARS or not _NAME.match(checkpoint):
+            check.fail("commands", "command %s: the checkpoint of %s must be lowercase letters, digits and dashes, starting with "
+                                   "a letter, at most %d characters" % (name, _shown(argument), MAX_NAME_CHARS))
+        mapped.append((argument, checkpoint))
+    check.unique([checkpoint for _, checkpoint in mapped], "commands")
+    return tuple(mapped)
 
 
 def _asks(check, name, entry, arguments, owner):

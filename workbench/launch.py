@@ -189,15 +189,18 @@ def _kill(process):
         pass
 
 
-def launch_captured(guarded, project_id, name, root, args, *, limit, timeout, kit=None, cwd=None):
+def launch_captured(guarded, project_id, name, root, args, *, limit, timeout, kit=None, cwd=None, before=None):
     """Run the pinned helper like ``launch`` with its standard output read here, at most `limit`
     bytes, and for at most `timeout` seconds. Returns ``Captured(code, stdout, stderr, over,
     timed_out)``; the helper has been stopped (with its process group) when `over` or `timed_out`
     is true, and `stderr` is the last ``STDERR_KEPT`` bytes of what it wrote there. Standard input is
-    closed. Raises LaunchError if the helper was not run."""
+    closed. Raises LaunchError if the helper was not run. `before` is called as in ``launch``: after the
+    checks and just before the helper starts, and whatever it raises stops the run."""
     path, directory, kit = _prepare(guarded, project_id, name, root, kit)
     process = None
     try:
+        if before is not None:
+            before()
         try:
             process = subprocess.Popen(_command(path, args, kit), stdin=subprocess.DEVNULL,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd,

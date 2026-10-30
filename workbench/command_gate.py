@@ -370,8 +370,10 @@ def run(stdin, err, prepare, *, deadline=gate_hook.DEADLINE):
             raise Refusal("the %s call has no %s to read" % (display.ascii_text(name)[:40], field))
         if "\0" in command or len(command) > MAX_COMMAND:
             raise Refusal("the command holds a NUL byte or is longer than %d characters" % MAX_COMMAND)
-        relaxed = [key for key, level in table.items() if level in RELAXED]
-        reason = judge(command, relaxed, store_bin, table)
+        # A checkpoint that an argument is the command of is matched by that argument's spellings (``rendering.Table``).
+        command_of = getattr(table, "command_of", {})
+        relaxed = [command_of.get(key, key) for key, level in table.items() if level in RELAXED]
+        reason = judge(command, relaxed, store_bin, {command_of.get(key, key): level for key, level in table.items()})
         if reason:
             raise Refusal(reason)
 

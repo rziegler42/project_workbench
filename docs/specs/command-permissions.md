@@ -612,7 +612,7 @@ refused with nothing written, 2 usage.
 **The log.** The launcher writes the attempt line before the helper starts and the outcome line after, for a run without a terminal, as
 for every owner-run argument with a level ("The log"). For this key the helper prints, after its work, one JSON line of at most 512
 bytes: `{"format": 1, "record": "<path>", "sha256": "<64 hex>", "approver": "<Name <email>>", "via": "ask" | "none"}`; the launcher checks
-its form, that `via` is the level it ran at and, at `ask`, that the run was given the digest the attempt line names, and writes the
+its form and that `via` is the level it ran at (it compares no digest: the helper recomputes it, and the attempt line holds the one the run was given), and writes the
 route, the approver's email address and the record's hash into the outcome's reason, as `accepted by <email> via <route> sha256:<hex>`.
 The email is printable ASCII of at most 100 characters (the grammar of `trust-and-approval.md`), so the reason stays within its 200
 characters and the line within its 1,024 bytes; the name, which may be non-ASCII and up to 100 characters, is in the tracked status line

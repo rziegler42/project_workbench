@@ -48,7 +48,7 @@ def run(guarded, tokens, out, err, *, cwd=None):
                        % ", ".join(sorted("%s/%s" % (item.package, item.module.name) for item in process)))
     module = process[0].module
     loaded = settings.load(guarded)
-    owner_commands = [(command.name, command.owner, command.arguments, command.levels)
+    owner_commands = [(command.name, command.owner, command.arguments, command.levels, command.checkpoint_of)
                       for item in found for command in item.module.commands]
     try:
         effective = settings.effective(loaded, module.checkpoints, module.caps, owner_commands)

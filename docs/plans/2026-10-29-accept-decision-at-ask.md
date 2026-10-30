@@ -176,8 +176,8 @@ sections of the specs. The kit is shipped to the modules that use it, so a packa
    installer-command table for `acknowledge`.
 4. Make `wb settings` stop saying `ask` is not offered for a key that offers it, and keep saying it for a key that does not.
 5. Make the launcher read the helper's one result line for a mapped argument and write the approver, the route and the digest into the
-   outcome line of the level log; a missing, malformed, over-long or mismatching line (the digest it names is not the one the run was
-   given) makes the outcome `refused`. Tests cover each case and the unchanged outcome line of every other key.
+   outcome line of the level log; a missing, malformed or over-long line, and a line whose route (`via`) is not the level the run had,
+   makes the outcome `refused`. The line carries no digest and the launcher does not compare one: the helper recomputes it. Tests cover each case and the unchanged outcome line of every other key.
 6. Run the whole `tests` root.
 **Verification:** the new tests fail before and pass after; the whole `tests` root passes; `wb settings` output for this repository is
 unchanged until Increment D.
@@ -319,7 +319,7 @@ found no problem. The reviewer could not run the checks or read the code; the cl
 replace and the document check's status rule are the plan's own and are checked in D. The choice in item 4 (the log names the email, not
 the name) is the author's and is for the owner to confirm.
 
-### Increment B — the identity reader in the kit (not yet committed)
+### Increment B — the identity reader in the kit (committed as `c725e22`)
 
 Changed: `workbench/wbkit/identity.py` (new: the reader, the grammar and `Identity` moved unchanged; only its docstring header names the
 kit), `workbench/identity.py` (re-exports `Identity`, `IdentityError`, `account_home`, `check`, `parse` and `read` from the kit),
@@ -340,3 +340,36 @@ import error before the kit module existed); `python3 tests/run_all.py` (6081 te
 Review: the `reviewer` agent, one exchange, no blocking finding. Applied: the stale "specified, not built" kit bullet (1); the deviation
 recorded here (2); step 1 recorded here (3). Not changed: the spacing of `_SET_NAME =` (4), which the moved code had before. The reviewer
 could not run anything.
+
+### Increment C — a checkpoint's command (not yet committed)
+
+Changed: `workbench/declarations.py` (`Command.checkpoint_of`, checked for form: an owner-run argument that offers a level, a name of
+the checkpoint form, no name claimed twice), `workbench/levels.py` (`checkpoint_commands`; the registry gives a mapped argument the
+checkpoint's key and no key of its own, only when the checkpoint is one the process module declares; the offers of a key that gains
+`ask` are listed in level order), `workbench/rendering.py` (`Table`, a dict that carries `command_of`; `plan` and `table_of` use it;
+`digest` also hashes the mapping when there is one), `workbench/command_gate.py`, `settingscmd.py`, `harnessstage.py`, `commands.py`
+(`Request.checkpoint_of`), `levelrun.py` (`level_of_command`), `ownerargs.py` (the key of a mapped argument, and the result line),
+`launch.py` (`launch_captured` takes `before`), `docs/specs/module-contract.md` (`checkpoint_of` is built), and the tests
+`tests/test_checkpoint_command.py` and `tests/test_checkpoint_command_run.py`, which use a synthetic module and checkpoint only.
+
+Deviations and choices, for the owner: (1) The plan's step 5 and the spec say the launcher checks that the digest the run was given is
+the one the attempt line names. The result line has no digest field, and the attempt evidence and the run's arguments come from one
+request, so that check could never fail; it is not built. On the owner's word the plan's step 5 and the spec's sentence in
+`command-permissions.md` ("The log") were corrected to say so; that edit changes the plan's region, so the approval needs renewing. (2) The launcher checks the result line for every argument a declaration maps, also when no process
+module declares the checkpoint and the argument keeps its own key; it then runs the helper captured, as the mapped path does. (3) A
+mapped argument's helper runs with standard input closed, standard output read here (64 KiB) and a 300 s limit; an over-limit or
+timed-out run is stopped and logged `refused`, although the helper may already have changed the record (a `refused` outcome can follow a
+change). (4) A run that exits 0 without a valid last line is `refused` with exit 3. Increment D must print the line also for an
+already-accepted record (exit 0), or the launcher must be taught that case; the spec does not yet say which. (5) The approver in the
+log is the email only (as the spec says); the digest is on the attempt line, not the outcome line.
+
+Verification as run: the new tests failed before the code (26 failures and 23 errors in the first file) and pass after;
+`python3 tests/run_all.py` (6158 tests in 13 roots, OK, before the review fix below); `wb check` and `wb run code-work check` (73
+plans) clean; `git diff --check` clean; `wb settings` for this repository unchanged (`accept-decision` still reads `block`).
+
+Review: the `reviewer` agent, one exchange. Finding 1 (blocking): the rendering record's table digest did not cover which argument a
+checkpoint was rendered for, so an upgrade that remapped the argument would leave a valid-looking record. Applied: `digest` hashes the
+mapping when there is one (a table with none hashes as before), with tests. Findings 2 to 5: recorded above as (4), (1), (2) and (3).
+Applied: the over-limit and timeout tests (5), the `levels.py` docstring (9). Findings 6 to 8 found no bypass, wrong level or change
+for a module that does not use the field. The reviewer could not run anything. Not checked by anyone: whether `wb upgrade` or
+`wb rerender` already invalidates a record when a module's declaration changes; the digest fix makes that moot for this field.

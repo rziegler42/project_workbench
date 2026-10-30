@@ -26,8 +26,10 @@ from .wbkit import display, project, safefs
 
 # `levels` and `preview` are the declaration's (``declarations.Command``): the levels each owner-run argument offers and the
 # argument that previews them.
-Request = collections.namedtuple("Request", "root project_id name arguments kit owner levels preview",
-                                 defaults=((), (), None))
+# `checkpoint_of` is the declaration's too: the arguments that are the command of a checkpoint, whose helper prints the one result
+# line that the launcher checks (``ownerargs.py``).
+Request = collections.namedtuple("Request", "root project_id name arguments kit owner levels preview checkpoint_of",
+                                 defaults=((), (), None, ()))
 Declared = collections.namedtuple("Declared", "package module command declaration provides")
 
 
@@ -172,7 +174,8 @@ def resolve(guarded, start, name, args, provides=None):
                            % (found.package, found.module, _shown(name), _shown(provides)))
     _arguments(command, args)
     pin = check_pin(guarded, ident, found)
-    return Request(root, ident, name, args, pin.kit, command.owner, command.levels, command.preview)
+    return Request(root, ident, name, args, pin.kit, command.owner, command.levels, command.preview,
+                   command.checkpoint_of)
 
 
 def launch_refusal(guarded, project_id, name, root, args, stdin, stdout):
