@@ -286,7 +286,7 @@ list the operations and the attempts with no outcome as unfinished (a killed pro
 
 It prints the `checkpoint` and `cap` lines it always printed, then one `level <key>: <level>` line for every key it knows: the
 declared checkpoints, then the installer's owner-run commands, then the agent-safe actions (`wb verify`, `wb preview install`,
-`wb preview adopt`, `wb preview upgrade`, `wb preview add`, `wb preview rerender`, `wb launch`, `wb check`, `wb plan-status`, `wb settings`), then `wb run
+`wb preview adopt`, `wb preview upgrade`, `wb preview add`, `wb preview rerender`, `wb preview release-approvals`, `wb launch`, `wb check`, `wb plan-status`, `wb settings`), then `wb run
 <command> <argument>` for each argument the installed modules declare (an owner-run argument first), with the defaults and the
 table applied. An agent-safe key and a declared argument that is not owner-run default to `none`; every other key defaults to `block`.
 The hook entry points, the dispatcher words and `delegate-approve-plan` are not keys. As built by Increments A and C of the plan, a
@@ -307,7 +307,7 @@ A state in which an owner has set every key to `none`, and so has no protections
 freedom and not a feature: there is no master switch, profile or command that sets it.
 
 **Coverage.** Every command and subcommand that `cli.py` routes has a key, the agent-safe ones included (`verify`, `preview install`,
-`preview adopt`, `preview upgrade`, `preview add`, `preview rerender`, `launch`, `check`, `plan-status`, `settings`), so the owner can tighten a command that is always allowed
+`preview adopt`, `preview upgrade`, `preview add`, `preview rerender`, `preview release-approvals`, `launch`, `check`, `plan-status`, `settings`), so the owner can tighten a command that is always allowed
 today. The hook entry points `gate`, `agent-gate` and `gate-command` are the exception: the harness runs them, they are not keys and
 they stay always allowed (the owner's decision). A test fails when `cli.py` routes any other command or subcommand with no key, as the test
 in `rules.py` does for the owner-run and agent-safe split. A subcommand has a key when it is a different action (`wb preview
@@ -486,7 +486,8 @@ and not a problem, because the stale state is already safe).
   for a different reason, recorded in `2026-10-27-rerender-is-terminal-only` (accepted): at `none` the level would be read through the
   record, which reads `block` whenever the table or the permissions file differs, and those are the two ordinary reasons to run a
   re-render. A level written for it other than `block` reads as `block` with a note. It writes no level-log entry.
-- **`wb preview rerender`** is the read-only plan and is its own agent-safe key, default `none`.
+- **`wb preview rerender`** is the read-only plan and is its own agent-safe key, default `none`. So is **`wb preview release-approvals`**
+  (the read-only preview of a release, built by Increment B of the plan `2026-10-30-release-approvals-at-ask`).
 - **It runs only at a terminal**, on standard input and output, at every level; the owner types the first 12 characters of the
   preview's digest. Before the first write it rebuilds the plan and refuses unless the digest is the one confirmed.
 - **The plan lists** each key whose rule moves, the files it changes (the permissions file, the local manifest, the rendering
@@ -644,8 +645,9 @@ owner confirms a command and a digest, not that they read the record.
 
 ## `wb release-approvals` at `ask` (specified, not built)
 
-The plan `2026-10-30-release-approvals-at-ask` builds this in its Increments B to D; none of it is built until those are committed.
-Until then the key offers `block` and `none` only. The key `wb release-approvals` will offer `block`, `ask` and `none`, and defaults to
+The plan `2026-10-30-release-approvals-at-ask` builds this in its Increments B to D. The preview is built (Increment B); the digest
+check, the offer of `ask` and the rendered rules are not built until Increments C and D are committed. Until then the key offers
+`block` and `none` only, and `wb preview release-approvals` does not open the guarded store or write anything. The key `wb release-approvals` will offer `block`, `ask` and `none`, and defaults to
 `block`. `delegated` is not built for it (the roadmap candidate `checkpoint-levels-beyond-block` stays open).
 
 **How the existing parts treat it** (read on 2026-10-30, Increment A). The rendering is generic over the keys of the form

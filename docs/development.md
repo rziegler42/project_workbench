@@ -39,6 +39,7 @@ ambiguous blank.
 | Owner-run: clear the marker of an unfinished write (terminal only; at `wb recover` set to `none`, an agent may run it with no terminal) | `python3 -m workbench recover [<target> \| --dir <path>]` |
 | Owner-run: attach the harness to a clone (no terminal test, denied to the agent by the harness; at `wb attach` set to `none` the `deny` is not rendered and an unattended run is logged) | `python3 -m workbench attach [<target> \| --dir <path>] --harness <package>/<module>` |
 | Preview a re-render of an attached clone's permissions and of its rendered skills, agents and root file that are behind their sources (read-only) | `python3 -m workbench preview rerender [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
+| Preview a release of the shipped approvals: the packages and modules it would record with their hashes, the stale records and a digest (read-only; takes no argument) | `python3 -m workbench preview release-approvals` |
 | Owner-run: re-render an attached clone's permissions after changing the settings, and refresh its stale rendered skills, agents and root file (terminal only at every level; the key `wb rerender` offers `block` only) | `python3 -m workbench rerender [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |
 | Check a clone (read-only) | `python3 -m workbench check [<target> \| --dir <path>]` |
 | Preview an upgrade (read-only) | `python3 -m workbench preview upgrade [<target> \| --dir <path>] [--package <source> [--ref <ref>]] ...` |

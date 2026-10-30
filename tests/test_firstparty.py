@@ -171,6 +171,178 @@ class ReleaseTest(Base):
             self.assertIn("remove it by hand", warning)
 
 
+class PreviewTest(Base):
+    """``wb preview release-approvals`` and the plan step that the write step takes (Increment B of
+    ``2026-10-30-release-approvals-at-ask``)."""
+
+    def preview(self, *extra, dist=None):
+        out, err = io.StringIO(), io.StringIO()
+        code = cli.main(["preview", "release-approvals"] + list(extra), out, err,
+                        store_root=os.path.join(self.base, "store"), distribution=dist or self.dist)
+        return code, out.getvalue(), err.getvalue()
+
+    def package_hashes(self):
+        return firstparty._package_hashes(self.package, "sample")
+
+    def test_the_preview_names_each_package_and_module_with_its_full_hashes_and_that_it_is_new(self):
+        code, out, err = self.preview()
+        self.assertEqual((0, ""), (code, err))
+        decl, tree = self.package_hashes()
+        self.assertIn("package sample declaration %s tree %s record new\n" % (decl, tree), out)
+        mdecl, mtree = self.module_hashes("sample-notes")
+        self.assertIn("module sample-notes declaration %s tree %s record new\n" % (mdecl, mtree), out)
+        self.assertIn("approver: %s\n" % firstparty.RELEASE_APPROVER, out)
+        self.assertIn("time: %s\n" % firstparty.RELEASE_TIME, out)
+        self.assertIn("packages: 1\nmodules: 2\n", out)
+        self.assertIn("not covered: ", out)
+
+    def test_the_preview_says_recorded_for_a_record_that_a_release_wrote(self):
+        self.release()
+        _, out, _ = self.preview()
+        self.assertNotIn("record new", out)
+        self.assertEqual(3, out.count("record recorded"))
+
+    def test_the_last_line_is_the_digest_of_the_text_before_it(self):
+        _, out, _ = self.preview()
+        text, last = out[:out.rindex("digest: ")], out[out.rindex("digest: "):]
+        self.assertRegex(last, r"\Adigest: [0-9a-f]{32}\n\Z")
+        self.assertEqual("digest: %s\n" % hashlib.sha256(text.encode("utf-8")).hexdigest()[:32], last)
+        self.assertEqual(last[len("digest: "):-1], firstparty.digest_of(text))
+
+    def test_the_preview_writes_nothing(self):
+        before = listing(self.dist)
+        self.preview()
+        self.assertEqual(before, listing(self.dist))
+        self.assertFalse(os.path.exists(self.shipped))
+        self.release()
+        before = listing(self.dist)
+        self.preview()
+        self.assertEqual(before, listing(self.dist))
+
+    def test_the_digest_is_stable_and_changes_with_each_input(self):
+        def digest(**given):
+            plan = firstparty.plan_release(self.dist, **given)
+            return firstparty.digest_of(firstparty.preview_text(plan))
+
+        base = digest()
+        self.assertEqual(base, digest())
+        self.assertNotEqual(base, digest(approver="someone-else"))
+        self.assertNotEqual(base, digest(time="2026-10-30T00:00:00Z"))
+        stale = os.path.join(self.shipped, "packages", "0" * 64)
+        os.makedirs(stale)
+        with_stale = digest()
+        self.assertNotEqual(base, with_stale)
+        shutil.rmtree(stale)
+        self.assertEqual(base, digest())
+        # A change of one file of a module changes the tree hash and so the digest.
+        with open(os.path.join(self.package, "sample-notes", "files", "docs", "notes.md"), "a") as handle:
+            handle.write("changed\n")
+        self.assertNotEqual(base, digest())
+
+    def test_the_digest_covers_the_whole_hash_and_not_a_prefix(self):
+        plan = firstparty.plan_release(self.dist)
+        text = firstparty.preview_text(plan)
+        for item in plan.packages:
+            self.assertIn(item.declaration_hash, text)
+            self.assertIn(item.tree_hash, text)
+            for module in item.modules:
+                self.assertIn(module.declaration_hash, text)
+                self.assertIn(module.tree_hash, text)
+
+    def test_a_refused_package_refuses_the_preview_and_prints_no_digest(self):
+        with open(os.path.join(self.dist, "packages", "README"), "w") as handle:
+            handle.write("x")
+        code, out, err = self.preview()
+        self.assertEqual(1, code)
+        self.assertIn("not a package directory", err)
+        self.assertNotIn("digest:", out)
+        self.assertFalse(os.path.exists(self.shipped))
+
+    def test_no_packages_gives_a_preview_of_nothing_with_a_digest(self):
+        shutil.rmtree(os.path.join(self.dist, "packages"))
+        code, out, _ = self.preview()
+        self.assertEqual(0, code)
+        self.assertIn("packages: 0\nmodules: 0\n", out)
+        self.assertRegex(out, r"digest: [0-9a-f]{32}\n\Z")
+
+    def test_an_argument_is_a_usage_error_and_prints_nothing_on_standard_output(self):
+        code, out, err = self.preview("--digest", "0" * 32)
+        self.assertEqual((2, ""), (code, out))
+        self.assertIn("usage", err)
+
+    def test_the_preview_does_not_create_the_guarded_store(self):
+        missing = os.path.join(self.base, "no-store")
+        out, err = io.StringIO(), io.StringIO()
+        code = cli.main(["preview", "release-approvals"], out, err, store_root=missing, distribution=self.dist)
+        self.assertEqual(0, code)
+        self.assertFalse(os.path.lexists(missing))
+
+    def test_a_stale_name_with_a_newline_cannot_forge_a_line_or_a_digest(self):
+        # The safe walk of the shipped tree refuses such a name, so it never reaches the text (the stale list reads as
+        # empty, as it did before the plan step existed) ...
+        forged = "x\ndigest: " + "0" * 32
+        os.makedirs(os.path.join(self.shipped, "packages", forged))
+        code, out, err = self.preview()
+        self.assertEqual(0, code)
+        self.assertEqual(1, out.count("digest: "), out)
+        self.assertRegex(out, r"digest: [0-9a-f]{32}\n\Z")
+        # ... and if one ever did, the text prints it through ``display.clean``.
+        plan = firstparty.ReleasePlan((), "approver\nforged: 1", "time\x1b[2J", (forged,))
+        text = firstparty.preview_text(plan)
+        self.assertNotIn("\ndigest: ", text)
+        self.assertNotIn("\nforged: 1", text)
+        self.assertNotIn("\x1b", text)
+        # the title, the two counts, the approver, the time, the stale count, the one stale key and the last line
+        self.assertEqual(8, len(text.splitlines()))
+
+    def test_a_damaged_record_does_not_refuse_the_preview_or_the_release_and_reads_as_new(self):
+        self.release()
+        keys = os.listdir(os.path.join(self.shipped, "packages"))
+        damaged = os.path.join(self.shipped, "packages", sorted(keys)[0], "approval.json")
+        with open(damaged, "w") as handle:
+            handle.write("not json")
+        code, out, err = self.preview()
+        self.assertEqual((0, ""), (code, err))
+        self.assertEqual(1, out.count("record new"), out)
+        self.assertEqual(2, out.count("record recorded"), out)
+        before = len(os.listdir(os.path.join(self.shipped, "packages")))
+        try:
+            self.release()
+        except firstparty.ReleaseError:
+            pass  # what the write did with a damaged record before this plan; the plan step must not add a refusal of its own
+        self.assertEqual(before, len(os.listdir(os.path.join(self.shipped, "packages"))))
+
+    def test_the_release_is_the_plan_followed_by_the_write_and_a_second_run_changes_nothing(self):
+        done = firstparty.write_release(firstparty.plan_release(self.dist), self.dist)
+        self.assertEqual((1, 3, []), tuple(done))
+        before = listing(self.dist)
+        again = self.release()
+        self.assertEqual((1, 3, []), tuple(again))
+        self.assertEqual(before, listing(self.dist))
+
+    def test_the_write_step_writes_the_plan_it_is_given_and_does_not_read_the_packages_again(self):
+        plan = firstparty.plan_release(self.dist)
+        decl, tree = self.package_hashes()
+        with open(os.path.join(self.package, "sample-notes", "files", "docs", "notes.md"), "a") as handle:
+            handle.write("changed after the plan\n")
+        firstparty.write_release(plan, self.dist)
+        shipped = firstparty.shipped_tree(self.dist)
+        self.assertTrue(approvals.check_package(shipped, "sample", decl, tree).approved)
+        # The package as it is now was not confirmed, so the records do not make it first-party.
+        self.assertFalse(firstparty.is_first_party(self.package, self.dist))
+
+    def test_the_stale_records_of_the_plan_are_those_the_write_reports(self):
+        self.release()
+        with open(os.path.join(self.package, "sample-notes", "files", "docs", "notes.md"), "a") as handle:
+            handle.write("changed\n")
+        plan = firstparty.plan_release(self.dist)
+        self.assertEqual(2, len(plan.stale))
+        self.assertTrue(all(len(key) == 64 for key in plan.stale))
+        done = firstparty.write_release(plan, self.dist)
+        self.assertEqual(sorted(key[:12] for key in plan.stale),
+                         sorted(w.split()[2] for w in done.warnings))
+
+
 class IsFirstPartyTest(Base):
     def test_not_first_party_before_a_release(self):
         self.assertFalse(firstparty.is_first_party(self.package, self.dist))

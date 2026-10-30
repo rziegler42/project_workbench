@@ -25,19 +25,21 @@ other package. The records are trusted because the distribution is: they count a
 only if the owner reviews what the release changed in them.
 
 ``release_approvals`` is the release-time generator. It is not a command for users of a
-project. It verifies every package under ``packages/`` as first-party, writes nothing if
-any module fails, and otherwise writes one module record per module and one package record
-per package with a fixed approver and time, so running it twice gives identical files.
+project. It is ``plan_release`` followed by ``write_release``: the plan verifies every package under ``packages/`` as
+first-party, writes nothing and refuses if any module fails (``wb preview release-approvals`` prints it), and the write
+records one module record per module and one package record per package of that plan with a fixed approver and time,
+without reading the packages again, so running it twice gives identical files.
 Records of earlier releases are left alone and reported, because deletion is not provided
 here. A failure while verifying writes nothing; a write that fails part way can leave the
 earlier records of that run on disk. They are valid and a rerun is idempotent.
 """
 
 import collections
+import hashlib
 import os
 
 from . import approvals, declarations, hashing, store, verify
-from .wbkit import safefs
+from .wbkit import display, safefs
 
 PACKAGES = "packages"
 SHIPPED = os.path.join("workbench", "shipped_approvals")
@@ -46,6 +48,12 @@ RELEASE_TIME = "1970-01-01T00:00:00Z"
 
 Found = collections.namedtuple("Found", "check source")
 Release = collections.namedtuple("Release", "packages records warnings")
+# The release plan: what a release would record, built once by ``plan_release`` and written by ``write_release`` without a second
+# reading of the packages (``docs/specs/command-permissions.md``, "`wb release-approvals` at `ask`"). `recorded` is whether a valid
+# shipped record for those hashes exists now; `stale` is the full keys of the shipped records that this release leaves behind.
+PlannedModule = collections.namedtuple("PlannedModule", "name declaration_hash tree_hash recorded")
+PlannedPackage = collections.namedtuple("PlannedPackage", "name declaration_hash tree_hash recorded modules")
+ReleasePlan = collections.namedtuple("ReleasePlan", "packages approver time stale")
 
 
 class ReleaseError(Exception):
@@ -147,7 +155,14 @@ def _package_hashes(path, name):
 
 
 def release_approvals(distribution=None, approver=RELEASE_APPROVER, time=RELEASE_TIME):
-    """Write the shipped approvals for every package under ``packages/``."""
+    """Write the shipped approvals for every package under ``packages/``: the plan, then the write of that plan."""
+    distribution = distribution or default_distribution()
+    return write_release(plan_release(distribution, approver, time), distribution)
+
+
+def plan_release(distribution=None, approver=RELEASE_APPROVER, time=RELEASE_TIME):
+    """The ``ReleasePlan`` for every package under ``packages/``: read and verify them, write nothing. ``ReleaseError`` when a
+    package is refused, with the reasons."""
     distribution = distribution or default_distribution()
     packages_dir = os.path.join(distribution, PACKAGES)
     try:
@@ -156,7 +171,7 @@ def release_approvals(distribution=None, approver=RELEASE_APPROVER, time=RELEASE
     except (safefs.SafeFsError, OSError) as exc:
         raise ReleaseError(str(exc))
     if not names:
-        return Release(0, 0, [])
+        return ReleasePlan((), approver, time, ())
 
     plan = []
     problems = []
@@ -176,37 +191,89 @@ def release_approvals(distribution=None, approver=RELEASE_APPROVER, time=RELEASE
         raise ReleaseError("nothing was written; first-party packages were refused:\n  "
                            + "\n  ".join(problems))
 
+    shipped = shipped_tree(distribution)
+    planned = []
+    wanted = set()
+    try:
+        for name, decl, tree, modules in plan:
+            members = []
+            for module in modules:
+                subject = "%s/%s" % (name, module.name)
+                recorded = approvals.check_module(shipped, subject, module.declaration_hash, module.tree_hash).approved
+                members.append(PlannedModule(module.name, module.declaration_hash, module.tree_hash, recorded))
+                wanted.add(approvals.record_key("module", module.declaration_hash, module.tree_hash))
+            recorded = approvals.check_package(shipped, name, decl, tree).approved
+            planned.append(PlannedPackage(name, decl, tree, recorded, tuple(members)))
+            wanted.add(approvals.record_key("package", decl, tree))
+    except approvals.ApprovalError as exc:
+        raise ReleaseError("could not plan the shipped approvals: %s" % exc)
+    stale = _stale(os.path.join(distribution, SHIPPED), wanted)
+    return ReleasePlan(tuple(planned), approver, time, tuple(stale))
+
+
+def write_release(plan, distribution=None):
+    """Write the records of `plan` (a ``ReleasePlan``) and nothing else: the packages are not read again, so a package changed
+    after the plan was built is not released by it (the records name the hashes the plan holds, and the changed tree no longer
+    matches them). Returns the ``Release``; the warnings name the shipped records the plan leaves stale."""
+    distribution = distribution or default_distribution()
+    if not plan.packages:
+        return Release(0, 0, [])
     shipped_root = os.path.join(distribution, SHIPPED)
     try:
         os.makedirs(shipped_root, exist_ok=True)
         writer = _ShippedWriter(shipped_root)
-        wanted = set()
         records = 0
-        for name, decl, tree, modules in plan:
-            for module in modules:
-                record = approvals.record_module(
-                    writer, "%s/%s" % (name, module.name), module.declaration_hash,
-                    module.tree_hash, approver, time)
-                wanted.add(approvals.record_key("module", record.declaration_hash, record.tree_hash))
+        for item in plan.packages:
+            for module in item.modules:
+                approvals.record_module(writer, "%s/%s" % (item.name, module.name), module.declaration_hash,
+                                        module.tree_hash, plan.approver, plan.time)
                 records += 1
-            record = approvals.record_package(
-                writer, name, decl, tree,
-                [(m.name, m.declaration_hash, m.tree_hash) for m in modules], approver, time)
-            wanted.add(approvals.record_key("package", record.declaration_hash, record.tree_hash))
+            approvals.record_package(
+                writer, item.name, item.declaration_hash, item.tree_hash,
+                [(m.name, m.declaration_hash, m.tree_hash) for m in item.modules], plan.approver, plan.time)
             records += 1
-        warnings = _stale(writer, wanted)
     except (safefs.SafeFsError, approvals.ApprovalError, OSError) as exc:
         raise ReleaseError("could not write the shipped approvals: %s" % exc)
-    return Release(len(plan), records, warnings)
+    warnings = ["shipped record %s is not part of this release; remove it by hand" % key[:12] for key in plan.stale]
+    return Release(len(plan.packages), records, warnings)
 
 
-def _stale(writer, wanted):
+def _stale(shipped_root, wanted):
+    """The full keys of the shipped records under `shipped_root` that are not in `wanted`, sorted; none when there is no
+    shipped directory yet."""
     try:
-        with safefs.Root(writer.root, "shipped approvals") as root:
+        with safefs.Root(shipped_root, "shipped approvals") as root:
             entries = root.walk()
-    except safefs.SafeFsError:
+    except (safefs.SafeFsError, OSError):
         return []
     found = sorted(e.rel.split("/")[1] for e in entries
                    if e.rel.count("/") == 1 and e.rel.startswith(PACKAGES + "/"))
-    return ["shipped record %s is not part of this release; remove it by hand" % key[:12]
-            for key in found if key not in wanted]
+    return [key for key in found if key not in wanted]
+
+
+def preview_text(plan):
+    """The text a ``wb preview release-approvals`` prints before its digest line: the packages and modules a release would
+    record with their hashes in full and whether each record exists now, the approver and time, the stale records, and what the
+    preview does not cover. A stale key is a directory name of the shipped tree, so it is printed through ``display.clean``: a
+    name that holds a newline or an escape cannot forge a line of the text, a digest line included. The names of packages and
+    modules come from verified declarations and cannot hold one."""
+    lines = ["release approvals", "packages: %d" % len(plan.packages),
+             "modules: %d" % sum(len(item.modules) for item in plan.packages)]
+    for item in plan.packages:
+        lines.append("package %s declaration %s tree %s record %s"
+                     % (item.name, item.declaration_hash, item.tree_hash, "recorded" if item.recorded else "new"))
+        for module in item.modules:
+            lines.append("  module %s declaration %s tree %s record %s"
+                         % (module.name, module.declaration_hash, module.tree_hash,
+                            "recorded" if module.recorded else "new"))
+    lines.append("approver: %s" % display.clean(plan.approver))
+    lines.append("time: %s" % display.clean(plan.time))
+    lines.append("stale records: %d" % len(plan.stale))
+    lines.extend("  %s" % display.clean(key) for key in plan.stale)
+    lines.append("not covered: the content of the packages; read the change with git diff before confirming")
+    return "\n".join(lines) + "\n"
+
+
+def digest_of(text):
+    """The first 32 hexadecimal characters of the SHA-256 of `text` (the digest line of a preview, as for a plan's)."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]

@@ -329,6 +329,20 @@ class SingleWordKeys(unittest.TestCase):
                          sorted(command_gate.LAUNCHERS))
         self.assertEqual(tuple(rules.PREVIEW_ACTIONS), command_gate.PREVIEW_ACTIONS)
 
+    def test_the_release_preview_is_not_the_owner_run_command(self):
+        key = "wb release-approvals"
+        self.assertIsNone(self.judge("wb preview release-approvals", keys=(key,)))
+        self.assertIsNotNone(self.judge("bash -c 'wb release-approvals'", keys=(key,)))
+
+    def test_the_release_preview_does_not_hide_a_release_in_the_same_command(self):
+        key = "wb release-approvals"
+        for command in ("wb preview release-approvals; wb release-approvals",
+                        "wb preview release-approvals && wb release-approvals",
+                        "wb preview release-approvals | wb release-approvals",
+                        "wb release-approvals; wb preview release-approvals"):
+            with self.subTest(command=command):
+                self.assertIsNotNone(self.judge(command, keys=(key,)))
+
     def test_every_owner_run_command_is_read_in_command_position(self):
         from workbench import rules
         for command in rules.OWNER_RUN:

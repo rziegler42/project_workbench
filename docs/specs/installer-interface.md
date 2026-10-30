@@ -162,7 +162,7 @@ says so.
 | command | kind | takes | writes | terminal only | state |
 |---|---|---|---|---|---|
 | `install` | project | target, a module selection | committed content, manifest, the project's store directory, then per-clone harness files | yes, owner-run; the owner may set `wb install` to `none` | built |
-| `preview` | project | `install`, `adopt`, `upgrade`, `add` or `rerender` and their arguments | nothing; no network, it reads only the approved cache | no | built |
+| `preview` | project | `install`, `adopt`, `upgrade`, `add`, `rerender` or `release-approvals` and their arguments (`release-approvals` takes none) | nothing; no network, it reads only the approved cache (`release-approvals` reads the packages and the shipped records and ends with a digest) | no | built |
 | `adopt` | project | target, a module selection (as `install`) | committed content for the paths that are missing, manifest, the project's store directory; never an existing file and no harness file | yes, owner-run; the owner may set `wb adopt` to `none` | built (`adopt-existing-repository`) |
 | `attach` | project | target, `--harness` | per-clone harness files, `.git/info/exclude`, the local manifest | no, but owner-run (harness deny rule) | built |
 | `rerender` | project | target, `--package` | the stale, new and missing rendered files, the harness's permissions file, the local manifest's hashes, then the rendering record in the guarded store | yes, owner-run at every level; the key offers `block` only | built (`rerender-attached-harness`, `refresh-rendered-harness`) |

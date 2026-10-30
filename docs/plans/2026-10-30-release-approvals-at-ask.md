@@ -241,7 +241,7 @@ Left for the owner: the approval of the plan, and the question of a security rev
 
 ## Result
 
-### Increment A — the reading and the spec (not yet committed)
+### Increment A — the reading and the spec (committed as `c6c6d7d`)
 
 Changed: `docs/specs/command-permissions.md` only: a new section "`wb release-approvals` at `ask` (specified, not built)" (the reading
 below, a table of forms, the preview, what the command does at `ask`, and what the digest does not cover), a note on the offers of the
@@ -299,3 +299,49 @@ needs only the offer of `ask`; `levelrun.optional` returns a route only at `none
 12-character prefixes of the hashes, so the digest could not change with every hash, and the spec overstated what it binds; the preview
 now prints the hashes in full. Applied: the terminal row (the digest is refused at a terminal); the places for Increments B, C and E
 recorded above. Recorded: the tests were listed and not read (a gap in step 1, to be closed in the increment that needs each).
+
+### Increment B — the preview (committed with the trailer `#B`)
+
+Changed: `workbench/firstparty.py` (`release_approvals` is now `plan_release` followed by `write_release`; the new `ReleasePlan`,
+`PlannedPackage` and `PlannedModule` hold the hashes in full, whether each record exists now, the approver, the time and the stale
+keys; `preview_text` and `digest_of` build the text and its digest; the write takes the plan and does not read `packages/` again;
+`_stale` returns full keys and takes the path), `workbench/cli.py` (`preview release-approvals`, with no argument, refused as a
+usage error when one is given; the usage text), `workbench/rules.py` (`PREVIEW_ACTIONS`, which gives the agent-safe key `wb preview
+release-approvals` and feeds the command gate), `tests/test_firstparty.py` (a class `PreviewTest`, 12 tests), `tests/test_levels.py` (a
+test for the new key and the pinned key list), `tests/test_command_gate.py` (the preview is not the owner-run command) and the
+documents that list the preview actions (`docs/development.md`, `docs/specs/installer-interface.md`, `docs/specs/command-permissions.md`:
+the two lists of agent-safe keys and the entry for the preview). No file under `packages/` changed, so no release.
+
+The preview text: `release approvals`, the counts of packages and modules, a line per package and an indented line per module with
+its declaration hash and tree hash in full and `record new` or `record recorded`, `approver:`, `time:`, `stale records: <n>` and the
+full keys, `not covered: ...`, then the last line `digest: <32 hex>`, the first 32 characters of the SHA-256 of the text before it.
+On this repository it prints one package, 12 modules and 0 stale records, and left the tree unchanged.
+
+Choices, for the owner: (1) the preview does not open the guarded store and does not install the launcher wrapper (it first opened the
+store as the other previews do; the review showed that creating the store and seeding the settings are writes, and nothing in the
+preview needs the store, so it was dropped, and a test shows a missing store is not created); (2) a plan with no packages prints a
+preview of nothing with a digest, and the write of it writes nothing, as the release did; (3) the stale list is computed at plan time
+and the write reports it from the plan; since the records of the plan are in the wanted set, it equals the list the old code computed
+after writing; (4) module lines are indented under their package and do not repeat its name, and the digest covers the order; (5) the
+safe walk of the shipped tree refuses an entry whose name holds a control character, and `_stale` returns an empty list when the walk
+is refused, as the old code did, so a name that could forge a line of the preview never reaches it; the text prints the stale keys,
+the approver and the time through `display.clean` as well, and a test builds a plan with such names to show it.
+
+Verification as run: the new tests failed first (the plan and write functions did not exist and the preview action was refused), then
+`python3 -B -m unittest discover -s tests -t tests -p test_firstparty.py`: 54 tests OK; `test_levels.py`: 34 tests OK;
+`python3 -B -W error tests/run_all.py` before the key list was updated: 6265 tests in 13 roots with three failures, all in
+`tests/test_levels.py` and all because the new agent-safe key was not in the pinned key list, which the test change fixes; the whole
+suite is run again after the review. `wb preview release-approvals` run on this repository: output as above, tree unchanged.
+
+Review: the `reviewer` agent, one exchange, no blocking finding. Applied: (1) a test that a damaged record in the shipped tree does not
+refuse the preview and reads as `record new`, and does not make the release refuse where it did not (the `approvals.check_*`
+functions return a `Check` and do not raise); (2) the preview no longer opens the guarded store, with a test; (3) the printed names go
+through `display.clean`, with the test above (a name with a newline is refused earlier by the safe walk); (4) command gate tests that
+`wb preview release-approvals` does not hide a release in the same command (`;`, `&&`, `|`, and the reverse order); (5) the section
+of the spec now says the preview is built and the rest is not. Recorded: the old `release_approvals` could not be compared by the
+reviewer (it had no diff); the structure, the idempotence and the no-package case are covered by the existing release tests, which
+pass unchanged. A mutation check the reviewer named, for each of the digest over a prefix, the write re-reading the packages and the
+stale list dropped from the text, fails a test.
+
+After the review's changes: `python3 -B -W error tests/run_all.py`: 6269 tests in 13 roots, all OK; `wb check`, `wb run code-work check`
+(75 plans) and `wb verify packages/workbench`: no problems. No file under `packages/` changed.

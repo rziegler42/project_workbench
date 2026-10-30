@@ -25,6 +25,7 @@ USAGE = ("usage: python3 -m workbench verify [<package> | --dir <path>] "
          "       python3 -m workbench launch <project-id> <name> --root <dir> -- <args>\n"
          "       python3 -m workbench run [--provides <capability>] <command> [<argument> ...]\n"
          "       python3 -m workbench release-approvals\n"
+         "       python3 -m workbench preview release-approvals   (read-only; what a release would write, with a digest)\n"
          "       python3 -m workbench preview install [<target> | --dir <path>] --package <source> [--ref <ref>] ...\n"
          "                                            [--package ...] --select <module> ...   (read-only)\n"
          "       python3 -m workbench install <same arguments as preview install>   (owner-run, terminal only)\n"
@@ -269,10 +270,28 @@ def _rerender(tokens, out, err, store_root, distribution, stdin, home=None):
     return rerender.run(guarded, command, stdin, out, err, distribution, home=home)
 
 
-def _preview(argv, out, err, store_root, distribution, home=None):
-    if len(argv) < 2 or argv[1] not in ("install", "adopt", "upgrade", "add", "rerender"):
-        err.write("preview takes install, adopt, upgrade, add or rerender\n%s" % USAGE)
+def _preview_release(tokens, out, err, store_root, distribution):
+    """``preview release-approvals``: what a release would write, read-only, ending with a digest of that text."""
+    if tokens:
+        err.write("preview release-approvals takes no argument\n%s" % USAGE)
         return 2
+    try:
+        plan = firstparty.plan_release(distribution)
+    except firstparty.ReleaseError as exc:
+        err.write("refused: %s\n" % _clean(str(exc)))
+        return 1
+    text = firstparty.preview_text(plan)
+    out.write(text)
+    out.write("digest: %s\n" % firstparty.digest_of(text))
+    return 0
+
+
+def _preview(argv, out, err, store_root, distribution, home=None):
+    if len(argv) < 2 or argv[1] not in ("install", "adopt", "upgrade", "add", "rerender", "release-approvals"):
+        err.write("preview takes install, adopt, upgrade, add, rerender or release-approvals\n%s" % USAGE)
+        return 2
+    if argv[1] == "release-approvals":
+        return _preview_release(argv[2:], out, err, store_root, distribution)
     if argv[1] == "rerender":
         return _preview_rerender(argv[2:], out, err, store_root, distribution, home)
     upgrading = argv[1] == "upgrade"
