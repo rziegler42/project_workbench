@@ -285,7 +285,7 @@ terminal acceptance writes no log entry, and the confirmation that `delegated` w
 
 ## Result
 
-### Increment A — specs written and reviewed (not yet committed)
+### Increment A — specs written and reviewed (committed as `1d9f5fc`)
 
 Changed (documents only): `docs/specs/command-permissions.md` (a new section "Accepting a decision through a command (specified, not
 built)" holding the command, the key and its fallback, the forms table, the preview and digest, the order of `accept`, the refusals, the
@@ -318,3 +318,25 @@ Not changed: item 10 (an existing inconsistency between lines 239 and 248 of `co
 found no problem. The reviewer could not run the checks or read the code; the claims about `plan-status --digest`, the `upgrade`
 replace and the document check's status rule are the plan's own and are checked in D. The choice in item 4 (the log names the email, not
 the name) is the author's and is for the owner to confirm.
+
+### Increment B — the identity reader in the kit (not yet committed)
+
+Changed: `workbench/wbkit/identity.py` (new: the reader, the grammar and `Identity` moved unchanged; only its docstring header names the
+kit), `workbench/identity.py` (re-exports `Identity`, `IdentityError`, `account_home`, `check`, `parse` and `read` from the kit),
+`tests/test_wbkit_identity.py` (new: the former `tests/test_identity.py` with its import and docstring changed), `tests/test_identity.py`
+(rewritten: the installer names are the kit objects, the grammar and the error are the same through both names, `approvals.identity` is
+the installer module) and the kit bullet of `docs/specs/module-boundary.md` (no longer "specified, not built").
+
+Step 1: the kit is not copied into a module; it is the workbench's own `wbkit` directory, found by file location (`module-boundary.md`,
+"The kit"), so a new kit file changes no shipped helper's hash. Deviation from the plan's wording: the identity tests do not pass
+unchanged against both names, because they patch `GIT_LOCATIONS`, `TIMEOUT`, `pwd` and `account_home` on the module object, which a
+re-export cannot honour. The whole of them run against the kit module, and the installer module has the short test above. Every importer
+uses only re-exported names (`read`, `parse`, `check`, `IdentityError`, `Identity`), and a test that patches `identity.read` still works.
+
+Verification as run: `python3 -m unittest tests.test_wbkit_identity tests.test_identity` (49 tests, OK; the kit test failed with an
+import error before the kit module existed); `python3 tests/run_all.py` (6081 tests in 13 roots, OK). The test that plan approvals print
+`by Name <email>` is in `tests/test_planapprovals.py` and ran in the whole run.
+
+Review: the `reviewer` agent, one exchange, no blocking finding. Applied: the stale "specified, not built" kit bullet (1); the deviation
+recorded here (2); step 1 recorded here (3). Not changed: the spacing of `_SET_NAME =` (4), which the moved code had before. The reviewer
+could not run anything.
