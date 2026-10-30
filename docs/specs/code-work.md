@@ -236,7 +236,7 @@ step without a recorded outcome.
 | submit a remote job on a profile the plan declares | `submit-remote-job` | stop | delegable |
 | fetch the output of a remote job | `fetch-remote-output` | stop | delegable; overwriting an existing or tracked file is a hard stop |
 | change a spec's or roadmap's direction | `change-direction` | stop | delegable |
-| accept a decision | `accept-decision` | stop | not delegable: the owner decides who accepts a decision (`AGENTS.md`); the levels table offers `block` and `none`, and only at `none` may an agent accept (the `draft-decision` skill reads `wb settings`) |
+| accept a decision | `accept-decision` | stop | not delegable: the owner decides who accepts a decision (`AGENTS.md`); the levels table offers `block` and `none`, and only at `none` may an agent accept (the `draft-decision` skill reads `wb settings`); `ask` through a `groundwork` command is specified and not built (`command-permissions.md`) |
 | acknowledge changes made by someone else, first tier | `acknowledge-first-tier` | stop | only by explicit setting |
 | acknowledge changes made by someone else, second tier | `acknowledge-second-tier` | stop | delegable |
 

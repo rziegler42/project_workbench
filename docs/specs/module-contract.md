@@ -314,6 +314,14 @@ the directory name and `name` in `module.json` must be equal. No list holds a du
   arguments unchanged and its last two arguments are `--digest <32 lowercase hex>`: it takes them off before it counts its other
   arguments, recomputes the digest of what the argument would change now inside the lock that guards the change, and changes
   nothing unless the two are equal. At a terminal a `--digest` is checked the same way and a run without one works as before.
+- `commands[].checkpoint_of` *(specified, not built; plan `2026-10-29-accept-decision-at-ask`, Increment C)*: optional. An object that
+  maps an argument listed in `owner` to the name of a checkpoint, the key that argument then uses (`command-permissions.md`, "Accepting a
+  decision through a command"). The argument must also appear in `levels` (it offers a level beyond `block`); a name must have the form
+  of a checkpoint name (`^[a-z][a-z0-9-]*$`, at most 64 characters); two arguments may not claim one name. A declaration is read alone, so
+  `verify` checks the form only and cannot know whether a process module declares the checkpoint. The registry applies the mapping only
+  when an installed process module declares the checkpoint; otherwise the argument keeps its own key `wb run <command> <argument>`. It is
+  covered by the declaration hash as written, so a declaration without it hashes as before, and a workbench that predates it refuses a
+  package that has it. An argument that is mapped prints, after its work, the one result line that `command-permissions.md` describes.
 
 - `approval` *(built)*: an object with exactly the fields `command` (the key of one of this module's `commands`)
   and `argument` (one of that command's `arguments`), and refused on any module type but `process`. It names the

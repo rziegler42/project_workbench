@@ -285,4 +285,36 @@ terminal acceptance writes no log entry, and the confirmation that `delegated` w
 
 ## Result
 
-Empty until work starts.
+### Increment A — specs written and reviewed (not yet committed)
+
+Changed (documents only): `docs/specs/command-permissions.md` (a new section "Accepting a decision through a command (specified, not
+built)" holding the command, the key and its fallback, the forms table, the preview and digest, the order of `accept`, the refusals, the
+log and the result line, and what stays outside; pointers in "A level for every command", in the table row for accepting a decision and
+in "Not built"), `docs/specs/module-contract.md` (`commands[].checkpoint_of`), `docs/specs/module-boundary.md` (the identity reader in
+the kit), `docs/specs/groundwork.md` and `docs/specs/code-work.md` (pointers that keep what is built separate from what is specified).
+`docs/specs/trust-and-approval.md` needed no change: `delegate` stays `approve-plan` only, and the level log's text is in
+`command-permissions.md`.
+
+Choices the specs make that the plan left open, for review: the record must be a regular file under `docs/decisions/`; the date is the
+local date; the result line is a JSON object of at most 512 bytes with the fields `format`, `record`, `sha256`, `approver` and `via`; the
+field is named `checkpoint_of`; the kit's reader is `wbkit/identity.py`. Also found while reading: the kit is not copied into a module,
+it is the workbench's own `wbkit` directory, so Increment B's first step is answered (no shipped helper's hash changes), and
+`module-boundary.md` rule 5 for the kit is met by the installer and the groundwork helper.
+
+Verification as run: `wb check` and `wb run code-work check` (73 plans) report no problems and `git diff --check` is clean, before and
+after the review fixes. Nothing else was run; no code exists yet. A search of `docs/` for `accept-decision` found the sentences that say
+"no command" or "governs no command" (lines of "The log", "Blocked without a terminal" and "`accept-decision` at `none`" in
+`command-permissions.md`); each now says "today" or "as built" and points at the new section. The author read each edited section against
+the two accepted records (`2026-10-29-accept-decision-offers-the-ask-level` and `2026-10-28-every-key-offers-the-approve-plan-levels`):
+the command, the preview's digest, the status-line-only replace, the approver by git identity and the log are in the first; `delegated`
+and the three agent-only keys are in the second and are left as that record says.
+
+Review: the `reviewer` agent, one exchange, thirteen items, no blocking finding. Applied: the log paragraph and the "Blocked without a
+terminal" bullet read "today" (items 1 and 2); the `none` paragraph says "as built" (3); how the approver is written in the log, since
+the outcome reason is 200 ASCII characters and a name may be non-ASCII: the reason holds `accepted by <email> via <route> sha256:<hex>`
+and the name stays in the status line (4); a terminal run with a `--digest` (5); the unexplained sentence about the other seven keys
+removed (6); the difference between `none` and a hand edit (7); an already-accepted record is reported only after the digest check (8).
+Not changed: item 10 (an existing inconsistency between lines 239 and 248 of `code-work.md`, outside this increment). Items 9, 11 and 12
+found no problem. The reviewer could not run the checks or read the code; the claims about `plan-status --digest`, the `upgrade`
+replace and the document check's status rule are the plan's own and are checked in D. The choice in item 4 (the log names the email, not
+the name) is the author's and is for the owner to confirm.

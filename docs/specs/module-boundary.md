@@ -68,6 +68,11 @@ needs in order to read untrusted repository content safely and to report:
   has verified may run with or without a terminal (`may_run`), and the attempt and outcome lines of the log with their
   append (`begin`, `finish`). The caller reads and verifies the level; the kit does not, and no module helper uses these yet
   (`command-permissions.md`, "A level for every command");
+- the owner's git identity, `Name <email>` (`wbkit/identity.py`; *specified, not built*, plan `2026-10-29-accept-decision-at-ask`,
+  Increment B): the reader, its grammar and its limits are those of `trust-and-approval.md`, "The approver and how it was authorized",
+  moved from the installer so that a module helper that writes an approver's name and the installer share one implementation
+  (rule 5 below: the installer and the `groundwork` helper both need it). The installer's `identity` module calls the kit's. It adds a
+  module to the kit and changes none that a helper imports, so it needs no new API number;
 - the report form of a module check (below) and the exit-code convention.
 
 Rules for the kit:

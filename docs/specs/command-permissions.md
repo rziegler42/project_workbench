@@ -271,7 +271,7 @@ agent runs and shows the preview first (`review-engine.md`).
 
 ### The log
 
-Every run at a level other than `block` that goes on without a terminal appends two lines (except `attach` and `release-approvals` where no level can be read, a run that changes nothing, and `accept-decision`, which no command runs; see their paragraphs above) to `level-log` in the guarded store, never rewriting one: the attempt, with
+Every run at a level other than `block` that goes on without a terminal appends two lines (except `attach` and `release-approvals` where no level can be read, a run that changes nothing, and, today, `accept-decision`, which no command runs; see their paragraphs above, and "Accepting a decision through a command" for the specified command, whose runs would be logged) to `level-log` in the guarded store, never rewriting one: the attempt, with
 a random operation identifier, the time, the key, the level and the evidence (`digest:<d>` at `ask`, `converged-<n>-of-<bound>` for a
 delegated approval, empty at `none`); then the outcome, with the same identifier, the time, `done` or `refused`, and a reason of at
 most 200 printable ASCII characters. Lines are tab-separated, at most 1,024 bytes, and written by one `write` to a descriptor opened
@@ -329,7 +329,7 @@ Increment C of the plan `2026-10-27-levels-for-the-review-workflow`; "Which leve
 that key has a preview digest of its own, built as `approve-plan`'s is (for an owner-run argument of a module's command, once its
 declaration names a `preview` argument; `verify` checks the name, and the digest the argument prints is the module's to build). Every key built by the plan offers `none`; the keys that still offer `block` only are listed under "Not built". Only the review engine's five owner-run arguments have a digest of their own and so offer `ask` besides `approve-plan` (built by Increments E and F of the plan `2026-10-27-levels-for-the-review-workflow`). At `none` an owner-run command runs without a terminal
 and without a harness `deny`; the command's own checks of its input and its log entry apply, and the terminal prompt does not.
-`accept-decision` offers `block` and `none`. Since 2026-10-29 the groundwork policy block in `AGENTS.md` says that accepting a
+`accept-decision` offers `block` and `none`; `ask` for it is specified under "Accepting a decision through a command" and is not built. Since 2026-10-29 the groundwork policy block in `AGENTS.md` says that accepting a
 decision is a checkpoint that stops by default and that the level `wb settings` prints for it says whether the agent may accept; the
 `draft-decision` skill says what each level allows.
 
@@ -431,7 +431,7 @@ level that could not be read carries the reason after the terminal-only text. `r
 writes the approvals shipped with the first-party packages, so at `none` an agent can make the first-party packages trusted.
 
 **`accept-decision` at `none`** (built by Increment K). The checkpoint `accept-decision`, which the process module declares, offers `block` and
-`none` and defaults to `block`. It governs no command of the installer: an agent accepts a decision by editing the record, so the
+`none` and defaults to `block`. As built it governs no command of the installer (the command specified under "Accepting a decision through a command" would change this paragraph when built): an agent accepts a decision by editing the record, so the
 level is read by the guidance. The `draft-decision` skill tells the agent to run the one read-only command `wb settings` and to mark a
 record it drafted `Accepted`, in its status line and in its index row, only while the output holds the line `level accept-decision:
 none`; on any other line, when the line is missing or when the command fails, it stops at `Proposed` and asks the owner, and a file, a
@@ -540,7 +540,7 @@ owner-run was run to build the table. A reading from the code or a spec is state
 | Approve a plan, at `delegated` | `wb delegate-approve-plan <plan>` | `approve-plan`, `delegated` | no | a converged, sealed review of the exact bytes (`trust-and-approval.md`), and the preconditions of the `delegate-approval` skill (a `peer-review` provider, a Risks section, no `Hard stop:` line); it counts only while the table reads `delegated`, so not while it reads `ask` *(the last clause is an inference from `trust-and-approval.md`)* |
 | Approve a plan, at `none` | `wb approve-plan <plan>`, no terminal | `approve-plan`, `none` | no | nothing; the run is logged |
 | Approve a roadmap, a spec or a design | none exists | no key | not applicable | a roadmap and a spec have no status gate (`AGENTS.md`); a design is approved by the owner's word in the conversation. Nothing records it |
-| Accept a decision | the owner edits its `Status:` line and the index | `accept-decision`, `block`; offers `block` and `none` | **yes, or an editor** *(inference)* | the rule that an agent may not accept one at `block` is guidance in `AGENTS.md` and the skill; the installer enforces nothing here. No command with an `ask` level exists for it. The owner's other route is their own edit of the personal settings to `none` (a terminal or an editor), which lets the packaged `draft-decision` accept a record; on 2026-10-27 the copy rendered in this clone said never to accept one and had no such route; the clone has since been re-rendered and its skill matches the package |
+| Accept a decision | the owner edits its `Status:` line and the index | `accept-decision`, `block`; offers `block` and `none` | **yes, or an editor** *(inference)* | the rule that an agent may not accept one at `block` is guidance in `AGENTS.md` and the skill; the installer enforces nothing here. No command with an `ask` level exists for it yet; one is specified under "Accepting a decision through a command" and is not built. The owner's other route is their own edit of the personal settings to `none` (a terminal or an editor), which lets the packaged `draft-decision` accept a record; on 2026-10-27 the copy rendered in this clone said never to accept one and had no such route; the clone has since been re-rendered and its skill matches the package |
 
 Three things this map shows:
 
@@ -549,7 +549,7 @@ Three things this map shows:
   `none` once the owner sets and renders them.
 - **Blocked without a terminal:** the five owner-run arguments of the review engine at their shipped level `block`, and accepting a
   decision. These five are the subject of the plan `2026-10-27-levels-for-the-review-workflow`, which built `ask` and `none` for
-  them; the owner opts in per key in the personal settings and runs `wb rerender`. Accepting a decision has no command to give a level to.
+  them; the owner opts in per key in the personal settings and runs `wb rerender`. Accepting a decision has no command to give a level to today; one is specified under "Accepting a decision through a command" and is not built.
 - **Not blocked, once the owner sets a level:** any of the five at `ask` (with the preview digest) or `none`. Their read-only
   `preview <argument>` runs at either level too, and is not stopped by the command gate (see "The command gate").
 
@@ -562,8 +562,77 @@ Also, in the same flow:
 - The "yes" in "Needs a terminal" for the review engine's owner-run arguments rests on `review-engine.md`, "Owner-run commands". In
   the code the test is made by the launcher (`commands.owner_refusal`), not the helper, as `review-engine.md` now says.
 
+## Accepting a decision through a command (specified, not built)
+
+The decision `2026-10-29-accept-decision-offers-the-ask-level` (accepted on 2026-10-29) gives `accept-decision` the levels `block`, `ask`, `delegated` and
+`none`. The plan `2026-10-29-accept-decision-at-ask` builds `block`, `ask` and `none`; this section is what it builds against, and
+none of it is built until that plan's Increments B to E are committed. `delegated` for `accept-decision` is not built by that plan:
+the accepted record leaves a delegated review's subject for a decision undecided, so `delegated` reads `block` here, as it does for
+every key but `approve-plan`.
+
+**The command.** The `groundwork` module ships one helper with two arguments, run with `wb run`. The installer names neither the
+module nor the helper.
+
+- `preview <record>` is agent-safe and read-only. It writes nothing and exits 0. `<record>` is a path relative to the project root that
+  names a regular file under `docs/decisions/`, with no link followed.
+- `accept <record>` is owner-run. It replaces the record's status line, and nothing else in the file, with `Status: Accepted by <approver>
+  on <date>`, where `<approver>` is the owner's git identity, `Name <email>`, read as plan approvals read it
+  (`trust-and-approval.md`, "The approver and how it was authorized") and `<date>` is today's date in the local zone.
+
+**The key.** The declaration maps `accept` to the checkpoint `accept-decision` (`module-contract.md`, `commands[].checkpoint_of`). When
+an installed process module declares that checkpoint, the key of `accept` is `accept-decision` and the key `wb run groundwork accept`
+does not exist. When none does, `accept` keeps its own key `wb run groundwork accept`, which offers `block`, `ask` and `none` and
+defaults to `block`, `wb settings` prints no `accept-decision` line, the `draft-decision` skill stops at `Proposed` as it does for any
+level it does not find, and a level the owner wrote for `accept-decision` is noted as a key no module declares and ignored. The key
+offers `block`, `ask` and `none`; `delegated` reads `block` with the note that it is not offered. The shipped default stays `block`.
+
+| Form | Level | Result |
+|---|---|---|
+| `accept <record>`, standard input and output terminals | any | the owner's terminal command: the owner types the first 12 characters of the record's SHA-256; a `--digest` given at a terminal is checked the same way, and a run without one works as above |
+| `accept <record> --digest <32 hex>` | `ask` | recorded when the digest equals the one the argument computes now |
+| `accept <record>`, no terminal | `none` | recorded, with no digest |
+| any other form without a terminal | `block`, `delegated` | refused: accepting a decision is owner-run |
+| `accept <record> --digest …` | not `ask` here | refused: a digest needs the level `ask` and its rendered rule |
+
+**What `preview` prints.** Text, then a last line `digest: <32 lowercase hex>`: the project, the command and argument, the record's path,
+its status line, the SHA-256 of its bytes, and what accepting does not cover (that the owner read the record; the index row). The digest
+is the first 32 hexadecimal characters of the SHA-256 of that text, as for `plan-status --digest`, so a confirmation cannot be reused for
+another project, another record or another content.
+
+**What `accept` does, in order.** It takes the last two arguments `--digest <hex>` off at `ask` (the launcher checked their form,
+`module-contract.md`), reads the identity first (so a missing or refused identity writes nothing), reads the record (bounded, no link
+followed, regular file, one hard link), recomputes the digest, checks that the status is `Proposed`, replaces only the status line with
+the hash-checked whole-file replace that `upgrade` uses, reads the result back and compares it with what it meant to write, and prints one
+result line. It refuses, with nothing written, a record whose bytes differ from the digest, a status that is not `Proposed`, a path that
+is not under `docs/decisions/`, a link, a file over its bound, a status line that is missing or repeated, and a missing or refused
+identity. A record that already reads `Accepted` is reported as such and not changed (exit 0) only after the digest check has passed, so a
+changed record is refused whatever its status; at `none`, which has no digest, the check is on the status alone. Exit codes: 0 done or already accepted, 1
+refused with nothing written, 2 usage.
+
+**The log.** The launcher writes the attempt line before the helper starts and the outcome line after, for a run without a terminal, as
+for every owner-run argument with a level ("The log"). For this key the helper prints, after its work, one JSON line of at most 512
+bytes: `{"format": 1, "record": "<path>", "sha256": "<64 hex>", "approver": "<Name <email>>", "via": "ask" | "none"}`; the launcher checks
+its form, that `via` is the level it ran at and, at `ask`, that the run was given the digest the attempt line names, and writes the
+route, the approver's email address and the record's hash into the outcome's reason, as `accepted by <email> via <route> sha256:<hex>`.
+The email is printable ASCII of at most 100 characters (the grammar of `trust-and-approval.md`), so the reason stays within its 200
+characters and the line within its 1,024 bytes; the name, which may be non-ASCII and up to 100 characters, is in the tracked status line
+and not in the log. A missing, malformed, over-long or mismatching line, or an approver that does not pass the grammar, makes the
+outcome `refused`, not `done`.
+A run at a terminal reads no level and writes no entry, so a terminal acceptance is recorded by the tracked status line (the approver
+and the date) and by git history only. The helper writes nothing to the guarded store.
+
+**What stays outside the command.** The index row of `docs/decisions/README.md` is not written by the command; the `draft-decision` skill
+tells the agent to update it afterwards, and the document check reports a row that disagrees with a status line. A hand edit of a status
+line is possible and is not gated, and the document check does not treat it as unaccepted. An agent that edits a status line with its own
+edit tool is held by the rule it follows and not by this gate, as it is for `accept-decision` today. At `none` the command runs and is
+logged, while a hand edit of a status line is never gated and never logged; that is the difference between the two routes. At `ask` the
+owner confirms a command and a digest, not that they read the record.
+
 ## Not built
 
+- `ask` for `accept-decision` is specified above and built by the plan `2026-10-29-accept-decision-at-ask`; until that plan's
+  Increments B to E are committed, `accept-decision` offers `block` and `none` only, and `delegated` for it and for the other seven keys
+  is not built by that plan.
 - `ask` and `none` for the owner-run arguments of the other module commands (`wb run mempalace init`, `mine`, and
   `wb run remote-runner fetch-overwrite`). The declaration fields (`levels` and `preview`), the launcher that reads the level and logs the run,
   and the review engine's five (`extend`, `reset`, `archive`, `amend`, `prune`, each with a preview and a digest) are built by the plan

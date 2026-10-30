@@ -226,7 +226,9 @@ owner accepts a decision and the agent writes it as `Proposed`; it now says that
 of `accept-decision` governs, as the `draft-decision` skill already did. The seeded decisions README says the same, and also that a
 status line that names who accepted a record names that person by their git identity, `Name <email>`
 (`2026-10-29-approvals-name-the-approver-by-git-identity`); an older record keeps its form. The levels are those of
-`command-permissions.md`: `block` and `none` are built for `accept-decision`, `delegated` and `ask` are accepted but not built.
+`command-permissions.md`: `block` and `none` are built for `accept-decision`; `ask` is specified, with a helper of this module
+("Accepting a decision through a command" there, plan `2026-10-29-accept-decision-at-ask`) and not built; `delegated` is accepted but
+not built.
 
 ## Checkpoints
 
@@ -235,7 +237,7 @@ status line that names who accepted a record names that person by their git iden
 | accept a decision | stop |
 | change a spec's or roadmap's direction | stop |
 
-The owner sets each in the personal settings (`command-permissions.md`; for `accept-decision`, `block` and `none` are built).
+The owner sets each in the personal settings (`command-permissions.md`; for `accept-decision`, `block` and `none` are built and `ask` is specified, not built).
 Acknowledgement of changes to specs,
 roadmaps and decisions made by someone else follows `trust-and-approval.md` (second
 tier). Recording evidence and correcting a typo are not checkpoints.
