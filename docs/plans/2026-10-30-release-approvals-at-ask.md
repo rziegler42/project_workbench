@@ -1,6 +1,6 @@
 # Offer the level ask for wb release-approvals
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-30
 Candidate: none — the `wb release-approvals` part of workbench-v1#checkpoint-levels-beyond-block, which stays open: `delegated` for it and for the other keys, and `ask` for the keys that are not this one, are not built here, and a completed plan that named the candidate would close it
 Specs: command-permissions, trust-and-approval
