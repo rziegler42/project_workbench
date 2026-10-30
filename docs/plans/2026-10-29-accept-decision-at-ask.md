@@ -1,6 +1,6 @@
 # Accept a decision through a command, at the levels block, ask and none
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-29
 Candidate: none — the first part of workbench-v1#checkpoint-levels-beyond-block, which stays open: `delegated` for the eight keys and the other seven keys are not built here, and a completed plan that named the candidate would close it
 Specs: command-permissions, trust-and-approval, groundwork, code-work, module-contract, module-boundary
