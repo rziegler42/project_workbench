@@ -30,9 +30,11 @@ seven keys. Until then `accept-decision` offers three of its four levels, and th
 - Increment B: the identity reader, made available to a module's helper through the kit.
 - Increment C: the declaration field that makes a module's owner-run argument the command of a checkpoint's key, and the installer code
   that reads it (registry, rendering, command gate, `wb settings`).
-- Increment D: the groundwork helper, its declaration and its tests.
-- Increment E: the texts that say what each level allows, in the module and in this repository's installed copies.
-- Increment F: the real-module checks and the close-out record. The owner's own runs are listed there; they are not increments.
+- Increment D: a hash-checked replace of one file in the kit, which the helper needs and the kit lacked (added after Increment E, first
+  run, found it missing; the owner chose to build it in the kit).
+- Increment E: the groundwork helper, its declaration and its tests.
+- Increment F: the texts that say what each level allows, in the module and in this repository's installed copies.
+- Increment G: the close-out record. The owner's own runs are listed there; they are not increments.
 
 ## Non-goals
 
@@ -42,7 +44,7 @@ seven keys. Until then `accept-decision` offers three of its four levels, and th
   approval.
 - The keys `submit-remote-job`, `push-shared-branch`, `release-approvals`, `acknowledge-first-tier` and `acknowledge-second-tier`
   (previews and digests), and the agent-only `fetch-remote-output` and `change-direction`.
-- A change to the compiled hard-stop floor, to who may accept a decision, or to the document check beyond what Increment D names.
+- A change to the compiled hard-stop floor, to who may accept a decision, or to the document check beyond what Increment E names.
 - Enforcing the level against an agent that edits a status line with its own edit tool. The accepted record states this limit; the rule
   the agent follows still governs it.
 - Accepting a record that is not `Proposed`, and any change to an accepted record's text.
@@ -68,8 +70,9 @@ seven keys. Until then `accept-decision` offers three of its four levels, and th
 - **What `ask` binds.** The preview prints the project, the command and argument, the record's path relative to the project root, its
   status line and the SHA-256 of its bytes, and `digest: <32 hex>` over that canonical text, as `plan-status --digest` does. The `accept`
   argument recomputes the digest inside its own run, reads the record again (bounded, no link followed), and refuses unless the digest,
-  the hash and the status `Proposed` all hold; it replaces only the status line, through the kit's hash-checked whole-file replace, and
-  verifies the result. If the kit has no such replace, Increment D stops and reports.
+  the hash and the status `Proposed` all hold; it replaces only the status line, through the kit's hash-checked replace (`Root.replace_file`, built by Increment D), and
+  verifies the result. The kit has no lock, so a window remains between the replace's last comparison and its rename; the read-back
+  catches a change made inside it.
 - **The terminal form** is the owner's: the owner types the first 12 characters of the record's hash, as for a plan. It reads no level.
 - **The log.** The accepted record says the acceptance is logged in the guarded store "with the approver, `via` and the digest, as the
   level log does for other keys". The level log records an attempt line (key, level, digest) before the helper starts and an outcome line
@@ -119,7 +122,7 @@ seven keys. Until then `accept-decision` offers three of its four levels, and th
 ### Increment A — The specs
 
 **Outcome:** the specs state the command, the key mapping, the levels, the preview, the digest, the refusals and the limits, so that
-B to E are built against text.
+B to F are built against text.
 **Dependencies:** none.
 **Affected areas:** `docs/specs/command-permissions.md` ("Which levels a key offers", "The preview and the digest", a new section on
 accepting a decision, "Not built"), `docs/specs/trust-and-approval.md` ("Checkpoint and cap settings", "Effective values"),
@@ -180,13 +183,48 @@ sections of the specs. The kit is shipped to the modules that use it, so a packa
    makes the outcome `refused`. The line carries no digest and the launcher does not compare one: the helper recomputes it. Tests cover each case and the unchanged outcome line of every other key.
 6. Run the whole `tests` root.
 **Verification:** the new tests fail before and pass after; the whole `tests` root passes; `wb settings` output for this repository is
-unchanged until Increment D.
+unchanged until Increment E.
 **Evidence:** the one local commit, with the trailer `Plan: 2026-10-29-accept-decision-at-ask#C`.
 
-### Increment D — The groundwork helper
+### Increment D — A hash-checked replace in the kit
+
+**Outcome:** a module's helper can replace one existing file of the project, if and only if it still has the bytes the helper read,
+and the replace leaves no other change. The kit had no such function: `Root.read_if_present` reads without following a link and refuses
+a file with more than one hard link, and `write_tree` replaces by an atomic rename, but nothing compares the file with what was read at
+the moment of the rename; the installer's `replace_file` (`workbench/projectfs.py`) does, and a helper cannot import the installer.
+Increment E, first run, stopped on this (the plan's "What `ask` binds" says it must).
+**Dependencies:** none beyond A to C; it is built before E.
+**Affected areas:** `workbench/wbkit/safefs.py` (one new method of `Root`), `tests/test_safefs.py`, the kit bullet of
+`docs/specs/module-boundary.md`, and the sentence of `docs/specs/command-permissions.md` ("What `accept` does, in order") that names
+"the hash-checked whole-file replace that `upgrade` uses". No file under `packages/` changes, so no release is needed.
+**Steps:**
+1. Write the tests first, over a real temporary tree: the replace succeeds and keeps the file's mode; it refuses a file whose bytes
+   differ from the expected SHA-256, a link at any component, a file that is not regular, a file with more than one hard link, a file
+   over the limit, a path outside the root, an absent file and a data argument that is not bytes; a file replaced or modified between
+   the read and the rename (the existing `_fire` hooks of the kit's tests give the moment) is refused with nothing written; a failed
+   replace leaves the original and no temporary file; a successful one returns the SHA-256 of what it wrote.
+2. Add `Root.replace_file(rel, expected_sha256, data, limit=MAX_FILE_BYTES)`: descend with no-follow flags and keep the directory
+   descriptors; read the target as `read_if_present` does; compare its SHA-256 with `expected_sha256`; stage the new bytes in an
+   exclusively created sibling with the target's mode; fsync; compare the target's identity (device, inode, size, modification time) with
+   the one read, immediately before a rename that names the held directory descriptor; remove the staged file on any failure. The
+   window between that last comparison and the rename remains, because the kit has no lock; the function's docstring and the spec say
+   so, and a caller checks the result by reading it back.
+3. Record the function in the kit bullet of the boundary spec (rule 5: the installer's `replace_file` and the `groundwork` helper both
+   need it; the installer is not changed to call it here), and correct the sentence in `command-permissions.md` to name the kit's
+   function and the window.
+4. Run `tests/test_safefs.py`, `tests/test_boundary.py` and the whole `tests` root, then `wb check` and `wb run code-work check`.
+**Verification:** the tests of step 1 fail before and pass after; the whole `tests` root passes; `wb check` and
+`wb run code-work check` report no problems. Because the function writes to the filesystem on an untrusted path, the review of this
+increment asks for the `reviewer` agent first; whether to run a security review is the owner's call at the checkpoint below.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-29-accept-decision-at-ask#D`.
+
+**Checkpoint after D.** The function touches the filesystem and is the only write the helper makes. Ask the owner whether to run a
+security review before E.
+
+### Increment E — The groundwork helper
 
 **Outcome:** the `groundwork` module ships `preview` and `accept` for a decision record, declared as the command of `accept-decision`.
-**Dependencies:** B and C.
+**Dependencies:** B, C and D.
 **Affected areas:** `packages/workbench/groundwork/helper/` (a new helper), `packages/workbench/groundwork/module.json`,
 `packages/workbench/groundwork/tests/`, the shipped records.
 **Steps:**
@@ -194,7 +232,7 @@ unchanged until Increment D.
    completion criteria; a record whose status is already `Accepted` is reported as such and not changed; the digest differs for another
    project, another record and another record content.
 2. Write the helper from the kit: bounded read, no link, the status line found by the same rule the document check uses, one line
-   replaced, the result read back and compared.
+   replaced through `Root.replace_file` (Increment D), the result read back and compared.
 3. Declare it: `ships`, a command with `preview` as a non-owner argument and `accept` as an owner-run argument that offers `ask` and
    `none` and maps to `accept-decision`.
 4. Stop for the owner's word for one scripted pass if more than one package file changes, make the pass, and stop for the owner's
@@ -202,15 +240,15 @@ unchanged until Increment D.
 5. Run the module's tests, then the whole `tests` root and every package test root.
 **Verification:** the tests of step 1 fail before and pass after; `wb verify packages/workbench` reports no refusal after the release;
 `wb check` and `wb run code-work check` report no problems.
-**Evidence:** the one local commit, with the trailer `Plan: 2026-10-29-accept-decision-at-ask#D`.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-29-accept-decision-at-ask#E`.
 
-**Checkpoint after D.** The change touches authorization, the filesystem and a subprocess. Ask the owner whether to run a security
-review before E.
+**Checkpoint after E.** The change touches authorization, the filesystem and a subprocess. Ask the owner whether to run a security
+review before F.
 
-### Increment E — What each level allows
+### Increment F — What each level allows
 
 **Outcome:** every shipped text that says who accepts a decision says it by level and names the command.
-**Dependencies:** D.
+**Dependencies:** E.
 **Affected areas:** the `draft-decision` skill and the policy block of `groundwork`, `files/docs/decisions/README.md`, this
 repository's `AGENTS.md` (written by the owner's `wb upgrade`, never by hand), the installed copies, the shipped records.
 **Steps:**
@@ -219,15 +257,15 @@ repository's `AGENTS.md` (written by the owner's `wb upgrade`, never by hand), t
 2. Edit the skill: at `block` stop at `Proposed`; at `ask` run `preview`, show it, and run `accept` with the digest for the owner to
    confirm; at `none` run `accept`; after any acceptance update the index row; `delegated` reads `block`.
 3. Edit the policy block and the seeded README to match, with the same wording.
-4. Stop for the owner's scripted-pass word and release as in D; then ask the owner to run `wb upgrade` and `wb rerender`, and read the
+4. Stop for the owner's scripted-pass word and release as in E; then ask the owner to run `wb upgrade` and `wb rerender`, and read the
    results.
 **Verification:** the tests of step 1; the module tests; the whole `tests` root; `wb check`.
-**Evidence:** the one local commit, with the trailer `Plan: 2026-10-29-accept-decision-at-ask#E`, then a commit of the upgrade results.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-29-accept-decision-at-ask#F`, then a commit of the upgrade results.
 
-### Increment F — The close-out
+### Increment G — The close-out
 
 **Outcome:** the plan's Result records what was run, and the specs' "Not built" and the roadmap's remaining work are true.
-**Dependencies:** E.
+**Dependencies:** F.
 **Affected areas:** `docs/specs/command-permissions.md` ("Not built"), this plan's Result.
 **Steps:**
 1. Remove `ask` for `accept-decision` from "Not built", and record `delegated` for it and for the other seven keys as still not built,
@@ -235,7 +273,7 @@ repository's `AGENTS.md` (written by the owner's `wb upgrade`, never by hand), t
 2. Write the Result: each increment, the verification as run, what was not run, the review outcomes and the owner's runs from criterion 7.
 3. Run `wb check`, `wb run code-work check`, `doccheck`, `refcheck` and the whole `tests` root.
 **Verification:** the checks above report no problem; every completion criterion is marked met or not met with its evidence.
-**Evidence:** the one local commit, with the trailer `Plan: 2026-10-29-accept-decision-at-ask#F`.
+**Evidence:** the one local commit, with the trailer `Plan: 2026-10-29-accept-decision-at-ask#G`.
 
 ## Verification for the plan as a whole
 
@@ -247,7 +285,7 @@ that shows the harness prompt for the command at `ask`.
 
 - **Authorization.** The command turns a document into an accepted decision, which outranks the code. A wrong digest check or a path
   that follows a link would accept or rewrite the wrong file. The helper recomputes everything itself, refuses links and checks the bytes
-  it replaces. A security review is owed after D and runs only when the owner asks.
+  it replaces. A security review is owed after D (the replace) and after E (the helper) and runs only when the owner asks.
 - **The prompt proves little.** At `ask` the owner confirms a command and a digest, not that they read the record. The preview is shown
   in the conversation first, but nothing enforces that.
 - **`none` and a hand edit.** At `none` the command runs without a terminal and is logged. A hand edit of a status line is never gated.
@@ -316,7 +354,7 @@ and the name stays in the status line (4); a terminal run with a `--digest` (5);
 removed (6); the difference between `none` and a hand edit (7); an already-accepted record is reported only after the digest check (8).
 Not changed: item 10 (an existing inconsistency between lines 239 and 248 of `code-work.md`, outside this increment). Items 9, 11 and 12
 found no problem. The reviewer could not run the checks or read the code; the claims about `plan-status --digest`, the `upgrade`
-replace and the document check's status rule are the plan's own and are checked in D. The choice in item 4 (the log names the email, not
+replace and the document check's status rule are the plan's own and are checked in D and E (the kit has no hash-checked replace; Increment D adds it). The choice in item 4 (the log names the email, not
 the name) is the author's and is for the owner to confirm.
 
 ### Increment B — the identity reader in the kit (committed as `c725e22`)
@@ -341,7 +379,7 @@ Review: the `reviewer` agent, one exchange, no blocking finding. Applied: the st
 recorded here (2); step 1 recorded here (3). Not changed: the spacing of `_SET_NAME =` (4), which the moved code had before. The reviewer
 could not run anything.
 
-### Increment C — a checkpoint's command (not yet committed)
+### Increment C — a checkpoint's command (committed as `02098d4`)
 
 Changed: `workbench/declarations.py` (`Command.checkpoint_of`, checked for form: an owner-run argument that offers a level, a name of
 the checkpoint form, no name claimed twice), `workbench/levels.py` (`checkpoint_commands`; the registry gives a mapped argument the
@@ -359,8 +397,8 @@ request, so that check could never fail; it is not built. On the owner's word th
 module declares the checkpoint and the argument keeps its own key; it then runs the helper captured, as the mapped path does. (3) A
 mapped argument's helper runs with standard input closed, standard output read here (64 KiB) and a 300 s limit; an over-limit or
 timed-out run is stopped and logged `refused`, although the helper may already have changed the record (a `refused` outcome can follow a
-change). (4) A run that exits 0 without a valid last line is `refused` with exit 3. Increment D must print the line also for an
-already-accepted record (exit 0), or the launcher must be taught that case; the spec does not yet say which. (5) The approver in the
+change). (4) A run that exits 0 without a valid last line is `refused` with exit 3. Increment E must print the line also for an
+already-accepted record (the owner decided so on 2026-10-30) (exit 0), or the launcher must be taught that case; the spec does not yet say which. (5) The approver in the
 log is the email only (as the spec says); the digest is on the attempt line, not the outcome line.
 
 Verification as run: the new tests failed before the code (26 failures and 23 errors in the first file) and pass after;
@@ -373,3 +411,13 @@ mapping when there is one (a table with none hashes as before), with tests. Find
 Applied: the over-limit and timeout tests (5), the `levels.py` docstring (9). Findings 6 to 8 found no bypass, wrong level or change
 for a module that does not use the field. The reviewer could not run anything. Not checked by anyone: whether `wb upgrade` or
 `wb rerender` already invalidates a record when a module's declaration changes; the digest fix makes that moot for this field.
+
+### Increment E — stopped before any change (the plan was amended to add Increment D)
+
+Started on the owner's word (with the scripted pass, and `wb release-approvals` run beforehand). Reading the kit for the replace that
+step 2 and "What `ask` binds" rely on found that the kit has none: `replace_file` is in `workbench/projectfs.py`, which a helper cannot
+import, and the kit's `write_tree` takes no expected hash. Nothing under `packages/` or `tests/` was changed. The plan says to stop and
+report; the owner chose to build the function in the kit, as its own increment, and the plan was amended accordingly (this Increment D
+and the later labels shifted by one). A first report said a hard-linked record would go unchecked; that was wrong, since
+`Root.read_if_present` refuses a file with more than one hard link. What is missing is the comparison at the moment of the rename.
+The shipped approvals released before this stop are unaffected, since no package file changed.

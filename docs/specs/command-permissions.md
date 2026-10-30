@@ -566,7 +566,7 @@ Also, in the same flow:
 
 The decision `2026-10-29-accept-decision-offers-the-ask-level` (accepted on 2026-10-29) gives `accept-decision` the levels `block`, `ask`, `delegated` and
 `none`. The plan `2026-10-29-accept-decision-at-ask` builds `block`, `ask` and `none`; this section is what it builds against, and
-none of it is built until that plan's Increments B to E are committed. `delegated` for `accept-decision` is not built by that plan:
+none of it is built until that plan's Increments B to F are committed. `delegated` for `accept-decision` is not built by that plan:
 the accepted record leaves a delegated review's subject for a decision undecided, so `delegated` reads `block` here, as it does for
 every key but `approve-plan`.
 
@@ -631,7 +631,7 @@ owner confirms a command and a digest, not that they read the record.
 ## Not built
 
 - `ask` for `accept-decision` is specified above and built by the plan `2026-10-29-accept-decision-at-ask`; until that plan's
-  Increments B to E are committed, `accept-decision` offers `block` and `none` only, and `delegated` for it and for the other seven keys
+  Increments B to F are committed, `accept-decision` offers `block` and `none` only, and `delegated` for it and for the other seven keys
   is not built by that plan.
 - `ask` and `none` for the owner-run arguments of the other module commands (`wb run mempalace init`, `mine`, and
   `wb run remote-runner fetch-overwrite`). The declaration fields (`levels` and `preview`), the launcher that reads the level and logs the run,
