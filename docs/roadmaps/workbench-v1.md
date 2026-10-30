@@ -662,9 +662,10 @@ the owner. A default wing per project is a larger change and is not part of this
 ### checkpoint-levels-beyond-block — Levels other than `block` for the keys that offer only `block`
 
 **Outcome:** the four keys that `command-permissions.md` lists as limited to `block` (`submit-remote-job`,
-`push-shared-branch`, `fetch-remote-output` and `change-direction`), the three that offer `block` and `none` only
-(`wb release-approvals`, `acknowledge-first-tier` and `acknowledge-second-tier`), and `accept-decision`, which offers `block`, `ask` and
-`none` since the plan `2026-10-29-accept-decision-at-ask` and still lacks `delegated`, each offer the same levels as `approve-plan`:
+`push-shared-branch`, `fetch-remote-output` and `change-direction`), the two that offer `block` and `none` only
+(`acknowledge-first-tier` and `acknowledge-second-tier`), and `accept-decision` and `wb release-approvals`, which offer `block`, `ask`
+and `none` (since the plans `2026-10-29-accept-decision-at-ask` and `2026-10-30-release-approvals-at-ask`) and still lack `delegated`,
+each offer the same levels as `approve-plan`:
 `block`, `ask`, `delegated` and `none`, with the same meaning (the owner's direction, 2026-10-28). The accepted decision says
 no key should be limited to `block`; this closes the gap that spec lists. Today `delegate` takes effect for `approve-plan`
 only, so this widens it.
@@ -675,8 +676,9 @@ review may stand for at a push or a remote job.
 **Boundary:** the command keys need their own preview digest before `ask` can work, and a delegated route for each; the
 agent checkpoints (`fetch-remote-output`, `change-direction`), which no command runs, need the decision and a way to record the
 level. `accept-decision` has its command and its `ask` level (`groundwork accept`); its `delegated` level waits on a decision about
-what a delegated review's subject is for a decision. `wb release-approvals` runs where no project level can be read, so it needs a decision on where
-its level is read from. It does not change who may approve a plan, the hard
+what a delegated review's subject is for a decision. `wb release-approvals` has its preview digest and its `ask` level; where the verified level
+cannot be read it reads the owner's own settings in the guarded store, and its `delegated` level waits on a decision about what a
+delegated review would stand for when it makes the first-party packages trusted. It does not change who may approve a plan, the hard
 stops, or the owner-run commands. It may be split into a plan per key.
 **Promotion trigger:** the owner chooses to begin it, after accepting the decision.
 
