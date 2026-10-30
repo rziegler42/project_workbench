@@ -1,6 +1,6 @@
 # Close the superpowers retirement
 
-Status: Proposed
+Status: Completed
 Created: 2026-10-30
 Candidate: none — these are moves M10, M11 and M12 of the move list in `global-config-inventory`, a follow-on to `workbench-v1#global-config-migration`, which the plan `2026-10-27-retire-carried-instructions` also followed; whether the roadmap gains a candidate for them is the owner's call and a roadmap edit stops for the owner
 Specs: global-config-inventory, superpowers-ports
